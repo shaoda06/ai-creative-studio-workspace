@@ -143,6 +143,14 @@ class SyncCurrentDocumentsTests(unittest.TestCase):
                 self.assertFalse(target.exists())
                 self.assertFalse((self.project / self.archive).exists())
 
+    def test_existing_crlf_script_can_publish_valid_index(self):
+        script, _, target, plan = self.storyboard_plan()
+        original = script.read_text(encoding='utf-8').replace('\n', '\r\n').encode('utf-8')
+        script.write_bytes(original)
+        sync.sync_documents(self.project, plan, self.archive)
+        self.assertIn('EP002-C001-P001', target.read_text(encoding='utf-8'))
+        self.assertEqual(script.read_bytes(), original)
+
     def test_index_checks_use_same_batch_script_instead_of_old_formal(self):
         script, draft, target, plan = self.storyboard_plan()
         script.write_text('## 1. 故事剧本正文\n### EP002-C009\n旧场次\n', encoding='utf-8')

@@ -75,6 +75,8 @@ class PortabilityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_director_legacy_mapping_and_final_receipt_survive_move(self):
         self.data.task_type = 'video-first-pass'
+        self.data.workflow = {'1': {'class_type': 'MiniMaxH3Director', 'inputs': {
+            'timeline_data': json.dumps({'segments': [{}]})}}}
         self.data.outputs = []
         output = self.project / '候选/EP001-C001-P001-R001-一采.mp4'
         output.parent.mkdir()

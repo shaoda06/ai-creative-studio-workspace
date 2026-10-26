@@ -194,6 +194,8 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
         self.seed('collecting')
         self.data.task_type = 'video-second-pass'
         self.data.segment_plan = t.segments.SegmentPlan(director_node='d', report_node='r', output_root='/comfy/output')
+        self.data.workflow = {'d': {'class_type': 'MiniMaxH3Director', 'inputs': {
+            'timeline_data': json.dumps({'segments': [{}, {}]})}}}
         self.data.outputs = []
         items = [{'index': index, 'identity': f'EP003-C001-P00{index + 1}-R001-二采',
                   'candidate': self.project / f'候选/video-{index}.mp4', 'response_name': f'video-{index}.json'} for index in (0, 1)]

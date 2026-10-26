@@ -187,7 +187,7 @@ def validate_storyboard_indexes(paths, pending, read):
         for key in (script_key, index_key):
             path = paths.file(key)
             data = proposed[path] if path in proposed else read(path, required=True)
-            documents[key] = data.decode('utf-8-sig')
+            documents[key] = data.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
         body = re.search(r'^##[ \t]+1\.[ \t]*故事剧本正文[ \t]*\n(.*?)(?=^##[ \t]|\Z)',
                          documents[script_key], re.M | re.S)
         scenes = re.findall(r'^###[ \t]+' + re.escape(episode) + r'-(C\d{3,})[ \t]*$',
