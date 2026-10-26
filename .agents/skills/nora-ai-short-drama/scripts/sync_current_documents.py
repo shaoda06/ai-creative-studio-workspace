@@ -1,10 +1,11 @@
 """Publish explicitly selected current workdraft sections, without adopting content."""
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 from urllib.parse import unquote, urlsplit
 
@@ -167,7 +168,7 @@ def validate_storyboard_indexes(paths, pending, read):
     episodes = set()
     proposed = {target: data for target, data, _ in pending}
     for target in proposed:
-        match = re.fullmatch(r'09-剧集制作/(EP\d{3,})/03-分镜脚本/'
+        match = re.fullmatch(r'09-剧集制作/((?:EP\d{3,}|片头|片尾))/03-分镜脚本/'
                              r'(?:\1-分镜索引|\1-C\d{3,}-场次分镜)\.md',
                              target.relative_to(paths.project).as_posix())
         if match:
@@ -175,10 +176,12 @@ def validate_storyboard_indexes(paths, pending, read):
     if not episodes:
         return
     # Use the same table and identity checks as the browser; no running server needed.
-    source = Path(__file__).resolve().parents[4] / '工作区浏览服务/backend/parsers/project.py'
-    spec = importlib.util.spec_from_file_location('nora_project_parser', source)
-    parser = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(parser)
+    service = Path(__file__).resolve().parents[4] / '工作区浏览服务'
+    sys.path.insert(0, str(service))
+    try:
+        parser = importlib.import_module('backend.parsers.project')
+    finally:
+        sys.path.pop(0)
     for episode in sorted(episodes):
         base = '09-剧集制作/' + episode
         script_key = base + '/02-剧集剧本/' + episode + '-本集剧本.md'
@@ -188,12 +191,9 @@ def validate_storyboard_indexes(paths, pending, read):
             path = paths.file(key)
             data = proposed[path] if path in proposed else read(path, required=True)
             documents[key] = data.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
-        body = re.search(r'^##[ \t]+1\.[ \t]*故事剧本正文[ \t]*\n(.*?)(?=^##[ \t]|\Z)',
-                         documents[script_key], re.M | re.S)
-        scenes = re.findall(r'^###[ \t]+' + re.escape(episode) + r'-(C\d{3,})[ \t]*$',
-                            body[1] if body else '', re.M)
+        scenes = parser.production_scene_ids(documents[script_key], episode)
         if not scenes:
-            raise ValueError(script_key + '：缺少故事剧本正文或完整场次标题')
+            raise ValueError(script_key + '：缺少内容正文或完整场次标题')
         rows = parser.table_records(documents[index_key], ('场次', '分段', '分段计划时长（秒）'))
         if not rows:
             raise ValueError(index_key + '：没有可读取的分段表')

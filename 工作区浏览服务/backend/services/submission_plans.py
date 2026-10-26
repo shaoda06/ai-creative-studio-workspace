@@ -1,5 +1,6 @@
 """Build submission artifacts from one project task list; prepare all before queueing any."""
 from copy import deepcopy
+import asyncio
 import json
 from pathlib import Path
 import re
@@ -320,12 +321,6 @@ def adoption_updates(root, draft, text, generation, heading, source, spec):
         '采用的候选版本': ('v' + version[1] if version else source.stem) + '／' + spec['upscale_number'],
         '采用候选版本': ('v' + version[1] if version else source.stem) + '／' + spec['upscale_number']})
     values.update(spec.get('adoption_fields', {}))
-    missing = [name for name in columns if not values.get(name) or values[name] == '不适用']
-    # 不适用 is a valid explicit state for portraits/base bodies, but not a missing scope or view.
-    missing = [name for name in missing if name not in ('人物状态', '服装状态')]
-    if missing:
-        raise ValueError('正式资产表缺少已确认内容，请在adoption_fields填写：' + '、'.join(missing))
-    replacement = '| ' + ' | '.join(values[name] for name in columns) + ' |'
     formal = project_file(root, spec['formal'])
     previous = []
     for row in rows[2:]:
@@ -334,12 +329,26 @@ def adoption_updates(root, draft, text, generation, heading, source, spec):
             previous.append(row)
     if len(previous) > 1:
         raise ValueError('正式资产表中同一正式文件重复')
+    if '封面编号' in columns and not values.get('封面编号') and previous:
+        values['封面编号'] = previous[0].strip('|').split('|')[columns.index('封面编号')].strip()
+    missing = [name for name in columns if not values.get(name) or values[name] == '不适用']
+    # 不适用 is a valid explicit state for portraits/base bodies, but not a missing scope or view.
+    missing = [name for name in missing if name not in ('人物状态', '服装状态', '列表封面')]
+    if missing:
+        raise ValueError('正式资产表缺少已确认内容，请在adoption_fields填写：' + '、'.join(missing))
+    if '列表封面' in columns and '列表封面' not in spec.get('adoption_fields', {}):
+        values['列表封面'] = (previous[0].strip('|').split('|')[columns.index('列表封面')].strip()
+                            if previous else '')
+    replacement = '| ' + ' | '.join(values[name] for name in columns) + ' |'
     old = previous[0] if previous else '\n'.join(rows[:2])
     new = replacement if previous else old + '\n' + replacement
     return [dict(path=draft.relative_to(root).as_posix(), old=old, new=new), *spec.get('adoption_updates', [])]
 
 
 def build_image(root, skill, spec, documents, now):
+    if spec['kind'] == '封面' and spec['task_type'] == 'image':
+        from backend.parsers.covers import cover_fields
+        spec = {**spec, 'fields': cover_fields(spec.get('fields', {}), documents.read)}
     draft = project_file(root, spec['draft'])
     text = documents.read(draft)
     if text is None:
@@ -356,14 +365,18 @@ def build_image(root, skill, spec, documents, now):
         if project_file(root, approval_file) != draft:
             raise ValueError('超分必须在原生成工作稿留档')
         generation = re.search(r'生成记录-\d+', heading)[0]
-        numbers = [int(n) for n in re.findall(r'超分-(\d+)', images.section(text, generation)[0])]
-        number = spec.get('upscale_number', f'超分-{max(numbers, default=0)+1:03d}')
-        prefix = spec['object'] + '-' + generation + '-' + number
         target = spec.get('size', [n * 2 for n in refs[0]['size']])
         if not isinstance(target, (list, tuple)) or len(target) != 2 or any(type(n) is not int or n <= 0 for n in target):
             raise ValueError('超分size须为两个正整数像素宽高')
         width, height = target
+        local = tuple(target) == tuple(refs[0]['size']) or any(n < old for n, old in zip(target, refs[0]['size']))
+        label = '规格处理' if local else '超分'
+        numbers = [int(n) for n in re.findall(label + r'-(\d+)', images.section(text, generation)[0])]
+        number = spec.get('processing_number' if local else 'upscale_number', f'{label}-{max(numbers, default=0)+1:03d}')
+        prefix = spec['object'] + '-' + generation + '-' + number
         processing = f'RTX指定尺寸{width}×{height}' if 'size' in spec else '固定RTX2倍'
+        if local:
+            processing = f'本地等比缩放与裁切{width}×{height}'
         candidate = project_file(root, spec.get('output', str(refs[0]['file'].with_name(refs[0]['file'].stem + '-' + number + '.png'))))
         record = project_file(root, spec.get('record_dir', str(draft.parent.parent / '执行附件' / prefix)))
         plan = dict(draft=draft.relative_to(root).as_posix(), kind=spec['kind'], generation=generation, review=heading,
@@ -372,10 +385,12 @@ def build_image(root, skill, spec, documents, now):
                          formal=spec['formal'], record_updates=adoption_updates(root, draft, text, generation, heading, refs[0]['file'], {**spec, 'upscale_number': number})))
         if spec.get('archive'):
             plan['upscale']['archive'] = spec['archive']
+        if local:
+            plan['local_processing'] = dict(source_size=list(refs[0]['size']), crop_anchor=spec.get('crop_anchor', [0.5, 0.5]))
         body = images.section(text, generation)[0]
-        changed = images.fields(body, {'批准后超分': '已批准待超分；进度见后台状态',
+        changed = images.fields(body, {'批准后超分': '已批准待本地规格处理' if local else '已批准待超分；进度见后台状态',
             '超分编号及批准输入': number + '；' + images.link(draft, refs[0]['file']) + '；[原批准](#' + heading + ')',
-            '超分工作流、参数与任务ID': processing + '；任务状态见' + images.link(draft, record / '后台任务状态.json', '后台状态')})
+            '超分工作流、参数与任务ID': processing + '；' + images.link(draft, record / ('结果收尾报告.json' if local else '后台任务状态.json'), '处理记录' if local else '后台状态')})
         text = text.replace(body, changed, 1)
         seed = None
     else:
@@ -387,28 +402,42 @@ def build_image(root, skill, spec, documents, now):
         width, height = spec.get('size', SIZES.get(spec['image_type'], (None, None)))
         if not width or not height or width % 32 or height % 32:
             raise ValueError('明确图片尺寸须为有效32倍数；其他类型请在size指定既定尺寸')
-        stem = '-'.join(str(x) for x in (spec['object'], spec.get('state'), spec.get('costume'), spec['image_type']) if x)
+        if not spec.get('formal') and spec['image_type'] != '画风样例':
+            raise ValueError('新图片任务须填写formal正式图片路径，再确定候选名称')
+        stem = project_file(root, spec['formal']).stem if spec.get('formal') else '项目基本定位-画风验证'
+        board = re.fullmatch(r'(.+-手绘导演分镜表)-第([0-9]{2,})页', stem)
+        pattern = (re.escape(board[1]) + r'-v([0-9]{2,})-第' + board[2] + r'页\.png') if board else re.escape(stem) + r'-候选-v([0-9]{2,})\.png'
         versions = []
         for area in re.finditer(r'^### 生成记录-\d+\s*\n.*?(?=^#{1,3} |\Z)', text, re.M | re.S):
-            if images.value(area[0], '图片类型') != spec['image_type'] or images.value(area[0], '人物状态') != spec.get('state', '不适用') or images.value(area[0], '服装状态') != spec.get('costume', '不适用'):
-                continue
             for path in re.findall(r'\]\(([^)]+\.png)\)', images.value(area[0], '输出候选文件') or images.value(area[0], '候选文件入口')):
-                version = re.search(r'-v(\d+)\.png$', path)
+                version = re.fullmatch(pattern, Path(unquote(path)).name)
                 if version: versions.append(int(version[1]))
-        candidate = project_file(root, spec.get('output', str(draft.parent / '素材' / f'{stem}-候选-v{max(versions, default=0)+1:02d}.png')))
+        version = max(versions, default=0) + 1
+        filename = f'{board[1]}-v{version:02d}-第{board[2]}页.png' if board else f'{stem}-候选-v{version:02d}.png'
+        candidate = project_file(root, spec.get('output', str(draft.parent / '素材' / filename)))
         record = project_file(root, spec.get('record_dir', str(draft.parent.parent / '执行附件' / prefix)))
         seed = choose_seed(root, spec, refs, documents, images.link(root / '00-项目定位/项目基本定位.md', draft, generation)[:-1] + '#' + generation + ')')
         plan = dict(draft=draft.relative_to(root).as_posix(), kind=spec['kind'], generation=generation,
                     review='审阅-' + generation + '-001', images=[dict(path=candidate.relative_to(root).as_posix(), width=width, height=height)])
+    if spec.get('formal'):
+        plan['formal'] = project_file(root, spec['formal']).relative_to(root).as_posix()
+    plan['image_type'] = spec['image_type'] if 'image_type' in spec else images.value(images.section(text, generation)[0], '图片类型')
+    images.validate_names(root, plan, required=True)
     if candidate.exists():
         raise ValueError('候选文件已存在，不能覆盖：' + str(candidate))
+    if plan.get('local_processing'):
+        documents.new_json(record / (prefix + '-本地处理计划.json'), plan)
+        documents.put(draft, text)
+        return dict(project=str(root), task_type=spec['task_type'], title=spec['title'], workflow={}, uploads=[], image_plan=plan,
+            record_dir=str(record), outputs=[dict(node_id='local', output_key='images', index=0, path=str(candidate), response_name=prefix+'-处理结果.json')],
+            attempt_name=prefix+'-执行尝试.json', request_name=prefix+'-本地请求.json', response_name=prefix+'-本地响应.json', history_name=prefix+'-执行结果.json')
     image_type = spec.get('image_type') or images.value(images.section(text, generation)[0], '图片类型')
     remote_name = spec['object'] + '-' + image_type + '-' + prefix[len(spec['object']) + 1:]
     category = '剧集专用' if spec['kind'] == '剧集素材' else spec['kind']
     if image_type == '画风样例':
         remote_output = remote_prefix(root, '图片生成', '画风样例', prefix)
     elif category == '剧集专用':
-        episode = re.search(r'EP\d+', spec['object'])[0]
+        episode = re.search(r'(?:EP\d+|片头|片尾)', spec['object'])[0]
         remote_output = remote_prefix(root, '图片生成', category, episode, remote_name)
     else:
         remote_output = remote_prefix(root, '图片生成', category, spec['object'], remote_name)
@@ -544,6 +573,28 @@ async def execute(store, payload):
     if payload.reprepare and not payload.prepare_only:
         raise ValueError('重新装配仅用于--prepare-only，不会直接入队')
     journal_file = plan_file.with_name(plan_file.stem + '-装配结果.json')
+    if getattr(payload, 'record_repairs', None) is not None:
+        from backend.services import local_images
+        if not payload.record_repairs:
+            raise ValueError('登记修复映射不能为空，不执行原任务清单')
+        if payload.prepare_only or payload.reprepare or payload.start_paused:
+            raise ValueError('登记修复不能与准备或暂停提交混用')
+        journal = json.loads(journal_file.read_text('utf-8-sig'))
+        if journal['thread_id'] != payload.thread_id or journal['source'] != source:
+            raise ValueError('登记修复须引用原来源及未变化的原清单')
+        targets = {project_file(root, task['record_dir']): task for task in journal['tasks']}
+        repairs = []
+        for path, repair in payload.record_repairs.items():
+            task = targets[project_file(root, path)]
+            if not task.get('image_plan', {}).get('local_processing'):
+                raise ValueError('此入口只接续已有本地图片成果，远端任务走通知登记修复')
+            data = TaskInput(**task, url=store.remote_urls()[0], thread_id=payload.thread_id, desktop=payload.desktop)
+            store.resolve_input(data)
+            repairs.append((data, repair))
+        results = []
+        for data, repair in repairs:
+            results.append(await asyncio.to_thread(local_images.repair, store, data, repair))
+        return dict(status='completed', tasks=results, next_action='end-turn')
     journal = None
     documents = None
     if journal_file.exists():
@@ -593,9 +644,10 @@ async def execute(store, payload):
                 if revised != update['new']:
                     update['old'], update['new'] = update['new'], revised
             journal['source'] = source
+            journal['published'] = False
             write_json(journal_file, journal)
         if len(journal.get('accepted', [])) == len(journal['tasks']):
-            return dict(status='enqueued', tasks=journal['accepted'], reused=True, next_action='end-turn')
+            return dict(status='completed' if all(item['status'] == 'completed' for item in journal['accepted']) else 'enqueued', tasks=journal['accepted'], reused=True, next_action='end-turn')
     else:
         documents = documents or Documents(root)
         tasks = []
@@ -625,8 +677,10 @@ async def execute(store, payload):
         accepted.append(dict(title=data.title, task_type=data.task_type, local_task_id=result['local_task_id'],
                              status=result['status'], record_dir=data.record_dir))
         write_json(journal_file, journal)
-    if not journal.get('accepted'):
+    if not journal.get('accepted') and not journal.get('published'):
         publish(root, journal['writes'])
+        journal['published'] = True
+        write_json(journal_file, journal)
     prepared = []
     inputs = []
     for index, task in enumerate(journal['tasks']):
@@ -637,17 +691,26 @@ async def execute(store, payload):
         store.resolve_input(data)
         if any(row['input'].record_dir == data.record_dir for row in store.rows.values()):
             raise ValueError('清单后项已被其他登记占用，请核对原任务，不自动补提')
-        report = await store.prepare_only(data)
+        if data.image_plan and data.image_plan.get('local_processing'):
+            from backend.services import local_images
+            report = local_images.prepare(store, data)
+        else:
+            report = await store.prepare_only(data)
         prepared.append(dict(title=data.title, report=report['report']))
         inputs.append(data)
-    if payload.prepare_only:
+    if payload.prepare_only or payload.start_paused and any(data.image_plan and data.image_plan.get('local_processing') for data in inputs):
         return dict(status='prepared', tasks=prepared, next_action='review-content')
     for data in inputs:
         try:
-            result = await store.enqueue(data)
+            if data.image_plan and data.image_plan.get('local_processing'):
+                from backend.services import local_images
+                result = await asyncio.to_thread(local_images.complete, store, data)
+            else:
+                result = await store.enqueue(data)
         except (ValueError, OSError, store.client.ClientError) as error:
             return dict(status='partial' if accepted else 'failed', tasks=accepted, error=str(error), next_action='inspect-failure')
         accepted.append(dict(title=data.title, task_type=data.task_type, local_task_id=result['local_task_id'],
-                             status=result['status'], record_dir=data.record_dir))
+                             status=result['status'], record_dir=data.record_dir,
+                             **({'provider': 'local', 'report': result['report']} if result.get('provider') == 'local' else {})))
         write_json(journal_file, journal)
-    return dict(status='enqueued', tasks=accepted, next_action='end-turn')
+    return dict(status='completed' if all(item['status'] == 'completed' for item in accepted) else 'enqueued', tasks=accepted, next_action='end-turn')

@@ -104,6 +104,8 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
         raise ValueError('新视频任务必须先关联场次修改轮次；请使用--prepare-only补齐准备，旧登记任务仍按原记录恢复')
     if not legacy and not report.get('new_task_ready'):
         raise ValueError('新任务准备报告尚未覆盖完整登记要求；请使用--prepare-only补齐准备，不会在开工时补查')
+    if not legacy:
+        check_existing_video_identity(data, actual.get('mapping'))
     if not legacy and require_content_review and needs_content_review(data):
         content = report.get('content_checks', {})
         if content.get('version') != 1 or content.get('ok') is not True:
@@ -223,6 +225,23 @@ def check_new_targets(data):
         raise ValueError('新导演台任务必须显式提供每段本机成果保存路径')
 
 
+def check_existing_video_identity(data, mapping):
+    if not data.task_type.startswith('video-') or not mapping:
+        return
+    stage = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}[data.task_type]
+    stage_folder = {'一采': '01-一采', '二采': '02-二采', '后处理': '03-后处理'}[stage]
+    for index in mapping['selected_indices']:
+        entry = mapping['segments'][index]
+        identity = entry['segment'] + '-' + entry['round'] + '-' + stage
+        episode, scene = entry['segment'].split('-')[:2]
+        root = Path(data.project) / '09-剧集制作' / episode
+        folders = [root / '其他资料/候选视频', root / '06-阶段采用视频' / stage_folder / (scene + '-场次'),
+                   root / '其他资料/阶段采用视频' / stage_folder / (scene + '-场次')]
+        if any(file.is_file() and file.suffix in ('.mp4', '.webm', '.mov')
+               for folder in folders for file in folder.glob(identity + '.*')):
+            raise ValueError('候选编号已有视频文件，重新生成须使用新R；失败取回请沿原任务恢复：' + identity)
+
+
 def fixed_checks(store, data, *, mapping=None, legacy=False):
     from backend.services.director_uploads import pairs
     from backend.services import comfy_segments as segments
@@ -311,18 +330,16 @@ def needs_content_review(data):
 
 
 def storyboard_index_checks(data, mapping):
-    from backend.parsers.project import table_records, storyboard_index_identity
+    from backend.parsers.project import table_records, storyboard_index_identity, production_scene_ids
     episode = mapping['scene'].split('-')[0]
     base = '09-剧集制作/' + episode
     script_key = base + '/02-剧集剧本/' + episode + '-本集剧本.md'
     index_key = base + '/03-分镜脚本/' + episode + '-分镜索引.md'
     script = project_file(data.project, script_key).read_text('utf-8-sig')
     index = project_file(data.project, index_key).read_text('utf-8-sig')
-    body = re.search(r'^##[ \t]+1\.[ \t]*故事剧本正文[ \t]*\n(.*?)(?=^##[ \t]|\Z)', script, re.M | re.S)
-    scenes = re.findall(r'^###[ \t]+' + re.escape(episode) + r'-(C\d{3,})[ \t]*$',
-                        body[1] if body else '', re.M)
+    scenes = production_scene_ids(script, episode)
     if not scenes:
-        raise ValueError(script_key + '：缺少故事剧本正文或完整场次标题')
+        raise ValueError(script_key + '：缺少内容正文或完整场次标题')
     rows = table_records(index, ('场次', '分段', '分段计划时长（秒）'))
     if not rows:
         raise ValueError(index_key + '：没有可读取的分段表')
@@ -356,10 +373,18 @@ def prepare_report(store, data, *, at_execution=False, previous=...):
         mapping_file = Path(data.record_dir) / '输入映射.json'
         mapping = json.loads(mapping_file.read_text('utf-8-sig')) if mapping_file.exists() else {}
         report['prepared_input'] = basis(store, data, mapping)
+        if not at_execution:
+            check_existing_video_identity(data, mapping)
         if not at_execution and data.task_type.startswith('video-'):
             if 'scene_composition' not in report['prepared_input']:
                 check_new_targets(data)
-                raise ValueError('新视频任务必须填写scene_modification_round，关联完整场次组合后再准备；不得用执行时间线代替')
+                raise ValueError('新视频任务必须填写scene_modification_round，关联单集修改轮次后再准备；不得用执行时间线代替')
+            from episode_rounds import episode_manifest_key, validate_episode_manifest
+            episode = mapping['scene'].split('-')[0]
+            manifest = Path(data.project) / episode_manifest_key(episode)
+            if not manifest.exists() or not any(item['number'] == mapping['scene_modification_round']
+                    for item in validate_episode_manifest(json.loads(manifest.read_text('utf-8-sig')), episode)['rounds']):
+                raise ValueError('新视频任务须先登记单集共用的修改轮次，旧场次轮次仅用于历史任务')
         composition = report['prepared_input'].get('scene_composition')
         expected = previous['prepared_input'].copy() if previous else {}
         if previous and 'title' not in expected:

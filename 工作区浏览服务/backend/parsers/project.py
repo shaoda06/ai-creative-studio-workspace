@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 from datetime import datetime
 from urllib.parse import quote, unquote, urlsplit
+from backend.parsers.video_products import load_products
 
 class SourceChangedError(RuntimeError):
     """A source document was edited while the project was being read."""
@@ -24,7 +25,7 @@ PEOPLE = "03-人物资料"
 SCENES = "04-场景资料"
 PROPS = "05-道具资料"
 FORMAL_SECTIONS = ("00-项目定位", "01-主旨与简介", "02-故事大纲", PEOPLE, SCENES, PROPS,
-                   "06-分集大纲", "07-参考音频", "08-参考视频", "09-剧集制作")
+                   "06-分集大纲", "07-参考音频", "08-参考视频", "09-剧集制作", "10-封面资料", "11-社交媒体资料", "98-发布成片")
 TEXT_PREVIEW_LIMIT = 256 * 1024
 INLINE_PATTERN = r"(\x60+)(.+?)\1|!?\[([^\]]*)\]\((<[^>]+>|[^)\n]+)\)|\*\*(.+?)\*\*"
 STATUS_COLORS = {
@@ -46,7 +47,7 @@ def live_task_record(relative):
 
 def live_revision_notes(relative):
     # Review notes have their own live API; they are not compiled project sources.
-    return re.fullmatch(r"09-剧集制作/(EP\d{3,})/其他资料/工作稿/\1-C\d{3,}-视频修改意见\.json",
+    return re.fullmatch(r"09-剧集制作/((?:EP\d{3,}|片头|片尾))/其他资料/工作稿/\1(?:-C\d{3,})?-视频修改意见\.json",
                         Path(relative).as_posix()) is not None
 
 
@@ -401,6 +402,11 @@ def document_preview(text, source):
     }
 
 
+def production_scene_ids(text, episode):
+    from .scene_rounds import rounds
+    return rounds.production_scene_ids(text, episode)
+
+
 def storyboard_index_identity(episode, scenes, row):
     identity = re.fullmatch(re.escape(episode) + r"-(C\d{3,})-(P\d{3,})", row["分段"])
     if not identity or identity[1] not in scenes or row["场次"] != episode + "-" + identity[1]:
@@ -463,7 +469,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             if load_scope == '09-剧集制作':
                 allowed.add('06-分集大纲')
             if load_scope == '06-分集大纲' and re.fullmatch(
-                    r'09-剧集制作/(EP\d{3,})/02-剧集剧本/\1-本集剧本\.md', relative):
+                    r'09-剧集制作/((?:EP\d{3,}|片头|片尾))/02-剧集剧本/\1-本集剧本\.md', relative):
                 allowed.add('09-剧集制作')
             if relative.split('/')[0] not in allowed:
                 return None
@@ -526,7 +532,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
 
     def video_prompts(key):
         match = re.fullmatch(
-            r"09-剧集制作/(EP\d+)/06-生成结果/(C\d+)-场次结果/(P\d+)-分段结果/"
+            r"09-剧集制作/((?:EP\d+|片头|片尾))/06-生成结果/(C\d+)-场次结果/(P\d+)-分段结果/"
             r"(01-一采|02-二采)/(?:候选|选定)/(.+)\.(?:mp4|webm|mov)", key)
         if match:
             episode, scene, segment, stage, stem = match.groups()
@@ -538,10 +544,10 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             english_key = f"{stage_root}/执行记录/{take[1]}-{stage[3:]}/模型提示词.txt"
         else:
             adopted = re.fullmatch(
-                r"09-剧集制作/(EP\d{3,})/(?:06-阶段采用视频|其他资料/阶段采用视频|06-生成结果)/(01-一采|02-二采)/(C\d{3,})-场次/"
+                r"09-剧集制作/((?:EP\d{3,}|片头|片尾))/(?:06-阶段采用视频|其他资料/阶段采用视频|06-生成结果)/(01-一采|02-二采)/(C\d{3,})-场次/"
                 r"(.+)\.(?:mp4|webm|mov)", key)
             candidate = re.fullmatch(
-                r"09-剧集制作/(EP\d{3,})/其他资料/候选视频/(.+)\.(?:mp4|webm|mov)", key)
+                r"09-剧集制作/((?:EP\d{3,}|片头|片尾))/其他资料/候选视频/(.+)\.(?:mp4|webm|mov)", key)
             if not adopted and not candidate:
                 return None
             episode = adopted[1] if adopted else candidate[1]
@@ -570,7 +576,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 prompts["chinese"] = chinese[1].strip()
         return prompts
 
-    def file_entry(path):
+    def file_entry(path, *, metadata_only=False):
         if not path.is_file():
             return None
         key = path.relative_to(project).as_posix()
@@ -582,6 +588,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 ".flac": "audio", ".mp4": "video", ".webm": "video", ".mov": "video"
                 }.get(path.suffix.lower(), "file")
         item = {"kind": kind, "name": path.name, "key": key, "url": quote(key, safe="/-._~")}
+        if metadata_only:
+            return item
         if kind == "document":
             if load_scope is not None:
                 text = texts.get(key)
@@ -677,7 +685,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         return dict(link)
 
     def review_section(review, heading):
-        text = texts.get(review["key"], "")
+        text = read(review["key"], preview=False) or ""
         fragment = unquote(urlsplit(review["url"]).fragment)
         if fragment:
             headings = list(re.finditer(r"^(#{1,6}) (.+?)\s*$", text, re.M))
@@ -795,7 +803,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 state = match.group(1) if match else path.stem
                 image_type = "道具参考图"
             else:
-                match = re.fullmatch(re.escape(number) + r"-(EP\d{3,}-C\d{3,}(?:-V\d{3,})?)-场景参考图", path.stem)
+                match = re.fullmatch(re.escape(number) + r"-((?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?)-场景参考图", path.stem)
                 state = match.group(1) if match else path.stem
                 image_type = "场次环境图" if match else ("平面图" if "平面" in path.stem else "场景参考图")
             assets.append({kind: True, "type": image_type, "state": state, "media": media,
@@ -852,6 +860,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                            "versionHtml": inline(entry["采用的候选版本"], record_key),
                            "recordUrl": record_url,
                            "scope": entry.get("适用范围", "未记录"), "media": media,
+                           "listCover": entry.get("列表封面", "").strip() == "是",
                            "reviews": reviews, **review_data})
         for match in re.finditer(r"^### (生成记录-\d+)\s*\n(.*?)(?=^### |\Z)", record, re.M | re.S):
             name, chunk = match.group(1), match.group(2)
@@ -878,9 +887,20 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         person_groups = [{"name": group["name"], "files": [f for f in group["files"]
                           if any(part.startswith(number + "-") for part in Path(f["key"]).parts)]}
                          for group in people_groups]
-        # The current registry determines which images are eligible as covers.
-        cover = next((a for a in formal if a["media"] and a["approved"] and a["coverApplicable"] and a["type"] == "人物上半身正面肖像图"),
-                     next((a for a in formal if a["media"] and a["approved"] and a["coverApplicable"] and a["type"] == "角色多视角参考图"), None))
+        eligible = [a for a in formal if a["media"] and a["approved"] and a["coverApplicable"]]
+        designated = [a for a in formal if a["listCover"]]
+        cover = None
+        if len(designated) > 1:
+            warnings.append(record_key + "：列表封面标记重复，每个人物只能指定一张，请核对。")
+        elif designated:
+            if designated[0] in eligible:
+                cover = designated[0]
+            else:
+                warnings.append(record_key + "：指定的列表封面缺少可读取的当前正式图片、有效批准或制作适用性，请核对。")
+        else:
+            cover = next((a for a in eligible if a["type"] == "人物上半身正面肖像图"),
+                         next((a for a in eligible if a["type"] == "角色多视角参考图"),
+                              next(iter(eligible), None)))
         voice_field = re.search(r"^- 说话声音参考音频（可选）：(.*?)(?=^- \S|^## |\Z)",
                                 texts.get(card_key, ""), re.M | re.S)
         voice = next((media for link in markdown_links(voice_field[1], card_key)
@@ -999,7 +1019,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             review_data = asset_review_metadata(reviews, record_url, formal_key=links[0]["key"] if links else "", adopted_version=entry["采用的候选版本"])
             scope = entry["场景状态与适用条件"]
             # Only an explicit scene-origin filename qualifies as an episode environment.
-            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-EP\d{3,}-C\d{3,}(?:-V\d{3,})?-场景参考图\.(?:png|jpg|jpeg|webp)", Path(links[0]["key"]).name))
+            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-(?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?-场景参考图\.(?:png|jpg|jpeg|webp)", Path(links[0]["key"]).name))
             if re.search(r"仅.*(?:空间|布局|结构)|不是实际|仅供.*结构|结构辅助", scope):
                 is_environment = False
             asset = {"scene": True, "type": "场次环境图" if is_environment else "辅助／既有参考图",
@@ -1037,7 +1057,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             origin = field(chunk, "最初制作场次").rstrip("。")
             if origin == "未记录":
                 task_info = re.search(r"^#### 1\. [^\n]*\n(.*?)(?=^#### |\Z)", chunk, re.M | re.S)
-                origins = set(re.findall(r"EP\d{3,}-C\d{3,}", task_info.group(1) if task_info else ""))
+                origins = set(re.findall(r"(?:EP\d{3,}|片头|片尾)-C\d{3,}", task_info.group(1) if task_info else ""))
                 if len(origins) == 1:
                     origin = origins.pop()
             seen_outputs = set()
@@ -1068,7 +1088,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
     # media stays on disk and is never decoded, transformed or judged here.
     def inventory(relative):
         if load_scope is not None and (relative.split('/')[0] != load_scope or
-                load_scope == '09-剧集制作' and (episode_id is None or relative != load_scope + '/' + episode_id)):
+                load_scope == '09-剧集制作' and (episode_id is None or
+                    not (relative == load_scope + '/' + episode_id or relative.startswith(load_scope + '/' + episode_id + '/')))):
             return []
         folder = project / relative
         if not folder.is_dir() or not folder.resolve().is_relative_to(project):
@@ -1107,50 +1128,50 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             parent["children"].append(item)
         for branch in branches.values():
             branch["children"].sort(key=file_order)
-            if re.fullmatch(r"09-剧集制作/EP\d{3,}/02-剧集剧本", branch["key"]):
+            if re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/02-剧集剧本", branch["key"]):
                 branch["children"].sort(key=lambda item: (
-                    0 if re.fullmatch(r"EP\d{3,}-本集剧本\.md", item["name"]) else 1,
+                    0 if re.fullmatch(r"(?:EP\d{3,}|片头|片尾)-本集剧本\.md", item["name"]) else 1,
                     item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/03-分镜脚本", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/03-分镜脚本", branch["key"]):
                 branch["children"].sort(key=lambda item: (
                     file_order(item), item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/03-分镜脚本/C\d{3,}-场次分镜", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/03-分镜脚本/C\d{3,}-场次分镜", branch["key"]):
                 branch["children"].sort(key=lambda item: (
-                    0 if re.fullmatch(r"EP\d{3,}-C\d{3,}-场次分镜\.md", item["name"]) else 1,
+                    0 if re.fullmatch(r"(?:EP\d{3,}|片头|片尾)-C\d{3,}-场次分镜\.md", item["name"]) else 1,
                     item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/04-专用素材", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/04-专用素材", branch["key"]):
                 branch["children"].sort(key=lambda item: (
-                    0 if re.fullmatch(r"(?:EP\d{3,}-)?素材索引\.md", item["name"]) else
-                    1 if re.fullmatch(r"(?:EP\d{3,}-)?素材生成记录\.md", item["name"]) else 2,
+                    0 if re.fullmatch(r"(?:(?:EP\d{3,}|片头|片尾)-)?素材索引\.md", item["name"]) else
+                    1 if re.fullmatch(r"(?:(?:EP\d{3,}|片头|片尾)-)?素材生成记录\.md", item["name"]) else 2,
                     item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/05-视频提示词", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/05-视频提示词", branch["key"]):
                 branch["children"].sort(key=lambda item: (
-                    0 if re.fullmatch(r"EP\d{3,}-生成说明\.md", item["name"]) else 1,
+                    0 if re.fullmatch(r"(?:EP\d{3,}|片头|片尾)-生成说明\.md", item["name"]) else 1,
                     item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/06-生成结果/(?:(?:01|04)-场次成片/C\d{3,}-场次|(?:02|05)-整集成片)", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/06-生成结果/(?:(?:01|04)-场次成片/C\d{3,}-场次|(?:02|05)-整集成片)", branch["key"]):
                 branch["children"].sort(key=lambda item: (
-                    0 if re.fullmatch(r"EP\d{3,}(?:-C\d{3,})?-成片说明\.md", item["name"]) else 1,
+                    0 if re.fullmatch(r"(?:EP\d{3,}|片头|片尾)(?:-C\d{3,})?-成片说明\.md", item["name"]) else 1,
                     file_order(item), item["name"],
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/06-生成结果/C\d{3,}-场次结果", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/06-生成结果/C\d{3,}-场次结果", branch["key"]):
                 branch["children"].sort(key=lambda item: (
                     file_order(item),
                     0 if item["name"] == "场次成片" else 1 if re.fullmatch(r"P\d+-分段结果", item["name"]) else 2,
                     int(match.group(1)) if (match := re.fullmatch(r"P(\d+)-分段结果", item["name"])) else 0,
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/06-生成结果/C\d{3,}-场次结果/(场次成片|P\d{3,}-分段结果/(01-一采|02-二采|03-后处理))", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/06-生成结果/C\d{3,}-场次结果/(场次成片|P\d{3,}-分段结果/(01-一采|02-二采|03-后处理))", branch["key"]):
                 branch["children"].sort(key=lambda item: (
                     file_order(item),
                     {"选定": 0, "候选": 1, "审阅记录": 2, "执行记录": 3}.get(item["name"], 4),
                 ))
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/06-生成结果/C\d{3,}-场次结果/P\d{3,}-分段结果/(01-一采|02-二采|03-后处理)/执行记录(?:/R\d{3,}-(?:一采|二采|后处理))?", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/06-生成结果/C\d{3,}-场次结果/P\d{3,}-分段结果/(01-一采|02-二采|03-后处理)/执行记录(?:/R\d{3,}-(?:一采|二采|后处理))?", branch["key"]):
                 branch["children"].sort(key=lambda item: item["name"] != "监控说明.md")
-            elif re.fullmatch(r"09-剧集制作/EP\d{3,}/其他资料/执行附件/EP\d{3,}-C\d{3,}-P\d{3,}-R\d{3,}-(?:一采|二采|后处理)", branch["key"]):
+            elif re.fullmatch(r"09-剧集制作/(?:EP\d{3,}|片头|片尾)/其他资料/执行附件/(?:EP\d{3,}|片头|片尾)-C\d{3,}-P\d{3,}-R\d{3,}-(?:一采|二采|后处理)", branch["key"]):
                 branch["children"].sort(key=lambda item: item["name"] != "监控说明.md")
         return node
 
@@ -1170,10 +1191,11 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                                   + r"[ \t]*[｜|][ \t]*([^｜|\n]+?)[ \t]*[｜|][ \t]*本集(?:故事)?剧本[ \t]*$",
                                   source, re.M)
         title = match[1].strip() if match else ""
-        status = re.search(r"^(?:-[ \t]*)?集名状态[:：][ \t]*(工作集名|最终定名|待定)[ \t]*$", source, re.M)
-        working = title and re.search(r"^(?:-[ \t]*)?工作集名[:：][ \t]*" + re.escape(title)
+        status = re.search(r"^(?:-[ \t]*)?集名状态[:：][ \t]*(待定集名|临时集名|最终定名|工作集名|待定)[ \t]*$", source, re.M)
+        working = title and re.search(r"^(?:-[ \t]*)?(?:工作|临时)集名[:：][ \t]*" + re.escape(title)
                                      + r"(?:[ \t]*[（(]非最终发行集名[）)])?[ \t]*$", source, re.M)
-        return {"title": title, "titleStatus": (status[1] if status else "工作集名" if working else "") if title else ""}
+        value = status[1] if status else "临时集名" if working else ""
+        return {"title": title, "titleStatus": {"工作集名": "临时集名", "待定": "待定集名"}.get(value, value) if title else ""}
 
     outline_text = read(outline_index) or ""
     outline_items, indexed, planned_episodes = [], set(), set()
@@ -1247,12 +1269,12 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
     if web_episode_navigation:
         from .generation import resolve_context
     production_statuses = {match[1]: row["status"] for row in rows
-                           if (match := re.fullmatch(r"(EP\d{3,})\s*制作", row["name"]))}
+                           if (match := re.fullmatch(r"((?:EP\d{3,}|片头|片尾))\s*制作", row["name"]))}
     folder = project / production
     for episode in sorted(folder.iterdir()) if folder.is_dir() and load_scope in (None, production) else []:
         if episode_id is not None and episode.name != episode_id:
             continue
-        if not episode.is_dir() or not re.fullmatch(r"EP\d{3,}", episode.name) or not episode.resolve().is_relative_to(project):
+        if not episode.is_dir() or not re.fullmatch(r"(?:EP\d{3,}|片头|片尾)", episode.name) or not episode.resolve().is_relative_to(project):
             continue
         root = episode.relative_to(project).as_posix()
         files = inventory(root)
@@ -1288,12 +1310,14 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
     episode_numbers = planned_episodes | existing_episodes.keys()
     episodes = []
     counts = {"未开始": 0, "进行中": 0, "已完成": 0}
-    for number in sorted(episode_numbers, key=lambda value: int(value[2:])):
+    for number in sorted(episode_numbers, key=lambda value: (0, ("片头", "片尾").index(value))
+                         if value in ("片头", "片尾") else (1, int(value[2:]))):
         raw_status = production_statuses.get(number)
         state = ("已完成" if raw_status == "已完成" else "进行中"
                  if raw_status in ("进行中", "待确认") or (number in existing_episodes and raw_status != "未开始")
                  else "未开始")
-        counts[state] += 1
+        if number.startswith("EP"):
+            counts[state] += 1
         if episode_id is not None and number != episode_id:
             continue
         if not web_episode_navigation and number not in existing_episodes:
@@ -1307,34 +1331,101 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         if web_episode_navigation and (load_scope is None or episode_id is not None):
             episode_root = production + "/" + number
             work_root = episode_root + "/其他资料/工作稿/"
+            episode_node["materials"] = [item for folder in (episode_root + "/04-专用素材", work_root + "素材")
+                for item in inventory(folder) if item["kind"] == "image"]
+            material_key = work_root + number + "-专用素材制作-工作稿.md"
+            episode_node["materialRecord"] = file_entry(project / material_key)
+            # Director sheets are discussion boards, separate from video inputs.
+            sheet_name = re.compile(re.escape(number) + r"-(C\d{3,})-手绘导演分镜表(?:-v(\d{2,}))?-第(\d{2,})页\.png")
+            director_sheets = episode_node["directorSheets"] = {}
+            for kind, folder in (("formal", episode_root + "/03-分镜脚本/导演分镜表"),
+                                 ("candidates", work_root + "素材")):
+                for item in inventory(folder):
+                    match = sheet_name.fullmatch(item['name'])
+                    if item['kind'] != 'image' or not match or bool(match[2]) != (kind == 'candidates'):
+                        continue
+                    collection = director_sheets.setdefault(match[1], {
+                        "formal": [], "candidates": [], "record": episode_node["materialRecord"]})
+                    collection[kind].append(dict(item, page=int(match[3]), version='v' + match[2] if match[2] else ''))
+            sheet_keys = set()
+            for scene, collection in director_sheets.items():
+                sheet_record = work_root + number + '-' + scene + '-场次分镜-工作稿.md'
+                sheet_text = read(sheet_record) or ''
+                registrations = {row['图表版本']: row for row in table_records(
+                    sheet_text, ('来源分镜版本', '图表版本', '候选编号'))}
+                adopted_pages = {}
+                for row in table_records(sheet_text, ('来源分镜版本', '图表版本', '候选原图', '正式图片')):
+                    for link in markdown_links(row['正式图片'], sheet_record):
+                        adopted_pages[link['key']] = row
+                for item in collection['formal']:
+                    row = adopted_pages.get(item['key'], {})
+                    item.update(sourceVersion=row.get('来源分镜版本', ''), version=row.get('图表版本', ''))
+                for item in collection['candidates']:
+                    row = registrations.get(item['version'], {})
+                    item['sourceVersion'] = row.get('来源分镜版本', '')
+                    item['candidateNumber'] = int(row['候选编号']) if row.get('候选编号', '').isdigit() else None
+                    item['adopted'] = any(formal['sourceVersion'] == item['sourceVersion']
+                        and formal['version'] == item['version'] and formal['page'] == item['page']
+                        and any(link['key'] == item['key'] for link in markdown_links(
+                            adopted_pages.get(formal['key'], {}).get('候选原图', ''), sheet_record))
+                        for formal in collection['formal'])
+                for kind in ('formal', 'candidates'):
+                    collection[kind].sort(key=lambda item: (int(item['version'][1:]) if item['version'] else 0, item['page']))
+                    sheet_keys.update(item['key'] for item in collection[kind])
+            from backend.parsers.production_materials import material_review_states
+            episode_node['materials'] = material_review_states(
+                [item for item in episode_node['materials'] if item['key'] not in sheet_keys],
+                read(material_key) or '', material_key)
             issues = episode_node["productionIssues"] = []
             episode_node["script"], script = latest_episode_document(
                 episode_root + "/02-剧集剧本/" + number + "-本集剧本.md", work_root + number + "-本集剧本-工作稿.md")
-            script_body = re.search(r"^##[ \t]+1\.[ \t]*故事剧本正文[ \t]*\n(.*?)(?=^##[ \t]|\Z)", script, re.M | re.S)
-            episode_node["scenes"] = list(dict.fromkeys(re.findall(
-                r"^###[ \t]+" + re.escape(number) + r"-(C\d{3,})[ \t]*$",
-                script_body[1] if script_body else "", re.M)))
+            episode_node["scenes"] = production_scene_ids(script, number)
             if episode_node["script"] and not episode_node["scenes"]:
                 issues.append({"key": episode_node["script"]["key"], "message":
-                    "缺少二级标题“1. 故事剧本正文”（##），或该章中没有三级场次标题（### " + number + "-C001）。"})
+                    ("缺少二级标题“3. 动画内容”（##），或该章中没有三级场次标题（### " if number in ("片头", "片尾") else
+                     "缺少二级标题“1. 故事剧本正文”（##），或该章中没有三级场次标题（### ") + number + "-C001）。"})
+            board_scenes = sorted({match[1] for folder in (episode_root + "/03-分镜脚本", work_root)
+                for item in inventory(folder)
+                if (match := re.fullmatch(re.escape(number) + r"-(C\d{3,})-场次分镜(?:-工作稿)?\.md", item["name"]))})
+            # Documents remain readable before an upstream script or video exists.
+            source_scenes = episode_node["scenes"]
+            if not source_scenes:
+                episode_node["scenes"] = board_scenes
+            from .scene_rounds import load_episode_rounds, load_scene_rounds
+            episode_node['episodeRounds'] = load_episode_rounds(number, read) if episode_mode != 'ending' else []
+            episode_node['scenes'] = list(dict.fromkeys([*episode_node['scenes'],
+                *(scene for item in episode_node['episodeRounds'] for scene in item['scenes'])]))
             episode_node["segments"] = {scene: [] for scene in episode_node["scenes"]}
             episode_node["storyboards"] = {}
-            from .scene_rounds import load_scene_rounds
             episode_node['sceneRounds'] = {scene: load_scene_rounds(project, number, scene, read)
                                           for scene in episode_node['scenes']} if episode_mode != 'ending' else {}
             storyboard_texts = {}
-            for scene in episode_node["scenes"]:
+            for scene in dict.fromkeys([*episode_node["scenes"], *board_scenes]):
                 identity = number + "-" + scene + "-场次分镜"
                 item, text = latest_episode_document(episode_root + "/03-分镜脚本/" + identity + ".md",
                                                      work_root + identity + "-工作稿.md")
                 if item:
+                    item['version'] = field(text, '文档版本').rstrip('。')
                     episode_node["storyboards"][scene] = item
                     storyboard_texts[scene] = text
+                    if source_scenes and scene not in source_scenes:
+                        issues.append({"key": item["key"], "message": "场次 " + number + "-" + scene + " 未在上游正文中定义；分镜文档仍可独立查看。"})
                     if not re.search(r"^##[ \t]+1\.[ \t]*镜头正文[ \t]*$", text, re.M):
                         issues.append({"key": item["key"], "scene": scene,
                                        "message": "缺少二级标题“1. 镜头正文”（##），无法读取本场镜头。"})
             index_item, storyboard_index_text = latest_episode_document(episode_root + "/03-分镜脚本/" + number + "-分镜索引.md",
                                                             work_root + number + "-分镜索引-工作稿.md")
+            episode_node["storyboardIndex"] = index_item
+            episode_node["generationPlan"], _ = latest_episode_document(episode_root + "/05-视频提示词/" + number + "-生成说明.md",
+                                                                       work_root + number + "-生成说明-工作稿.md")
+            prompt_ids = sorted({match[1] for folder in (episode_root + "/05-视频提示词", work_root)
+                for item in inventory(folder)
+                if (match := re.fullmatch(r"(" + re.escape(number) + r"-C\d{3,}-P\d{3,}-视频提示词)(?:-工作稿)?\.md", item["name"]))})
+            episode_node["videoPrompts"] = []
+            for identity in prompt_ids:
+                item, _ = latest_episode_document(episode_root + "/05-视频提示词/" + identity + ".md", work_root + identity + "-工作稿.md")
+                if item:
+                    episode_node["videoPrompts"].append(item)
             storyboard_index = index_item["key"] if index_item else episode_root + "/03-分镜脚本/" + number + "-分镜索引.md"
             index_rows = table_records(storyboard_index_text, ("场次", "分段", "分段计划时长（秒）"))
             if index_item and not index_rows:
@@ -1375,7 +1466,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                                    "message": "镜头正文中缺少三级标题“分段 " + identity[2] + "”（###），无法关联该段镜头。"})
                 shot_body = re.search(r"^####[ \t]+", segment_script[0], re.M) if segment_script else None
                 script_text = segment_script[0][shot_body.start():] if shot_body else ""
-                script_text = re.sub(r"(^####[ \t]+(EP\d+(?:-C\d+)?-SH\d+)[ \t]*\n)\s*(?:-[ \t]+)?\*\*镜号\*\*[：:][ \t]*\2[ \t]*(?=\n|$)",
+                script_text = re.sub(r"(^####[ \t]+((?:EP\d+|片头|片尾)(?:-C\d+)?-SH\d+)[ \t]*\n)\s*(?:-[ \t]+)?\*\*镜号\*\*[：:][ \t]*\2[ \t]*(?=\n|$)",
                                      r"\1", script_text, flags=re.M)
                 videos = []
                 segment_identity = row["分段"]
@@ -1386,6 +1477,13 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     record_key = episode_root + "/其他资料/执行附件/" + segment_identity + "-生成记录.md"
                     record = read(record_key) or ""
                 current_results = re.search(r"^## 1\. 当前选定结果\s*\n(.*?)(?=^## |\Z)", record, re.M | re.S)
+                product_sets = {}
+                def products_for(run, stage):
+                    if stage != '后处理':
+                        return []
+                    if run not in product_sets:
+                        product_sets[run] = load_products(project, segment_identity + '-' + run + '-后处理', read)
+                    return product_sets[run]
                 approved_keys = set()
                 for adopted in table_records(current_results[1] if current_results else "", ("处理阶段", "当前选定文件", "R编号", "人工批准依据")):
                     if re.match(r"^(?:未选定|尚未选定|未采用|尚未采用)(?:$|[；;，,。：:\s])", adopted["当前选定文件"]):
@@ -1393,7 +1491,9 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     for link in markdown_links(adopted["当前选定文件"], record_key):
                         name = Path(link['key']).name
                         if not re.fullmatch(re.escape(segment_identity + '-' + adopted['R编号'] + '-' + adopted['处理阶段'])
-                                            + r'\.(?:mp4|webm|mov)', name):
+                                            + r'\.(?:mp4|webm|mov)', name) and not any(
+                                product['key'] == link['key'] and product['role'] == '最终产物'
+                                for product in products_for(adopted['R编号'], adopted['处理阶段'])):
                             continue
                         if video_adoption_approved(adopted, record, record_key, name):
                             approved_keys.add(link['key'])
@@ -1454,6 +1554,11 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     video["taskStateUrl"] = next((link["url"] for link in state_links
                                                   if Path(link["key"]).name == "后台任务状态.json"), "")
                     video["candidateNumber"] = int(video["run"][1:])
+                    products = products_for(video['run'], video['stage'])
+                    if products:
+                        video['products'] = products
+                        video['approved'] = any(
+                            product['key'] in approved_keys and product['role'] == '最终产物' for product in products)
                     if episode_mode == 'full':
                         video["context"] = resolve_context(segment_identity + "-" + video["run"] + "-" + video["stage"],
                             generation_contexts, project, read, read_plain, text_previews)
@@ -1463,11 +1568,41 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     **({"scriptUrl": quote(storyboard_source, safe="/-._~")} if read(storyboard_source) is not None else {})})
         episodes.append(episode_node)
     catalogues[production] = {"kind": "group", "key": production, "name": "剧集制作", "children": episodes,
-        "statistics": {"total": len(episode_numbers), "completed": counts["已完成"],
+        "statistics": {"total": sum(number.startswith("EP") for number in episode_numbers), "completed": counts["已完成"],
                        "notStarted": counts["未开始"], "running": counts["进行中"]},
         "note": "选择剧集查看本集内容。"}
 
-    directories = [{"name": p.name, "label": re.sub(r"^\d+-", "", p.name),
+    if load_scope in (None, "10-封面资料"):
+        from backend.parsers.covers import build_covers
+        catalogues["10-封面资料"] = build_covers(project, read)
+        catalogues["10-封面资料"]["groups"] = collect_groups("10-封面资料")
+
+    if load_scope in (None, "11-社交媒体资料"):
+        from backend.parsers.accounts import build_accounts
+        catalogues["11-社交媒体资料"] = build_accounts(project, read)
+        catalogues["11-社交媒体资料"]["groups"] = collect_groups("11-社交媒体资料")
+
+    if load_scope in (None, "98-发布成片"):
+        def release_tree(folder):
+            node = {"kind": "group", "key": folder.relative_to(project).as_posix(),
+                    "name": folder.name, "children": []}
+            for path in sorted(folder.iterdir(), key=lambda path: (path.is_dir(), path.name.casefold())):
+                if path.name.startswith('.') or not path.resolve().is_relative_to(project):
+                    continue
+                if path.is_dir():
+                    if not path.is_symlink():
+                        node["children"].append(release_tree(path))
+                elif item := file_entry(path, metadata_only=True):
+                    node["children"].append(item)
+            node["children"].sort(key=file_order)
+            return node
+
+        folder = project / "98-发布成片"
+        catalogues[folder.name] = (release_tree(folder) if folder.is_dir() and not folder.is_symlink()
+                                   else {"kind": "group", "key": folder.name, "name": "发布成片", "children": []})
+        catalogues[folder.name]["note"] = "按原目录只读浏览用户导出的成片及附属文件，不修改文件；文件存在不代表已发布或已审批。"
+
+    directories = [{"name": p.name, "label": "账号资料" if p.name == "11-社交媒体资料" else re.sub(r"^\d+-", "", p.name),
                     "url": quote(p.name, safe="-._~") + "/"}
                    for p in sorted(project.iterdir())
                    if p.is_dir() and p.name in FORMAL_SECTIONS]

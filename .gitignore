@@ -3,6 +3,7 @@
 # 本机Codex配置。
 /.codex/
 /comfyui-config.json
+/提示词管理/
 
 # 已独立安装、由上游按需获取的技能，不随本模板重复分发。
 /.agents/skills/h3-prompt-writing/
@@ -38,3 +39,9 @@
 /工作区浏览服务/frontend/dist/
 /工作区浏览服务/frontend/*.tsbuildinfo
 /工作区浏览服务/runtime/
+
+# 共享提示词允许使用与其他目录同名的分类；仅正文纳入共享。
+!/共享提示词/**/
+!/共享提示词/**/*.md
+/共享提示词/.trash/
+/共享提示词/**/.prompt-*.tmp

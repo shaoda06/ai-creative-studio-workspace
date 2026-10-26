@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""汇总已批准的整场阶段，原生导出导演包、配对画布并补齐现有记录。"""
+"""汇总已批准的整场一采或二采，原生导出导演包、配对画布并补齐现有记录。"""
 import argparse
 import copy
 import hashlib
@@ -15,9 +15,11 @@ from urllib.parse import unquote
 import video_adopt as adopt
 import workflow_baselines as pairs
 import comfyui_config
+import project_progress
 
 client = adopt.client
 MEDIA = ('imageFile', 'audioFile', 'videoFile', 'pairedAudioFile')
+FINALIZATION_STAGES = ('一采', '二采')
 WIDGETS = ('steps', 'sampler', 'scheduler', 'cfg', 'shift_video', 'shift_audio', 'seed', 'task_type')
 
 
@@ -38,21 +40,83 @@ def save_json(path, value):
     replace_file(path, json.dumps(value, ensure_ascii=False, indent=2) + '\n')
 
 
-def postprocess_uploads(root, record):
-    """从本任务成功上传记录读取实际素材，不扫描或猜测上传响应文件名。"""
-    events_file = record / '后台过程记录.json'
-    if not events_file.is_file():
-        raise ValueError('后处理缺少 uploads 和后台成功上传记录：' + str(record))
-    uploads = []
-    for event in adopt.load(events_file):
-        if event['stage'] == 'upload' and event['result'] == 'success':
-            receipt = event['remote']
-            local = adopt.local_path(root, event['file'])
-            adopt.check_file(local, receipt)
-            uploads.append({'file': str(local), 'input_path': receipt['input_path']})
-    if not uploads:
-        raise ValueError('后处理缺少 uploads 和后台成功上传记录：' + str(record))
-    return uploads
+def indexed_parts(root, episode):
+    path = root / '09-剧集制作' / episode / '03-分镜脚本' / (episode + '-分镜索引.md')
+    return re.findall(r'^\| (' + re.escape(episode) + r'-C\d{3}) \|[^\n]*?\| ('
+                      + re.escape(episode) + r'-C\d{3}-P\d{3}) \|', path.read_text('utf-8-sig'), re.M)
+
+
+def selected(root, part, stage):
+    draft = root / '09-剧集制作' / part.split('-')[0] / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+    text = draft.read_text('utf-8-sig')
+    output = adopt.selected_output(root, draft, text, part, stage)
+    return output['identity'] if output else None
+
+
+def episode_missing(root, episode):
+    """Check current approved identities against their actual finalization records."""
+    missing, records = [], {}
+    for scene, part in indexed_parts(root, episode):
+        draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+        text = draft.read_text('utf-8-sig')
+        for stage in adopt.STAGES:
+            identity = selected(root, part, stage)
+            if identity is None:
+                missing.append(part + ' ' + stage + '未采用')
+                continue
+            if stage not in FINALIZATION_STAGES:
+                continue
+            headings = re.findall(r'^### (定稿留档-' + re.escape(scene + '-' + stage) + r'[^\n]*)$', text, re.M)
+            covered = False
+            for heading in headings:
+                a, b = adopt.section(text, heading)
+                for reference in re.findall(r'\[留档记录\]\(([^)]+)\)', text[a:b]):
+                    path = adopt.local_path(root, draft.parent / unquote(reference))
+                    if path not in records:
+                        records[path] = adopt.load(path)
+                    record = records[path]
+                    if (record['state'] == 'completed' and identity in {s['identity'] for s in record['sources']}
+                            and all(adopt.local_path(root, record[k]).is_file() for k in ('pack', 'canvas'))):
+                        covered = True
+            if not covered:
+                missing.append(identity + '缺少当前版本定稿留档')
+    return missing
+
+
+def update_progress(root, episode, scene, stage, summary, *, failure_record=None):
+    path = root / '项目进度.md'
+    pending, next_steps = [], []
+    indexed = indexed_parts(root, episode)
+    missing = episode_missing(root, episode)
+    if failure_record is not None:
+        reference = '[本场' + stage + '留档记录](' + adopt.link(path, failure_record) + ')'
+        reason = {'export_failed': '导出失败', 'verification_failed': '核对失败'}[adopt.load(failure_record)['state']]
+        pending.append(reference + reason)
+        next_steps.append('核对' + reference + '并恢复定稿留档')
+    else:
+        for current_scene, part in indexed:
+            if current_scene == scene and selected(root, part, stage) is None:
+                draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+                pending.append('[' + part + '](' + adopt.link(path, draft) + ')的' + stage + '尚未采用')
+    for current_scene in dict.fromkeys(s for s, _ in indexed):
+        parts = [part for s, part in indexed if s == current_scene]
+        for current_stage in FINALIZATION_STAGES:
+            if failure_record is not None and (current_scene, current_stage) == (scene, stage):
+                continue
+            if any(part + ' ' + current_stage + '未采用' in missing for part in parts):
+                continue
+            if any(item.startswith(current_scene + '-') and item.endswith(current_stage + '缺少当前版本定稿留档')
+                   for item in missing):
+                reference = '[' + current_scene + current_stage + '](' + adopt.link(path, summary) + ')'
+                pending.append(reference + '定稿留档尚未齐备')
+                next_steps.append('补齐' + reference + '的定稿留档')
+    complete = failure_record is None and not missing
+    folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[-1] + '-场次')
+    outputs = '[' + scene + stage + '采用视频](' + adopt.link(path, folder) + ')、[制作与留档记录](' + adopt.link(path, summary) + ')'
+    text = path.read_text('utf-8-sig')
+    replace_file(path, project_progress.update(text, episode, status='已完成' if complete else '进行中',
+                                             outputs=outputs, pending=pending, next_steps=next_steps))
+    return complete
 
 
 def source(root, item):
@@ -68,15 +132,6 @@ def source(root, item):
     response = adopt.load(mapping_path.parent / '提交响应.json')
     accepted = response.get('data', response)
     restoration = []
-    verified_uploads = None
-    if item['identity'].endswith('-后处理'):
-        load_paths = [n['inputs']['file'] for n in request['prompt'].values() if n['class_type'] == 'LoadVideo']
-        bound_paths = [u['input_path'] for u in mapping.get('uploads', [])]
-        if 'source_bytes' not in mapping or any(path not in bound_paths for path in load_paths):
-            verified_uploads = postprocess_uploads(root, mapping_path.parent)
-        if not mapping.get('uploads') or any(path not in bound_paths for path in load_paths):
-            mapping['uploads'] = verified_uploads
-            restoration.append('依据本任务后台成功上传记录关联实际 input_path 与本地来源；原映射保留')
     # Populate the export copy from the actual API; source canvas bytes stay untouched.
     for stored in canvas['nodes']:
         named = stored.get('widgets_values_named', {})
@@ -84,30 +139,12 @@ def source(root, item):
         if named and key in workflow:
             named.update({k: v for k, v in workflow[key]['inputs'].items() if k in named and not pairs.is_link(v)})
             stored['widgets_values'] = list(named.values())
-    if pairs.semantic(request['prompt']) != pairs.semantic(workflow) and item['identity'].endswith('-后处理'):
-        # Some saved preparation pairs precede the upload. Restore only the exact
-        # LoadVideo path recorded by that task's upload and submitted request.
-        restored = copy.deepcopy(workflow)
-        for key, node in restored.items():
-            if node['class_type'] == 'LoadVideo':
-                path = request['prompt'][key]['inputs']['file']
-                if path not in [u['input_path'] for u in mapping['uploads']]:
-                    raise ValueError('实际提交的视频路径未在上传映射中关联')
-                node['inputs']['file'] = path
-                graph, node_id = pairs.Canvas(canvas).find(key)
-                stored = graph.nodes[node_id]
-                stored['widgets_values_named']['file'] = path
-                stored['widgets_values'] = list(stored['widgets_values_named'].values())
-        if pairs.semantic(restored) != pairs.semantic(request['prompt']):
-            raise ValueError('来源 API／提交响应与实际获批任务不一致：' + item['identity'])
-        workflow = restored
-        restoration.append('以本任务请求及上传映射恢复LoadVideo文件路径；原准备API和画布保留')
     if (not mapping.get('prompt_id') or accepted.get('prompt_id') != mapping['prompt_id']
             or pairs.semantic(request['prompt']) != pairs.semantic(workflow)):
         raise ValueError('来源 API／提交响应与实际获批任务不一致：' + item['identity'])
     return {'identity': item['identity'], 'mapping_path': mapping_path, 'mapping': mapping,
             'context': contexts[0], 'api_path': api_path, 'canvas_path': canvas_path,
-            'api': workflow, 'canvas': canvas, 'restoration': restoration, 'verified_uploads': verified_uploads}
+            'api': workflow, 'canvas': canvas, 'restoration': restoration}
 
 
 def director(source_item, part):
@@ -158,44 +195,10 @@ def lift_common(common, group):
     return group
 
 
-def merge_graph(canvas, workflow, addition, offset):
-    """后处理各段的实际节点分支并列保存，不改处理参数或输入路径。"""
-    graph, api = copy.deepcopy(addition['canvas']), copy.deepcopy(addition['api'])
-    if graph.get('definitions', {}).get('subgraphs'):
-        raise ValueError('后处理来源含子图，当前合并器不支持；保留来源并报告缺项')
-    ids = {n['id']: canvas['last_node_id'] + i + 1 for i, n in enumerate(graph['nodes'])}
-    links = {pairs.link_tuple(l)[0]: canvas['last_link_id'] + i + 1 for i, l in enumerate(graph['links'])}
-    for n in graph['nodes']:
-        n['id'] = ids[n['id']]
-        n['pos'][0] += offset
-        for entry in n.get('inputs', []):
-            if entry.get('link') is not None:
-                entry['link'] = links[entry['link']]
-        for entry in n.get('outputs', []):
-            if entry.get('links'):
-                entry['links'] = [links[x] for x in entry['links']]
-    for entry in graph['links']:
-        if isinstance(entry, dict):
-            entry.update(id=links[entry['id']], origin_id=ids[entry['origin_id']], target_id=ids[entry['target_id']])
-        else:
-            entry[0], entry[1], entry[3] = links[entry[0]], ids[entry[1]], ids[entry[3]]
-    for key, node in api.items():
-        for field, value in node['inputs'].items():
-            if pairs.is_link(value):
-                node['inputs'][field] = [str(ids[int(value[0])]), value[1]]
-        workflow[str(ids[int(key)])] = node
-    canvas['nodes'].extend(graph['nodes'])
-    canvas['links'].extend(graph['links'])
-    canvas['last_node_id'], canvas['last_link_id'] = max(ids.values()), max(links.values(), default=canvas['last_link_id'])
-    for group in graph.get('groups', []):
-        group['bounding'][0] += offset
-        canvas.setdefault('groups', []).append(group)
-
-
 def prepare(root, plan, batch_parts=None, batch_name=None):
     episode, scene, stage = plan['episode'], plan['scene'], plan['stage']
-    if not re.fullmatch(r'EP\d{3}', episode) or not re.fullmatch(r'C\d{3}', scene) or stage not in adopt.STAGES:
-        raise ValueError('需要明确 EP编号／C编号／一采、二采或后处理')
+    if not re.fullmatch(r'(?:EP\d{3}|片头|片尾)', episode) or not re.fullmatch(r'C\d{3}', scene) or stage not in FINALIZATION_STAGES:
+        raise ValueError('需要明确 EP编号或片头／片尾、C编号以及一采或二采；后处理不导出导演包')
     ep = root / '09-剧集制作' / episode
     index_file = ep / '03-分镜脚本' / f'{episode}-分镜索引.md'
     expected = re.findall(r'^\| ' + episode + '-' + scene + r' \|[^\n]*?\| (' + episode + '-' + scene + r'-P\d{3}) \|',
@@ -252,30 +255,6 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
             raise ValueError('取回凭据的远端输出与本段映射不对应')
         adopt.check_file(selected, receipt)
         content = actual
-        if stage == '后处理':
-            content = source(root, item['content'])
-            if (actual['context']['source'] != content['identity']
-                    or content['identity'].rsplit('-', 2)[0] != part
-                    or not content['identity'].endswith('-二采')):
-                raise ValueError('后处理正文来源须为该获批任务明确接续的同段二采')
-            source_video = adopt.local_path(root, item['source_video'])
-            if source_video.stem != content['identity']:
-                raise ValueError('后处理源视频身份不符合二采来源')
-            uploads = [u for u in actual['mapping']['uploads']
-                       if adopt.local_path(root, u['file']) == source_video]
-            loaders = [n['inputs']['file'] for n in actual['api'].values() if n['class_type'] == 'LoadVideo']
-            if len(uploads) != 1 or loaders != [uploads[0]['input_path']]:
-                raise ValueError('后处理实际输入视频与上传映射不对应：' + part)
-            if 'source_bytes' in actual['mapping']:
-                adopt.check_file(source_video, {'bytes': actual['mapping']['source_bytes'],
-                                                'sha256': actual['mapping']['source_sha256']})
-            else:
-                # Backend upload receipts already bind the actual source bytes.
-                verified = [u for u in actual['verified_uploads']
-                            if adopt.local_path(root, u['file']) == source_video
-                            and u['input_path'] == loaders[0]]
-                if len(verified) != 1:
-                    raise ValueError('后处理源视频没有唯一匹配的成功上传凭据：' + part)
         content['root'] = root
         content['director'] = director(content, part)
         sources.append((actual, content))
@@ -355,9 +334,6 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
     for field in ('timeline_data', 'total_frames', 'global_prompt'):
         stored['widgets_values_named'][field] = workflow[key]['inputs'][field]
     stored['widgets_values'] = list(stored['widgets_values_named'].values())
-    if stage == '后处理':
-        for i, (actual, _) in enumerate(sources):
-            merge_graph(canvas, workflow, actual, 2200 * (i + 1))
     canvas.setdefault('extra', {})['nora_scene_finalization'] = {'stage': stage, 'sources': evidence,
                                                               'purpose': '整场汇总工程；不是单次执行原始画布；不恢复一采缓存'}
     urls = {content['mapping']['url'].rstrip('/') for _, content in sources}
@@ -366,9 +342,31 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
     edition = plan.get('edition', '')
     if edition and not re.fullmatch(r'\d{3}', edition):
         raise ValueError('edition 须为三位留档序号，不是生成R编号')
-    stem = f'{episode}-{scene}-{stage}定稿' + ('-' + batch_name if batch_name else '') + ('-' + edition if edition else '')
+    base = f'{episode}-{scene}-{stage}定稿' + ('-' + batch_name if batch_name else '')
     final = adopt.local_path(root, ep / '06-阶段采用视频' / adopt.STAGES[stage] / f'{scene}-场次' / '导演包')
     record = sources[0][0]['mapping_path'].parent
+    if not edition:
+        versions = set()
+        for directory in (final, record):
+            for path in directory.glob(base + '*'):
+                match = re.fullmatch(re.escape(base) + r'(?:-(\d{3}))?(?:-导演包\.mmxpack\.zip|\.workflow\.json|-留档记录\.json|\.api\.json|-导出响应\.json)', path.name)
+                if match:
+                    versions.add(match[1] or '')
+        for version in sorted(versions, key=lambda v: int(v or '1'), reverse=True):
+            previous_path = record / (base + ('-' + version if version else '') + '-留档记录.json')
+            if previous_path.is_file():
+                previous = adopt.load(previous_path)
+                if (previous['sources'] == evidence and previous['stage'] == stage
+                        and previous.get('configuration_batch_authorization') == plan.get('configuration_batch_authorization')):
+                    edition = version
+                    break
+        else:
+            if versions:
+                number = max(int(v or '1') for v in versions) + 1
+                if number > 999:
+                    raise ValueError('本场该阶段留档序号已用至999，不能覆盖已有版本')
+                edition = f'{number:03d}'
+    stem = base + ('-' + edition if edition else '')
     return {'workflow': workflow, 'canvas': canvas, 'timeline': timeline, 'node': key,
             'url': next(iter(urls)), 'sources': sources, 'evidence': evidence, 'media': media,
             'pack': final / (stem + '-导演包.mmxpack.zip'), 'canvas_path': final / (stem + '.workflow.json'),
@@ -432,6 +430,7 @@ def verify_pack(prepared):
 def finalize_one(root, plan, p, apply, timeout):
     for path in [*p['drafts'], p['summary'], p['progress']]:
         path.read_text(encoding='utf-8-sig')
+    project_progress.phase_row(p['progress'].read_text('utf-8-sig'), plan['episode'])
     record = {'stage': plan['stage'], 'sources': p['evidence'], 'url': p['url'], 'node_id': p['node'],
               'pack': str(p['pack']), 'canvas': str(p['canvas_path']), 'api': str(p['api_path']),
               'configuration_batch_authorization': plan.get('configuration_batch_authorization')}
@@ -467,6 +466,8 @@ def finalize_one(root, plan, p, apply, timeout):
                        'details': error.details if isinstance(error, client.ClientError) else {}}
             client.write_new(p['receipt'], failure)
             save_json(p['record'], {**record, 'state': 'export_failed', 'error': failure, 'receipt': str(p['receipt'])})
+            update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'],
+                            p['summary'], failure_record=p['record'])
             raise
         client.write_new(p['receipt'], {'ok': True, 'recorded_at': client.now(), 'data': response})
     try:
@@ -475,12 +476,14 @@ def finalize_one(root, plan, p, apply, timeout):
             adopt.check_file(p['pack'], adopt.load(p['receipt'])['data'])
     except (ValueError, KeyError, OSError, zipfile.BadZipFile) as error:
         save_json(p['record'], {**record, 'state': 'verification_failed', 'error': str(error)})
-        for path in [*p['drafts'], p['summary'], p['progress']]:
+        for path in [*p['drafts'], p['summary']]:
             text = path.read_text(encoding='utf-8-sig')
             if re.search(r'^### ' + re.escape(p['heading']) + r'\s*$', text, re.M):
                 a, b = adopt.section(text, p['heading'])
                 body = adopt.field(text[a:b], '状态', p['scope'] + '定稿留档核对失败；具体问题见留档记录，视频批准事实保持。')
                 replace_file(path, text[:a] + body + '\n' + text[b:])
+        update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'],
+                        p['summary'], failure_record=p['record'])
         raise
     if not p['receipt'].exists():
         # The native client may have published the ZIP before an interrupted receipt write.
@@ -490,7 +493,7 @@ def finalize_one(root, plan, p, apply, timeout):
                                       'basis': '已有准备记录及实际包内容／素材字节核对；原远端导出时间未记录',
                                       'data': {'path': str(p['pack']), 'bytes': p['pack'].stat().st_size, 'sha256': digest}})
     stamp = adopt.load(p['record']).get('verified_at', client.now())
-    for path in [*p['drafts'], p['summary'], p['progress']]:
+    for path in [*p['drafts'], p['summary']]:
         text = path.read_text(encoding='utf-8-sig')
         body = (f'\n- 状态：{p["scope"]}定稿留档完成；视频批准依据保持原记录。\n'
                 f'- 导演包：[下载]({adopt.link(path, p["pack"])})\n'
@@ -509,8 +512,11 @@ def finalize_one(root, plan, p, apply, timeout):
         save_json(actual['mapping_path'], mapped)
     save_json(p['record'], {**record, 'state': 'completed', 'verified_at': stamp,
                            'checks': '全部P段实际批准／实际提交来源／原生包正文与素材字节／记录入口',
-                           'records': [str(path) for path in [*p['drafts'], p['summary'], p['progress']]],
+                           'records': [str(path) for path in [*p['drafts'], p['summary']]],
                            'receipt': str(p['receipt'])})
+    update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'], p['summary'])
+    saved = adopt.load(p['record'])
+    save_json(p['record'], {**saved, 'records': saved['records'] + [str(p['progress'])]})
     result['state'] = 'completed'
     return result
 

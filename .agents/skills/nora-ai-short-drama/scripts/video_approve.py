@@ -9,25 +9,16 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from urllib.parse import unquote
 
 import video_adopt as adopt
 import scene_finalize as final
+import project_progress
 
 
-def indexed_parts(root, episode):
-    path = root / '09-剧集制作' / episode / '03-分镜脚本' / (episode + '-分镜索引.md')
-    return re.findall(r'^\| (' + re.escape(episode) + r'-C\d{3}) \|[^\n]*?\| ('
-                      + re.escape(episode) + r'-C\d{3}-P\d{3}) \|', path.read_text('utf-8-sig'), re.M)
-
-
-def selected(root, part, stage):
-    draft = root / '09-剧集制作' / part.split('-')[0] / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-    text = draft.read_text('utf-8-sig')
-    _, _, row = adopt.selected_row(text, stage)
-    names = re.findall(re.escape(part) + r'-R\d{3}-' + stage + r'\.\w+', row)
-    anchors = re.findall(r'\]\(#([^)]*)\)', row.strip().strip('|').split('|')[-1])
-    approved = names and len(anchors) == 1 and adopt.approved_row(text, names[0] + ' [审核](#' + anchors[0] + ')', names[0])
-    return Path(names[0]).stem if approved else None
+indexed_parts = final.indexed_parts
+selected = final.selected
+episode_missing = final.episode_missing
 
 
 def source_items(root, plan, stage):
@@ -56,6 +47,44 @@ def source_items(root, plan, stage):
     return found
 
 
+def adopted_source(root, identity, stage):
+    """Resolve the exact adopted identity through its linked records, never latest-R scans."""
+    part = identity.rsplit('-', 2)[0]
+    episode, scene, _ = part.split('-')
+    draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+    text = draft.read_text('utf-8-sig')
+    candidates = []
+    headings = re.findall(r'^### (定稿留档-' + re.escape(episode + '-' + scene + '-' + stage) + r'[^\n]*)$', text, re.M)
+    for heading in headings:
+        start, end = adopt.section(text, heading)
+        for reference in re.findall(r'\[留档记录\]\(([^)]+)\)', text[start:end]):
+            record = adopt.load(adopt.local_path(root, draft.parent / unquote(reference)))
+            if record['state'] != 'completed' or record['stage'] != stage:
+                continue
+            for source in record['sources']:
+                if source['identity'] == identity:
+                    item = {key: source[key] for key in ('identity', 'mapping', 'api', 'canvas', 'receipt')}
+                    if item not in candidates:
+                        candidates.append(item)
+    if candidates:
+        if len(candidates) != 1:
+            raise ValueError('当前采用身份的留档来源不唯一：' + identity)
+        return candidates[0]
+    row = adopt.selected_row(text, stage)[2]
+    anchor = re.findall(r'\]\(#([^)]*)\)', row.strip().strip('|').split('|')[-1])[0]
+    heading = next(h for h in re.findall(r'^### (.+)$', text, re.M) if h.lower() == anchor.lower())
+    start, end = adopt.section(text, heading)
+    review = text[start:end]
+    mappings = re.findall(r'^- 来源任务[^：\n]*：\[' + re.escape(identity) + r'\]\(([^)]+)\)', review, re.M)
+    receipts = re.findall(r'^- agent取回及展示入口：\[实际输出凭据\]\(([^)]+)\)', review, re.M)
+    if len(mappings) != 1 or len(receipts) != 1:
+        raise ValueError('当前采用身份缺少明确的执行来源或取回凭据：' + identity)
+    mapping = adopt.local_path(root, draft.parent / unquote(mappings[0]))
+    return {'identity': identity, 'mapping': str(mapping),
+            'receipt': str(adopt.local_path(root, draft.parent / unquote(receipts[0]))),
+            'api': str(mapping.parent / '任务.api.json'), 'canvas': str(mapping.parent / '任务.workflow.json')}
+
+
 def record_updates(root, episode, summary):
     """Adoption requires both business entrances; the final status is written below."""
     updates = []
@@ -65,38 +94,11 @@ def record_updates(root, episode, summary):
     return updates
 
 
-def episode_missing(root, episode):
-    """Check current approvals against existing finalization records, not newest files."""
-    missing, records = [], {}
-    for scene, part in indexed_parts(root, episode):
-        draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-        text = draft.read_text('utf-8-sig')
-        for stage in adopt.STAGES:
-            identity = selected(root, part, stage)
-            if identity is None:
-                missing.append(part + ' ' + stage + '未采用')
-                continue
-            headings = re.findall(r'^### (定稿留档-' + re.escape(scene + '-' + stage) + r'[^\n]*)$', text, re.M)
-            covered = False
-            for heading in headings:
-                a, b = adopt.section(text, heading)
-                for link in re.findall(r'\[留档记录\]\(([^)]+)\)', text[a:b]):
-                    path = adopt.local_path(root, draft.parent / urllib.parse.unquote(link))
-                    if path not in records:
-                        records[path] = adopt.load(path)
-                    record = records[path]
-                    if (record['state'] == 'completed' and identity in {s['identity'] for s in record['sources']}
-                            and all(adopt.local_path(root, record[k]).is_file() for k in ('pack', 'canvas'))):
-                        covered = True
-            if not covered:
-                missing.append(identity + '缺少当前版本定稿留档')
-    return missing
-
-
 def update_business(root, episode, scene, stage, summary, identities, finalized, complete):
     status = (episode + '分段制作与交付已完成。' if complete else
               scene + '的' + stage + '已采用' + str(len(identities)) + '段；'
-              + ('本场该阶段定稿留档完成。' if finalized else '本场该阶段定稿尚未完成。'))
+              + (('本场后处理采用已齐备。' if finalized else '本场后处理采用尚未齐备。') if stage == '后处理' else
+                 ('本场该阶段定稿留档完成。' if finalized else '本场该阶段定稿尚未完成。')))
     text = summary.read_text('utf-8-sig')
     if re.search(r'^- 当前状态及待办：', text, re.M):
         text = re.sub(r'^- 当前状态及待办：[^\n]*', '- 当前状态及待办：' + status, text, count=1, flags=re.M)
@@ -105,24 +107,23 @@ def update_business(root, episode, scene, stage, summary, identities, finalized,
         text = first + '\n\n- 当前状态及待办：' + status + '\n' + rest
     heading = '批准收尾-' + scene + '-' + stage
     folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[1] + '-场次')
-    body = '\n- 状态：' + status + '\n- 当前采用顺序：' + ' → '.join(identities) + '\n- 文件入口：[阶段采用视频](' + adopt.link(summary, folder) + ')\n'
+    file_entry = '[阶段采用视频](' + adopt.link(summary, folder) + ')'
+    if stage == '后处理':
+        links = []
+        for identity in identities:
+            part = identity.rsplit('-', 2)[0]
+            draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+            output = adopt.selected_output(root, draft, draft.read_text('utf-8-sig'), part, stage)
+            links.append('[' + identity + '](' + adopt.link(summary, output['path']) + ')')
+        file_entry = '；'.join(links)
+    body = '\n- 状态：' + status + '\n- 当前采用顺序：' + ' → '.join(identities) + '\n- 文件入口：' + file_entry + '\n'
     if re.search(r'^### ' + re.escape(heading) + r'\s*$', text, re.M):
         a, b = adopt.section(text, heading)
         text = text[:a] + body + '\n' + text[b:]
     else:
         text = text.rstrip() + '\n\n### ' + heading + '\n' + body
     final.replace_file(summary, text)
-    progress = root / '项目进度.md'
-    text = progress.read_text('utf-8-sig')
-    rows = re.findall(r'^\| ' + re.escape(episode) + r'制作 \|[^\n]*', text, re.M)
-    if len(rows) != 1:
-        raise ValueError('项目进度缺少唯一的' + episode + '制作行；采用和留档事实已保留')
-    cells = rows[0].split('|')
-    cells[3] = ' 已完成 ' if complete else ' 进行中 '
-    cells[4] = ' - [' + scene + stage + '采用视频](' + adopt.link(progress, folder) + ') '
-    cells[5] = ' - 分段制作与交付完成 ' if complete else ' - ' + status + ' '
-    cells[6] = ' - 下一集等待用户安排 ' if complete else ' - 后续阶段按实际批准及执行授权安排 '
-    final.replace_file(progress, text.replace(rows[0], '|'.join(cells), 1))
+    final.update_progress(root, episode, scene, stage, summary)
 
 
 def browser_sync(root, episode, stage, identities, complete, timeout):
@@ -130,9 +131,9 @@ def browser_sync(root, episode, stage, identities, complete, timeout):
     base = config['url'].rstrip('/')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-    def get(route):
+    def get(route, *, text=False):
         with opener.open(base + route, timeout=timeout) as response:
-            return json.load(response)
+            return response.read().decode("utf-8-sig") if text else json.load(response)
 
     service = get('/api/service')
     if not service['ready'] or Path(service['workspace']).resolve() != root.parent.parent:
@@ -141,14 +142,19 @@ def browser_sync(root, episode, stage, identities, complete, timeout):
     deadline = time.monotonic() + timeout
     while True:
         status = get(route + '/status')
-        if status.get('error'):
-            raise ValueError('浏览入口同步失败：' + str(status['error']))
-        if not status['updating']:
+        if not status['updating'] and not status['checking']:
+            if status.get('error'):
+                raise ValueError('浏览入口同步失败：' + str(status['error']))
             break
         if time.monotonic() >= deadline:
             raise TimeoutError('浏览入口仍在同步；只需恢复本次网页核对，不重复采用或导出')
         time.sleep(.5)
-    data = get(route + '/episodes/' + episode)
+    served = get(route + '/files/' + urllib.parse.quote('项目进度.md', safe=''), text=True)
+    _, actual = project_progress.phase_row(served, episode)
+    _, expected = project_progress.phase_row((root / '项目进度.md').read_text('utf-8-sig'), episode)
+    if actual != expected:
+        raise ValueError('网页尚未同步本批阶段行的状态、成果、待决事项和下一步')
+    data = get(route + '/episodes/' + urllib.parse.quote(episode, safe=''))
     seen = set()
     for scene_name, rows in data['segments'].items():
         for row in rows:
@@ -180,6 +186,7 @@ def approve(args):
     if len(scopes) != 1:
         raise ValueError('一次批准收尾限同一集、场次及处理阶段')
     episode, scene_number, stage = next(iter(scopes))
+    project_progress.phase_row((root / '项目进度.md').read_text('utf-8-sig'), episode)
     scene = episode + '-' + scene_number
     expected = [p for s, p in indexed_parts(root, episode) if s == scene]
     if not expected or any(i.rsplit('-', 2)[0] not in expected for i in ids):
@@ -218,7 +225,7 @@ def approve(args):
                 result['finalization'] = previous['finalization']
             result.update(phase='browser', local_completed=True)
             result['browser'] = browser_sync(root, episode, stage, ids, result['episode_completed'], args.timeout)
-            result['state'] = 'completed' if 'finalization' in result else 'adopted_partial'
+            result['state'] = 'completed' if all(selected(root, p, stage) for p in expected) else 'adopted_partial'
             return result
         result['adoption'] = adopt.adoption(args, plan=adoption_plan)
         result['timings_seconds']['adoption'] = round(time.monotonic() - start, 3)
@@ -228,23 +235,16 @@ def approve(args):
         ready = all(chosen)
         result['phase'] = 'business_records'
         update_business(root, episode, scene, stage, summary, [i for i in chosen if i], False, False)
-        if ready:
+        if ready and stage in final.FINALIZATION_STAGES:
             result['phase'] = 'finalization'
-            chosen_items = [dict(available[i]) for i in chosen]
+            chosen_items = [dict(available[i]) if i in available else adopted_source(root, i, stage) for i in chosen]
             final_plan = {'episode': episode, 'scene': scene_number, 'stage': stage, 'items': chosen_items, 'summary': str(summary)}
-            if stage == '后处理' or plan.get('source_finalization'):
+            if plan.get('source_finalization'):
                 origin = adopt.load(adopt.local_path(root, plan['source_finalization']))
                 for key in ('configuration_batches', 'configuration_batch_authorization'):
                     if key in origin:
                         final_plan[key] = origin[key]
-                if stage == '后处理':
-                    content = {i['identity']: i for i in origin['items']}
-                    for item in chosen_items:
-                        mapping = adopt.load(Path(item['mapping']))
-                        source = next(c['source'] for c in mapping['generation_contexts'] if c['identity'] == item['identity'])
-                        item['content'] = {k: content[source][k] for k in ('identity', 'mapping', 'api', 'canvas')}
-                        item['source_video'] = mapping['source_video']
-            for key in ('configuration_batches', 'configuration_batch_authorization'):
+            for key in ('configuration_batches', 'configuration_batch_authorization', 'edition'):
                 if key in plan:
                     final_plan[key] = plan[key]
             began = time.monotonic()

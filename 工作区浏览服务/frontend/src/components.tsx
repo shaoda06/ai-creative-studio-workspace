@@ -5,19 +5,19 @@ import { get, projectUrl } from './api';
 import type { FileItem, Group, RecordData } from './api';
 import { CopyButton } from './components/CopyButton';
 import { TabNav } from './components/TabNav';
-import { useNotify } from './components/Notifications';
+import { FloatingMessage } from './components/Notifications';
 import { DocumentInformation } from './components/DocumentInformation';
 import { Loading } from './components/Loading';
 import { ChapterNavigation } from './components/ChapterNavigation';
 import type { ChapterHeading } from './components/ChapterNavigation';
+import { FileActions } from './components/FileActions';
+export { FileActions, Original } from './components/FileActions';
 
 export const PreviewContext = createContext<(item: FileItem) => void>(() => {});
 export function Result({ loading, error, retry, retrying, page = false }: {
   loading: boolean; error: Error | null; retry: () => unknown; retrying: boolean; page?: boolean;
 }) {
-  const notify = useNotify();
-  useEffect(() => { if (error) return notify('资料读取失败，请点击重新读取。', 'error'); }, [error, notify]);
-  if (error) return <p className="error" role="alert">资料读取失败，请点击重新读取。 <button disabled={retrying} onClick={() => { void retry(); }}>{retrying ? '正在读取…' : '重新读取'}</button></p>;
+  if (error) return <FloatingMessage tone="error">资料读取失败，请点击重新读取。 <button disabled={retrying} onClick={() => { void retry(); }}>{retrying ? '正在读取…' : '重新读取'}</button></FloatingMessage>;
   return loading && !error ? <Loading page={page} /> : null;
 }
 type LanguageOption = { value: string; label: string; text: string; html?: string };
@@ -48,15 +48,12 @@ export function Rich({ html = '', languages = {} }: { html?: string; languages?:
     return <CodeBlock key={index} text={block.text} languages={block.languageGroup ? languages[block.languageGroup] : undefined} />;
   })}</div>;
 }
-export function Original({ url, label = '原文件' }: { url?: string; label?: string }) {
-  return url ? <a href={url} target="_blank" rel="noopener noreferrer">{label} ↗</a> : null;
-}
-export function FileLink({ item, showOriginal = true }: { item: FileItem; showOriginal?: boolean }) {
+export function FileLink({ item, showOriginal = true, showStatus = true }: { item: FileItem; showOriginal?: boolean; showStatus?: boolean }) {
   const preview = useContext(PreviewContext);
   const target = item.kind === 'reference' && item.media ? { ...item.media, name: item.name, prompts: item.prompts } : item;
-  return <div className="file"><button className="link" onClick={() => preview(target)}>{item.name}</button><div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}{showOriginal && <Original url={target.url} />}</div></div>;
+  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{showOriginal && <FileActions url={target.url} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
 }
-export function FileTree({ items, showOriginal = true }: { items: FileItem[]; showOriginal?: boolean }) {
+export function FileTree({ items, showOriginal = true, showStatus = true }: { items: FileItem[]; showOriginal?: boolean; showStatus?: boolean }) {
   const entries: FileItem[] = [];
   const folders = new Map<string, FileItem>();
   for (const item of items) {
@@ -71,13 +68,13 @@ export function FileTree({ items, showOriginal = true }: { items: FileItem[]; sh
     folders.get(name)!.files!.push({ ...item, name: item.name.slice(separator + 1) });
   }
   return <div className="tree">{entries.map(item => item.kind === 'group' || item.children || item.files ?
-    <Folder key={item.key || item.name} item={item} showOriginal={showOriginal} /> :
-    <div key={item.key || item.name}><FileLink item={item} showOriginal={showOriginal} />{item.summary && <p className="muted">{item.summary}</p>}<Rich html={(item as RecordData).sourceHtml} />{(item as RecordData).duration && <p className="muted">实测时长：{(item as RecordData).duration}</p>}</div>)}</div>;
+    <Folder key={item.key || item.name} item={item} showOriginal={showOriginal} showStatus={showStatus} /> :
+    <div key={item.key || item.name}><FileLink item={item} showOriginal={showOriginal} showStatus={showStatus} />{item.summary && <p className="muted">{item.summary}</p>}<Rich html={(item as RecordData).sourceHtml} />{(item as RecordData).duration && <p className="muted">实测时长：{(item as RecordData).duration}</p>}</div>)}</div>;
 }
-function Folder({ item, showOriginal = true }: { item: FileItem; showOriginal?: boolean }) {
+function Folder({ item, showOriginal = true, showStatus = true }: { item: FileItem; showOriginal?: boolean; showStatus?: boolean }) {
   const [open, setOpen] = useState(false);
   return <details open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary>{item.name}</summary>
-    {open && <FileTree items={item.children || item.files || []} showOriginal={showOriginal} />}</details>;
+    {open && <FileTree items={item.children || item.files || []} showOriginal={showOriginal} showStatus={showStatus} />}</details>;
 }
 export function Groups({ groups = [], chapter = false }: { groups?: Group[]; chapter?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -89,7 +86,7 @@ export function Groups({ groups = [], chapter = false }: { groups?: Group[]; cha
     {open && <div id={contentId} className="groups-content">{folders}</div>}
   </section> : <details className="groups"><summary>其他资料</summary>{folders}</details>;
 }
-export function Document({ value: latest }: { value: RecordData }) {
+export function Document({ value: latest, showOriginal = true, showChapters = true }: { value: RecordData; showOriginal?: boolean; showChapters?: boolean }) {
   const [value, setValue] = useState(latest);
   const changed = (value.html || value.bodyHtml) !== (latest.html || latest.bodyHtml) || value.headerHtml !== latest.headerHtml;
   const body = value.bodyHtml || value.contentHtml || value.html || '';
@@ -169,23 +166,24 @@ export function Document({ value: latest }: { value: RecordData }) {
   const hasGroups = !!latest.groups?.length;
   const [headings, setHeadings] = useState<ChapterHeading[]>([]);
   useEffect(() => {
+    if (!showChapters) return;
     setHeadings(Array.from(ref.current!.querySelectorAll('h2,h3,h4,h5,h6')).map((heading, i) => {
       if (!heading.id) heading.id = `chapter-${i}`;
       return { id: heading.id, text: heading.textContent || '', level: Number(heading.tagName[1]) };
     }));
-  }, [presentation.html, hasGroups]);
+  }, [presentation.html, hasGroups, showChapters]);
   return <div className="document">
-    {changed && <p className="notice document-update">本文有新版本，当前阅读位置保持不变。<button onClick={() => setValue(latest)}>读取新版本</button></p>}
-    <div className="meta document-meta-inline">{value.confirmationHtml && <Rich html={value.confirmationHtml.match(/^<span class="status-badge.*?<\/span>/s)?.[0]} />}{value.meta && Object.entries(value.meta).filter(([key]) => key !== '确认状态').map(([key, text]) => <span key={key}>{key}：{String(text)}</span>)}<Original url={value.url} /></div>
+    {changed && <FloatingMessage>本文有新版本，当前阅读位置保持不变。<button onClick={() => setValue(latest)}>读取新版本</button></FloatingMessage>}
+    <div className="meta document-meta-inline">{value.confirmationHtml && <Rich html={value.confirmationHtml.match(/^<span class="status-badge.*?<\/span>/s)?.[0]} />}{value.meta && Object.entries(value.meta).filter(([key]) => key !== '确认状态').map(([key, text]) => <span key={key}>{key}：{String(text)}</span>)}{showOriginal && <FileActions url={value.url} />}</div>
     {value.headerHtml && <DocumentInformation><Rich html={value.headerHtml} /></DocumentInformation>}
-    <ChapterNavigation headings={headings} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />
+    {showChapters && <ChapterNavigation headings={headings} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />}
     <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} /><Groups groups={latest.groups} chapter /></div>
   </div>;
 }
-export function Dialog({ title, children, close, headerActions }: { title: string; children: ReactNode; close: () => void; headerActions?: ReactNode }) {
+export function Dialog({ title, children, close, headerActions, size = "default", showHeader = true, closeDisabled = false }: { title: string; children: ReactNode; close: () => void; headerActions?: ReactNode; size?: "default" | "compact" | "fullscreen"; showHeader?: boolean; closeDisabled?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  return <dialog ref={ref} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) close(); }}><header><h2>{title}</h2>{headerActions ?? <button aria-label="关闭" onClick={close}>关闭 ×</button>}</header><div className="dialog-body">{children}</div></dialog>;
+  return <dialog ref={ref} className={size === "default" ? undefined : `dialog-${size}`} aria-label={title} onCancel={event => { event.preventDefault(); if (!closeDisabled) close(); }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
 }
 export function Preview({ project, item, revision, close }: { project: string; item: FileItem; revision: number; close: () => void }) {
   // Keep the opened item and revision until the user chooses to load newer text.
@@ -205,13 +203,13 @@ export function Preview({ project, item, revision, close }: { project: string; i
   const video = kind === 'video' || /\.(mp4|webm|mov)$/i.test(key || item.name);
   const audio = kind === 'audio' || /\.(mp3|wav|ogg|flac|m4a)$/i.test(key || item.name);
   return <Dialog title={item.name} close={close}>
-    {kind !== 'progress' && !(kind === 'document' && item.doc) && <Original url={item.url} />}
-    {text && !item.doc && revision !== openedRevision && <p className="notice document-update">项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></p>}
-    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div><Original url={item.url} /></div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
-      image ? <img className="preview-image" src={item.url} alt={item.name} onError={() => setMediaError('图片无法加载，请使用原文件入口。')} /> :
+    {kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
+    {text && !item.doc && revision !== openedRevision && <FloatingMessage>项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></FloatingMessage>}
+    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div><FileActions url={item.url} /></div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
+      image ? <img className="preview-image" src={item.url} alt={item.name} onError={() => setMediaError('图片无法加载，请下载原文件查看。')} /> :
       video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请使用原文件入口。')} /> :
       audio ? <audio controls preload="metadata" src={item.url} onError={() => setMediaError('音频无法加载，请使用原文件入口。')} /> : <p>此格式暂不支持页内预览，请打开原文件。</p>}
-    {mediaError && <p className="error" role="alert">{mediaError}</p>}
+    {mediaError && <FloatingMessage tone="error">{mediaError}</FloatingMessage>}
     {item.prompts && <details><summary>对应提示词</summary><p>英文</p><pre>{item.prompts.english}</pre><p>中文</p><pre>{item.prompts.chinese}</pre></details>}
   </Dialog>;
 }

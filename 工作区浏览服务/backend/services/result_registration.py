@@ -1,4 +1,5 @@
 """Automatic, resumable closeout of downloaded candidates and approved image upscales."""
+import asyncio
 import hashlib
 import json
 import os
@@ -11,6 +12,7 @@ from backend.services.execution_checks import write_json
 from backend.services.result_summary import batch_tasks, summary, outputs as collected_outputs
 from project_paths import project_file
 from video_adopt import field
+import project_progress
 
 REPORT = '结果收尾报告.json'
 
@@ -242,11 +244,9 @@ def apply_record_updates(store, key, updates, episodes, report=None):
         if set(update) != {'path', 'old', 'new'} or not all(isinstance(value, str) and value for value in update.values()):
             raise ValueError('业务更新须提供 path、old、new，且不得为空')
         path = project_file(root, update['path'])
-        if path == root / '项目进度.md':
-            if not any(re.search(r'\b' + re.escape(ep) + r'\b', update['old']) for ep in episodes):
-                raise ValueError('项目进度更新必须明确属于本批剧集')
-        elif not any(path.is_relative_to(root / '09-剧集制作' / ep) for ep in episodes) or not (
-                '01-制作前检查' in path.parts or path.name.endswith('生成说明-工作稿.md')):
+        if path != root / '项目进度.md' and (not any(
+                path.is_relative_to(root / '09-剧集制作' / ep) for ep in episodes) or not (
+                '01-制作前检查' in path.parts or path.name.endswith('生成说明-工作稿.md'))):
             raise ValueError('业务更新仅用于本批项目进度、制作前检查及生成说明工作稿')
         if path not in edits:
             before = path.read_text('utf-8-sig')
@@ -261,6 +261,9 @@ def apply_record_updates(store, key, updates, episodes, report=None):
         if current.count(update['old']) != 1:
             raise ValueError('业务更新原文不唯一或已变化：' + str(path))
         edits[path] = before, current.replace(update['old'], update['new'], 1)
+    progress = root / '项目进度.md'
+    if progress in edits:
+        project_progress.validate_update(*edits[progress], episodes)
     journal = {'fingerprint': fingerprint, 'status': 'applying', 'updates': updates,
                'files': {path.relative_to(root).as_posix(): {'before': before_digests[path], 'after': digest(after) if after != before else before_digests[path]}
                          for path, (before, after) in edits.items()}}
@@ -285,7 +288,7 @@ def apply_record_updates(store, key, updates, episodes, report=None):
     return fingerprint
 
 
-async def closeout(store, projects, batch_id, thread_id, record_updates=(), image_plans=None):
+async def closeout(store, projects, batch_id, thread_id, record_updates=(), image_plans=None, image_repairs=None):
     ids, _ = batch_tasks(store, batch_id, thread_id)
     for key, plan in (image_plans or {}).items():
         if key not in ids or store.rows[key]['input'].task_type not in ('image', 'image-upscale'):
@@ -297,12 +300,29 @@ async def closeout(store, projects, batch_id, thread_id, record_updates=(), imag
         from backend.services.image_closeout import validate_plan
         validate_plan(row['input'].model_copy(update={'image_plan': plan}))
         store.record(key, 'closeout', 'association_repaired', _changes={'image_closeout_plan': plan})
+    for key, repair in (image_repairs or {}).items():
+        from backend.services import image_closeout as images
+        if key not in ids or store.rows[key]['input'].task_type not in ('image', 'image-upscale'):
+            raise ValueError('登记修复必须属于本通知的图片任务')
+        row = store.rows[key]
+        if row['state']['status'] != 'completed' or row['state']['collected'] != row['state']['expected']:
+            raise ValueError('登记修复只处理已取回的原成果')
+        if row['state'].get('image_registration_repair') == repair:
+            continue
+        plan = row['input'].image_plan or row['state'].get('image_closeout_plan')
+        if plan is None:
+            raise ValueError('缺少原图片关联，先补齐真实关联')
+        current = row['state'].get('image_registration_updates', images.record_updates(plan))
+        updates = await asyncio.to_thread(images.repair_record_updates,
+            Path(row['input'].project), [plan['draft']], current, repair, Path(row['input'].record_dir) / REPORT,
+            identity={'task_id': key, 'prompt_id': row['state']['prompt_id']})
+        store.record(key, 'closeout', 'records_repaired',
+                     _changes={'image_registration_updates': updates, 'image_registration_repair': repair})
     return await closeout_tasks(store, projects, ids, record_updates, batch_id=batch_id)
 
 
 async def closeout_tasks(store, projects, ids, record_updates=(), *, batch_id=None):
     """Internal completion worker; no Agent acknowledgement is required to register."""
-    import asyncio
     if record_updates and len({store.rows[key]['state']['project'] for key in ids}) != 1:
         raise ValueError('跨项目通知的业务更新须分项目处理，不接受混合更新')
     reports, groups = [], {}

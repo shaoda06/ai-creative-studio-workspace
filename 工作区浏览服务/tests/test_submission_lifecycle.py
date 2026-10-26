@@ -76,13 +76,13 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         mapping = dict(scene='EP001-C001', scene_storyboard_version='v1', selected_indices=[0], storyboard_file='storyboard.md',
             screenplay_version='v1', scene_modification_round=1,
             uploads=[], segments=[dict(segment='EP001-C001-P001', round='R001', duration_seconds=3, local_execution_dir=str(self.record))])
-        manifest = self.project / '09-剧集制作/EP001/其他资料/工作稿/EP001-C001-场次修改轮次.json'
+        manifest = self.project / '09-剧集制作/EP001/其他资料/工作稿/EP001-修改轮次.json'
         manifest.parent.mkdir(parents=True, exist_ok=True)
         self.scene_rounds_file = manifest
-        manifest.write_text(json.dumps({'episode': 'EP001', 'scene': 'C001', 'rounds': [{
-            'number': 1, 'script': {'file': 'screenplay.md', 'version': 'v1'},
-            'storyboard': {'file': 'storyboard.md', 'version': 'v1'},
-            'segments': [{'id': 'P001', 'stage': '一采', 'run': 'R001', 'duration': 3}]}]}), 'utf-8')
+        manifest.write_text(json.dumps({'episode': 'EP001', 'rounds': [{
+            'number': 1, 'created_at': '2026-10-26T00:00:00+08:00', 'script': {'file': 'screenplay.md', 'version': 'v1'},
+            'scenes': {'C001': {'storyboard': {'file': 'storyboard.md', 'version': 'v1'},
+            'segments': [{'id': 'P001', 'stage': '一采', 'run': 'R001', 'duration': 3}]}}}]}), 'utf-8')
         attach_review(self.project, self.record, workflow, mapping)
         (self.record / '输入映射.json').write_text(json.dumps(mapping), 'utf-8')
         self.data.uploads = [dict(file=str(source), node='502', input='timeline_data', subfolder='task',
@@ -100,10 +100,28 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             upload.assert_not_called(); submit.assert_not_called()
         self.assertFalse(self.store.rows)
 
+    async def test_old_scene_round_recovers_but_cannot_prepare_a_new_video(self):
+        self.video()
+        episode = json.loads(self.scene_rounds_file.read_text('utf-8'))
+        item = episode['rounds'][0]
+        legacy = self.scene_rounds_file.with_name('EP001-C001-场次修改轮次.json')
+        legacy.write_text(json.dumps({'episode': 'EP001', 'scene': 'C001', 'rounds': [
+            {**item['scenes']['C001'], 'number': 1, 'created_at': item['created_at'], 'script': item['script']}]}), 'utf-8')
+        self.scene_rounds_file.unlink()
+        before = legacy.read_bytes()
+        with patch.object(t.client, 'upload') as upload, patch.object(t.client, 'submit') as submit:
+            with self.assertRaisesRegex(ValueError, '单集共用'):
+                await self.store.prepare_only(self.data)
+            upload.assert_not_called(); submit.assert_not_called()
+        checks.prepare_report(self.store, self.data, at_execution=True)
+        self.assertEqual(checks.read_report(self.data)['prepared_input']['scene_composition']['number'], 1)
+        self.assertTrue(checks.check_prepared(self.store, self.data, legacy=True)['ok'])
+        self.assertEqual(legacy.read_bytes(), before)
+
     async def test_preparation_pins_referenced_round_not_entire_round_history(self):
         self.video()
         original = json.loads(self.scene_rounds_file.read_text('utf-8'))
-        original['rounds'][0]['segments'].append({'id': 'P002', 'stage': '一采', 'run': 'R009', 'duration': 3})
+        original['rounds'][0]['scenes']['C001']['segments'].append({'id': 'P002', 'stage': '一采', 'run': 'R009', 'duration': 3})
         self.scene_rounds_file.write_text(json.dumps(original), 'utf-8')
         await self.store.prepare_only(self.data)
         report = checks.read_report(self.data)
@@ -116,7 +134,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(checks, 'fixed_checks', side_effect=AssertionError('adding a round must not repeat fixed checks')):
             self.assertTrue(checks.check_prepared(self.store, self.data)['ok'])
             self.assertTrue((await self.store.prepare_only(self.data))['reused'])
-        data['rounds'][0]['segments'][1]['run'] = 'R010'
+        data['rounds'][0]['scenes']['C001']['segments'][1]['run'] = 'R010'
         self.scene_rounds_file.write_text(json.dumps(data), 'utf-8')
         with patch.object(t.client, 'upload') as upload, patch.object(t.client, 'submit') as submit:
             with self.assertRaisesRegex(ValueError, '准备资料已变化'):
@@ -652,17 +670,21 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             except WebSocketDisconnect:
                 pass
         self.upload()
+        image_draft = self.project / '03-人物资料/其他资料/工作稿/CH001-参考图-工作稿.md'
+        image_draft.parent.mkdir(parents=True)
+        self.data.outputs[0].path = str(image_draft.parent / '素材/CH001-基础-人物上半身正面肖像图-候选-v01.png')
         workflow = self.record / 'input.json'
         workflow.write_text(json.dumps(self.data.workflow), 'utf-8')
         uploads = self.record / 'uploads.json'
         uploads.write_text(json.dumps(self.data.uploads), 'utf-8')
         outputs = self.record / 'outputs.json'
         outputs.write_text(json.dumps([out.model_dump() for out in self.data.outputs]), 'utf-8')
-        image_draft = self.project / 'image-draft.md'
         image_draft.write_text('# 工作稿\n### 生成记录-001\n- 执行状态：等待\n- 输出候选文件：未取得\n'
             '- 实际尺寸、格式及数量：待核对\n- 文件核对结论：待核对\n- 审阅记录入口：尚无\n## 4. 审阅区\n', 'utf-8')
         image_plan = self.record / 'image-plan.json'
-        image_plan.write_text(json.dumps(dict(draft='image-draft.md', kind='人物', generation='生成记录-001',
+        image_plan.write_text(json.dumps(dict(draft=image_draft.relative_to(self.project).as_posix(), kind='人物',
+            image_type='人物上半身正面肖像图',
+            formal='03-人物资料/CH001-人物/参考图/CH001-基础-人物上半身正面肖像图.png', generation='生成记录-001',
             review='审阅-生成记录-001-001', images=[dict(path=self.data.outputs[0].path, width=4, height=3)])), 'utf-8')
         adapter = self.root / 'codex/plugins/cache/openai-bundled/codex-app-tools/test/server.mjs'
         adapter.parent.mkdir(parents=True)

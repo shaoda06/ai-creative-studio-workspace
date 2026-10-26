@@ -65,9 +65,10 @@ class EpisodeDownloadTests(HttpTestCase):
         self.assertEqual(response.status_code, 200, response.text[:200] if response.status_code != 200 else '')
         self.assertEqual(response.headers['content-type'], 'application/zip')
         self.assertEqual(int(response.headers['content-length']), len(response.content))
-        self.assertIn('示例项目-第1集-正式版视频.zip', unquote(response.headers['content-disposition']))
+        self.assertIn('示例项目-第1集-已采用视频.zip', unquote(response.headers['content-disposition']))
         with ZipFile(BytesIO(response.content)) as bundle:
             self.assertIn('draft_content.json', bundle.namelist())
+            self.assertIn('draft_info.json', bundle.namelist())
             self.assertIn('draft_meta_info.json', bundle.namelist())
             return {item.filename: bundle.read(item) for item in bundle.infolist() if not item.filename.endswith('.json')}
 
@@ -76,7 +77,7 @@ class EpisodeDownloadTests(HttpTestCase):
         for stage in episode_downloads.STAGES:
             first = self.video(stage, 'C001', 'P001')[1]
             second = self.video(stage, 'C002', 'P002')[1]
-            expected[stage] = {'第1场-第1段-正式版.mp4': first, '第2场-第1段-正式版.mp4': second}
+            expected[stage] = {'第1场-第1段-已采用.mp4': first, '第2场-第1段-已采用.mp4': second}
             self.video(stage, 'C001', 'P003', approved=False)
         self.source('09-剧集制作/EP001/06-阶段采用视频/01-一采/C001-场次/未选定.mp4', b'unselected')
         self.source('09-剧集制作/EP002/06-阶段采用视频/01-一采/C001-场次/EP002-C001-P001-R001-一采.mp4', b'other episode')
@@ -102,11 +103,11 @@ class EpisodeDownloadTests(HttpTestCase):
                     self.assertTrue(resource['url'].endswith('?scene=' + scene))
                     response = self.client.get(resource['url'])
                     self.assertEqual(response.status_code, 200)
-                    self.assertIn(f'示例项目-第1集-{scene}-{stage}-正式版视频.zip',
+                    self.assertIn(f'示例项目-第1集-{scene}-{stage}-已采用视频.zip',
                                   unquote(response.headers['content-disposition']))
                     with ZipFile(BytesIO(response.content)) as bundle:
-                        self.assertEqual(bundle.namelist(), [f'第{scene_number}场-第1段-正式版.mp4',
-                                                           'draft_content.json', 'draft_meta_info.json'])
+                        self.assertEqual(bundle.namelist(), [f'第{scene_number}场-第1段-已采用.mp4',
+                                                           'draft_content.json', 'draft_info.json', 'draft_meta_info.json'])
                         self.assertEqual(bundle.read(bundle.namelist()[0]), expected[scene][stage])
 
     def test_scene_download_does_not_read_missing_files_from_other_scenes(self):
@@ -117,7 +118,7 @@ class EpisodeDownloadTests(HttpTestCase):
         response = self.client.get(resource['url'])
         self.assertEqual(response.status_code, 200)
         with ZipFile(BytesIO(response.content)) as bundle:
-            self.assertEqual(bundle.read('第1场-第1段-正式版.mp4'), expected)
+            self.assertEqual(bundle.read('第1场-第1段-已采用.mp4'), expected)
         self.assertEqual(self.completed_download().status_code, 404)
 
     def test_scene_request_requires_existing_scene_and_does_not_fall_back_to_other_scenes(self):
@@ -274,16 +275,16 @@ class EpisodeDownloadTests(HttpTestCase):
         expected = expected[-1:] + expected[:-1]
         response = self.completed_download()
         self.assertEqual(response.status_code, 200)
-        self.assertIn('示例项目-第1集-正式版视频.zip', unquote(response.headers['content-disposition']))
+        self.assertIn('示例项目-第1集-已采用视频.zip', unquote(response.headers['content-disposition']))
         self.assertEqual(int(response.headers['content-length']), len(response.content))
         with ZipFile(BytesIO(response.content)) as bundle:
-            self.assertEqual(bundle.namelist(), ['第1场-第1段-正式版.mp4', '第2场-第1段-正式版.mp4',
-                                               '第2场-第2段-正式版.mp4', '第2场-第3段-正式版.mp4',
-                                               'draft_content.json', 'draft_meta_info.json'])
+            self.assertEqual(bundle.namelist(), ['第1场-第1段-已采用.mp4', '第2场-第1段-已采用.mp4',
+                                               '第2场-第2段-已采用.mp4', '第2场-第3段-已采用.mp4',
+                                               'draft_content.json', 'draft_info.json', 'draft_meta_info.json'])
             self.assertEqual([bundle.read(member) for member in bundle.namelist() if not member.endswith('.json')], [content for _, content in expected])
         stage_files = self.archive('后处理', 'videos')
-        self.assertEqual(list(stage_files), ['第1场-第1段-正式版.mp4', '第2场-第1段-正式版.mp4',
-                                            '第2场-第2段-正式版.mp4', '第2场-第3段-正式版.mp4'])
+        self.assertEqual(list(stage_files), ['第1场-第1段-已采用.mp4', '第2场-第1段-已采用.mp4',
+                                            '第2场-第2段-已采用.mp4', '第2场-第3段-已采用.mp4'])
 
     def test_draft_uses_same_package_names_script_order_full_durations_and_original_audio(self):
         for scene, number in [('C001', 'P012'), ('C001', 'P002'), ('C002', 'P001')]:
@@ -327,6 +328,22 @@ class EpisodeDownloadTests(HttpTestCase):
                     self.assertEqual(doc['materials']['transitions'], [])
                     self.assertEqual(doc['materials']['texts'], [])
 
+    def test_mac_and_windows_draft_entries_share_identical_timeline_and_identity(self):
+        self.episode['scenes'] = ['C001']
+        self.video('后处理', 'C001', 'P001')
+        for url in (self.url.replace('/downloads', '/download'), self.url + '/后处理/videos?scene=C001'):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                with ZipFile(BytesIO(response.content)) as bundle:
+                    self.assertEqual(bundle.read('draft_info.json'), bundle.read('draft_content.json'))
+                    content = json.loads(bundle.read('draft_info.json'))
+                    meta = json.loads(bundle.read('draft_meta_info.json'))
+                    self.assertEqual(content['id'], meta['draft_id'])
+                    self.assertEqual(content['duration'], meta['tm_duration'])
+                    self.assertEqual(content['materials']['videos'][0]['path'],
+                                     jianying_draft.DRAFT_PATH + '第1场-第1段-已采用.mp4')
+
     def test_invalid_video_does_not_deliver_a_zip_with_a_broken_draft(self):
         self.video('后处理', 'C001', 'P001')
         with patch.object(jianying_draft.MediaInfo, 'parse', return_value=SimpleNamespace(
@@ -339,7 +356,7 @@ class EpisodeDownloadTests(HttpTestCase):
         for number in ('P001', 'P002', 'P003', 'P004', 'P005'):
             self.video('二采', 'C001', number, approved=False)
         original, content = self.video('二采', 'C001', 'P012')
-        self.assertEqual(self.archive('二采', 'videos'), {'第1场-第6段-正式版.mp4': content})
+        self.assertEqual(self.archive('二采', 'videos'), {'第1场-第6段-已采用.mp4': content})
         source = next(self.project.rglob(Path(original).name))
         self.assertEqual(source.read_bytes(), content)
         self.assertIn('P012', source.name)
@@ -350,7 +367,7 @@ class EpisodeDownloadTests(HttpTestCase):
         path = self.project / video['key']
         moved = path.rename(path.with_suffix('.mov'))
         video['key'] = moved.relative_to(self.project).as_posix()
-        self.assertEqual(list(self.archive('一采', 'videos')), ['第1场-第1段-正式版.mov'])
+        self.assertEqual(list(self.archive('一采', 'videos')), ['第1场-第1段-已采用.mov'])
 
     def test_stage_zip_rejects_duplicate_formal_video_names(self):
         self.video('二采', 'C001', 'P001')
@@ -358,7 +375,7 @@ class EpisodeDownloadTests(HttpTestCase):
         segment['videos'].append(dict(segment['videos'][0]))
         response = self.client.get(self.url + '/二采/videos')
         self.assertEqual(response.status_code, 409)
-        self.assertIn('同一分段存在多个正式版', response.json()['detail'])
+        self.assertIn('同一分段存在多个已采用', response.json()['detail'])
         self.assertEqual(list((self.root / 'downloads').iterdir()), [])
 
     def test_completed_download_requires_finished_episode_and_every_scene(self):

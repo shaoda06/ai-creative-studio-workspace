@@ -1,45 +1,57 @@
-import { PointerTooltip } from './PointerTooltip';
+import { DownloadControl } from './DownloadControl';
 import { useState } from 'react';
-import './SceneDownloads.css';
+import { FloatingMessage, useNotify } from './Notifications';
 
 type Request = { time: string; message: string; failed: boolean };
 export type DownloadState = Request & { busy: boolean };
 
-export function DownloadButton({ url, label, title, pack = false, disabled = false, onStateChange }: {
+export function DownloadButton({ url, label, title, pack = false, disabled = false, onStateChange, file, filename: providedFilename }: {
   url: string | null; label: string; title: string; pack?: boolean; disabled?: boolean;
+  file?: { text: string; name: string; type: string };
+  filename?: string;
   onStateChange?: (state: DownloadState) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [requests, setRequests] = useState<Request[]>([]);
+  const [progress, setProgress] = useState<Request | null>(null);
+  const notify = useNotify();
 
   async function download() {
-    const index = requests.length;
     let current = {
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       message: pack ? '正在打包视频，请稍候…' : '正在准备文件，请稍候…', failed: false,
     };
     const update = (message: string, failed = false) => {
       current = { ...current, message, failed };
-      if (onStateChange) onStateChange({ ...current, busy: true });
-      else setRequests(previous => previous.map((request, i) => i === index ? current : request));
+      setProgress(current);
+      onStateChange?.({ ...current, busy: true });
     };
     setBusy(true);
-    if (onStateChange) onStateChange({ ...current, busy: true });
-    else setRequests(previous => [...previous, current]);
+    setProgress(current);
+    onStateChange?.({ ...current, busy: true });
     try {
-      const response = await fetch(url!);
-      if (!response.ok) {
-        const message = response.headers.get('Content-Type')?.includes('application/json')
-          ? (await response.json()).detail : await response.text();
-        throw new Error(message || `下载失败（${response.status}）`);
+      let blob: Blob;
+      let filename: string;
+      if (file) {
+        blob = new Blob([file.text], { type: file.type });
+        filename = file.name;
+      } else {
+        const response = await fetch(url!);
+        if (!response.ok) {
+          const message = response.headers.get('Content-Type')?.includes('application/json')
+            ? (await response.json()).detail : await response.text();
+          throw new Error(message || `下载失败（${response.status}）`);
+        }
+        if (providedFilename) filename = providedFilename;
+        else {
+          const disposition = response.headers.get('Content-Disposition') || '';
+          const encoded = disposition.match(/filename\*=utf-8''([^;]+)/i);
+          const plain = disposition.match(/filename="([^"]+)"/i);
+          if (!encoded && !plain) throw new Error('下载响应缺少文件名，请重试。');
+          filename = encoded ? decodeURIComponent(encoded[1]) : plain![1];
+        }
+        update('正在接收文件，请稍候…');
+        blob = await response.blob();
       }
-      const disposition = response.headers.get('Content-Disposition') || '';
-      const encoded = disposition.match(/filename\*=utf-8''([^;]+)/i);
-      const plain = disposition.match(/filename="([^"]+)"/i);
-      if (!encoded && !plain) throw new Error('下载响应缺少文件名，请重试。');
-      const filename = encoded ? decodeURIComponent(encoded[1]) : plain![1];
-      update('正在接收文件，请稍候…');
-      const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
@@ -54,17 +66,15 @@ export function DownloadButton({ url, label, title, pack = false, disabled = fal
       update(`下载失败：${error instanceof Error ? error.message : String(error)}`, true);
     } finally {
       setBusy(false);
+      setProgress(null);
+      notify(`${title}：${current.message}`, current.failed ? 'error' : 'info');
       onStateChange?.({ ...current, busy: false });
     }
   }
 
-  return <div className="stage-download-row">
-    <PointerTooltip text={title}><button type="button" className="stage-download-link" disabled={!url || busy || disabled} aria-busy={busy}
-       onClick={download}>
-      {busy && <span className="loading-spinner download-spinner" aria-hidden="true" />}
-      {busy ? (pack ? '正在打包…' : '正在准备…') : label}
-    </button></PointerTooltip>
-    {!onStateChange && requests.map((request, index) => <span className={`stage-download-message ${request.failed ? 'download-failed' : 'muted'}`}
-      role={request.failed ? 'alert' : 'status'} key={index}>{request.time} {request.message}</span>)}
-  </div>;
+  return <>
+    <DownloadControl title={title} disabled={(!url && !file) || disabled} busy={busy} onClick={download}
+      label={busy ? (pack ? '正在打包…' : '正在准备…') : label} />
+    {progress && <FloatingMessage>{title}：{progress.message}</FloatingMessage>}
+  </>;
 }

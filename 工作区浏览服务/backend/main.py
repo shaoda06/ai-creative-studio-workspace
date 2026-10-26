@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 
 from backend.parsers import project as parser
 from backend.services.projects import ProjectStore
+from project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
 from backend.services import krea2
@@ -24,23 +25,31 @@ from workflow_paths import workflow_directories, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import node_config
+from backend.services.prompts import WorkspacePromptLibrary
+from backend.routes.prompts import create_router as prompt_router
+from backend.services.assets import AssetLibrary
+from backend.routes.assets import create_router as asset_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
+from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
 from backend.services.result_registration import closeout as result_closeout
 from websockets.exceptions import WebSocketException
 from backend.services.revision_notes import Episode, Scene, NoteInput, RevisionNote, SceneNotes, RevisionNotes, ExportChanges, NotesChangedError
+from backend.services.episode_revision_notes import EpisodeRevisionNotes, EpisodeNotes, EpisodeExportChanges
 
 TOOL = Path(__file__).resolve().parent.parent
 WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', TOOL.parent)).resolve()
 WORKFLOWS = workflow_root(WORKSPACE / '.agents/skills/nora-ai-short-drama')
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
+prompt_library = WorkspacePromptLibrary(WORKSPACE / '提示词管理', WORKSPACE / '共享提示词')
 VERSION = json.loads((TOOL / 'frontend/package.json').read_text('utf-8'))['version']
 FRONTEND_RELEASE = TOOL / 'frontend/dist/release.json'
 store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/project-cache', version=VERSION)
 @asynccontextmanager
 async def lifespan(app):
     clear_downloads()
+    prompt_library.initialize()
     tasks = TaskStore(TOOL / 'runtime', WORKSPACE)
     tasks.projects = store
     app.state.comfy_tasks = tasks
@@ -191,6 +200,10 @@ def queue_write(request: Request):
         raise HTTPException(403, '仅允许工作台同源管理操作')
 
 
+app.include_router(prompt_router(prompt_library, queue_write))
+app.include_router(asset_router(AssetLibrary(WORKSPACE / '综合资料/资产管理'), queue_write))
+
+
 def agent_request(request: Request):
     tasks = request.app.state.comfy_tasks
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
@@ -255,6 +268,15 @@ async def agent_retry_collection(key: str, request: Request) -> dict[str, Any]:
         raise HTTPException(409, str(error)) from error
 
 
+@app.post('/api/internal/comfy/tasks/{key}/repair-collection')
+async def agent_repair_collection(key: str, data: CollectionRepairInput, request: Request) -> dict[str, Any]:
+    tasks = agent_request(request)
+    try:
+        return repair_collection(tasks, key, data)
+    except (ValueError, OSError, KeyError) as error:
+        raise HTTPException(409, str(error)) from error
+
+
 @app.post('/api/internal/comfy/tasks/{key}/resolve')
 async def agent_resolve_task(key: str, data: ResolutionInput, request: Request) -> dict[str, Any]:
     tasks = agent_request(request)
@@ -273,6 +295,7 @@ class SubmissionPlanInput(BaseModel):
     prepare_only: bool = False
     reprepare: bool = False
     start_paused: bool = False
+    record_repairs: dict[str, dict] | None = None
 
 
 @app.post('/api/internal/comfy/submit-plan')
@@ -292,6 +315,7 @@ class NoticeReceipt(BaseModel):
 class ResultRegistrationInput(NoticeReceipt):
     record_updates: list[dict[str, str]] = []
     image_plans: dict[str, dict] = {}
+    image_repairs: dict[str, dict] = {}
 
 
 @app.post('/api/internal/comfy/notifications/{batch_id}/ack')
@@ -318,7 +342,7 @@ async def agent_register_results(batch_id: str, data: ResultRegistrationInput, r
     try:
         locks = tasks.__dict__.setdefault('_closeout_locks', {})
         async with locks.setdefault(batch_id, asyncio.Lock()):
-            return await result_closeout(tasks, store, batch_id, data.thread_id, data.record_updates, data.image_plans)
+            return await result_closeout(tasks, store, batch_id, data.thread_id, data.record_updates, data.image_plans, data.image_repairs)
     except (ValueError, OSError, KeyError, TypeError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -388,6 +412,14 @@ def view(value, name):
 @app.get('/api/projects')
 def projects() -> list[dict[str, str]]:
     return store.discover()
+
+
+@app.get('/api/project-index')
+def project_index() -> dict[str, str]:
+    path = store.root / INDEX_NAME
+    if not path.is_file():
+        raise HTTPException(404, '项目总索引尚未建立')
+    return {'title': path.stem, 'html': parser.markdown(path.read_text('utf-8-sig'), INDEX_NAME)}
 
 
 @app.get('/api/workflows')
@@ -468,7 +500,7 @@ def episode_detail(name: str, episode: Episode, detail: Annotated[Literal['playb
     if current is None:
         raise HTTPException(404, '剧集不存在')
     previous = None
-    if int(episode[2:]) > 1:
+    if episode.startswith('EP') and int(episode[2:]) > 1:
         previous_id = 'EP' + str(int(episode[2:]) - 1).zfill(len(episode) - 2)
         prior = entry(name, '09-剧集制作', previous_id, mode='ending' if detail == 'playback' else 'full')['data']['catalogues']['09-剧集制作']['children']
         if prior:
@@ -518,7 +550,8 @@ def episode_download(name: str, episode: Episode, stage: Literal['一采', '二�
         files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)[stage][kind]
         if not files:
             raise FileNotFoundError(('本场' if scene else '本集') + '该阶段没有可下载的' + KINDS[kind])
-        filename = f'{name}-第{int(episode[2:])}集-{scene}-{stage}-正式版视频.zip' if scene else video_archive_name(name, episode)
+        label = episode if episode in ('片头', '片尾') else f'第{int(episode[2:])}集'
+        filename = f'{name}-{label}-{scene}-{stage}-已采用视频.zip' if scene else video_archive_name(name, episode)
         return zip_response(files, filename)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
@@ -559,10 +592,34 @@ def project_file(name: str, path: str, request: Request, v: str | None = None, d
     return response
 
 
+@app.get('/api/projects/{name}/revision-notes/{episode}')
+def episode_revision_notes(name: str, episode: Episode) -> EpisodeNotes:
+    try:
+        return EpisodeRevisionNotes(revision_notes).read(store.project(name), episode)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, UnicodeError) as error:
+        raise HTTPException(503, '修改意见读取失败：' + str(error)) from error
+
+
+@app.put('/api/projects/{name}/revision-notes/{episode}/export')
+def save_episode_revision_export(name: str, episode: Episode, value: EpisodeExportChanges, request: Request) -> EpisodeNotes:
+    if not local_write_request(request):
+        raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
+    try:
+        return EpisodeRevisionNotes(revision_notes).save(store.project(name), episode, value)
+    except NotesChangedError as error:
+        raise HTTPException(409, str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, UnicodeError) as error:
+        raise HTTPException(503, '修改意见未保存：' + str(error)) from error
+
+
 @app.get('/api/projects/{name}/revision-notes/{episode}/{scene}')
 def scene_revision_notes(name: str, episode: Episode, scene: Scene) -> SceneNotes:
     try:
-        return revision_notes.read(store.project(name), episode, scene)
+        return EpisodeRevisionNotes(revision_notes).read_scene(store.project(name), episode, scene)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, UnicodeError) as error:
@@ -574,7 +631,7 @@ def save_revision_note(name: str, episode: Episode, scene: Scene, value: NoteInp
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return revision_notes.save(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_note(store.project(name), episode, scene, value)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, UnicodeError) as error:
@@ -586,7 +643,7 @@ def save_revision_export(name: str, episode: Episode, scene: Scene, value: Expor
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return revision_notes.save_export(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_scene_export(store.project(name), episode, scene, value)
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -649,19 +706,35 @@ def update_action(request: Request, action: UpdateAction) -> dict[str, bool]:
     return {'ok': True}
 
 
+@app.get('/api/component-samples/file')
+def component_sample_file(download: bool = False) -> Response:
+    return Response('公共组件下载示例。此文件不包含项目资料。\n', media_type='text/plain',
+                    headers={'Content-Disposition': ('attachment' if download else 'inline') + '; filename="component-sample.txt"'})
+
+
 @app.get('/api/history')
 def history() -> list[dict[str, str]]:
     root = TOOL / 'docs'
-    return [{'path': p.relative_to(root).as_posix(), 'name': p.stem} for p in sorted(root.rglob('*.md'))]
+    return [{'path': p.relative_to(root).as_posix(), 'name': p.stem}
+            for p in sorted(root.rglob('*.md')) if not p.is_relative_to(root / '归档')]
 
 
 @app.get('/api/history/document')
-def history_document(path: Annotated[str, Query()]) -> dict[str, str]:
+def history_document(path: Annotated[str, Query()], page: Annotated[int, Query(ge=1)] = 1) -> dict[str, str | int]:
     root = TOOL / 'docs'
     target = (root / path).resolve()
     if not target.is_relative_to(root) or target.suffix != '.md' or not target.is_file():
         raise HTTPException(404, '记录不存在')
-    return {'title': target.stem, 'html': parser.markdown(target.read_text('utf-8'), path)}
+    text = target.read_text('utf-8')
+    if path == '版本记录.md':
+        introduction, *entries = re.split(r'(?m)(?=^### )', text)
+        page_size = 10
+        total = len(entries)
+        page = min(page, max(1, (total + page_size - 1) // page_size))
+        start = (page - 1) * page_size
+        return {'title': target.stem, 'html': parser.markdown(introduction + ''.join(entries[start:start + page_size]), path),
+                'page': page, 'pageSize': page_size, 'total': total}
+    return {'title': target.stem, 'html': parser.markdown(text, path)}
 
 
 app.frontend('/', directory=TOOL / 'frontend/dist', fallback='index.html')

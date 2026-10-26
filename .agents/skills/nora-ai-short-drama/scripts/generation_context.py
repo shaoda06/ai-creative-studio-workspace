@@ -27,8 +27,11 @@ def scene_round_basis(project, mapping, task_type):
         if fixed is None or fixed['stage'] != STAGES[task_type] or fixed['run'] != item['round']:
             raise ValueError('执行分段身份与场次修改轮次不一致：' + item['segment'])
         duration = item.get('duration_seconds', item.get('durationSec'))
-        if duration != fixed['duration']:
+        playback_duration = item.get('playback_duration_seconds', duration)
+        if playback_duration != fixed['duration']:
             raise ValueError('执行分段计划时长与场次修改轮次不一致：' + item['segment'])
+        if duration < playback_duration:
+            raise ValueError('生成请求时长不能短于成片计划时长：' + item['segment'])
     return revision
 
 
@@ -36,7 +39,7 @@ def validate_segment_context(project, workflow, task_type, mapping, *, timelines
     """Shared fixed facts for segment retrieval and generation input records."""
     path_scope = path_scope if path_scope is not None else PreparationPaths(project)
     scene, stage = mapping['scene'], STAGES[task_type]
-    if not re.fullmatch(r'EP\d{3,}-C\d{3,}', scene):
+    if not re.fullmatch(r'(?:EP\d{3,}|片头|片尾)-C\d{3,}', scene):
         raise ValueError('输入映射的场次编号不正确')
     directors = [node for node in workflow.values() if node['class_type'] == 'MiniMaxH3Director']
     if len(directors) != 1:
@@ -58,10 +61,10 @@ def validate_segment_context(project, workflow, task_type, mapping, *, timelines
         entries[index] = {'identity': identity, 'directory': directory}
     revision = scene_round_basis(path_scope.project, mapping, task_type)
     if revision is not None:
-        expected = {item['id']: item for item in revision['segments']}
         for index in indices:
-            segment = mapping['segments'][index]['segment']
-            if timeline['segments'][index]['durationSec'] != expected[segment.split('-')[-1]]['duration']:
+            item = mapping['segments'][index]
+            segment = item['segment']
+            if timeline['segments'][index]['durationSec'] != item.get('duration_seconds', item.get('durationSec')):
                 raise ValueError('实际执行选中段计划时长与场次修改轮次不一致：' + segment)
     return {'director': director, 'timeline': timeline, 'indices': indices, 'entries': entries, 'project': path_scope.project}
 
@@ -74,7 +77,7 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
         mapping = json.loads(path_scope.io_file(mapping_file).read_text(encoding='utf-8-sig'))
     stage = STAGES[task_type]
     scene = mapping['scene']
-    if (stage == '后处理' or segment_plan_checked) and not fixed_checked and not re.fullmatch(r'EP\d{3,}-C\d{3,}', scene):
+    if (stage == '后处理' or segment_plan_checked) and not fixed_checked and not re.fullmatch(r'(?:EP\d{3,}|片头|片尾)-C\d{3,}', scene):
         raise ValueError('输入映射的场次编号不正确')
     payloads = {}
 

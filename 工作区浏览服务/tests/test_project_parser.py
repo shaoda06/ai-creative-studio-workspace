@@ -71,6 +71,50 @@ class ProjectParserTests(unittest.TestCase):
         self.assertEqual(len(data["groups"][0]["files"]), 2)
         self.assertFalse((self.root / portal.POSITION).exists())
 
+    def test_scoped_asset_views_load_linked_review_documents(self):
+        self.person_fixture()
+        self.prop_fixture()
+        self.scene_fixture()
+        for stage, kind in ((portal.PEOPLE, "people"), (portal.PROPS, "props"),
+                            (portal.SCENES, "scenes")):
+            with self.subTest(stage=stage):
+                data = portal.build_data(self.root.resolve(), load_scope=stage)
+                assets = data[kind][0]["formal"]
+                self.assertTrue(assets)
+                self.assertTrue(all(asset["approved"] for asset in assets))
+                self.assertFalse(any("图片批准依据" in warning for warning in data["warnings"]))
+                for asset in assets:
+                    for review in asset["reviews"]:
+                        self.assertIn(review["key"], data["sources"])
+
+    def test_scoped_people_load_exact_review_from_shared_or_position_work_draft(self):
+        _, record = self.person_fixture()
+        original = record.read_text()
+        old_link = "../../审阅记录/CH001-审阅-001.md"
+        for folder in (portal.PEOPLE, "00-项目定位"):
+            key = folder + "/其他资料/工作稿/共享审阅-工作稿.md"
+            self.put(key, "# 工作稿\n\n### 审阅-历史图片01-001\n"
+                     "#### 4. 用户确认\n- 结论：不采用\n\n"
+                     "### 审阅-历史图片02-001\n"
+                     "#### 4. 用户确认\n- 结论：批准采用\n"
+                     "#### 5. 采用与后续影响\n- 留存用途：角色展示\n"
+                     "- 当前制作适用性：正常比例与Q版\n")
+            target = Path(os.path.relpath(self.root / key, record.parent)).as_posix()
+            for anchor, approved in (("审阅-历史图片02-001", True),
+                                     ("审阅-历史图片01-001", False),
+                                     ("审阅-不存在-001", False), ("", False)):
+                with self.subTest(folder=folder, anchor=anchor):
+                    link = target + ("#" + anchor if anchor else "")
+                    record.write_text(original.replace(old_link, link))
+                    data = portal.build_data(self.root.resolve(), load_scope=portal.PEOPLE)
+                    asset = data["people"][0]["formal"][0]
+                    self.assertEqual(asset["approved"], approved)
+                    if approved:
+                        self.assertEqual(asset["reviewDecision"], "批准采用")
+                        self.assertEqual(asset["retentionPurpose"], "角色展示")
+                        self.assertEqual(asset["applicability"], "正常比例与Q版")
+                        self.assertIn(key, data["sources"])
+
     def test_image_work_draft_uses_scoped_approval_and_original_asset_folder(self):
         _, person_record = self.person_fixture()
         prop_record = self.prop_fixture()
@@ -466,6 +510,75 @@ class ProjectParserTests(unittest.TestCase):
         self.assertIn("09-剧集制作/EP001/02-剧集剧本", keys)
         self.assertIn("09-剧集制作/EP001/06-生成结果/C001-场次结果/P001-分段结果/01-一采/候选", keys)
 
+
+    def test_director_sheets_separate_current_pages_from_candidates_and_other_materials(self):
+        root = '09-剧集制作/EP001'
+        self.put(root + '/02-剧集剧本/EP001-本集剧本.md', '# 剧本\n\n## 1. 故事剧本正文\n\n### EP001-C001\n\n### EP001-C002\n')
+        for page in (10, 2, 1):
+            self.put(root + f'/03-分镜脚本/导演分镜表/EP001-C001-手绘导演分镜表-第{page:02}页.png', 'formal')
+        self.put(root + '/03-分镜脚本/导演分镜表/EP001-C002-手绘导演分镜表-第01页.png', 'other scene')
+        for version, page in ((10, 2), (2, 10), (2, 1), (1, 1)):
+            self.put(root + f'/其他资料/工作稿/素材/EP001-C001-手绘导演分镜表-v{version:02}-第{page:02}页.png', 'candidate')
+        self.put(root + '/其他资料/工作稿/素材/EP001-C002-手绘导演分镜表-v02-第01页.png', 'other scene candidate')
+        self.put(root + '/其他资料/历史版本/EP001-C001-手绘导演分镜表-第03页.png', 'archived')
+        self.put(root + '/其他资料/工作稿/素材/普通图片.png', 'ordinary material')
+        self.put(root + '/其他资料/工作稿/EP001-专用素材制作-工作稿.md', '# 图片过程记录')
+        data = portal.build_data(self.root.resolve(), web_episode_navigation=True)
+        episode = data['catalogues']['09-剧集制作']['children'][0]
+        sheets = episode['directorSheets']
+        self.assertEqual(set(sheets), {'C001', 'C002'})
+        self.assertEqual([item['page'] for item in sheets['C001']['formal']], [1, 2, 10])
+        self.assertEqual([(item['version'], item['page']) for item in sheets['C001']['candidates']],
+                         [('v01', 1), ('v02', 1), ('v02', 10), ('v10', 2)])
+        self.assertEqual(len(sheets['C002']['formal']), 1)
+        self.assertEqual([item['name'] for item in episode['materials']], ['普通图片.png'])
+        self.assertEqual(sheets['C001']['record']['name'], 'EP001-专用素材制作-工作稿.md')
+
+    def test_director_candidate_only_shared_objects_and_image_closeout(self):
+        from types import SimpleNamespace
+        from backend import main  # Load the runtime script paths used by image closeout.
+        from backend.services.result_registration import verify_image_entries
+        for number in ('EP001', '片头', '片尾'):
+            root = f'09-剧集制作/{number}'
+            candidate = root + f'/其他资料/工作稿/素材/{number}-C001-手绘导演分镜表-v01-第01页.png'
+            self.put(candidate, 'candidate only')
+            parsed = portal.build_data(self.root.resolve(), web_episode_navigation=True, load_scope='09-剧集制作', episode_id=number)
+            episode = parsed['catalogues']['09-剧集制作']['children'][0]
+            self.assertEqual(episode['directorSheets']['C001']['formal'], [])
+            self.assertEqual(episode['directorSheets']['C001']['candidates'][0]['key'], candidate)
+            self.assertEqual(episode['materials'], [])
+            verify_image_entries(SimpleNamespace(section=lambda *args: parsed), 'fixture', [{
+                'draft': root + f'/其他资料/工作稿/{number}-专用素材制作-工作稿.md', 'path': candidate}])
+
+    def test_director_sheet_source_and_adoption_come_from_registered_relationships(self):
+        root = '09-剧集制作/EP001'
+        work = root + '/其他资料/工作稿'
+        formal = root + '/03-分镜脚本/导演分镜表/EP001-C001-手绘导演分镜表-第01页.png'
+        self.put(formal, 'formal')
+        for version in (1, 2, 3, 4):
+            self.put(work + f'/素材/EP001-C001-手绘导演分镜表-v{version:02}-第01页.png', 'candidate')
+        self.put(work + '/EP001-C001-场次分镜-工作稿.md', '''# 场次工作稿
+
+| 来源分镜版本 | 图表版本 | 候选编号 |
+| --- | --- | --- |
+| v07 | v01 | 1 |
+| v07 | v02 | 2 |
+| v08 | v03 | 1 |
+
+| 页码 | 来源分镜版本 | 图表版本 | 候选原图 | 正式图片 |
+| --- | --- | --- | --- | --- |
+| 1/1 | v07 | v02 | [候选](素材/EP001-C001-手绘导演分镜表-v02-第01页.png) | [正式](../../03-分镜脚本/导演分镜表/EP001-C001-手绘导演分镜表-第01页.png) |
+''')
+        def collection():
+            data = portal.build_data(self.root.resolve(), web_episode_navigation=True)
+            return data['catalogues']['09-剧集制作']['children'][0]['directorSheets']['C001']
+        sheets = collection()
+        self.assertEqual([(item['sourceVersion'], item['candidateNumber'], item['adopted']) for item in sheets['candidates']],
+                         [('v07', 1, False), ('v07', 2, True), ('v08', 1, False), ('', None, False)])
+        self.assertEqual(sheets['formal'][0]['sourceVersion'], 'v07')
+        self.assertEqual(sheets['formal'][0]['version'], 'v02')
+        (self.root / formal).unlink()
+        self.assertFalse(any(item['adopted'] for item in collection()['candidates']), '登记有链接但正式图片缺失不冒称采用')
 
     def test_episode_materials_index_record_then_images_by_filename(self):
         for episode, prefix in (("EP001", ""), ("EP002", "EP002-")):
@@ -1445,6 +1558,61 @@ class ProjectParserTests(unittest.TestCase):
         self.assertIsNone(person["cover"])
         self.assertFalse(person["formal"][0]["approved"])
         self.assertIn("修改后再审", person["formal"][0]["statusHtml"])
+
+    def test_people_explicit_list_cover_overrides_portrait(self):
+        _, record = self.person_fixture()
+        self.put("03-人物资料/CH001-小林/参考图/双形象.png", "fixture image")
+        text = record.read_text().replace("| 审阅记录 |", "| 审阅记录 | 列表封面 |")
+        text = text.replace("| --- | --- | --- | --- | --- | --- |", "| --- | --- | --- | --- | --- | --- | --- |")
+        row = "| 人物上半身正面肖像图 | 少年 | 基础服 | [图](正式.png) | v01 | [审阅](../../审阅记录/CH001-审阅-001.md) |"
+        explicit = row.replace("人物上半身正面肖像图", "角色双形象展示图").replace("正式.png", "双形象.png") + " 是 |"
+        for rows in (row + " 否 |\n" + explicit, explicit + "\n" + row + " 否 |"):
+            with self.subTest(rows=rows):
+                record.write_text(text.replace(row, rows))
+                person = portal.build_data(self.root)["people"][0]
+                self.assertEqual(person["cover"]["type"], "角色双形象展示图")
+                self.assertTrue(person["cover"]["listCover"])
+                self.assertEqual(len(person["formal"]), 2)
+                self.assertTrue(all(a["approved"] for a in person["formal"]))
+
+    def test_people_automatic_cover_priority_and_other_formal_fallback(self):
+        _, record = self.person_fixture()
+        original = record.read_text()
+        row = "| 人物上半身正面肖像图 | 少年 | 基础服 | [图](正式.png) | v01 | [审阅](../../审阅记录/CH001-审阅-001.md) |"
+        other = row.replace("人物上半身正面肖像图", "全身造型参考图")
+        views = row.replace("人物上半身正面肖像图", "角色多视角参考图")
+        for rows, expected in ((other + "\n" + views + "\n" + row, "人物上半身正面肖像图"),
+                               (other + "\n" + views, "角色多视角参考图"),
+                               (other, "全身造型参考图")):
+            with self.subTest(expected=expected):
+                record.write_text(original.replace(row, rows))
+                cover = portal.build_data(self.root)["people"][0]["cover"]
+                self.assertEqual(cover["type"], expected)
+                self.assertFalse(cover["listCover"])
+
+    def test_people_invalid_list_cover_does_not_grant_approval_or_hide_conflict(self):
+        _, record = self.person_fixture()
+        original = record.read_text().replace("| 审阅记录 |", "| 审阅记录 | 列表封面 |")
+        original = original.replace("| --- | --- | --- | --- | --- | --- |", "| --- | --- | --- | --- | --- | --- | --- |")
+        row = "| 人物上半身正面肖像图 | 少年 | 基础服 | [图](正式.png) | v01 | [审阅](../../审阅记录/CH001-审阅-001.md) |"
+        marked = row + " 是 |"
+        for problem in ("unapproved", "missing", "not-applicable", "duplicate"):
+            with self.subTest(problem=problem):
+                text = original.replace(row, marked)
+                review = "# 审阅\n## 4. 用户确认\n- 结论：批准采用。\n"
+                if problem == "unapproved":
+                    review = review.replace("批准采用", "修改后再审")
+                elif problem == "missing":
+                    text = text.replace("(正式.png)", "(缺失.png)")
+                elif problem == "not-applicable":
+                    review += "## 5. 采用与后续影响\n- 当前制作适用性：不适用\n"
+                else:
+                    text = text.replace(marked, marked + "\n" + marked.replace("人物上半身正面肖像图", "全身造型参考图"))
+                self.put("03-人物资料/审阅记录/CH001-审阅-001.md", review)
+                record.write_text(text)
+                data = portal.build_data(self.root)
+                self.assertIsNone(data["people"][0]["cover"])
+                self.assertTrue(any("列表封面" in w for w in data["warnings"]))
 
     def test_people_history_or_loose_files_are_not_current_assets(self):
         _, record = self.person_fixture()

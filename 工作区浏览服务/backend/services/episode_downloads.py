@@ -6,18 +6,20 @@ from zipfile import ZIP_STORED, ZipFile
 
 from fastapi.responses import FileResponse
 from backend.services.jianying_draft import draft_files
+from backend.parsers.video_products import final_product
 
 STAGES = {'后处理': '03-后处理', '二采': '02-二采', '一采': '01-一采'}
-KINDS = {'videos': '正式版视频', 'director': '导演包', 'canvas': '画布'}
+KINDS = {'videos': '已采用视频', 'director': '导演包', 'canvas': '画布'}
 DOWNLOAD_DIRECTORY = Path(__file__).resolve().parents[2] / 'runtime' / 'downloads'
 
 
 def video_archive_name(name, episode):
-    return f'{name}-第{int(episode[2:])}集-正式版视频.zip'
+    label = episode if episode in ('片头', '片尾') else f'第{int(episode[2:])}集'
+    return f'{name}-{label}-已采用视频.zip'
 
 
 def video_member_name(path, scene_number, segment_number):
-    return f'第{scene_number}场-第{segment_number}段-正式版{path.suffix}'
+    return f'第{scene_number}场-第{segment_number}段-已采用{path.suffix}'
 
 
 def indexed_episode(episode, data):
@@ -42,12 +44,12 @@ def completed_episode_videos(store, name, episode, data):
         for segment_number, segment in enumerate(segments, 1):
             videos = [video for video in segment['videos'] if video['stage'] == '后处理' and video['approved']]
             if len(videos) != 1:
-                raise ValueError('本集尚未全部批准后处理正式版')
-            video = videos[0]
+                raise ValueError('本集尚未全部批准后处理已采用')
+            video = final_product(videos[0])
             path = store.file(name, video['key'])
             stat = path.stat()
             if video['fileRevision'] != str(stat.st_mtime_ns) + '-' + str(stat.st_size):
-                raise ValueError('正式版文件已变化，请等待页面同步后重新下载')
+                raise ValueError('已采用文件已变化，请等待页面同步后重新下载')
             files.append((path, video_member_name(path, scene_number, segment_number)))
     return files
 
@@ -63,7 +65,8 @@ def resources(store, name, episode, data, scene=None):
         for segment_number, segment in enumerate(selected['segments'][selected_scene], 1):
             for video in segment['videos']:
                 if video['approved']:
-                    path = store.file(name, video['key'], video['fileRevision'])
+                    product = final_product(video)
+                    path = store.file(name, product['key'], product['fileRevision'])
                     result[video['stage']]['videos'].append((path, video_member_name(path, scene_number, segment_number)))
 
     root = store.project(name)
@@ -113,7 +116,7 @@ def zip_response(files, filename):
             members = set()
             for source, member in files:
                 if member in members:
-                    raise ValueError('同一分段存在多个正式版，请核对采用记录后重新下载')
+                    raise ValueError('同一分段存在多个已采用，请核对采用记录后重新下载')
                 members.add(member)
                 bundle.write(source, member)
             for member, content in draft_files(files, Path(filename).stem).items():

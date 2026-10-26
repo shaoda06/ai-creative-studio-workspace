@@ -39,10 +39,73 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         return dict(task_type='image', object=who, title=who + ' · 角色六视图', kind='人物', image_type='角色多视角参考图',
             state='大学', costume='首集', authorization='用户明确要求男女主各生成一张穿衣六视图',
             draft=f'03-人物资料/其他资料/工作稿/{who}-参考图-工作稿.md',
+            formal=f'03-人物资料/{who}-人物/参考图/{who}-大学-首集-角色多视角参考图.png',
             prompt=dict(rewritten_prompt='风格要求：真人摄影感。\n画面要求：同一人物六视图。\n人物描述：按当前确认的衣装。', wh_ratio='1:1', ratio_follow=''))
 
     def write_plan(self, *tasks):
         self.plan_file.write_text(json.dumps(dict(tasks=tasks), ensure_ascii=False))
+
+    def test_prop_layout_type_does_not_become_candidate_filename(self):
+        spec = dict(self.spec(), kind='道具', object='PR001', image_type='道具三视图',
+                    state='基础', size=[1024, 1024],
+                    draft='05-道具资料/其他资料/工作稿/PR001-参考图-工作稿.md',
+                    formal='05-道具资料/PR001-保温杯/参考图/PR001-基础-道具参考图.png')
+        documents = plans.Documents(self.project)
+        with patch.object(plans, 'choose_seed', return_value=101):
+            task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
+        self.assertEqual(Path(task['outputs'][0]['path']).name, 'PR001-基础-道具参考图-候选-v01.png')
+        self.assertFalse((self.project / spec['draft']).exists())
+
+    def test_views_count_candidate_versions_by_formal_filename(self):
+        spec = dict(self.spec(), kind='场景', object='SC001', image_type='场景参考图', size=[1024, 1024],
+                    draft='04-场景资料/其他资料/工作稿/SC001-参考图-工作稿.md')
+        documents = plans.Documents(self.project)
+        for view, expected in [('V001', 'v01'), ('V002', 'v01'), ('V001', 'v02')]:
+            spec['formal'] = f'04-场景资料/SC001-办公室/参考图/SC001-EP001-C001-{view}-场景参考图.png'
+            with patch.object(plans, 'choose_seed', return_value=101):
+                task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
+            self.assertEqual(Path(task['outputs'][0]['path']).name,
+                             f'SC001-EP001-C001-{view}-场景参考图-候选-{expected}.png')
+
+    async def test_explicit_wrong_candidate_stops_before_any_publish_or_enqueue(self):
+        spec = self.spec()
+        spec['output'] = '03-人物资料/其他资料/工作稿/素材/CH001-大学-首集-角色多视角参考图-候选-v01-imagegen.png'
+        self.write_plan(spec)
+        with patch.object(self.store, 'enqueue', side_effect=AssertionError('must not enqueue')):
+            with self.assertRaisesRegex(ValueError, '对应正式图片名'):
+                await plans.execute(self.store, self.payload)
+        self.assertFalse((self.project / spec['draft']).exists())
+
+    def test_processing_source_and_destination_must_share_formal_identity(self):
+        draft = '03-人物资料/其他资料/工作稿/CH001-参考图-工作稿.md'
+        source = '03-人物资料/其他资料/工作稿/素材/CH001-日常-服装参考图-候选-v01.png'
+        plan = dict(draft=draft, kind='人物', formal='03-人物资料/CH001-男主/参考图/CH001-日常-服装参考图.png',
+                    images=[dict(path=source.removesuffix('.png') + '-规格处理-001.png')],
+                    upscale=dict(source=source, number='规格处理-001', formal='03-人物资料/CH001-男主/参考图/CH001-日常-服装参考图.png'))
+        image.validate_names(self.project, plan, required=True)
+        plan['images'][0]['path'] = plan['images'][0]['path'].replace('-规格处理-001', '-1080x1440')
+        with self.assertRaisesRegex(ValueError, '对应正式图片名'):
+            image.validate_names(self.project, plan, required=True)
+        plan['images'][0]['path'] = source.removesuffix('.png') + '-规格处理-001.png'
+        plan['upscale']['source'] = source.replace('服装参考图-候选', '服装正背面图-候选')
+        with self.assertRaisesRegex(ValueError, '批准原候选与正式图片名称不一致'):
+            image.validate_names(self.project, plan, required=True)
+
+    def test_legacy_plan_can_recover_without_rewriting_new_fields(self):
+        plan = dict(draft='旧工作稿.md', kind='场景', images=[dict(path='旧名-imagegen.png')])
+        image.validate_names(self.project, plan)
+        self.assertNotIn('formal', plan)
+        with self.assertRaisesRegex(ValueError, 'formal'):
+            image.validate_names(self.project, plan, required=True)
+
+    def test_new_direct_registration_cannot_bypass_formal_identity(self):
+        self.data.image_plan = dict(draft='03-人物资料/其他资料/工作稿/CH001-参考图-工作稿.md',
+                                    kind='人物', images=[dict(path='03-人物资料/其他资料/工作稿/素材/任意图-候选-v01.png')])
+        with self.assertRaisesRegex(ValueError, 'formal'):
+            self.store.validate_registration(self.data)
+        self.data.image_plan['formal'] = '03-人物资料/CH001-男主/参考图/CH001-大学-人物多视角参考图.png'
+        with self.assertRaisesRegex(ValueError, '对应正式图片名'):
+            self.store.validate_registration(self.data)
 
     async def test_batch_builds_both_pairs_and_records_before_one_queue_handoff(self):
         self.write_plan(self.spec(), self.spec('CH002'))
@@ -517,6 +580,226 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_upscale_builds_formal_adoption_and_closes_bound_upload(self):
         await self.check_upscale_adoption()
+
+    def test_adoption_keeps_optional_list_cover_on_replacement(self):
+        draft = self.project / self.spec()['draft']
+        source = draft.parent / '素材/图片-候选-v02.png'
+        spec = dict(self.spec(), upscale_number='超分-001')
+        header = ('# 工作稿\n## 1. 当前正式资产\n'
+                  '| 正式文件 | 采用的候选版本 | 审阅记录 | 列表封面 |\n'
+                  '| --- | --- | --- | --- |\n')
+        previous = '| ' + image.link(draft, self.project / spec['formal']) + ' | v01 | [批准](#旧批准) | 是 |\n'
+        generation = '\n## 2. 逐次生成记录\n### 生成记录-002\n- 图片类型：角色多视角参考图\n'
+        for old, fields, expected in (('', {}, ''), (previous, {}, '是'),
+                                      (previous, {'列表封面': '否'}, '否')):
+            with self.subTest(existing=bool(old), fields=fields):
+                updates = plans.adoption_updates(self.project, draft, header + old + generation,
+                    '生成记录-002', '审阅-生成记录-002-001', source,
+                    dict(spec, adoption_fields=fields))
+                self.assertEqual(updates[0]['new'].splitlines()[-1].strip('|').split('|')[-1].strip(), expected)
+                self.assertIn('v02／超分-001', updates[0]['new'])
+
+    def approved_local_spec(self, size):
+        source = image_tests.ImageCloseoutTests.setup_image(self)
+        result_registration.register(self.store, 'task')
+        text = self.draft.read_text()
+        review = image.section(text, '审阅-生成记录-001-001')[0]
+        self.draft.write_text(text.replace(review, image.fields(review, {
+            '结论': '批准采用', '批准的具体候选': image.link(self.draft, source)})))
+        formal = '03-人物资料/CH001-男主/参考图/CH001-日常-服装参考图.png'
+        spec = dict(task_type='image-upscale', object='CH001', title='CH001 · 指定尺寸适配', kind='人物',
+            draft=self.rel(self.draft), authorization='用户授权指定尺寸下的等比缩放与少量裁切', formal=formal,
+            size=size, adoption_fields={'适用范围': '第一集'}, references=[dict(file=self.rel(source), purpose='获批原图',
+            approval=self.rel(self.draft)+'#审阅-生成记录-001-001')])
+        return source, self.project / formal, spec
+
+    async def check_progress_scope_conflict(self, size):
+        source, formal, spec = self.approved_local_spec(size)
+        progress = self.project / '项目进度.md'
+        row = '| EP001制作 | 会话 | 进行中 | 当前成果 | - 衣装未定 | - 无 |'
+        progress.write_text(row)
+        spec['adoption_updates'] = [dict(path='项目进度.md', old='衣装未定', new='图片已采用')]
+        self.write_plan(spec)
+        with patch.object(self.store, 'enqueue', side_effect=AssertionError('must not enqueue')), \
+                patch.object(t.client.Client, 'json', side_effect=AssertionError('must not contact remote')), \
+                patch('PIL.ImageOps.fit', side_effect=AssertionError('must not process locally')):
+            with self.assertRaisesRegex(ValueError, '对应阶段行'):
+                await plans.execute(self.store, self.payload)
+        self.assertFalse(formal.exists())
+        self.assertEqual(progress.read_text(), row)
+        self.assertEqual(source.read_bytes(), png())
+        self.assertEqual(len(self.store.rows), 1)
+
+    async def test_upscale_progress_scope_conflict_stops_before_queue(self):
+        await self.check_progress_scope_conflict([8, 6])
+
+    async def test_local_progress_scope_conflict_stops_before_processing(self):
+        await self.check_progress_scope_conflict([6, 2])
+
+    async def test_any_smaller_edge_and_same_size_run_locally_without_queue_or_remote(self):
+        from PIL import Image
+        source, formal, spec = self.approved_local_spec([6, 2])
+        original = source.read_bytes()
+        self.write_plan(spec)
+        with patch.object(self.store, 'enqueue', side_effect=AssertionError('local must not enqueue')), \
+                patch.object(t.client.Client, 'json', side_effect=AssertionError('local must not contact remote')):
+            result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['tasks'][0]['provider'], 'local')
+        self.assertIsNone(result['tasks'][0]['local_task_id'])
+        with Image.open(formal) as output:
+            self.assertEqual(output.size, (6, 2))
+        self.assertEqual(source.read_bytes(), original)
+        self.assertIn('规格处理-001', self.draft.read_text())
+        self.assertIn('本地Pillow等比缩放与裁切；远端任务ID不适用', self.draft.read_text())
+        self.assertIn('v01／规格处理-001', self.draft.read_text())
+        self.assertEqual(len(self.store.rows), 1)  # Only the original image generation.
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('do not resize again')):
+            repeated = await plans.execute(self.store, self.payload)
+        self.assertTrue(repeated['reused'])
+
+    async def test_size_routing_covers_width_height_mixed_and_identical_dimensions(self):
+        _, _, spec = self.approved_local_spec([2, 3])
+        for size in ([2, 3], [4, 2], [6, 2], [2, 6], [2, 1], [4, 3], [8, 6], [4, 6]):
+            with self.subTest(size=size):
+                task = plans.build_image(self.project, t.SKILL, {**spec, 'size': size}, plans.Documents(self.project), t.client.now())
+                local = task['image_plan'].get('local_processing')
+                self.assertEqual(bool(local), size not in ([8, 6], [4, 6]))
+                if local:
+                    self.assertEqual(task['workflow'], {})
+                    self.assertEqual(task['uploads'], [])
+                else:
+                    self.assertEqual(task['workflow']['1']['class_type'], 'RTXVideoSuperResolution')
+
+    async def test_local_prepare_only_does_not_process_then_normal_call_completes(self):
+        _, formal, spec = self.approved_local_spec([2, 1])
+        spec['crop_anchor'] = [0.5, 0]
+        self.write_plan(spec)
+        self.payload.prepare_only = True
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('prepare only does not process')):
+            result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'prepared')
+        self.assertFalse(formal.exists())
+        self.payload.prepare_only = False
+        await plans.execute(self.store, self.payload)
+        receipt = next(self.project.rglob('*规格处理-001-处理结果.json'))
+        proof = json.loads(receipt.read_text())
+        self.assertEqual(proof['crop_anchor'], [0.5, 0])
+        self.assertEqual(proof['crop_box'], [0.0, 0.0, 4.0, 2.0])
+
+    async def test_local_processing_does_not_overwrite_existing_formal_without_archive(self):
+        _, formal, spec = self.approved_local_spec([2, 1])
+        formal.parent.mkdir(parents=True)
+        formal.write_bytes(b'preserve previous formal')
+        self.write_plan(spec)
+        with self.assertRaisesRegex(ValueError, '归档'):
+            await plans.execute(self.store, self.payload)
+        self.assertEqual(formal.read_bytes(), b'preserve previous formal')
+
+    async def test_changed_source_after_local_preparation_stops_before_processing(self):
+        source, formal, spec = self.approved_local_spec([2, 1])
+        self.write_plan(spec)
+        self.payload.prepare_only = True
+        await plans.execute(self.store, self.payload)
+        source.write_bytes(source.read_bytes())
+        self.payload.prepare_only = False
+        with self.assertRaisesRegex(ValueError, '准备资料已变化'):
+            await plans.execute(self.store, self.payload)
+        self.assertFalse(formal.exists())
+
+    async def test_local_closeout_resumes_browser_verification_without_processing_again(self):
+        _, formal, spec = self.approved_local_spec([2, 1])
+        self.write_plan(spec)
+        with patch('backend.services.local_images.verify_image_entries', side_effect=ValueError('browser not ready')):
+            result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'failed')
+        self.assertTrue(formal.exists())
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('do not process again')):
+            result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'completed')
+
+    async def test_local_record_repair_resumes_without_processing_or_queueing(self):
+        from copy import deepcopy
+        from backend.services import image_closeout as images
+        _, formal, spec = self.approved_local_spec([2, 1])
+        row = '| 人物参考图 | 会话 | 进行中 | 待正式保存 | - 无 | - 无 |'
+        progress = self.project / '项目进度.md'
+        progress.write_text(row)
+        spec['adoption_updates'] = [dict(path='项目进度.md', old=row, new=row.replace('待正式保存', '{{file}}'))]
+        self.write_plan(spec)
+        apply = images.apply_updates
+        def user_edit(root, report, report_file):
+            progress.write_text(row.replace('待正式保存', '待正式保存（用户备注）'))
+            return apply(root, report, report_file)
+        with patch.object(images, 'apply_updates', side_effect=user_edit):
+            result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'failed')
+        journal = json.loads(self.plan_file.with_name(self.plan_file.stem + '-装配结果.json').read_text())
+        task = journal['tasks'][0]
+        original = self.plan_file.read_bytes()
+        expected = images.record_updates(task['image_plan'])
+        revised = deepcopy(expected)
+        revised[-1] = dict(path='项目进度.md', old=progress.read_text(),
+                           new=progress.read_text().replace('待正式保存', '已正式保存'))
+        self.payload.record_repairs = {task['record_dir']: dict(reason='保留用户备注完成原登记',
+                                                               expected_updates=expected, updates=revised)}
+        # Repairs use actual result links, never placeholders from the original plan.
+        revised[0]['new'] = revised[0]['new'].replace('{{file}}', images.link(self.draft, formal))
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('no repeated processing')), \
+                patch.object(self.store, 'enqueue', side_effect=AssertionError('no queue')):
+            for _ in range(2):
+                result = await plans.execute(self.store, self.payload)
+                self.assertEqual(result['status'], 'completed')
+        self.assertTrue(formal.exists())
+        self.assertIn('已正式保存（用户备注）', progress.read_text())
+        self.assertEqual(self.plan_file.read_bytes(), original)
+
+    async def test_empty_record_repair_never_falls_through_to_generation(self):
+        self.write_plan(self.spec())
+        self.payload.record_repairs = {}
+        with patch.object(self.store, 'enqueue', side_effect=AssertionError('repair must never queue')):
+            with self.assertRaisesRegex(ValueError, '不能为空'):
+                await plans.execute(self.store, self.payload)
+
+    async def test_identical_size_copies_original_without_resampling(self):
+        source, formal, spec = self.approved_local_spec([4, 3])
+        self.write_plan(spec)
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('same dimensions do not need processing')):
+            await plans.execute(self.store, self.payload)
+        self.assertEqual(formal.read_bytes(), source.read_bytes())
+
+    async def test_invalid_second_task_prevents_local_first_task_from_executing(self):
+        _, formal, spec = self.approved_local_spec([2, 1])
+        second = self.spec('CH002')
+        second['size'] = [0, 0]
+        self.write_plan(spec, second)
+        with patch('PIL.ImageOps.fit', side_effect=AssertionError('batch has not passed preparation')):
+            with self.assertRaisesRegex(ValueError, '尺寸'):
+                await plans.execute(self.store, self.payload)
+        self.assertFalse(formal.exists())
+
+    async def test_local_replacement_archives_previous_formal(self):
+        _, formal, spec = self.approved_local_spec([2, 1])
+        formal.parent.mkdir(parents=True)
+        formal.write_bytes(b'previous formal')
+        spec['archive'] = '03-人物资料/其他资料/历史版本/服装-归档.png'
+        self.write_plan(spec)
+        result = await plans.execute(self.store, self.payload)
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual((self.project / spec['archive']).read_bytes(), b'previous formal')
+        self.assertNotEqual(formal.read_bytes(), b'previous formal')
+
+    async def test_legacy_rtx_plan_rejects_smaller_edge_before_upload(self):
+        _, _, spec = self.approved_local_spec([8, 6])
+        self.write_plan(spec)
+        result = await plans.execute(self.store, self.payload)
+        key = result['tasks'][0]['local_task_id']
+        data = self.store.rows[key]['input']
+        data.image_plan['images'][0].update(width=6, height=2)
+        data.workflow['1']['inputs'].update({'resize_type.width': 6, 'resize_type.height': 2})
+        with patch.object(t.client.Client, 'json', side_effect=AssertionError('no upload')):
+            with self.assertRaisesRegex(ValueError, 'RTX不能缩小'):
+                await self.store.prepare(key)
 
     async def test_target_dimensions_builds_paired_workflow_and_closes_approved_imagegen_source(self):
         await self.check_upscale_adoption(size=[11, 8])

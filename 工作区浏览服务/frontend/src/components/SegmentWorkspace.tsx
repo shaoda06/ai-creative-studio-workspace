@@ -14,7 +14,8 @@ import { PromptSections } from './PromptSections';
 import { RevisionNoteEditor } from './RevisionNotes';
 import type { NoteScope } from './RevisionNotes';
 import { useRefreshState } from '../refreshPosition';
-import './SegmentWideLayout.css';
+import { SegmentLayout } from './SegmentLayout';
+import './LatestSelection.css';
 
 function SegmentReferences({ context }: { context?: GenerationContext }) {
   const preview = useContext(PreviewContext);
@@ -31,12 +32,12 @@ function SegmentReferences({ context }: { context?: GenerationContext }) {
   </section>;
 }
 
-export function SegmentWorkspace({ scope, segment, revision, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuousControl }: {
-  scope: NoteScope; segment: string;
+export function SegmentWorkspace({ scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl }: {
+  scope: NoteScope; segment: string; roundNumber?: number;
   revision: number;
   items: VideoItem[]; selection: { stage: string; key: string }; onSelectionChange: (selection: { stage: string; key: string }) => void;
   tab: string; onTabChange: (tab: string) => void;
-  wideVideo: boolean; onToggleWide: () => void; continuousControl: ReactNode;
+  wideVideo: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode;
   plannedScript?: { html: string; url?: string; label: string }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
   cachedSources: Record<string, string>;
   retainSource: (source: string) => () => void;
@@ -50,8 +51,15 @@ export function SegmentWorkspace({ scope, segment, revision, items, selection: {
   const shotTimeline = useRef<HTMLDivElement>(null);
   const player = useRef<SegmentVideoHandle>(null);
   const latest = latestVideo(items.filter(item => item.stage === stage));
-  const versions = items.filter(item => item.stage === stage).sort((a, b) => Number(b.approved) - Number(a.approved) || b.candidateNumber - a.candidateNumber);
+  const versions = items.filter(item => item.stage === stage).sort((a, b) => b.candidateNumber - a.candidateNumber);
   const current = versions.find(item => item.key === selected);
+  const [productSelection, setProductSelection] = useState({ version: '', id: '' });
+  const products = current?.products || [];
+  const product = products.find(item => productSelection.version === current?.key && item.id === productSelection.id)
+    || products.find(item => item.role === '最终产物');
+  const displayVideo = current && product ? { ...current, url: product.previewUrl || product.url,
+    downloadUrl: product.url, previewNote: product.previewNote, reviewFileRevision: current.fileRevision,
+    fileRevision: product.fileRevision + ':' + (product.previewRevision || '') } : current;
   const identity = current && `${scope.episode}-${scope.scene}-${segment}-${current.run}-${current.stage}`;
   const detail = useQuery({ queryKey: ['generation-context', scope.project, identity, revision],
     queryFn: () => get<GenerationContext>(`${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
@@ -71,7 +79,8 @@ export function SegmentWorkspace({ scope, segment, revision, items, selection: {
     plannedDuration += shot.duration!;
     return { shot, start, end: plannedDuration };
   }) : [];
-  const activeShot = (timedShots.find(item => time < item.end) || timedShots[timedShots.length - 1])?.shot;
+  const activeTimedShot = timedShots.find(item => time < item.end) || timedShots[timedShots.length - 1];
+  const activeShot = activeTimedShot?.shot;
   const aligned = scriptMode === 'aligned' && canAlign;
   const editingNotes = tab === 'notes';
   const showShotTimeline = canAlign && (tab === 'script' || editingNotes);
@@ -85,18 +94,15 @@ export function SegmentWorkspace({ scope, segment, revision, items, selection: {
     const bounds = container.getBoundingClientRect();
     container.scrollBy({ left: title.left < bounds.left ? title.left - bounds.left : Math.max(0, title.right - bounds.right) });
   }, [tab, activeShot?.id, current?.key, showShotTimeline]);
-  const selectors = <div className="segment-selectors tabs tabs-grouped">
-      <TabSelect label="画质选择" selected={stage} onChange={value => onSelectionChange({ stage: value, key: '' })} items={['一采', '二采', '后处理'].map(value => ({ value, label: value }))} />
-      <TabSelect label="版本切换" disabled={!stage} selected={current?.key || ''} onChange={key => onSelectionChange({ stage, key })} items={versions.map(item => ({ value: item.key, label: item.approved ? '正式版' : candidateLabel(item.candidateNumber) }))} />
-      <button disabled={!latest} onClick={() => onSelectionChange({ stage: latest!.stage, key: latest!.key })}>本段最新版本</button>
+  const selectors = <div className="segment-selectors">
+      <TabSelect size="toolbar" highlightSelected label="画质选择" selected={stage} onChange={value => onSelectionChange({ stage: value, key: '' })} items={['一采', '二采', '后处理'].map(value => ({ value, label: value }))} />
+      <TabSelect size="toolbar" highlightSelected label="版本切换" reselect disabled={!stage} selected={current?.key || ''} onChange={key => onSelectionChange({ stage, key })} items={versions.map(item => ({ value: item.key, label: candidateLabel(item.candidateNumber), badge: item.approved ? '已采用' : undefined }))} />
+      {products.length > 1 && <TabSelect size="toolbar" highlightSelected label="产物选择" selected={product!.id} onChange={id => setProductSelection({ version: current!.key, id })} items={products.map(item => ({ value: item.id, label: item.label, badge: item.role }))} />}
+      <span className="production-latest">当前最新{latest ? selected !== latest.key && <>：{candidateLabel(latest.candidateNumber)}，<button className="production-latest-link" aria-label="切换到本段最新版本" onClick={() => onSelectionChange({ stage: latest.stage, key: latest.key })}>点击切换</button></> : '：暂无版本'}</span>
     </div>;
   return <>
     {!wideVideo && selectors}
-    <div className={'segment-workspace' + (wideVideo ? ' is-wide' : '')}>
-      <div className="segment-playback-row">
-      <SegmentVideo playerRef={player} selectorControl={wideVideo ? selectors : undefined} key={current?.key || 'empty'} wide={wideVideo} onToggleWide={onToggleWide} continuousControl={continuousControl} current={current} cachedSource={current && cachedSources[current.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => setPlayback({ key: current!.key, time })} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />
-      {wideVideo && <aside className="segment-side-navigation" aria-label="宽屏分段导航">{segmentNavigation}</aside>}
-      </div>
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo playerRef={player} selectorControl={wideVideo ? selectors : undefined} key={`${current?.key || 'empty'}/${product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => setPlayback({ key: current!.key, time })} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
       <SegmentReferences context={context} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
@@ -119,7 +125,7 @@ export function SegmentWorkspace({ scope, segment, revision, items, selection: {
         </div>}
         <div className={'segment-script-content' + (aligned && tab === 'script' ? ' is-aligned' : '')} ref={scriptContent}>
         {current && !current.context && <Result loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} />}
-        {editingNotes && current ? <RevisionNoteEditor key={`${current.stage}/${current.run}`} scope={scope} segment={segment} current={current} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '修改意见区域' : tab === 'script' ? '分镜脚本区域' : '提示词区域'}</div> : <>
+        {editingNotes && current ? <RevisionNoteEditor key={`${roundNumber}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} shotStart={activeTimedShot?.start} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '修改意见区域' : tab === 'script' ? '分镜脚本区域' : '提示词区域'}</div> : <>
           {awaitingGeneration ? <p className="notice" role="status">这版视频还没生成。{tab === 'script' && plannedScript?.html
             ? `现在看到的是${plannedScript.label}，不是生成视频时留下的记录。`
             : '还没有实际生成时使用的提示词和素材记录。'}</p>
@@ -138,6 +144,6 @@ export function SegmentWorkspace({ scope, segment, revision, items, selection: {
         </>}
         </div>
       </section>
-    </div>
+    </SegmentLayout>
   </>;
 }

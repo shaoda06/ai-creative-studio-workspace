@@ -34,6 +34,10 @@ def submit_plan(args):
     payload = dict(project=project.name, plan_file=plan.relative_to(project).as_posix(), thread_id=thread,
                    desktop=desktop, timeout=args.timeout, prepare_only=args.prepare_only,
                    reprepare=getattr(args, 'reprepare', False), start_paused=args.start_paused)
+    if getattr(args, 'record_repairs', None):
+        payload['record_repairs'] = json.loads(Path(args.record_repairs).read_text('utf-8-sig'))
+        if not isinstance(payload['record_repairs'], dict) or not payload['record_repairs']:
+            raise ValueError('登记修复映射须为非空JSON对象，不执行原任务清单')
     return local_post(config, '/submit-plan', payload, args.timeout)
 
 
@@ -95,11 +99,15 @@ def main():
         item.add_argument('--notification-id', required=True, help='Notification batch UUID from received message')
         if name == 'register-results':
             item.add_argument('--image-plans', help='Explicit legacy repair only: JSON object from local task UUID to its image closeout plan; cannot replace an accepted association')
+            item.add_argument('--image-repairs', help='JSON object from task UUID to reason/expected_updates/updates; repairs only existing record targets, never generation or approval')
             item.add_argument('--record-updates', help='UTF-8 JSON array of exact path/old/new updates for this batch progress or production checks; paths relative to the project')
     commands.choices['report'].add_argument('--details', action='store_true', help='显式读取完整报告；正常图片／视频报告只返回成果、数量和审核入口，异常自动保留完整报告')
     item = commands.add_parser('resolve', help='Close an investigated needs_attention task; preserve its original exception')
     item.add_argument('--task-id', required=True, help='Backend local UUID, not remote prompt_id')
     item.add_argument('--resolution', required=True, help='UTF-8 JSON resolution file with original prompt ID, evidence and replacement IDs')
+    item = commands.add_parser('repair-collection', help='仅修复原H3任务取回根目录，保留生成输入；不重新生成或自动重试')
+    item.add_argument('--task-id', required=True)
+    item.add_argument('--repair', required=True, help='含expected_prompt_id、output_root、reason的UTF-8 JSON文件')
     args = parser.parse_args()
     if args.command in ('report', 'ack', 'register-results'):
         thread = os.environ.get('CODEX_THREAD_ID')
@@ -110,9 +118,16 @@ def main():
             payload['record_updates'] = json.loads(Path(args.record_updates).read_text('utf-8-sig'))
         if args.command == 'register-results' and args.image_plans:
             payload['image_plans'] = json.loads(Path(args.image_plans).read_text('utf-8-sig'))
+        if args.command == 'register-results' and args.image_repairs:
+            payload['image_repairs'] = json.loads(Path(args.image_repairs).read_text('utf-8-sig'))
         result = service_call('notifications/' + args.notification_id + '/' + args.command, payload)
         if args.command == 'report' and not args.details and result.get('user_message_ready') and result.get('delivery') is not None:
-            result = {name: result[name] for name in ('notification_id', 'status', 'reused', 'user_message_ready', 'delivery')}
+            result = {name: result[name] for name in ('notification_id', 'status', 'reused', 'user_message_ready',
+                                                     'should_notify_user', 'new_task_ids', 'delivery') if name in result}
+    elif args.command == 'repair-collection':
+        payload = json.loads(Path(args.repair).read_text('utf-8-sig'))
+        payload['thread_id'] = os.environ.get('CODEX_THREAD_ID')
+        result = service_call('tasks/' + args.task_id + '/repair-collection', payload)
     elif args.command == 'resolve':
         result = service_call('tasks/' + args.task_id + '/resolve',
                               json.loads(Path(args.resolution).read_text('utf-8-sig')))

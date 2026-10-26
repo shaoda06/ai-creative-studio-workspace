@@ -21,6 +21,100 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.TaskTests.asyncSetUp
     asyncTearDown = base.TaskTests.asyncTearDown
 
+    async def test_repair_after_progress_edit_before_journal_keeps_original_task(self):
+        from copy import deepcopy
+        import asyncio, os, shutil, sys
+        from fastapi import FastAPI
+        from backend import main
+        from tests.test_queue_recovery import serving
+        self.setup_image()
+        progress = self.project / '项目进度.md'
+        row = '| 人物参考图 | 会话 | 进行中 | 尚未生成 | - 无 | - 无 |'
+        progress.write_text(row)
+        updates = [dict(path='项目进度.md', old=row, new=row.replace('尚未生成', '{{outputs}}；{{specs}}'))]
+        self.data.image_plan['record_updates'] = updates
+        image.validate_plan(self.data)
+        original = deepcopy(self.data.image_plan)
+        current = row.replace('尚未生成', '用户补充备注')
+        progress.write_text(current)
+        with self.assertRaises(ValueError):
+            registration.register(self.store, 'task')
+        self.assertFalse((self.record / registration.REPORT).exists())
+        repair = dict(reason='原授权内同步并保留用户备注', expected_updates=updates,
+                      updates=[dict(path='项目进度.md', old=current, new=current.replace('用户补充备注', '用户补充备注；已保存'))])
+        app = FastAPI()
+        app.state.comfy_tasks = self.store
+        app.add_api_route('/api/internal/comfy/notifications/{batch_id}/register-results', main.agent_register_results, methods=['POST'])
+        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli.parent.mkdir(parents=True)
+        shutil.copyfile(tasks.SKILL / 'scripts/browser_tasks.py', cli)
+        repair_file = self.record / '登记修复请求.json'
+        repair_file.write_text(json.dumps({'task': repair}, ensure_ascii=False))
+        async with serving(app) as url:
+            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps(dict(url=url, token=self.store.token)))
+            with patch.object(registration, 'batch_tasks', return_value=(['task'], None)), \
+                    patch.object(main, 'store', self.store.projects):
+                process = await asyncio.create_subprocess_exec(sys.executable, '-B', str(cli),
+                    'register-results', '--notification-id', 'batch', '--image-repairs', str(repair_file),
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    env={**os.environ, 'CODEX_THREAD_ID': self.data.thread_id})
+                stdout, stderr = await asyncio.wait_for(process.communicate(), 15)
+                self.assertEqual(process.returncode, 0, stderr.decode())
+                result = json.loads(stdout)
+        self.assertTrue(result['user_message_ready'], result)
+        self.assertIn('用户补充备注；已保存', progress.read_text())
+        self.assertEqual(self.data.image_plan, original)
+
+    def test_invalid_associated_updates_stop_before_registration(self):
+        self.setup_image()
+        for update in (dict(path='03-人物资料/人物索引.md', old='没有的原文', new='新文字'),
+                       dict(path='03-人物资料/人物索引.md', old='CH001', new='{{unsupported}}')):
+            with self.subTest(update=update):
+                self.data.image_plan['record_updates'] = [update]
+                with self.assertRaises(ValueError):
+                    image.validate_plan(self.data)
+
+    async def test_repair_existing_journal_is_audited_and_idempotent(self):
+        self.setup_image()
+        path = '03-人物资料/人物索引.md'
+        old = (self.project / path).read_text()
+        updates = [dict(path=path, old=old, new=old.replace('主角', '主角；{{specs}}'))]
+        self.data.image_plan['record_updates'] = updates
+        with patch.object(image, 'apply', side_effect=ValueError('登记中断')):
+            with self.assertRaisesRegex(ValueError, '登记中断'):
+                registration.register(self.store, 'task')
+        current = old.replace('主角', '主角（用户备注）')
+        (self.project / path).write_text(current)
+        repair = dict(reason='保留备注接续登记', expected_updates=updates,
+                      updates=[dict(path=path, old='主角（用户备注）', new='主角（用户备注）；已保存')])
+        with patch.object(registration, 'batch_tasks', return_value=(['task'], None)):
+            for _ in range(2):
+                result = await registration.closeout(self.store, self.store.projects, 'batch', self.data.thread_id,
+                                                      image_repairs={'task': repair})
+                self.assertTrue(result['user_message_ready'])
+        self.assertEqual((self.project / path).read_text().count('；已保存'), 1)
+        self.assertEqual(len(list(self.record.glob('*登记修复前-*.json'))), 1)
+        self.assertEqual(self.draft.read_text().count('### 审阅-生成记录-001-001'), 1)
+
+    def test_record_repair_rejects_new_targets_stale_requests_and_approval_changes(self):
+        self.setup_image()
+        old = self.draft.read_text()
+        confirmation = '#### 4. 用户确认\n\n- 结论：批准采用\n- 批准的具体候选：原图\n'
+        self.draft.write_text(old + '\n' + confirmation)
+        updates = [dict(path=self.rel(self.draft), old='原图', new='原图；关联补齐')]
+        report_file = self.record / '独立修复报告.json'
+        for expected, new in (([], updates),
+                              (updates, [dict(path='项目进度.md', old='旧', new='新')]),
+                              (updates, [dict(path=self.rel(self.draft), old='批准采用', new='待确认')])):
+            with self.subTest(expected=expected, updates=new):
+                with self.assertRaises(ValueError):
+                    image.repair_record_updates(self.project, [self.rel(self.draft)], updates,
+                        dict(reason='测试保护', expected_updates=expected, updates=new), report_file)
+        self.assertIn(confirmation, self.draft.read_text())
+        self.assertFalse(list(self.record.glob('*登记修复前-*.json')))
+
     def setup_image(self, kind='人物', scope='03-人物资料'):
         self.draft = self.project / scope / '其他资料/工作稿/CH001-参考图-工作稿.md'
         self.draft.parent.mkdir(parents=True)
@@ -33,7 +127,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
             folder.mkdir()
             (folder / 'CH001-男主-人物资料卡.md').write_text('# 人物资料卡\n\n## 3. 外貌与基础造型\n### 3.1 大学\n')
             (self.project / scope / '人物索引.md').write_text('| 人物编号 | 姓名 | 人物定位 | 资料卡入口 |\n| --- | --- | --- | --- |\n| CH001 | 男主 | 主角 | [资料卡](CH001-男主/CH001-男主-人物资料卡.md) |\n')
-        out = self.draft.parent / '素材/CH001-服装参考图-候选-v01.png'
+        out = self.draft.parent / '素材/CH001-日常-服装参考图-候选-v01.png'
         self.data.outputs[0].path = str(out)
         self.data.image_plan = dict(draft=self.rel(self.draft), kind=kind, generation='生成记录-001', review='审阅-生成记录-001-001', images=[dict(path=self.rel(out), width=4, height=3)])
         base.TaskTests.seed(self, status='completed')
@@ -174,7 +268,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         self.record = self.record / '超分-001'
         self.record.mkdir()
         self.data.record_dir = str(self.record)
-        out = source.with_name('CH001-服装参考图-候选-v01-超分-001.png')
+        out = source.with_name('CH001-日常-服装参考图-候选-v01-超分-001.png')
         self.data.task_type = 'image-upscale'
         self.data.workflow = {'2': {'class_type': 'LoadImage', 'inputs': {'image': 'uploaded/source.png'}}, '1': {'class_type': 'RTXVideoSuperResolution', 'inputs': {'images': ['2', 0], 'resize_type': 'scale by multiplier', 'resize_type.scale': 2}}, '3': {'class_type': 'SaveImage', 'inputs': {'images': ['1', 0]}}}
         self.data.uploads = [dict(file=str(source), node='2', input='image', **{'response-name': 'upload.json'})]
@@ -183,8 +277,8 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         plan = self.data.image_plan
         plan['images'] = [dict(path=self.rel(out), width=8, height=6)]
         formal = self.project / '03-人物资料/CH001-男主/参考图/CH001-日常-服装参考图.png'
-        header = '| 图片类型 | 人物状态 | 服装状态 | 正式文件 | 采用的候选版本 | 适用范围 | 审阅记录 |\n| --- | --- | --- | --- | --- | --- | --- |'
-        plan['upscale'] = dict(number='超分-001', source=self.rel(source), approval=plan['draft'] + '#' + plan['review'], formal=self.rel(formal), record_updates=[dict(path=plan['draft'], old=header, new=header + '\n| 服装参考图 | 大学 | 日常 | {{file}} | v01／超分001 | 首集 | [批准](#审阅-生成记录-001-001) |')])
+        header = '| 图片类型 | 人物状态 | 服装状态 | 正式文件 | 采用的候选版本 | 适用范围 | 审阅记录 | 列表封面 |\n| --- | --- | --- | --- | --- | --- | --- | --- |'
+        plan['upscale'] = dict(number='超分-001', source=self.rel(source), approval=plan['draft'] + '#' + plan['review'], formal=self.rel(formal), record_updates=[dict(path=plan['draft'], old=header, new=header + '\n| 服装参考图 | 大学 | 日常 | {{file}} | v01／超分001 | 首集 | [批准](#审阅-生成记录-001-001) | |')])
         base.TaskTests.seed(self, status='completed')
         self.store.save('task', collected=1)
         self.request()
@@ -365,11 +459,42 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
     async def test_record_updates_render_links_relative_to_each_document(self):
         self.setup_image()
         progress = self.project / '项目进度.md'
-        progress.write_text('等待生成')
-        self.data.image_plan['record_updates'] = [dict(path='项目进度.md', old='等待生成', new='待审核；{{outputs}}；{{specs}}')]
+        row = '| 人物参考图 | 会话 | 进行中 | 未生成 | - 无 | - 无 |'
+        progress.write_text(row)
+        self.data.image_plan['record_updates'] = [dict(path='项目进度.md', old=row,
+            new='| 人物参考图 | 会话 | 待确认 | {{outputs}}；{{specs}} | - 审核本轮候选 | - 无 |')]
+        image.validate_plan(self.data)
         registration.register(self.store, 'task')
         self.assertIn('](03-人物资料/其他资料/工作稿/素材/', progress.read_text())
         self.assertNotIn('{{', progress.read_text())
+
+    async def test_image_progress_updates_cannot_append_history(self):
+        self.setup_image()
+        progress = self.project / '项目进度.md'
+        row = '| 人物参考图 | 会话 | 进行中 | 当前成果 | - 无 | - 无 |'
+        progress.write_text(row)
+        self.data.image_plan['record_updates'] = [dict(path='项目进度.md', old=row,
+            new=row + '\n\n### 图片已取回\n完成流水')]
+        before = self.draft.read_bytes()
+        with self.assertRaisesRegex(ValueError, '不得追加历史记录'):
+            image.validate_plan(self.data)
+        with self.assertRaisesRegex(ValueError, '不得追加历史记录'):
+            registration.register(self.store, 'task')
+        self.assertEqual(progress.read_text(), row)
+        self.assertEqual(self.draft.read_bytes(), before)
+
+    async def test_image_progress_updates_cannot_modify_an_unrelated_phase(self):
+        self.setup_image()
+        progress = self.project / '项目进度.md'
+        row = '| 场景参考图 | 其他会话 | 待确认 | 其他成果 | - 场景问题 | - 无 |'
+        progress.write_text(row)
+        self.data.image_plan['record_updates'] = [dict(path='项目进度.md', old=row,
+            new=row.replace('场景问题', '误清'))]
+        with self.assertRaisesRegex(ValueError, '对应阶段行'):
+            image.validate_plan(self.data)
+        with self.assertRaisesRegex(ValueError, '对应阶段行'):
+            registration.register(self.store, 'task')
+        self.assertEqual(progress.read_text(), row)
 
     async def test_interrupt_after_document_publish_does_not_duplicate_appended_review(self):
         self.setup_image()

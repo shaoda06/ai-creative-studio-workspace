@@ -9,28 +9,36 @@ sys.path.insert(0, str(WORKSPACE / '工作区浏览服务'))
 
 from project_paths import project_file
 from backend.services import imagegen_results as native
+from backend.services.image_closeout import validate_names
 from backend.services.execution_checks import write_json
 from backend.services.projects import ProjectStore
 
 
 def main():
-    parser = argparse.ArgumentParser(description='主控准备Imagegen交接；子代理运行固定收尾；不调用生图或超分，不登记自动批准')
+    parser = argparse.ArgumentParser(description='准备Imagegen交接、运行固定收尾或只读核对命名；不调用生图或超分，不登记自动批准')
     commands = parser.add_subparsers(dest='command', required=True)
-    for command in ('prepare', 'complete', 'report', 'fail'):
+    for command in ('prepare', 'complete', 'report', 'fail', 'check-name'):
         item = commands.add_parser(command)
         item.add_argument('--project', required=True, help='本机项目绝对目录；也可为独立测试项目')
-        if command == 'prepare':
-            item.add_argument('--request', required=True, help='项目内JSON请求，路径相对项目根；含完整prompt和实际授权')
+        if command in ('prepare', 'check-name'):
+            item.add_argument('--request', required=True, help=('项目内JSON请求：kind/formal/draft/output，只核对路径，不写文件'
+                              if command == 'check-name' else '项目内JSON请求，含formal/output、完整prompt和实际授权；专项样例按规定填写'))
         else:
             item.add_argument('--manifest', required=True, help='prepare返回的项目内Imagegen执行清单路径')
         if command == 'complete':
             item.add_argument('--source', required=True, help='内置Imagegen实际返回的本机原生PNG绝对路径；只复制，不改原图')
             item.add_argument('--actual-prompt-file', help='可选；默认从执行清单读取提示词文件，无需重复填写长路径；仍核对正文')
+            item.add_argument('--record-repair', help='已有成果的登记修复JSON：reason/expected_updates/updates，不改原执行清单或批准')
         if command == 'fail':
             item.add_argument('--error-file', required=True, help='实际错误的UTF-8文件；不自动重试或改换模型／能力')
     args = parser.parse_args()
     root = Path(args.project).resolve()
-    if args.command == 'prepare':
+    if args.command == 'check-name':
+        spec = json.loads(project_file(root, args.request).read_text('utf-8-sig'))
+        validate_names(root, dict(kind=spec['kind'], image_type=spec.get('image_type'), formal=spec.get('formal'), draft=spec['draft'],
+            images=[dict(path=spec['output'])]), required=True)
+        result = dict(status='valid', formal=spec.get('formal'), candidate=spec['output'])
+    elif args.command == 'prepare':
         job = native.prepare(root, args.request)
         result = {name: job[name] for name in ('manifest', 'executor', 'generation', 'candidate', 'prompt_file',
                   'generation_call_file', 'result_store_key', 'report') if name in job}
@@ -51,7 +59,8 @@ def main():
                     raise ValueError('实际调用凭据已存在不同内容，不覆盖')
             else:
                 write_json(receipt, content)
-            result = native.complete(root, args.manifest, receipt, ProjectStore(root.parent))
+            repair = json.loads(Path(args.record_repair).read_text('utf-8-sig')) if args.record_repair else None
+            result = native.complete(root, args.manifest, receipt, ProjectStore(root.parent), repair=repair)
         elif args.command == 'fail':
             result = native.fail(root, args.manifest, Path(args.error_file).read_text('utf-8-sig'))
         else:

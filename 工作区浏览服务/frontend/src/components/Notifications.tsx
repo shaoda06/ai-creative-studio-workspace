@@ -1,30 +1,80 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import './Notifications.css';
 
-type Notification = { text: ReactNode; tone: 'info' | 'error'; duration: number };
-const NotificationContext = createContext<(text: ReactNode, tone?: Notification['tone'], duration?: number) => () => void>(() => () => {});
+type Notification = { text: ReactNode; tone: 'info' | 'error'; expiresAt: number | null; onDismiss?: () => void };
+type Message = Notification & { id: string };
+const NotificationContext = createContext<(text: ReactNode, tone?: Notification['tone'], duration?: 0) => () => void>(() => () => {});
+const MessageContext = createContext<{
+  put: (message: Message) => void;
+  remove: (id: string) => void;
+}>(null!);
 export const useNotify = () => useContext(NotificationContext);
 
+/** Dismiss only this mounted message; source rerenders must not reopen it or stop its operation. */
+export function FloatingMessage({ children, tone = 'info' }: { children: ReactNode; tone?: Notification['tone'] }) {
+  const id = useId();
+  const dismissed = useRef(false);
+  const { put, remove } = useContext(MessageContext);
+  useEffect(() => {
+    if (dismissed.current) return;
+    put({ id, text: children, tone, expiresAt: null, onDismiss: () => { dismissed.current = true; } });
+  }, [id, children, tone, put]);
+  useEffect(() => () => remove(id), [id, remove]);
+  return null;
+}
+
+function MessageCard({ message, remove }: { message: Message; remove: (id: string) => void }) {
+  const { id, expiresAt } = message;
+  const [now, setNow] = useState(Date.now);
+  const seconds = expiresAt === null ? null : Math.max(0, Math.ceil((expiresAt - now) / 1000));
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const timer = window.setTimeout(() => remove(id), Math.max(0, expiresAt - Date.now()));
+    const ticker = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => { window.clearTimeout(timer); window.clearInterval(ticker); };
+  }, [id, expiresAt, remove]);
+  return <div className={'floating-message floating-message-' + message.tone} role={message.tone === 'error' ? 'alert' : 'status'}>
+    <div className="floating-message-content">{message.text}</div>
+    {seconds !== null && seconds > 0 && <span className="floating-message-countdown" aria-hidden="true">{seconds}</span>}
+    <button type="button" className="floating-message-close" aria-label="关闭通知" onClick={() => { message.onDismiss?.(); remove(id); }}>×</button>
+  </div>;
+}
+
 export function Notifications({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<Notification | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [target, setTarget] = useState<Element>(document.body);
+  const nextId = useRef(0);
   const popup = useRef<HTMLElement>(null);
-  const notify = useCallback((text: ReactNode, tone: Notification['tone'] = 'info', duration = 3000) => {
-    const next = { text, tone, duration };
-    setMessage(next);
-    return () => setMessage(current => current === next ? null : current);
+  const remove = useCallback((id: string) => setMessages(current => current.filter(message => message.id !== id)), []);
+  const put = useCallback((message: Message) => setMessages(current => {
+    const index = current.findIndex(item => item.id === message.id);
+    return index < 0 ? [...current, message] : current.map(item => item.id === message.id ? message : item);
+  }), []);
+  const registry = useMemo(() => ({ put, remove }), [put, remove]);
+  const notify = useCallback((text: ReactNode, tone: Notification['tone'] = 'info', duration?: 0) => {
+    const id = `notification-${nextId.current++}`;
+    put({ id, text, tone, expiresAt: tone === 'error' || duration === 0 ? null : Date.now() + 3000 });
+    return () => remove(id);
+  }, [put, remove]);
+  useEffect(() => {
+    const locate = () => {
+      const dialogs = document.querySelectorAll('dialog[open]');
+      setTarget(dialogs.item(dialogs.length - 1) || document.body);
+    };
+    const observer = new MutationObserver(locate);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+    locate();
+    return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    if (!message) return;
-    popup.current!.hidePopover();
-    popup.current!.showPopover();
-    if (!message.duration) return;
-    const timer = window.setTimeout(() => setMessage(null), message.duration);
-    return () => window.clearTimeout(timer);
-  }, [message]);
-  return <NotificationContext.Provider value={notify}>{children}{message && createPortal(
-    <aside ref={popup} popover="manual" className={'notification notification-' + message.tone} role={message.tone === 'error' ? 'alert' : 'status'}>
-      <span>{message.text}</span><button aria-label="关闭通知" onClick={() => setMessage(null)}>×</button>
-    </aside>, document.querySelector('dialog[open]') || document.body
-  )}</NotificationContext.Provider>;
+    // A closing dialog can detach the portal before the observer selects its next host.
+    if (messages.length && popup.current!.isConnected && !popup.current!.matches(':popover-open')) popup.current!.showPopover();
+  }, [messages.length, target]);
+  return <NotificationContext.Provider value={notify}><MessageContext.Provider value={registry}>{children}{messages.length > 0 && createPortal(
+    <aside ref={popup} popover="manual" className="floating-messages" aria-label="消息通知">
+      {messages.map(message => <MessageCard key={message.id} message={message} remove={remove} />)}
+    </aside>, target
+  )}</MessageContext.Provider></NotificationContext.Provider>;
 }

@@ -23,9 +23,13 @@
 | `AGENTS.md` | 工作区约定、默认依赖安装位置及本地Git提交规则 |
 | `.agents/skills/nora-ai-short-drama/` | 短剧主控、共用规则、模板、脚本及[配套工作流](.agents/skills/nora-ai-short-drama/references/comfyui-workflow)；视频工作流用途见[H3执行规范](.agents/skills/nora-generation/references/ComfyUI-H3视频执行规范.md#0-制作策略与工作流配置) |
 | 主控同级的7个业务技能 | [开发、写作、资产、分镜、视频提示词、生成执行、审查](.agents/skills/nora-ai-short-drama/SKILL.md#按任务读取)；现行规则归所属技能，四个适配short-drama技能随仓库保存 |
+| `.agents/skills/nora-social-visuals/` | Nora可选账号主页视觉专项，制作头像与主页背景图，独立于视频封面；生成衔接执行技能 |
 | `sd-combat-engine/`、`sd-xuanhuan-engine/`、`sd-real-engine/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
 | 主技能内 `dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
 | `.agents/skills/krea2-style-library/` | 风格库使用与维护指引 |
+| `.agents/skills/nora-prompt-library/` | [提示词管理子技能](.agents/skills/nora-prompt-library/SKILL.md)，由Nora主控按需调用或独立使用，管理共用提示词两库 |
+| `共享提示词/` | 随公共仓库分发的提示词；网页新建默认保存到这里，一份提示词对应一个MD文件 |
+| `提示词管理/` | 仅本地保存的提示词与原有资料库，不入Git；与共享内容在同一页面管理 |
 | `工作区浏览服务/` | React＋FastAPI浏览服务、双击启动、共用解析器与开发历史 |
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
 | `projects/` | 使用者真实短剧项目，模板仅保留目录说明 |
@@ -41,7 +45,7 @@
 
 ### 本工作区技能与风格资源
 
-[Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora由主控、7个业务技能和3个按需打戏专项组成；原18项登记包含4个适配业务技能和14个方法／工具依赖。Krea2技能是独立可选工具。
+[Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora由主控、7个核心业务技能、可选社交媒体主页视觉专项和3个按需打戏专项组成；原18项登记包含4个适配业务技能和14个方法／工具依赖。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
 
 | 资源 | 来源与作者 |
 | --- | --- |
@@ -117,9 +121,9 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## Git边界
 
-采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。`projects/` 和 `综合资料/` 仅保留各自README，新增项目和过程资料仍自动排除。可被Git发现不等于自动提交，提交范围仍按本次任务核对。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
+采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。`projects/` 和 `综合资料/` 仅保留各自README，新增项目和过程资料仍自动排除。可被Git发现不等于自动提交；提交范围按[工作区Git提交规则](AGENTS.md#git-提交与推送)核对，其中公开提示词的新增、修改和删除随正常工作区提交一并归入，隐私提示词继续排除。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
 
-每次完成获授权维护并通过检查后，agent只为本次任务创建本地提交；纯讨论和只读检查不提交，推送须另有明确要求。提交前查看差异和暂存清单，不混入并发修改。Git只保存被跟踪且已提交的文件；真实项目需另行安排私有版本管理或备份。
+每次完成获授权维护并通过检查后，agent按上述规则，将本次任务与公开提示词变更归入同次本地提交；纯讨论和只读检查不提交，推送须另有明确要求。提交前查看差异和暂存清单，不混入并发修改。Git只保存被跟踪且已提交的文件；真实项目需另行安排私有版本管理或备份。
 
 作为GitHub模板使用时，新建工作区获得当前目录和文件，但不会自动接收模板后续更新。同步更新前检查本地修改，不要覆盖使用者自己的内容。单独分享Nora技能时同时携带适用的许可证及三个随包依赖的许可证。
 

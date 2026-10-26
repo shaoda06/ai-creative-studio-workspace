@@ -14,7 +14,7 @@ import sqlite3
 from urllib.parse import unquote
 
 
-IDENTITY = re.compile(r'EP\d{3,}-C\d{3,}-P\d{3,}-R\d{3,}-(?:一采|二采|后处理)')
+IDENTITY = re.compile(r'(?:EP\d{3,}|片头|片尾)-C\d{3,}-P\d{3,}-R\d{3,}-(?:一采|二采|后处理)')
 MUTABLE_JSON = {'输入映射.json', '成果取回映射.json', '后台任务状态.json'}
 INACTIVE = {'completed', 'failed', 'cancelled', 'unknown', 'needs_attention', 'paused'}
 PHASES = {'first-pass': '一采', 'second-pass': '二采', 'postprocess': '后处理',
@@ -46,7 +46,7 @@ class Migration:
     def __init__(self, project, request):
         self.project = Path(project).resolve()
         self.episode = request['episode']
-        if not re.fullmatch(r'EP\d{3,}', self.episode):
+        if not re.fullmatch(r'(?:EP\d{3,}|片头|片尾)', self.episode):
             raise ValueError('episode 须为完整EP编号')
         self.root = self.project / '09-剧集制作' / self.episode
         self.rows = request['identities']
@@ -193,20 +193,30 @@ class Migration:
                 data = json.loads(original)
                 identity = IDENTITY.findall(str(path))
                 stage = identity[-1].rsplit('-', 1)[1] if identity else None
-                updated = json.dumps(self.json_value(data, stage), ensure_ascii=False, indent=2) + '\n'
+                current = self.json_value(data, stage)
+                if path.name == '输入映射.json' and hasattr(self, 'report') and any(
+                        context['identity'] in {new for old, new in self.identities.items() if old != new}
+                        for context in current.get('generation_contexts', [])):
+                    current['identity_migration'] = {'report': self.report.relative_to(self.project).as_posix()}
+                updated = json.dumps(current, ensure_ascii=False, indent=2) + '\n'
             elif path.name.endswith('-视频修改意见.json'):
                 original = path.read_text('utf-8-sig')
                 data = json.loads(original)
-                scene = data['scene']
-                notes = {}
-                for key, item in data['notes'].items():
-                    old = f"{self.episode}-{scene}-{item['segment']}-{item['run']}-{item['stage']}"
-                    new = self.identities.get(old, old).split('-')[3]
-                    new_key = f"{item['segment']}/{item['stage']}/{new}"
-                    if new_key in notes:
-                        raise ValueError('备注身份冲突：' + new_key)
-                    notes[new_key] = dict(item, run=new)
-                data['notes'] = notes
+                groups = {data['scene']: data['notes']} if 'scene' in data else data['notes']
+                for scene, entries in groups.items():
+                    notes = {}
+                    for key, item in entries.items():
+                        old = f"{self.episode}-{scene}-{item['segment']}-{item['run']}-{item['stage']}"
+                        new = self.identities.get(old, old).split('-')[3]
+                        prefix = f"round/{item['roundNumber']}/" if item.get('roundNumber') is not None else ''
+                        new_key = prefix + f"{item['segment']}/{item['stage']}/{new}"
+                        if new_key in notes:
+                            raise ValueError('备注身份冲突：' + new_key)
+                        notes[new_key] = dict(item, run=new)
+                    if 'scene' in data:
+                        data['notes'] = notes
+                    else:
+                        data['notes'][scene] = notes
                 updated = json.dumps(data, ensure_ascii=False, indent=2) + '\n'
             else:
                 continue  # Requests, workflows, replies, receipts and media retain bytes.
@@ -246,6 +256,7 @@ class Migration:
             raise ValueError('迁移记录须位于项目99-综合资料/其他资料/历史版本，避免被当作现行生成映射')
         if report.exists():
             raise ValueError('该迁移已经执行；按原报告核对，不重复执行')
+        self.report = report
         moves, edits = self.plan()
         rows = self.task_rows(database) if database else []
         report.parent.mkdir(parents=True, exist_ok=True)
@@ -274,24 +285,140 @@ class Migration:
                 staged.append((temporary, new))
             for temporary, new in staged:
                 temporary.rename(new)
+        indexes = []
+        for path in edits:
+            current = Path(self.replace(str(path)))
+            source_plan = current.parent / '任务清单.json'
+            if current.name != '输入映射.json' or not source_plan.is_file():
+                continue
+            tasks = []
+            for task in json.loads(source_plan.read_text('utf-8-sig'))['tasks']:
+                directory = Path(self.replace(task['record_dir']))
+                directory = directory if directory.is_absolute() else self.project / directory
+                if directory.resolve() == current.parent:
+                    tasks.append({'task_type': task['task_type'], 'record_dir': current.parent.relative_to(self.project).as_posix()})
+            if not tasks:
+                raise ValueError('迁移后的来源清单无法关联实际执行目录：' + str(current))
+            index = current.parent / '迁移后来源清单.json'
+            content = {'purpose': '重编号后的采用来源索引，不用于提交生成',
+                       'original_submission_plan': source_plan.relative_to(self.project).as_posix(),
+                       'identity_migration': {'report': report.relative_to(self.project).as_posix()}, 'tasks': tasks}
+            if index.exists() and json.loads(index.read_text('utf-8-sig')) != content:
+                raise ValueError('已有不同的迁移来源索引，不覆盖：' + str(index))
+            index.write_text(json.dumps(content, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            indexes.append(index.relative_to(self.project).as_posix())
         if database:
             with closing(sqlite3.connect(database)) as db, db:
                 db.executemany('UPDATE tasks SET payload=?,state=? WHERE id=?',
                                [(row[3], row[4], row[0]) for row in rows])
-        ledger['state'] = 'completed'
+        ledger.update(state='completed', source_indexes=indexes)
         report.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding='utf-8')
         return {'state': 'completed', 'moves': len(moves), 'records': len(edits), 'tasks': len(rows), 'report': str(report)}
+
+
+class ExecutionMigration(Migration):
+    """Split one historical repeated execution from an otherwise unchanged R."""
+
+    def __init__(self, project, request):
+        self.project = Path(project).resolve()
+        self.episode = request['episode']
+        self.rows = request['identities']
+        if not re.fullmatch(r'(?:EP\d{3,}|片头|片尾)', self.episode):
+            raise ValueError('episode须为完整制作对象编号')
+        if len(self.rows) != 1:
+            raise ValueError('单次执行重编号只接受一个身份对应')
+        self.old, self.new = self.rows[0]['old'], self.rows[0]['new']
+        if not all(IDENTITY.fullmatch(value) for value in (self.old, self.new)) or self.old == self.new:
+            raise ValueError('单次执行需要两个不同的完整身份')
+        if self.old.split('-')[:3] != self.new.split('-')[:3] or self.old.rsplit('-', 1)[1] != self.new.rsplit('-', 1)[1]:
+            raise ValueError('单次执行重编号不能改变分段或阶段')
+        if not self.old.startswith(self.episode + '-'):
+            raise ValueError('单次执行身份越出本集')
+        self.execution = request['execution']
+        self.record = self.project / self.execution['record_dir']
+        self.target_record = self.project / self.execution['new_record_dir']
+        self.video = self.project / self.execution['source_output']
+        self.target_video = self.project / self.execution['target_output']
+        episode_root = self.project / '09-剧集制作' / self.episode
+        for path in (self.record, self.target_record, self.video, self.target_video):
+            if not path.resolve().is_relative_to(episode_root) or '..' in path.parts:
+                raise ValueError('单次执行重编号路径越出本集')
+        if self.record.parent.name != self.old or not re.fullmatch(r'执行-\d{8}-\d{6}', self.record.name):
+            raise ValueError('来源须为旧身份下明确的单次执行目录')
+        if self.target_record.name != self.new or self.video.stem != self.old or self.target_video.stem != self.new:
+            raise ValueError('执行或视频目标与候选身份不一致')
+        self.identities = {self.old: self.new}
+
+    def replace(self, value):
+        # External frozen source documents still belong to the original R.
+        for source, target in ((self.record, self.target_record), (self.video, self.target_video)):
+            value = value.replace(str(source), str(target))
+            value = value.replace(source.relative_to(self.project).as_posix(), target.relative_to(self.project).as_posix())
+        return value
+
+    def json_value(self, value, stage=None):
+        if isinstance(value, str):
+            return self.replace(value)
+        if isinstance(value, list):
+            return [self.json_value(item, stage) for item in value]
+        if not isinstance(value, dict):
+            return value
+        raw = {'workflow', 'workflow_api', 'request', 'response', 'remote', 'notices',
+               'materials_from', 'revision_of', 'content_review'}
+        result = {key: item if key in raw else self.json_value(item, stage) for key, item in value.items()}
+        if value.get('identity') == self.old:
+            result['identity'] = self.new
+        if value.get('segment') == self.old.rsplit('-', 2)[0] and value.get('round') == self.old.split('-')[3]:
+            result['round'] = self.new.split('-')[3]
+        if 'scene_modification_round' in value:
+            result['scene_modification_round'] = self.execution['scene_modification_round']
+        return result
+
+    def plan(self):
+        if not self.record.is_dir() or not self.video.is_file():
+            raise ValueError('单次执行目录或实际视频缺失')
+        if self.target_record.exists() or self.target_video.exists():
+            raise ValueError('新候选目标已存在，不覆盖')
+        edits = {}
+        for path in self.record.rglob('*'):
+            if path.is_file() and path.name in MUTABLE_JSON | {'结果收尾报告.json'}:
+                data = self.json_value(json.loads(path.read_text('utf-8-sig')))
+                if path.name == '输入映射.json' and hasattr(self, 'report'):
+                    data['identity_migration'] = {'report': self.report.relative_to(self.project).as_posix()}
+                edits[path] = json.dumps(data, ensure_ascii=False, indent=2) + '\n'
+        return [(self.video, self.target_video), (self.record, self.target_record)], edits
+
+    def task_rows(self, database):
+        with closing(sqlite3.connect(database)) as db:
+            task_id = self.execution['task_id']
+            payload, state = db.execute('SELECT payload,state FROM tasks WHERE id=?', (task_id,)).fetchone()
+        data, status = json.loads(payload), json.loads(state)
+        directory = Path(data['record_dir'])
+        directory = directory if directory.is_absolute() else self.project / directory
+        if data['project'] != self.project.name or directory.resolve() != self.record:
+            raise ValueError('指定任务与单次执行目录不匹配')
+        if status['status'] not in INACTIVE:
+            raise ValueError('单次执行任务仍在活动中')
+        current_data, current_state = dict(data), dict(status)
+        for field in ('record_dir', 'outputs', 'segment_plan'):
+            if field in data:
+                current_data[field] = self.json_value(data[field])
+        for field in ('segments', 'saved_outputs'):
+            if field in status:
+                current_state[field] = self.json_value(status[field])
+        return [(task_id, payload, state, json.dumps(current_data, ensure_ascii=False), json.dumps(current_state, ensure_ascii=False))]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, help='项目根目录')
-    parser.add_argument('--request', required=True, help='UTF-8 JSON：episode、identities[{old,new,source可选}]，须已获迁移授权')
+    parser.add_argument('--request', required=True, help='UTF-8 JSON：episode、identities[{old,new,source可选}]；可选execution只拆出一次历史执行，须已获迁移授权')
     parser.add_argument('--database', help='停止服务后的comfy-tasks.sqlite；仅迁移本集非活动任务当前入口')
     parser.add_argument('--apply', action='store_true', help='执行迁移；默认只读预览')
     parser.add_argument('--report', help='执行时必填；项目99-综合资料/其他资料/历史版本下的JSON，附原记录备份')
     args = parser.parse_args()
-    migration = Migration(args.project, json.loads(Path(args.request).read_text('utf-8-sig')))
+    request = json.loads(Path(args.request).read_text('utf-8-sig'))
+    migration = (ExecutionMigration if 'execution' in request else Migration)(args.project, request)
     if args.apply:
         if not args.report:
             parser.error('--apply 需要 --report')

@@ -4,6 +4,8 @@ import copy
 import contextlib
 import json
 import io
+import shutil
+import zipfile
 import urllib.parse
 from pathlib import Path
 import unittest
@@ -74,8 +76,6 @@ class ApprovalTests(unittest.TestCase):
         self.request = submission.with_name('批准收尾请求.json')
         self.plan = {'submission_plans': [str(submission)], 'identities': [i['identity'] for i in items],
                      'approval_text': '这两段都批准了。'}
-        if stage == '后处理':
-            self.plan['source_finalization'] = str(source)
         self.fixture.put(self.request, self.plan)
         NativeClient.calls = []
         return items
@@ -93,6 +93,169 @@ class ApprovalTests(unittest.TestCase):
 
         with patch.object(tool.final.client, 'Client', NativeClient), patch.object(tool, 'browser_sync', side_effect=verify):
             return tool.approve(argparse.Namespace(project=str(self.root), plan=str(self.request), apply=apply, timeout=30))
+
+    def register_final(self, item):
+        identity = item['identity']; part = identity.rsplit('-', 2)[0]
+        directory = self.fixture.extra / '执行附件' / identity
+        target = directory / '配套交付' / (identity + '-透明.mov')
+        self.fixture.put(target, b'alpha final')
+        self.fixture.put(directory / '后处理产物.json', {'products': [
+            {'id': 'alpha', 'label': '透明 MOV', 'role': '最终产物', 'file': str(target.relative_to(self.root))}]})
+        draft = self.fixture.extra / '工作稿' / (part + '-视频制作-工作稿.md')
+        text = draft.read_text(); row = tool.adopt.selected_row(text, '后处理')[2]
+        reference = tool.adopt.link(draft, target)
+        text = text.replace(row, '| 后处理 | [最终](' + reference + ') | R001 | 已记录 | [采用](#审阅-最终交付) |')
+        text += '\n### 审阅-最终交付\n- 对应具体输出：' + target.name + '\n- 决定：批准采用\n'
+        self.fixture.put(draft, text)
+        return draft, target
+
+    def test_final_product_survives_reapproval_and_counts_as_complete(self):
+        items = self.setup_stage(parts=('P001',))
+        self.run_plan()
+        draft, target = self.register_final(items[0]); text = draft.read_text()
+        self.assertEqual(tool.selected(self.root, 'EP001-C001-P001', '后处理'), items[0]['identity'])
+        self.assertEqual(tool.episode_missing(self.root, 'EP001'), [])
+        self.request = self.request.with_name('批准复核.json')
+        result = self.run_plan()
+        self.assertTrue(result['episode_completed'])
+        self.assertEqual(draft.read_text(), text)
+        self.assertEqual(result['adoption']['items'][0]['selected_path'], str(target))
+        self.assertEqual(result['adoption']['selected_approved_counts']['后处理'], 1)
+        summary = self.fixture.extra / '工作稿/EP001-生成说明-工作稿.md'
+        self.assertIn(tool.adopt.link(summary, target), summary.read_text())
+
+    def test_final_manifest_without_final_approval_does_not_complete_episode(self):
+        items = self.setup_stage(parts=('P001',)); self.run_plan()
+        draft, target = self.register_final(items[0])
+        text = draft.read_text().replace('- 决定：批准采用\n', '- 决定：待审核\n')
+        self.fixture.put(draft, text)
+        self.assertIsNone(tool.selected(self.root, 'EP001-C001-P001', '后处理'))
+        self.assertIn('EP001-C001-P001 后处理未采用', tool.episode_missing(self.root, 'EP001'))
+
+    def revision(self, original_item, revision='R002'):
+        old_identity = original_item['identity']
+        part = old_identity.split('-')[2]
+        stage = old_identity.split('-')[-1]
+        identity = old_identity.replace('R001', revision)
+        original = Path(original_item['mapping']).parent
+        folder = original.with_name(identity)
+        shutil.copytree(original, folder)
+        for path in folder.rglob('*'):
+            if path.is_file() and path.suffix in ('.json', '.txt', '.md'):
+                path.write_text(path.read_text().replace(str(original), str(folder))
+                                .replace(old_identity, identity).replace('"round": "R001"', '"round": "' + revision + '"'))
+        item = {key: str(folder / Path(value).name) for key, value in original_item.items() if key != 'identity'}
+        item['identity'] = identity
+        workflow = tool.adopt.load(Path(item['api']))
+        node = next(n for n in workflow.values() if n['class_type'] == 'MiniMaxH3Director')
+        timeline = json.loads(node['inputs']['timeline_data'])
+        timeline['segments'][0]['prompt'] = part + '修订 <Picture 1>'
+        timeline['batchWorkspaces']['r2v']['segments'] = copy.deepcopy(timeline['segments'])
+        self.fixture.replace_timeline(item, timeline)
+        (folder / '模型提示词.txt').write_text('共同正文\n\n' + part + '修订 <Picture 1>')
+        for suffix in ('api.json', 'workflow.json'):
+            shutil.copyfile(folder / ('实际.' + suffix), folder / ('任务.' + suffix))
+        candidate = self.fixture.extra / '候选视频' / (identity + '.mp4')
+        candidate.write_bytes(old_identity.encode())
+        draft = self.fixture.extra / '工作稿' / ('EP001-C001-' + part + '-视频制作-工作稿.md')
+        draft.write_text(draft.read_text() + '\n### ' + revision + '-' + stage + '\n- 处理阶段：' + stage + '\n- 用户决定：待审核\n')
+        submission = folder / '返修任务清单.json'
+        self.fixture.put(submission, {'tasks': [{'record_dir': str(folder), 'task_type': {
+            '一采': 'video-first-pass', '二采': 'video-second-pass'}[stage]}]})
+        self.request = folder / '返修批准收尾请求.json'
+        self.plan = {'identities': [identity], 'approval_text': part + '返修版批准采用。',
+                     'submission_plans': [str(submission)]}
+        return item
+
+    def test_single_revision_recovers_other_sources_and_saves_next_pair_without_overwriting(self):
+        for stage, index in (('一采', 0), ('一采', 1), ('二采', 0), ('二采', 1)):
+            with self.subTest(stage=stage, revised_part=index):
+                case = ApprovalTests()
+                case.setUp()
+                try:
+                    originals = case.setup_stage(stage)
+                    first = case.run_plan()
+                    self.assertEqual(first['state'], 'completed', first)
+                    old = {Path(first['finalization'][key]): Path(first['finalization'][key]).read_bytes()
+                           for key in ('pack', 'canvas', 'record')}
+                    for revision in ('R002', 'R003'):
+                        item = case.revision(originals[index], revision)
+                        result = case.run_plan()
+                        self.assertEqual(result['state'], 'completed', result)
+                        expected = [source['identity'] for source in originals]
+                        expected[index] = item['identity']
+                        self.assertEqual([s['identity'] for s in result['finalization']['sources']], expected)
+                        self.assertIn('-' + revision[1:] + '-导演包', result['finalization']['pack'])
+                        self.assertTrue(Path(result['finalization']['canvas']).is_file())
+                        with zipfile.ZipFile(result['finalization']['pack']) as archive:
+                            timeline = json.loads(archive.read('timeline.json'))
+                        prompts = ['P001 <Picture 1>', 'P002 <Picture 1>']
+                        prompts[index] = ('P001' if index == 0 else 'P002') + '修订 <Picture 1>'
+                        self.assertEqual([g['prompt'] for g in timeline['segments']], prompts)
+                        old.update({Path(result['finalization'][key]): Path(result['finalization'][key]).read_bytes()
+                                    for key in ('pack', 'canvas', 'record')})
+                        calls = len(NativeClient.calls)
+                        self.assertTrue(case.run_plan()['reused'])
+                        self.assertEqual(len(NativeClient.calls), calls)
+                        for path, content in old.items():
+                            self.assertEqual(path.read_bytes(), content)
+                finally:
+                    case.doCleanups()
+
+    def test_missing_adopted_source_stops_without_exporting_or_overwriting_old_pair(self):
+        originals = self.setup_stage('一采')
+        first = self.run_plan()
+        old_pair = {Path(first['finalization'][key]): Path(first['finalization'][key]).read_bytes()
+                    for key in ('pack', 'canvas')}
+        self.revision(originals[1])
+        Path(originals[0]['mapping']).unlink()
+        calls = list(NativeClient.calls)
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'needs_attention', result)
+        self.assertEqual(result['phase'], 'finalization')
+        self.assertEqual(NativeClient.calls, calls)
+        for path, content in old_pair.items():
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_revision_browser_recovery_keeps_assigned_edition_and_never_exports_again(self):
+        originals = self.setup_stage('一采')
+        self.run_plan()
+        self.revision(originals[1])
+        failed = self.run_plan(browser_error='模拟网页失败')
+        self.assertEqual(failed['state'], 'browser_pending', failed)
+        pair = {Path(failed['finalization'][key]): Path(failed['finalization'][key]).read_bytes()
+                for key in ('pack', 'canvas')}
+        calls = len(NativeClient.calls)
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertEqual(result['finalization']['pack'], failed['finalization']['pack'])
+        self.assertEqual(len(NativeClient.calls), calls)
+        for path, content in pair.items():
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_last_partial_generation_approval_recovers_previous_adopted_source(self):
+        self.setup_stage('一采')
+        ids = self.plan['identities'][:]
+        submission = tool.adopt.load(Path(self.plan['submission_plans'][0]))
+        self.plan['identities'] = ids[:1]
+        first_list = self.request.with_name('第一段任务清单.json')
+        self.fixture.put(first_list, {'tasks': submission['tasks'][:1]})
+        self.plan['submission_plans'] = [str(first_list)]
+        self.assertEqual(self.run_plan()['state'], 'adopted_partial')
+        self.request = Path(submission['tasks'][1]['record_dir']) / '批准收尾请求.json'
+        second_list = self.request.with_name('第二段任务清单.json')
+        self.fixture.put(second_list, {'tasks': submission['tasks'][1:]})
+        self.plan = {'identities': ids[1:], 'submission_plans': [str(second_list)], 'approval_text': '第二段也批准。'}
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertEqual([s['identity'] for s in result['finalization']['sources']], ids)
+
+    def test_explicit_new_finalization_edition_is_forwarded(self):
+        self.setup_stage(stage='一采',parts=('P001',))
+        self.plan['edition']='002'
+        result=self.run_plan()
+        self.assertEqual(result['state'],'completed',result)
+        self.assertEqual(len(list(self.fixture.ep.rglob('*一采定稿-002-导演包.mmxpack.zip'))),1)
 
     def test_whole_postprocess_approval_finishes_episode_and_repeat_never_exports_again(self):
         items = self.setup_stage(parts=tuple(f'P{i:03d}' for i in range(1, 13)))
@@ -121,12 +284,31 @@ class ApprovalTests(unittest.TestCase):
         self.assertTrue(result['episode_completed'])
         self.assertEqual(len(result['adoption']['items']), 12)
         self.assertEqual(result['episode_missing'], [])
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 1)
+        self.assertNotIn('finalization', result)
+        self.assertFalse(list((self.fixture.ep / '06-阶段采用视频/03-后处理').rglob('*.mmxpack.zip')))
+        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
         self.assertIn('| 已完成 |', (self.root / '项目进度.md').read_text())
+        cells = tool.project_progress.phase_row((self.root / '项目进度.md').read_text(), 'EP001')[1]
+        self.assertEqual(cells[4:], ['- 无', '- 无'])
+        self.assertNotIn('### 定稿留档-', (self.root / '项目进度.md').read_text())
         for path, data in original.items():
             self.assertEqual(path.read_bytes(), data)
         self.assertEqual(self.run_plan()['state'], 'completed')
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 1)
+        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+
+    def test_postprocess_ignores_legacy_director_source_and_keeps_generation_archives_required(self):
+        self.setup_stage()
+        self.plan['source_finalization'] = '不存在的旧二采定稿请求.json'
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed')
+        self.assertTrue(result['episode_completed'])
+        self.assertNotIn('finalization', result)
+        self.assertEqual(NativeClient.calls, [])
+        archive = next((self.fixture.ep / '06-阶段采用视频/02-二采').rglob('*.mmxpack.zip'))
+        archive.unlink()
+        missing = tool.episode_missing(self.root, 'EP001')
+        self.assertTrue(any('二采缺少当前版本定稿留档' in item for item in missing))
+        self.assertFalse(any('后处理缺少' in item for item in missing))
 
     def test_partial_approval_does_not_approve_other_file_or_export(self):
         self.setup_stage()
@@ -136,6 +318,9 @@ class ApprovalTests(unittest.TestCase):
         self.assertFalse(result['episode_completed'])
         self.assertIsNone(tool.selected(self.root, 'EP001-C001-P002', '后处理'))
         self.assertEqual(NativeClient.calls, [])
+        pending = tool.project_progress.phase_row((self.root / '项目进度.md').read_text(), 'EP001')[1][4]
+        self.assertIn('P002', pending)
+        self.assertNotIn('EP001-C001-P001', pending)
 
     def test_preview_does_not_move_write_export_or_query_browser(self):
         self.setup_stage()
@@ -155,7 +340,7 @@ class ApprovalTests(unittest.TestCase):
         recovered = self.run_plan()
         self.assertEqual(recovered['state'], 'completed')
         self.assertEqual(recovered['previous_failures'][0]['error'], '模拟网页失败')
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 1)
+        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
 
     def test_empty_approval_stops_before_moving(self):
         self.setup_stage()
@@ -167,13 +352,13 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(NativeClient.calls, [])
 
     def test_finalization_failure_keeps_adoption_and_does_not_finish_episode(self):
-        self.setup_stage()
+        self.setup_stage('一采')
         NativeClient.corrupt = True
         self.assertEqual(self.run_plan()['state'], 'needs_attention')
         report = tool.adopt.load(self.request.with_name('批准收尾请求-结果.json'))
         self.assertEqual(report['phase'], 'finalization')
         self.assertEqual(report['state'], 'needs_attention')
-        self.assertEqual(tool.selected(self.root, 'EP001-C001-P001', '后处理'), self.plan['identities'][0])
+        self.assertEqual(tool.selected(self.root, 'EP001-C001-P001', '一采'), self.plan['identities'][0])
         self.assertNotIn('| 已完成 |', (self.root / '项目进度.md').read_text())
         self.assertEqual(self.browser_calls, [])
 
@@ -187,7 +372,7 @@ class ApprovalTests(unittest.TestCase):
         self.request = self.fixture.extra / '执行附件' / all_ids[1] / '批准收尾请求.json'
         result = self.run_plan()
         self.assertTrue(result['episode_completed'])
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 1)
+        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
 
     def test_browser_verification_uses_existing_endpoints_and_exact_scene_revision(self):
         self.setup_stage()
@@ -198,6 +383,12 @@ class ApprovalTests(unittest.TestCase):
         playback = {'segments': {'C001': [{'id': 'P001', 'videos': [
             {'stage': '后处理', 'run': 'R001', 'approved': True}]}]}}
         called = []
+        served_progress = [None]
+        statuses = [
+            {'updating': False, 'checking': True, 'error': '上次读取期间资料有变化'},
+            {'updating': True, 'checking': True, 'error': None},
+            {'updating': False, 'checking': False, 'error': None},
+        ]
 
         class Opener:
             def open(inner, url, timeout):
@@ -206,25 +397,100 @@ class ApprovalTests(unittest.TestCase):
                 if path == '/api/service':
                     value = {'workspace': str(workspace), 'ready': True}
                 elif path.endswith('/status'):
-                    value = {'updating': False, 'error': None}
+                    value = statuses.pop(0)
                 elif '/episodes/' in path:
+                    self.assertEqual(statuses, [], '检查和更新结束后才能核对播放资料')
                     value = playback
+                elif '/files/' in path:
+                    return io.BytesIO(served_progress[0] or (self.root / '项目进度.md').read_bytes())
                 elif '/sections/' in path:
                     value = catalogue
                 else:
                     raise AssertionError('Unexpected endpoint ' + path)
                 return io.BytesIO(json.dumps(value).encode())
 
-        with patch.object(tool.urllib.request, 'build_opener', return_value=Opener()):
+        with patch.object(tool.urllib.request, 'build_opener', return_value=Opener()), \
+                patch.object(tool.time, 'sleep') as sleep:
             result = tool.browser_sync(self.root, 'EP001', '后处理', self.plan['identities'][:1], True, 30)
             self.assertEqual(result['state'], 'verified')
+            self.assertEqual(sleep.call_args_list, [unittest.mock.call(.5), unittest.mock.call(.5)])
             playback['segments'] = {'C002': playback['segments']['C001']}
+            statuses.append({'updating': False, 'checking': False, 'error': None})
             with self.assertRaisesRegex(ValueError, '具体采用版本'):
+                tool.browser_sync(self.root, 'EP001', '后处理', self.plan['identities'][:1], False, 30)
+            statuses.append({'updating': False, 'checking': False, 'error': None})
+            served_progress[0] = (self.root / '项目进度.md').read_text().replace('| 进行中 |', '| 待确认 |', 1).encode()
+            with self.assertRaisesRegex(ValueError, '状态、成果、待决事项和下一步'):
                 tool.browser_sync(self.root, 'EP001', '后处理', self.plan['identities'][:1], False, 30)
         self.assertTrue(any('/episodes/EP001' in p for p in called))
 
+    def test_browser_verification_encodes_opening_and_ending_paths(self):
+        workspace = self.root.parent.parent
+        self.fixture.put(workspace / '工作区浏览服务/runtime/task-service.json', {'url': 'http://browser.invalid'})
+        progress = (self.root / '项目进度.md').read_text()
+        for episode in ('片头', '片尾'):
+            with self.subTest(episode=episode):
+                self.fixture.put(self.root / '项目进度.md', progress.replace('EP001制作', episode + '制作'))
+                paths = []
+
+                class Opener:
+                    def open(inner, url, timeout):
+                        url.encode('ascii')  # urllib's HTTP request target must be encoded.
+                        path = urllib.parse.urlsplit(url).path
+                        paths.append(path)
+                        if path == '/api/service':
+                            value = {'workspace': str(workspace), 'ready': True}
+                        elif path.endswith('/status'):
+                            value = {'updating': False, 'checking': False, 'error': None}
+                        elif '/files/' in path:
+                            return io.BytesIO((self.root / '项目进度.md').read_bytes())
+                        elif '/episodes/' in path:
+                            value = {'segments': {'C001': [{'id': 'P001', 'videos': [
+                                {'stage': '一采', 'run': 'R003', 'approved': True}]}]}}
+                        else:
+                            raise AssertionError('Unexpected endpoint ' + path)
+                        return io.BytesIO(json.dumps(value).encode())
+
+                with patch.object(tool.urllib.request, 'build_opener', return_value=Opener()):
+                    result = tool.browser_sync(self.root, episode, '一采',
+                                               [episode + '-C001-P001-R003-一采'], False, 30)
+                self.assertEqual(result['state'], 'verified')
+                self.assertTrue(any(path.endswith('/episodes/' + urllib.parse.quote(episode, safe=''))
+                                    for path in paths))
+
+    def test_browser_checking_timeout_and_idle_error_do_not_read_episode(self):
+        workspace = self.root.parent.parent
+        self.fixture.put(workspace / '工作区浏览服务/runtime/task-service.json', {'url': 'http://browser.invalid'})
+        for status, expected_error, message in [
+            ({'updating': False, 'checking': True, 'error': None}, TimeoutError, '浏览入口仍在同步'),
+            ({'updating': False, 'checking': False, 'error': '读取失败'}, ValueError, '读取失败'),
+        ]:
+            with self.subTest(status=status):
+                called = []
+
+                class Opener:
+                    def open(inner, url, timeout):
+                        path = urllib.parse.urlsplit(url).path
+                        called.append(path)
+                        if path == '/api/service':
+                            value = {'workspace': str(workspace), 'ready': True}
+                        elif path.endswith('/status'):
+                            value = status
+                        else:
+                            raise AssertionError('等待或报错期间不应读取剧集：' + path)
+                        return io.BytesIO(json.dumps(value).encode())
+
+                with patch.object(tool.urllib.request, 'build_opener', return_value=Opener()), \
+                        patch.object(tool.time, 'monotonic', side_effect=[10, 11]), \
+                        patch.object(tool.time, 'sleep') as sleep:
+                    with self.assertRaisesRegex(expected_error, message):
+                        tool.browser_sync(self.root, 'EP001', '一采', [], False, 1)
+                    sleep.assert_not_called()
+                self.assertEqual(len(called), 2)
+
     def test_existing_authorized_configuration_batches_are_preserved(self):
-        self.setup_stage()
+        self.setup_stage('一采')
+        self.plan['source_finalization'] = str(self.request.with_name('来源二采定稿请求.json'))
         source = Path(self.plan['source_finalization'])
         origin = tool.adopt.load(source)
         origin.update(configuration_batches=[
@@ -234,7 +500,7 @@ class ApprovalTests(unittest.TestCase):
         self.fixture.put(source, origin)
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed')
-        self.assertTrue(result['episode_completed'])
+        self.assertFalse(result['episode_completed'])
         self.assertEqual(len(result['finalization']['batches']), 2)
         self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 2)
 

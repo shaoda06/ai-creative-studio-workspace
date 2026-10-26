@@ -1,3 +1,5 @@
+import { UnderlineTabs } from './UnderlineTabs';
+import { FloatingMessage } from './Notifications';
 import { PointerTooltip } from './PointerTooltip';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -70,6 +72,12 @@ export function TaskSidebar() {
     };
   }, []);
   const selectedNode = nodes.find(node => node.url === selectedUrl) ?? nodes[0];
+  const liveNodes = nodes.filter(node => node.connection === 'connected' && !node.error && !node.queue_error && node.running_count !== null);
+  const remoteActivity = connection !== 'connected' ? 'unknown'
+    : liveNodes.some(node => node.running_count! > 0) ? 'running'
+    : nodes.length > 0 && liveNodes.length === nodes.length ? 'idle' : 'unknown';
+  const remoteActivityLabel = remoteActivity === 'running' ? '远端有任务正在执行'
+    : remoteActivity === 'idle' ? '远端当前没有进行中任务' : '远端执行状态暂未确认';
   const category = (task: LocalQueueTask): keyof typeof localQueueStates => task.category ??
     (task.status === 'queued' || task.status === 'local_queued' ? 'queued' : task.status === 'paused' ? 'paused' : 'history');
   const nodeRows = localRows.filter(task => task.remote_url === selectedNode?.url);
@@ -180,6 +188,21 @@ export function TaskSidebar() {
       aria-label={open ? '收起任务进度' : '展开任务进度'} onClick={() => {
         setOpen(!open);
       }}><span aria-hidden="true">{open ? '‹' : '›'}</span><span className="comfy-rail-label">任务进度</span>
+      <PointerTooltip text={remoteActivityLabel}><span className="comfy-rail-runner" data-state={remoteActivity} role="img" aria-label={remoteActivityLabel}>
+        <svg width="28" height="36" viewBox="0 0 32 40" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <g className="comfy-lifter">
+            <g className="comfy-lifter-upper">
+              <path d="M1 13h30" />
+              <path d="M4 9v8M7 8v10M25 8v10M28 9v8" strokeWidth="3" />
+              <circle cx="16" cy="6.5" r="3" fill="currentColor" stroke="none" />
+              <path d="M16 10v3M11 15l2 9h6l2-9M11 15l-2-2v-2M21 15l2-2v-2M11 15q5-4 10 0" />
+            </g>
+            <path className="comfy-lifter-leg-left" d="M13 24L11 30L10 36" />
+            <path className="comfy-lifter-leg-right" d="M19 24L21 30L22 36" />
+            <path d="M7 37h5M20 37h5" />
+          </g>
+        </svg>
+      </span></PointerTooltip>
       <span className="comfy-rail-summary">
         <span className="comfy-rail-values">
           {(Object.keys(localQueueStates) as (keyof typeof localQueueStates)[]).map(status => <span key={status}>{status === 'queued' ? '队列中' : localQueueStates[status]} <b>{localCounts[status]}</b></span>)}
@@ -187,13 +210,10 @@ export function TaskSidebar() {
       </span></button>
     <div id="comfy-task-list" className="comfy-task-content" data-view={editingNodes ? 'nodes' : 'tasks'} hidden={!open}>
       {editingNodes ? <NodeEditor close={() => setEditingNodes(false)} /> : <>
-      <div className="comfy-node-heading"><nav className="underline-tabs comfy-node-tabs" aria-label="远端节点">
-        {nodes.map(node => <PointerTooltip key={node.url} text={connection === 'connected' ? nodeConnectionLabels[node.connection] : '等待后台连接恢复'}><button  aria-current={node.url === selectedNode?.url ? 'page' : undefined}
-          disabled={busy || dragToken.current !== null}
-          onClick={() => { setSelectedUrl(node.url); setActionError(''); }} >
-          <span className="comfy-node-dot" data-connection={connection === 'connected' ? node.connection : 'connecting'}
-            aria-hidden="true" />{node.name}</button></PointerTooltip>)}
-      </nav><button className="comfy-node-edit" disabled={busy || dragToken.current !== null}
+      <div className="comfy-node-heading"><UnderlineTabs scrollable label="远端节点" selected={selectedNode?.url || ''} disabled={busy || dragToken.current !== null}
+        onChange={url => { setSelectedUrl(url); setActionError(''); }} items={nodes.map(node => ({ value: node.url, label: node.name,
+          tooltip: connection === 'connected' ? nodeConnectionLabels[node.connection] : '等待后台连接恢复',
+          icon: <span className="comfy-node-dot" data-connection={connection === 'connected' ? node.connection : 'connecting'} aria-hidden="true" /> }))} /><button className="comfy-node-edit" disabled={busy || dragToken.current !== null}
         onClick={() => setEditingNodes(true)}>编辑</button></div>
       <section className="comfy-queue" aria-label="远端队列">
       <div className="comfy-task-heading"><strong>远端</strong>
@@ -210,16 +230,13 @@ export function TaskSidebar() {
       </section>
       <section className="comfy-queue" aria-label="本地队列">
         <div className="comfy-task-heading comfy-local-heading"><strong>本地</strong>
-          <nav className="underline-tabs comfy-local-tabs" aria-label="本地任务分类">
-            {(Object.keys(localQueueStates) as (keyof typeof localQueueStates)[]).map(status => <button key={status}
-              aria-current={localCategory === status ? 'page' : undefined} disabled={busy || dragToken.current !== null}
-              onClick={() => setLocalCategory(status)}>{localQueueStates[status]}（{localCounts[status]}）</button>)}
-          </nav>
+          <UnderlineTabs compact label="本地任务分类" selected={localCategory} disabled={busy || dragToken.current !== null}
+            onChange={setLocalCategory} items={(Object.keys(localQueueStates) as (keyof typeof localQueueStates)[]).map(status => ({ value: status, label: `${localQueueStates[status]}（${localCounts[status]}）` }))} />
         </div>
         {localCategory === 'history' ? <TaskHistory
           updatedAt={historyUpdatedAt} total={localCounts.history} onDetails={setDetailId} /> :
         <div className="comfy-queue-body" key={`${selectedNode?.url}:${localCategory}`}>
-          {actionError && <p className="comfy-task-warning" role="alert">{actionError}</p>}
+          {open && actionError && <FloatingMessage tone="error">{actionError}</FloatingMessage>}
           {localTasks.length === 0 && <p className="comfy-empty">暂无{localQueueStates[localCategory]}任务</p>}
           <div className="comfy-task-items">{localTasks.map(task => <LocalQueueCard key={task.id} task={task}
             position={localPositions.get(task.id)}

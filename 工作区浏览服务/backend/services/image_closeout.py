@@ -12,11 +12,109 @@ from urllib.parse import unquote
 import zlib
 
 from project_paths import project_file
+import project_progress
 from backend.services.execution_checks import write_json
 
 
 TEMPLATES = {'人物': '人物参考图工作稿模板.md', '场景': '场景参考图工作稿模板.md',
-             '道具': '道具参考图工作稿模板.md', '剧集素材': '剧集素材工作稿模板.md'}
+             '道具': '道具参考图工作稿模板.md', '剧集素材': '剧集素材工作稿模板.md',
+             '封面': '封面制作工作稿模板.md'}
+
+
+def progress_phases(root, drafts):
+    phases = set()
+    for draft in drafts:
+        parts = project_file(root, draft).relative_to(root).parts
+        if parts[0] == '09-剧集制作':
+            phases.add(parts[1] + '制作')
+        else:
+            phases.update({'03-人物资料': ('人物资料卡', '人物参考图'),
+                           '04-场景资料': ('场景资料卡', '场景参考图'),
+                           '05-道具资料': ('道具资料卡', '道具参考图'),
+                           '10-封面资料': ('封面制作',)}[parts[0]])
+    return phases
+
+
+def validate_record_updates(root, drafts, updates, *, tokens=(), contents=None):
+    """Preview exact association edits without publishing them or rendering future outputs."""
+    edits = {}
+    for update in updates:
+        if (set(update) != {'path', 'old', 'new'}
+                or any(not isinstance(update[name], str) or not update[name] for name in update)):
+            raise ValueError('图片关联更新须为非空path/old/new文字')
+        path = project_file(root, update['path'])
+        if path.suffix != '.md':
+            raise ValueError('图片关联更新只允许项目Markdown')
+        if set(re.findall(r'\{\{[^{}]+\}\}', update['new'])) - set(tokens):
+            raise ValueError('图片关联更新有未知占位符')
+        if path not in edits:
+            text = contents[path] if contents is not None and path in contents else path.read_text('utf-8-sig')
+            edits[path] = text, text
+        before, text = edits[path]
+        if update['old'] == update['new'] or text.count(update['new']) == 1:
+            continue
+        if text.count(update['old']) != 1:
+            raise ValueError('图片关联更新源文字变化或不唯一：' + str(path))
+        edits[path] = before, text.replace(update['old'], update['new'], 1)
+    progress = root / '项目进度.md'
+    if progress in edits:
+        project_progress.validate_update(*edits[progress], phases=progress_phases(root, drafts))
+    return edits
+
+
+def record_updates(plan):
+    return [*plan.get('record_updates', []), *plan.get('upscale', {}).get('record_updates', [])]
+
+
+def with_record_updates(plan, updates):
+    plan = deepcopy(plan)
+    plan['record_updates'] = [] if plan.get('upscale') else updates
+    if plan.get('upscale'):
+        plan['upscale']['record_updates'] = updates
+    return plan
+
+
+def repair_record_updates(root, drafts, current, repair, report_file, *, identity=None):
+    """Repair only exact record edits; retain immutable task/approval evidence and an audit copy."""
+    previous = json.loads(report_file.read_text('utf-8-sig')) if report_file.exists() else None
+    if previous and identity and any(previous.get(name) != value for name, value in identity.items()):
+        raise ValueError('登记修复报告不属于原任务或成果，不覆盖')
+    if previous and previous.get('record_repair') == repair:
+        return repair['updates']
+    if (set(repair) != {'reason', 'expected_updates', 'updates'}
+            or not isinstance(repair['reason'], str) or not repair['reason'].strip()
+            or repair['expected_updates'] != current):
+        raise ValueError('登记修复须说明原因并匹配当前关联更新，不覆盖其他修复')
+    if previous and previous['status'] in ('registered', 'completed'):
+        raise ValueError('图片已登记，不再改写登记计划；网页失败只接续核验')
+    allowed = {project_file(root, item['path']) for item in current}
+    if any(project_file(root, item['path']) not in allowed for item in repair['updates']):
+        raise ValueError('登记修复不能新增写入文件')
+    edits = validate_record_updates(root, drafts, repair['updates'])
+    for before, after in edits.values():
+        confirmations = re.findall(r'^#### 4\. 用户确认\s*\n.*?(?=^#### |^### |^## |\Z)', before, re.M | re.S)
+        if any(block not in after for block in confirmations):
+            raise ValueError('登记修复不能改写已有用户确认或批准依据')
+    if previous:
+        count = len(current)
+        prefix = previous['updates'][:-count] if count else previous['updates']
+        tail = previous['updates'][-count:] if count else []
+        if [(u['path'], u['old']) for u in tail] != [(u['path'], u['old']) for u in current]:
+            raise ValueError('收尾报告与关联更新不符，不猜测或改写系统登记项')
+        # Keep system-generated edits intact; they still undergo the final source/approval checks.
+        revised = {**previous, 'updates': [*prefix, *repair['updates']],
+                   'record_repair': repair, 'registration_updates': repair['updates']}
+    index = 1
+    archive = report_file.with_name(report_file.stem + f'-登记修复前-{index:03d}.json')
+    while archive.exists():
+        index += 1
+        archive = report_file.with_name(report_file.stem + f'-登记修复前-{index:03d}.json')
+    write_json(archive, {'report': previous, 'record_updates': current, 'repair': repair})
+    if previous:
+        if json.loads(report_file.read_text('utf-8-sig')) != previous:
+            raise ValueError('收尾报告并发变化，不覆盖')
+        write_json(report_file, revised)
+    return repair['updates']
 
 
 def section(text, heading):
@@ -92,13 +190,48 @@ def png(raw):
     return width, height
 
 
-def validate_plan(data):
+def validate_names(root, plan, *, required=False):
+    """Bind new candidate destinations to their declared formal image identity."""
+    up = plan.get('upscale')
+    formal_name = plan.get('formal') or (up.get('formal') if up and required else None)
+    if formal_name is None:
+        if required and plan.get('image_type') != '画风样例':
+            raise ValueError('新图片任务须填写formal正式图片路径，再确定候选名称')
+        if not required:
+            return  # Historical execution plans retain their submitted destinations.
+    formal = project_file(root, formal_name) if formal_name else Path('项目基本定位-画风验证.png')
+    draft = project_file(root, plan['draft'])
+    if up and formal != project_file(root, up['formal']):
+        raise ValueError('处理结果的formal与正式保存路径不一致')
+    for item in plan['images']:
+        candidate = project_file(root, item['path'])
+        if candidate.parent != draft.parent / '素材':
+            raise ValueError('新图片候选须保存到工作稿/素材/')
+        base = re.escape(formal.stem) + r'-候选-v[0-9]{2,}'
+        board = re.fullmatch(r'(.+-手绘导演分镜表)-第([0-9]{2,})页', formal.stem)
+        if up:
+            source = project_file(root, up['source'])
+            if not re.fullmatch(base, source.stem):
+                raise ValueError('批准原候选与正式图片名称不一致；先按授权整理来源，不改写原批准')
+            valid = candidate.name == source.stem + '-' + up['number'] + '.png'
+        elif plan.get('kind') == '社交媒体':
+            valid = bool(candidate.suffix and re.fullmatch(base + r'-(?:原生|[1-9][0-9]*x[1-9][0-9]*)', candidate.stem))
+        elif board:
+            valid = bool(re.fullmatch(re.escape(board[1]) + r'-v[0-9]{2,}-第' + board[2] + r'页\.png', candidate.name))
+        else:
+            valid = bool(re.fullmatch(base + r'\.png', candidate.name))
+        if not valid:
+            raise ValueError('新图片候选须按对应正式图片名及规定处理编号命名，不追加工具、比例等后缀：' + candidate.name)
+
+
+def validate_plan(data, *, check_records=True):
     plan = data.image_plan
     if plan is None:
         raise ValueError('图片缺少image_plan收尾关联；旧任务需显式补充原记录关联，不自动猜测')
     if data.task_type not in ('image', 'image-upscale') or plan['kind'] not in TEMPLATES:
         raise ValueError('图片收尾类型错误')
     root = Path(data.project)
+    validate_names(root, plan)
     draft = project_file(root, plan['draft'])
     text = draft.read_text('utf-8-sig')
     generation = section(text, plan['generation'])[0]
@@ -121,7 +254,8 @@ def validate_plan(data):
             raise ValueError('超分必须关联一个获批输入和一个输出')
         if up.get('review_required'):
             raise ValueError('用户要求超分后再审，不能使用自动正式采用计划')
-        if not re.fullmatch(r'超分-\d{3,}', up['number']):
+        local = plan.get('local_processing')
+        if not re.fullmatch(('规格处理' if local else '超分') + r'-\d{3,}', up['number']):
             raise ValueError('超分子记录编号错误')
         source = project_file(root, up['source'])
         approval_file, heading = up['approval'].split('#', 1)
@@ -135,24 +269,36 @@ def validate_plan(data):
         candidates = re.findall(r'\[[^\]]*\]\(([^)]+)\)', value(confirmation[1], '批准的具体候选') or value(confirmation[1], '对应具体候选'))
         if not any(project_file(root, (approval_path.parent / unquote(path)).resolve(), recorded=True) == source for path in candidates):
             raise ValueError('超分输入不是批准的具体候选')
-        if len(data.uploads) != 1 or Path(data.uploads[0]['file']) != source or data.uploads[0]['node'] != '2' or data.uploads[0]['input'] != 'image':
+        output = next(iter(planned.values()))
+        target = (output['width'], output['height'])
+        source_size = png(source.read_bytes())
+        if local:
+            anchor = local['crop_anchor']
+            if (data.workflow or data.uploads or data.outputs[0].node_id != 'local'
+                    or list(source_size) != local['source_size']):
+                raise ValueError('本地处理必须使用原批准图及本地输出，不带远端工作流或上传')
+            if not isinstance(anchor, (list, tuple)) or len(anchor) != 2 or any(type(n) not in (int, float) or not 0 <= n <= 1 for n in anchor):
+                raise ValueError('crop_anchor须为0到1之间的两个数，表示水平、垂直裁切位置')
+        elif any(n < old for n, old in zip(target, source_size)) or target == source_size:
+            raise ValueError('RTX不能缩小任意一边或处理同尺寸图片；请使用统一任务清单自动转本地处理')
+        elif len(data.uploads) != 1 or Path(data.uploads[0]['file']) != source or data.uploads[0]['node'] != '2' or data.uploads[0]['input'] != 'image':
             raise ValueError('超分上传必须绑定获批原图到节点2')
-        workflow = data.workflow
-        if (workflow['1']['class_type'] != 'RTXVideoSuperResolution' or workflow['1']['inputs']['images'] != ['2', 0]
-                or workflow['3']['class_type'] != 'SaveImage' or workflow['3']['inputs']['images'] != ['1', 0]
-                or data.outputs[0].node_id != '3'):
-            raise ValueError('超分必须为批准原图→RTX节点1→节点3')
-        resize = workflow['1']['inputs']
-        if resize['resize_type'] == 'scale by multiplier':
-            if resize['resize_type.scale'] != 2:
-                raise ValueError('倍数超分只支持2倍')
-        elif resize['resize_type'] == 'target dimensions':
-            target = (resize['resize_type.width'], resize['resize_type.height'])
-            output = next(iter(planned.values()))
-            if any(type(n) is not int for n in target) or target != (output['width'], output['height']):
-                raise ValueError('RTX指定尺寸与成果计划不符')
-        else:
-            raise ValueError('不支持的RTX图片尺寸模式')
+        if not local:
+            workflow = data.workflow
+            if (workflow['1']['class_type'] != 'RTXVideoSuperResolution' or workflow['1']['inputs']['images'] != ['2', 0]
+                    or workflow['3']['class_type'] != 'SaveImage' or workflow['3']['inputs']['images'] != ['1', 0]
+                    or data.outputs[0].node_id != '3'):
+                raise ValueError('超分必须为批准原图→RTX节点1→节点3')
+            resize = workflow['1']['inputs']
+            if resize['resize_type'] == 'scale by multiplier':
+                if resize['resize_type.scale'] != 2:
+                    raise ValueError('倍数超分只支持2倍')
+            elif resize['resize_type'] == 'target dimensions':
+                requested = (resize['resize_type.width'], resize['resize_type.height'])
+                if any(type(n) is not int for n in requested) or requested != target:
+                    raise ValueError('RTX指定尺寸与成果计划不符')
+            else:
+                raise ValueError('不支持的RTX图片尺寸模式')
         formal = project_file(root, up['formal'])
         if formal == source or formal in planned or formal.is_relative_to(Path(data.record_dir)):
             raise ValueError('超分正式文件必须与审批原图、候选及执行附件分开')
@@ -162,10 +308,9 @@ def validate_plan(data):
             raise ValueError('超分须预先提供正式资产表及关联入口的采用更新')
     elif up:
         raise ValueError('普通图片不能带超分采用计划')
-    for update in [*plan.get('record_updates', []), *(up['record_updates'] if up else [])]:
-        path = project_file(root, update['path'])
-        if path.suffix != '.md' or set(update) != {'path', 'old', 'new'} or not update['old'] or not update['new']:
-            raise ValueError('图片关联更新须为项目Markdown中的非空path/old/new')
+    tokens = ['{{outputs}}', '{{specs}}', '{{time}}', '{{evidence}}'] + (['{{file}}'] if up else [])
+    if check_records:
+        validate_record_updates(root, [plan['draft']], record_updates(plan), tokens=tokens)
     return draft, text, planned
 
 
@@ -201,6 +346,8 @@ def register(store, key, outputs, report_file):
     data, state = store.rows[key]['input'], store.rows[key]['state']
     if data.image_plan is None and state.get('image_closeout_plan'):
         data = data.model_copy(update={'image_plan': state['image_closeout_plan']})
+    if 'image_registration_updates' in state:
+        data = data.model_copy(update={'image_plan': with_record_updates(data.image_plan, state['image_registration_updates'])})
     previous = json.loads(report_file.read_text('utf-8')) if report_file.exists() else None
     if previous:
         if previous['task_id'] != key or previous['prompt_id'] != state['prompt_id']:
@@ -372,6 +519,10 @@ def apply_updates(root, report, report_file):
         else:
             raise ValueError('图片收尾源文字变化或不唯一：' + str(path))
         edits[path] = before, text
+    progress = root / '项目进度.md'
+    if progress in edits:
+        phases = progress_phases(root, [item['draft'] for item in report['items']])
+        project_progress.validate_update(*edits[progress], phases=phases)
     if report.get('approval'):
         approval = report['approval']
         path = project_file(root, approval['path'])

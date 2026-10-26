@@ -28,6 +28,7 @@ class NativeImageTests(unittest.TestCase):
             draft='03-人物资料/其他资料/工作稿/CH001-参考图-工作稿.md', prompt='保持原文的测试提示词。',
             authorization='用户授权一次独立测试，不自动重试', ratio='1:1', formal_size=[2048, 2048],
             output='03-人物资料/其他资料/工作稿/素材/CH001-成年-人物上半身正面肖像图-候选-v01.png',
+            formal='03-人物资料/CH001-测试人物/参考图/CH001-成年-人物上半身正面肖像图.png',
             fields={'人物状态': '成年'})
         self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
         self.projects = ProjectStore(self.project.parent)
@@ -59,6 +60,99 @@ class NativeImageTests(unittest.TestCase):
         self.assertEqual(self.projects.section(self.project.name, '03-人物资料')['people'][0]['pendingCount'], 1)
         self.assertFalse(list(self.project.rglob('*.api.json')))
         self.assertFalse(list(self.project.rglob('后台任务状态.json')))
+
+    def test_progress_scope_conflict_stops_before_native_handoff(self):
+        row = '| EP001制作 | 会话 | 进行中 | 当前成果 | - 衣装未定 | - 无 |'
+        progress = self.project / '项目进度.md'
+        progress.write_text(row)
+        self.spec['record_updates'] = [dict(path='项目进度.md', old='衣装未定', new='图片已采用')]
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        with self.assertRaisesRegex(ValueError, '对应阶段行'):
+            native.prepare(self.project, self.request)
+        self.assertFalse(self.request.with_name('请求-Imagegen执行清单.json').exists())
+        self.assertFalse((self.project / self.spec['draft']).exists())
+        self.assertEqual(progress.read_text(), row)
+
+    def test_invalid_associated_updates_stop_before_handoff(self):
+        path = '03-人物资料/人物索引.md'
+        for update in (dict(path=path, old='不存在的旧文字', new='新文字'),
+                       dict(path=path, old='CH001', new='{{unsupported}}'),
+                       dict(path=path, old='CH001', new='新文字', extra=True)):
+            with self.subTest(update=update):
+                self.spec['record_updates'] = [update]
+                self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+                with self.assertRaises(ValueError):
+                    native.prepare(self.project, self.request)
+                self.assertFalse((self.project / self.spec['draft']).exists())
+
+    def test_record_repair_preserves_user_note_and_original_manifest(self):
+        path = '03-人物资料/人物索引.md'
+        old = (self.project / path).read_text()
+        updates = [dict(path=path, old=old, new=old.replace('主角', '主角；本轮{{specs}}'))]
+        self.spec['record_updates'] = updates
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        self.prepare()
+        manifest = (self.project / self.job['manifest']).read_bytes()
+        current = old + '\n用户新备注\n'
+        (self.project / path).write_text(current)
+        # The exact old row still matches, so force a real source conflict within it.
+        current = current.replace('主角', '主角（用户补充）')
+        (self.project / path).write_text(current)
+        with self.assertRaises(ValueError):
+            native.complete(self.project, self.job['manifest'], self.result, self.projects)
+        repair = dict(reason='保留用户补充并完成原记录同步', expected_updates=updates,
+                      updates=[dict(path=path, old='主角（用户补充）', new='主角（用户补充）；本轮已保存')])
+        report_file = self.project / self.job['report']
+        original_report = report_file.read_bytes()
+        other = self.result.with_name('不同来源凭据.json')
+        other.write_text(json.dumps(dict(source='另一张图.png', actual_prompt=self.spec['prompt'])))
+        with self.assertRaisesRegex(ValueError, '不属于原任务或成果'):
+            native.complete(self.project, self.job['manifest'], other, self.projects, repair=repair)
+        self.assertEqual(report_file.read_bytes(), original_report)
+        report = native.complete(self.project, self.job['manifest'], self.result, self.projects, repair=repair)
+        self.assertTrue(report['user_message_ready'])
+        self.assertIn('用户新备注', (self.project / path).read_text())
+        self.assertIn('主角（用户补充）', (self.project / path).read_text())
+        self.assertEqual((self.project / self.job['manifest']).read_bytes(), manifest)
+        self.assertEqual((self.project / self.job['candidate']).read_bytes(), self.source.read_bytes())
+
+    def test_legacy_bad_token_without_journal_can_repair_existing_result(self):
+        path = '03-人物资料/人物索引.md'
+        updates = [dict(path=path, old='主角', new='{{unsupported}}')]
+        self.spec['record_updates'] = updates
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        with patch.object(images, 'validate_record_updates'):
+            self.prepare()  # Simulates a historical handoff created before preflight existed.
+        manifest = (self.project / self.job['manifest']).read_bytes()
+        with self.assertRaisesRegex(ValueError, '未知占位符'):
+            native.complete(self.project, self.job['manifest'], self.result, self.projects)
+        self.assertFalse((self.project / self.job['report']).exists())
+        repair = dict(reason='修正历史格式错误', expected_updates=updates,
+                      updates=[dict(path=path, old='主角', new='主角；已保存')])
+        repair_file = self.project / self.job['record'] / '登记修复请求.json'
+        repair_file.write_text(json.dumps(repair, ensure_ascii=False))
+        result = subprocess.run([sys.executable, '-B', str(native.SKILL / 'scripts/imagegen_results.py'),
+            'complete', '--project', str(self.project), '--manifest', self.job['manifest'],
+            '--source', str(self.source), '--record-repair', str(repair_file)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['user_message_ready'])
+        for _ in range(2):
+            self.assertTrue(native.complete(self.project, self.job['manifest'], self.result,
+                                           self.projects, repair=repair)['user_message_ready'])
+        self.assertEqual((self.project / self.job['manifest']).read_bytes(), manifest)
+
+    def test_matching_progress_phase_is_prepared_without_early_publication(self):
+        row = '| 人物参考图 | 会话 | 进行中 | 尚未生成 | - 无 | - 无 |'
+        progress = self.project / '项目进度.md'
+        progress.write_text(row)
+        self.spec['record_updates'] = [dict(path='项目进度.md', old='尚未生成', new='{{outputs}}；{{specs}}')]
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        self.prepare()
+        self.assertEqual(progress.read_text(), row)
+        result = native.complete(self.project, self.job['manifest'], self.result, self.projects)
+        self.assertTrue(result['user_message_ready'])
+        self.assertIn('7×5', progress.read_text())
+        self.assertNotIn('{{', progress.read_text())
 
     def test_prepare_and_complete_reuse_without_new_generation_or_overwriting_feedback(self):
         self.prepare()
@@ -129,12 +223,37 @@ class NativeImageTests(unittest.TestCase):
         self.assertIn('tool error', text)
         self.assertNotIn('### ' + self.job['review'], text)
 
+    def test_style_sample_uses_its_fixed_object_without_a_formal_asset(self):
+        self.spec.update(image_type='画风样例',
+            draft='00-项目定位/其他资料/工作稿/项目基本定位-画风验证-工作稿.md',
+            output='00-项目定位/其他资料/工作稿/素材/项目基本定位-画风验证-候选-v01.png')
+        del self.spec['formal']
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        self.prepare()
+        self.assertNotIn('formal', self.job['request'])
+        self.assertFalse((self.project / self.job['candidate']).exists())
+
+    def test_director_sheet_candidate_must_match_the_declared_formal_page(self):
+        self.spec.update(kind='剧集素材', image_type='手绘导演分镜表',
+            draft='09-剧集制作/EP001/其他资料/工作稿/EP001-专用素材制作-工作稿.md',
+            formal='09-剧集制作/EP001/03-分镜脚本/导演分镜表/EP001-C001-手绘导演分镜表-第01页.png',
+            output='09-剧集制作/EP001/其他资料/工作稿/素材/EP001-C001-手绘导演分镜表-v01-第02页.png')
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        with self.assertRaisesRegex(ValueError, '对应正式图片名'):
+            native.prepare(self.project, self.request)
+        self.assertFalse((self.project / self.spec['draft']).exists())
+        self.spec['output'] = self.spec['output'].replace('第02页', '第01页')
+        self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
+        self.prepare()
+        self.assertIn('-v01-第01页.png', self.job['candidate'])
+
     def test_all_existing_templates_are_prepared_without_new_asset_categories(self):
         for kind, scope, who in [('场景', '04-场景资料', 'SC001'), ('道具', '05-道具资料', 'PR001'),
                                  ('剧集素材', '09-剧集制作/EP001', 'EP001')]:
             with self.subTest(kind=kind):
                 spec = dict(self.spec, kind=kind, object=who,
                     draft=f'{scope}/其他资料/工作稿/{who}-参考图-工作稿.md',
+                    formal=f'{scope}/参考图/{who}.png',
                     output=f'{scope}/其他资料/工作稿/素材/{who}-候选-v01.png')
                 request = self.request.with_name(who + '.json')
                 request.write_text(json.dumps(spec, ensure_ascii=False))
@@ -164,6 +283,7 @@ class NativeImageTests(unittest.TestCase):
     def test_episode_generation_and_review_both_remain_pending(self):
         self.spec.update(kind='剧集素材', object='EP001-C001-P001', image_type='剧集专用参考图',
             draft='09-剧集制作/EP001/其他资料/工作稿/EP001-专用素材制作-工作稿.md',
+            formal='09-剧集制作/EP001/04-专用素材/EP001-专用图.png',
             output='09-剧集制作/EP001/其他资料/工作稿/素材/EP001-专用图-候选-v01.png')
         self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
         self.prepare()
@@ -184,6 +304,7 @@ class NativeImageTests(unittest.TestCase):
                 if scope == '剧集素材':
                     self.spec.update(kind='剧集素材', object='EP001-C001-P001', image_type='剧集专用参考图',
                         draft='09-剧集制作/EP001/其他资料/工作稿/EP001-专用素材制作-工作稿.md',
+                        formal='09-剧集制作/EP001/04-专用素材/EP001-专用图.png',
                         output='09-剧集制作/EP001/其他资料/工作稿/素材/EP001-专用图-候选-v01.png')
                     self.request = self.request.with_name('剧集请求.json')
                     self.request.write_text(json.dumps(self.spec, ensure_ascii=False))

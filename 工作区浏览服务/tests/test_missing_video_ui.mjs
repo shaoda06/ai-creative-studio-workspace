@@ -85,7 +85,7 @@ try {
   await page.screenshot({ path: path.join(out, 'not-generated.png') });
   assert.equal(await placeholder.innerText(), '尚未生成视频', 'planned revision mislabeled as lost media');
   assert.equal(await scene.getByText('部分分段暂无本轮视频。', { exact: true }).count(), 0);
-  assert.equal(await scene.locator('.scene-review-round').count(), 0, 'empty duplicate notice container remains');
+  assert.equal(await scene.getByRole('region', { name: '场次提示' }).count(), 0, 'preparation alone must not create a shared message panel');
   assert.equal(await scene.getByText('P001的本轮一采 R004尚未生成视频', { exact: false }).count(), 0);
   assert.ok((await scene.locator('.scene-video-preparation').innerText()).includes('3段尚无可播放视频'));
   assert.ok(!(await scene.innerText()).includes('视频已不可播放'));
@@ -152,10 +152,13 @@ try {
   await scene.getByText('P004的本轮一采 R001等待提交', { exact: false }).waitFor();
   assert.ok(!(await scene.locator('[role=alert]').allTextContents()).some(text => text.includes('尚未生成')));
   await select('P001');
-  await page.getByRole('combobox', { name: '版本切换', exact: true }).selectOption({ label: '候选三' });
-  await page.getByText('当前查看版本不属于本轮，导出仍按本轮版本。', { exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '版本切换', exact: true }).click();
+  await page.getByRole('listbox', { name: '版本切换', exact: true }).getByRole('option').filter({ hasText: '候选三' }).click();
+  await page.getByText('该版本未登记整场轮次，不能连续播放；导出仍按第1轮。', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('checkbox', { name: '连续播放', exact: true }).isDisabled(), true);
   await select('P001');
-  assert.equal(await scene.locator('.scene-review-round').count(), 0);
+  assert.equal(await scene.getByRole('region', { name: '场次提示' }).count(), 0, 'returning to the round clears the shared notice while progress stays separate');
+  assert.equal(await scene.locator('.scene-video-preparation').count(), 1);
   await page.setViewportSize({ width: 390, height: 844 });
   await placeholder.scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(out, 'mobile-not-generated.png') });

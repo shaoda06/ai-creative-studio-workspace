@@ -78,6 +78,7 @@ class PortabilityTests(unittest.IsolatedAsyncioTestCase):
         self.data.workflow = {'1': {'class_type': 'MiniMaxH3Director', 'inputs': {
             'timeline_data': json.dumps({'segments': [{}]})}}}
         self.data.outputs = []
+        self.data.workflow['1']['inputs']['timeline_data'] = json.dumps({'segments': [{}]})
         output = self.project / '候选/EP001-C001-P001-R001-一采.mp4'
         output.parent.mkdir()
         output.write_bytes(b'video')

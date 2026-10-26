@@ -4,16 +4,20 @@ import json
 import os
 import re
 import stat
+import sys
 import threading
 import time
 
 from backend.parsers.project import SourceChangedError, build_data, live_task_record, live_revision_notes, FORMAL_SECTIONS
 from backend.parsers.generation import load_context
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama/scripts'))
+from project_index import read_index
+
 logger = logging.getLogger(__name__)
 
 # Increment only when the parsed project data or interpretation becomes incompatible.
-CACHE_SCHEMA = 6
+CACHE_SCHEMA = 17
 
 class ProjectStore:
     """Parse on demand; keep the last complete result while a change is read."""
@@ -34,8 +38,11 @@ class ProjectStore:
         return path
 
     def discover(self):
-        return [{'id': p.name, 'name': p.name} for p in sorted(self.root.iterdir())
-                if p.is_dir() and not p.name.startswith('.') and p.resolve().parent == self.root]
+        projects = {p.name for p in self.root.iterdir()
+                    if p.is_dir() and not p.name.startswith('.') and p.resolve().parent == self.root}
+        _, indexed = read_index(self.root)
+        names = dict.fromkeys([*indexed, *sorted(projects)])
+        return [{'id': name, 'name': name} for name in names if name in projects]
 
     def snapshot(self, path: Path):
         # mtime and size detect edits, additions, removal and renames without reading media.
@@ -59,6 +66,8 @@ class ProjectStore:
                         if (os.name == 'nt' and item.stat(follow_symlinks=False).st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
                                 and not Path(item.path).resolve().is_relative_to(path)):
                             continue
+                        if key == '98-发布成片' or key.startswith('98-发布成片/'):
+                            result[key + '/'] = (0, 0)
                         pending.append((item.path, key + '/'))
                     elif item.name not in ('项目总览.html', 'index.html') and item.is_file():
                         if item.is_symlink() and not Path(item.path).resolve().is_relative_to(path):
@@ -74,7 +83,7 @@ class ProjectStore:
         return result
 
     def cache_snapshot(self, snapshot, part, data):
-        episode = re.match(r'09-剧集制作--(EP\d{3,})--(?:playback|ending|context)(?:--|$)', part or '')
+        episode = re.match(r'09-剧集制作--((?:EP\d{3,}|片头|片尾))--(?:playback|ending|context)(?:--|$)', part or '')
         if episode is None:
             return snapshot
         number = episode[1]
@@ -200,7 +209,7 @@ class ProjectStore:
                          error=None, error_kind=None, updating=False, retry_at=0.0, retry_at_time=0.0, sections=sections)
 
     def section(self, name: str, scope: str, episode: str | None = None, mode='full', candidate=None):
-        if scope not in FORMAL_SECTIONS or episode is not None and not re.fullmatch(r'EP\d{3,}', episode):
+        if scope not in FORMAL_SECTIONS or episode is not None and not re.fullmatch(r'(?:EP\d{3,}|片头|片尾)', episode):
             raise FileNotFoundError('栏目或剧集不存在')
         entry = self.get(name)
         if candidate is not None and not re.fullmatch(re.escape(episode) + r'-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', candidate):
@@ -240,7 +249,7 @@ class ProjectStore:
         path = (root / relative).resolve()
         if not path.is_relative_to(root) or any(p.startswith('.') for p in Path(relative).parts):
             raise FileNotFoundError('文件不存在或不在项目内')
-        identity = re.fullmatch(r'(EP\d{3,})-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', path.stem)
+        identity = re.fullmatch(r'((?:EP\d{3,}|片头|片尾))-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', path.stem)
         if revision and identity:
             if path.is_file():
                 stat = path.stat()

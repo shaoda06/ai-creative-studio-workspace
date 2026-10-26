@@ -12,9 +12,19 @@ export interface GenerationContext {
   references: Record<'common' | 'segment', { name: string; label: string; kind: 'image' | 'video' | 'audio'; url?: string; missing?: boolean }[]>;
 }
 // One recorded revision/stage; url and fileRevision are empty until a video exists.
-export interface SegmentVideo { key: string; url: string; run: string; stage: string; approved: boolean; candidateNumber: number; context?: GenerationContext; fileRevision: string; deliveryStatus: string; taskStatus: string; taskStateUrl?: string; checkedAt: string }
-export interface SceneRound { number: number; created_at: string; note?: string; script: (FileItem & { version: string }) | null; storyboard: (FileItem & { version: string }) | null; issues: string[]; segments: { id: string; duration: number; stage: string; run: string; scriptHtml: string; scriptUrl: string }[] }
-export interface FileItem { sceneRounds?: Record<string, SceneRound[]>; warnings?: string[]; previousEpisode?: FileItem | null; kind: string; name: string; title?: string; titleStatus?: string; productionComplete?: boolean; scenes?: string[]; productionIssues?: { key: string; message: string; scene?: string }[]; script?: FileItem | null; storyboards?: Record<string, FileItem>; segments?: Record<string, { id: string; duration: number; historical?: boolean; scriptHtml: string; scriptUrl?: string; videos: SegmentVideo[] }[]>; key?: string; url?: string; children?: FileItem[]; files?: FileItem[]; summary?: string; category?: string; statusHtml?: string; approvalHtml?: string; sourceHtml?: string; duration?: string; media?: FileItem; doc?: Record<string, unknown>; prompts?: { english?: string; chinese?: string }; }
+export interface VideoProduct {
+  id: string; label: string; role: '最终产物' | '过程产物'; key: string; url: string; fileRevision: string;
+  previewUrl?: string; previewRevision?: string; previewNote?: string;
+}
+export interface SegmentVideo {
+  products?: VideoProduct[];
+  downloadUrl?: string;
+  previewNote?: string;
+  reviewFileRevision?: string; key: string; url: string; run: string; stage: string; approved: boolean; candidateNumber: number; context?: GenerationContext; fileRevision: string; deliveryStatus: string; taskStatus: string; taskStateUrl?: string; checkedAt: string }
+export interface SceneRound { number: number; created_at: string; note?: string; episodeRound?: boolean; script: (FileItem & { version: string }) | null; storyboard: (FileItem & { version: string }) | null; issues: string[]; segments: { id: string; duration: number; stage: string; run: string; scriptHtml: string; scriptUrl: string }[] }
+export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean };
+export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; record: FileItem | null }
+export interface FileItem { materialGroup?: string; materialStatus?: string; materialNote?: string; materialReview?: FileItem; version?: string; directorSheets?: Record<string, DirectorSheets>; storyboardIndex?: FileItem | null; generationPlan?: FileItem | null; videoPrompts?: FileItem[]; materials?: FileItem[]; materialRecord?: FileItem | null; episodeRounds?: { number: number; scenes: string[] }[]; sceneRounds?: Record<string, SceneRound[]>; warnings?: string[]; previousEpisode?: FileItem | null; kind: string; name: string; title?: string; titleStatus?: string; productionComplete?: boolean; scenes?: string[]; productionIssues?: { key: string; message: string; scene?: string }[]; script?: FileItem | null; storyboards?: Record<string, FileItem>; segments?: Record<string, { id: string; duration: number; historical?: boolean; scriptHtml: string; scriptUrl?: string; videos: SegmentVideo[] }[]>; key?: string; url?: string; children?: FileItem[]; files?: FileItem[]; summary?: string; category?: string; statusHtml?: string; approvalHtml?: string; sourceHtml?: string; duration?: string; media?: FileItem; doc?: Record<string, unknown>; prompts?: { english?: string; chinese?: string }; }
 export interface Group { name: string; files: FileItem[] }
 // Source records contain stage-specific fields; retain their original keys and text.
 export type RecordData = Record<string, any>;

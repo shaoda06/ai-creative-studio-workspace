@@ -16,15 +16,15 @@ class AdoptionTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.root = Path(temp.name)
+        self.root = Path(temp.name).resolve()
         self.extra = self.root / '09-剧集制作/EP001/其他资料'
         self.summary = self.extra / '工作稿/EP001-生成说明-工作稿.md'
         self.progress = self.root / '项目进度.md'
         self.put(self.summary, '# 生成说明\n- 当前状态：待审核\n')
-        self.put(self.progress, '# 项目进度\n| EP001 | 制作中 |\n')
+        self.put(self.progress, '# 项目进度\n| EP001制作 | 会话 | 进行中 | 原成果 | - 无 | - 无 |\n')
         self.plan = {'approval_text': '这两段通过了', 'items': [], 'record_updates': [
             {'path': str(self.summary), 'old': '- 当前状态：待审核', 'new': '- 当前状态：本批批准采用'},
-            {'path': str(self.progress), 'old': '| EP001 | 制作中 |', 'new': '| EP001 | 本批已采用，其他任务继续 |'}]}
+            {'path': str(self.progress), 'old': '| EP001制作 | 会话 | 进行中 | 原成果 | - 无 | - 无 |', 'new': '| EP001制作 | 会话 | 进行中 | 当前采用 | - 无 | - 无 |'}]}
 
     def put(self, path, content):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,8 +34,9 @@ class AdoptionTests(unittest.TestCase):
         self.put(path, json.dumps(value, ensure_ascii=False))
 
     def item(self, part='P001', revision='R001', stage='一采', mapping=None):
-        identity = f'EP001-C001-{part}-{revision}-{stage}'
-        draft = self.extra / f'工作稿/EP001-C001-{part}-视频制作-工作稿.md'
+        unit = getattr(self, 'unit', 'EP001')
+        identity = f'{unit}-C001-{part}-{revision}-{stage}'
+        draft = self.extra / f'工作稿/{unit}-C001-{part}-视频制作-工作稿.md'
         if not draft.exists():
             self.put(draft, '# 分段工作稿\n- 最近更新：原时间\n- 当前状态及待办：待审核\n\n'
                      '## 1. 当前选定结果\n\n'
@@ -73,6 +74,27 @@ class AdoptionTests(unittest.TestCase):
         path = self.extra / '执行附件/采用请求.json'
         self.write_json(path, self.plan)
         return tool.adoption(argparse.Namespace(project=str(self.root), plan=str(path), apply=apply))
+
+    def test_shared_units_adopt_each_stage_without_touching_numbered_episode(self):
+        numbered_summary = self.summary
+        original = numbered_summary.read_bytes()
+        for unit in ('片头', '片尾'):
+            self.unit = unit
+            self.extra = self.root / '09-剧集制作' / unit / '其他资料'
+            self.summary = self.extra / '工作稿' / (unit + '-生成说明-工作稿.md')
+            self.put(self.summary, '# 生成说明\n- 当前状态：待审核\n')
+            for stage in tool.STAGES:
+                self.plan = {'approval_text': '本条具体候选通过采用', 'items': [], 'record_updates': [
+                    {'path': str(self.summary), 'old': '- 当前状态：待审核', 'new': '- 当前状态：待审核'},
+                    {'path': str(self.progress), 'old': '| EP001制作 | 会话 | 进行中 | 原成果 | - 无 | - 无 |', 'new': '| EP001制作 | 会话 | 进行中 | 原成果 | - 无 | - 无 |'}]}
+                _, draft, source, target = self.item(stage=stage)
+                content = source.read_bytes()
+                result = self.run_plan()
+                self.assertEqual(result['items'][0]['state'], 'adopt')
+                self.assertEqual(target.read_bytes(), content)
+                self.assertFalse(source.exists())
+                self.assertIn('- 决定：批准采用', draft.read_text())
+        self.assertEqual(numbered_summary.read_bytes(), original)
 
     def test_each_stage_and_repeat_do_not_change_revision_or_bytes(self):
         for stage in tool.STAGES:
@@ -122,6 +144,30 @@ class AdoptionTests(unittest.TestCase):
         self.assertEqual(saved['adoptions'][0]['prompt_id'], prompt)
         self.assertTrue(target.is_file())
         self.assertEqual(self.run_plan()['items'][0]['state'], 'already_adopted')
+
+    def test_migrated_receipt_requires_completed_matching_ledger_and_preserves_bytes(self):
+        item, _, source, target = self.item(revision='R005')
+        mapping = Path(item['mapping']); mapped = tool.load(mapping)
+        output = mapped.pop('outputs')[0]; prompt = mapped.pop('prompt_id')
+        ledger = self.root / '99-综合资料/其他资料/历史版本/迁移.json'
+        mapped['identity_migration'] = {'report': str(ledger)}
+        self.write_json(mapping, mapped)
+        self.write_json(mapping.parent/'提交响应.json', {'prompt_id':prompt})
+        self.write_json(mapping.parent/'后台任务状态.json', {'record_dir':str(mapping.parent),
+            'prompt_id':prompt,'remote_url':'https://example.test','segments':{'0':{**output,'receipt':item['receipt']}}})
+        receipt_path=Path(item['receipt']); receipt=tool.load(receipt_path)
+        old=item['identity'].replace('R005','R003'); receipt.update(identity=old,prompt_id=prompt)
+        self.write_json(receipt_path, receipt); original=receipt_path.read_bytes()
+        record={'state':'prepared','identities':[{'old':old,'new':item['identity']}],
+            'moves':[['historical execution',str(mapping.parent)]]}
+        self.write_json(ledger,record)
+        with self.assertRaisesRegex(ValueError,'分段身份'): self.run_plan()
+        record['state']='completed'; record['identities'][0]['old']=old.replace('R003','R004');self.write_json(ledger,record)
+        with self.assertRaisesRegex(ValueError,'分段身份'): self.run_plan()
+        record['identities'][0]['old']=old;record['identities'][0]['source']='historical-source';self.write_json(ledger,record)
+        self.assertEqual(self.run_plan()['items'][0]['state'],'adopt')
+        self.assertEqual(receipt_path.read_bytes(),original)
+        self.assertTrue(target.is_file());self.assertFalse(source.exists())
 
     def test_backend_postprocess_selector_and_download_receipt_bind_output(self):
         item, draft, source, target = self.item(stage='后处理')
@@ -326,6 +372,16 @@ class AdoptionTests(unittest.TestCase):
         self.put(self.progress, '其他会话已改动')
         with self.assertRaisesRegex(ValueError, '原文已变化'):
             self.run_plan()
+        self.assertTrue(source.exists())
+        self.assertFalse(target.exists())
+
+    def test_progress_edit_cannot_append_history_before_video_move(self):
+        _, _, source, target = self.item()
+        before = self.progress.read_bytes()
+        self.plan['record_updates'][1]['new'] += '\n\n### 定稿留档-EP001-C001-一采\n已完成'
+        with self.assertRaisesRegex(ValueError, '不得追加历史记录'):
+            self.run_plan()
+        self.assertEqual(self.progress.read_bytes(), before)
         self.assertTrue(source.exists())
         self.assertFalse(target.exists())
 

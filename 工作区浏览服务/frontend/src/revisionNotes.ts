@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { get, projectUrl } from './api';
 
-export interface NoteInput { segment: string; stage: string; run: string; text: string; fileRevision: string }
+export interface NoteInput { roundNumber?: number | null; segment: string; stage: string; run: string; text: string; fileRevision: string }
 export interface RevisionNote extends NoteInput { updatedAt: string }
 export interface OverallNote { number: number; text: string; updatedAt: string }
 export interface SavedSceneNotes { notes: Record<string, RevisionNote>; rounds: Record<string, OverallNote> }
@@ -11,7 +11,7 @@ const scenes = new Map<string, SceneState>();
 const listeners = new Set<() => void>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const saving = new Set<string>();
-export const noteKey = (value: Pick<NoteInput, 'segment' | 'stage' | 'run'>) => `${value.segment}/${value.stage}/${value.run}`;
+export const noteKey = (value: Pick<NoteInput, 'segment' | 'stage' | 'run' | 'roundNumber'>) => `${value.roundNumber != null ? `round/${value.roundNumber}/` : ''}${value.segment}/${value.stage}/${value.run}`;
 export const sceneNotesUrl = (project: string, episode: string, scene: string) => `${projectUrl(project)}/revision-notes/${episode}/${scene}`;
 function state(url: string): SceneState {
   if (!scenes.has(url)) scenes.set(url, { notes: {}, rounds: {}, drafts: {}, loaded: false, loading: false, error: '' });
@@ -101,9 +101,9 @@ window.addEventListener('beforeunload', event => {
     event.preventDefault();
   }
 });
-export function useSceneNotes(project: string, episode: string, scene: string) {
+export function useSceneNotes(project: string, episode: string, scene: string, enabled = true) {
   const url = sceneNotesUrl(project, episode, scene);
   const value = useSyncExternalStore(subscribe, () => state(url));
-  useEffect(() => { void loadNotes(url); }, [url]);
+  useEffect(() => { if (enabled) void loadNotes(url); }, [url, enabled]);
   return { ...value, url };
 }
