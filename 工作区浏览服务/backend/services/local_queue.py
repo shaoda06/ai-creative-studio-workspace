@@ -87,20 +87,30 @@ class LocalQueue:
                          if row['input'].record_dir == data.record_dir), None)
         if existing is not None:
             row = self.rows[existing]
-            registered = row['input'].model_copy(update={'url': row['state'].get('enqueued_url', row['input'].url)})
-            if registered.model_dump(exclude={'desktop', 'source_session_name'}) != data.model_dump(exclude={'desktop', 'source_session_name'}):
-                raise ValueError('执行附件目录已有不同任务，不能重复登记')
+            self.check_duplicate(existing, data)
             row['input'].desktop = data.desktop
             if data.source_session_name:
                 row['state']['source_session_name'] = data.source_session_name
             self.save(existing)
             return {'local_task_id': existing, 'monitor_id': existing, 'monitor': 'browser',
                     'status': row['state']['status'], 'duplicate': True}
-        project = self.validate_registration(data)
+        self.validate_registration(data)
         key = str(uuid.uuid4())
+        self.rows[key] = self.new_queue_row(key, data)
+        self.record(key, 'enqueue', 'accepted', _changes={})
+        self.session_readers[key] = asyncio.create_task(self.read_session_name(key))
+        return {'local_task_id': key, 'monitor_id': key, 'monitor': 'browser', 'status': self.rows[key]['state']['status']}
+
+    def check_duplicate(self, key, data):
+        row = self.rows[key]
+        registered = row['input'].model_copy(update={'url': row['state'].get('enqueued_url', row['input'].url)})
+        if registered.model_dump(exclude={'desktop', 'source_session_name'}) != data.model_dump(exclude={'desktop', 'source_session_name'}):
+            raise ValueError('执行附件目录已有不同任务，不能重复登记')
+
+    def new_queue_row(self, key, data):
         now = self.client.now()
-        self.rows[key] = {'input': data, 'state': {
-            'id': key, 'project': project.name, 'title': data.title, 'task_type': data.task_type,
+        return {'input': data, 'state': {
+            'id': key, 'project': Path(data.project).name, 'title': data.title, 'task_type': data.task_type,
             'prompt_id': None, 'client_id': str(uuid.uuid4()), 'status': 'paused' if data.start_paused else 'local_queued',
             'preparation_required': True,
             'content_review_required': True,
@@ -110,9 +120,6 @@ class LocalQueue:
             'error': None, 'notification': 'waiting', 'created_at': now, 'started_at': None,
             'collected': 0, 'expected': len(data.segment_plan.targets) if data.segment_plan else len(data.outputs),
             'source_session_name': data.source_session_name}}
-        self.record(key, 'enqueue', 'accepted', _changes={})
-        self.session_readers[key] = asyncio.create_task(self.read_session_name(key))
-        return {'local_task_id': key, 'monitor_id': key, 'monitor': 'browser', 'status': self.rows[key]['state']['status']}
 
     def active_drag(self, url=None):
         now = time.monotonic()
@@ -159,6 +166,8 @@ class LocalQueue:
     def task_action(self, key, action):
         if key not in self.rows:
             raise ValueError('任务不存在')
+        if self.rows[key].get('_repreparing'):
+            raise ValueError('任务正在重新准备，请等待准备结束后再操作')
         state = self.rows[key]['state']
         if state['status'] not in LOCAL:
             raise ValueError('任务已经提交或结束，不能操作本地排队')
@@ -184,11 +193,15 @@ class LocalQueue:
                     notice['delivery'] = 'superseded'
             self.save(key, notification='not_required')
         self.record(key, action, 'accepted')
+        data = self.rows[key]['input']
+        if action == 'cancel' and (state.get('group_id') or data.task_type == 'image' and data.image_batch_id):
+            self.queue_notice(key, 'cancelled', 'terminal', '任务已取消，按原组汇总')
         return {'local_task_id': key, 'status': state['status']}
 
     def can_transfer(self, key):
         state = self.rows[key]['state']
-        return state['status'] in LOCAL and not state.get('prompt_id') and not state.get('preparation_attempt', 0)
+        return (not self.rows[key].get('_repreparing') and state['status'] in LOCAL
+                and not state.get('prompt_id') and not state.get('preparation_attempt', 0))
 
     def transfer(self, key, url):
         if key not in self.rows:
@@ -456,6 +469,13 @@ class LocalQueue:
                 if not immediate:
                     for other in active:
                         await self.reconcile(other, background_collection=True)
+                # Reconciliation yields to queue controls. Honor the current node,
+                # order and pause/cancel decisions before prepare claims this task.
+                current = self.ordered(url)
+                current.sort(key=lambda item: not self.rows[item]['state'].get('immediate', False))
+                if self.active_drag(url) or not current or current[0] != key:
+                    return
+                immediate = row['state'].get('immediate', False)
                 try:
                     workflow = await self.prepare(key)
                     await self.remote_queues.refresh(url)

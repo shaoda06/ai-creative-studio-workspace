@@ -1,11 +1,16 @@
-"""Coalesce pending outcomes per source conversation, with durable delivery receipts."""
+"""Deliver explicit task groups, with durable per-task execution and delivery receipts."""
 import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import subprocess
 import uuid
-from backend.services.result_summary import summary, batch_tasks, image_delivery, video_delivery
+from backend.services.result_summary import summary, batch_tasks, group_delivery
+from backend.services.round_results import round_results
+
+
+class NotificationNotStarted(OSError):
+    """The sender did not start, so retrying cannot duplicate a delivered message."""
 
 
 class TaskNotifications:
@@ -17,17 +22,22 @@ class TaskNotifications:
                                                      'dispatch_attempt', 'preparation_attempt')},
                 'closeout_status': closeout.get('status'), 'closeout_error': closeout.get('error')}
 
+    def image_batch_members(self, key):
+        data = self.rows[key]['input']
+        return [member for member, item in self.rows.items()
+                if item['input'].project == data.project and item['input'].thread_id == data.thread_id
+                and item['input'].task_type == 'image' and item['input'].image_batch_id == data.image_batch_id]
+
     def image_batch_waiting(self, key):
         row = self.rows[key]
         data, state = row['input'], row['state']
         if (data.task_type != 'image' or not data.image_batch_id or state['status'] != 'completed'
                 or state.get('closeout', {}).get('status') != 'completed'):
             return False
-        members = [item for item in self.rows.values()
-                   if item['input'].project == data.project and item['input'].thread_id == data.thread_id
-                   and item['input'].task_type == 'image' and item['input'].image_batch_id == data.image_batch_id]
+        members = [self.rows[member] for member in self.image_batch_members(key)]
         return len(members) != data.image_batch_size or any(
-            item['state']['status'] != 'completed' or item['state'].get('closeout', {}).get('status') != 'completed'
+            item['state']['status'] not in ('cancelled', 'resolved') and (
+                item['state']['status'] != 'completed' or item['state'].get('closeout', {}).get('status') != 'completed')
             for item in members)
 
     def ready_notices(self, thread_id):
@@ -35,23 +45,37 @@ class TaskNotifications:
         for key, notice in self.notification_pending(thread_id):
             row = self.rows[key]
             state, data = row['state'], row['input']
-            if (data.task_type == 'image-upscale' and state['status'] == 'completed'
-                    and state.get('closeout', {}).get('status') == 'completed'):
+            group_id = state.get('group_id')
+            if group_id and self.group_status(group_id)['terminal'] and self.groups[group_id].get('notified_terminal') == [self.notice_outcome(member) for member in self.group_members(key)]:
+                notice['delivery'] = 'not_required'
+                self.record(key, 'notification', 'already_notified',
+                            _changes={'notification': 'not_required', 'notice_wait_reason': None})
+            elif (data.task_type == 'image-upscale' and state['status'] == 'completed'
+                    and state.get('closeout', {}).get('status') == 'completed'
+                    and (not state.get('group_id') or self.group_status(state['group_id'])['status'] == 'completed'
+                         and all(self.rows[member]['input'].task_type == 'image-upscale' for member in self.group_members(key)))):
                 notice['delivery'] = 'not_required'
                 self.record(key, 'notification', 'not_required', message='超分完成并正式保存，正常结果静默',
                             _changes={'notification': 'not_required', 'notice_wait_reason': None})
-            elif state.get('reported_outcome') == self.notice_outcome(key):
+            elif (not state.get('group_id') and state.get('reported_outcome') == self.notice_outcome(key)):
                 notice['delivery'] = 'acknowledged'
                 self.record(key, 'notification', 'already_received', message='本次实际结果已通过report读取，不再发送',
                             _changes={'notification': 'acknowledged', 'notice_wait_reason': None})
-            elif self.image_batch_waiting(key):
-                if state.get('notice_wait_reason') != 'image_batch':
+            elif self.group_waiting(key):
+                reason = 'task_group' if group_id else 'image_batch'
+                if state.get('notice_wait_reason') != reason:
                     self.record(key, 'notification', 'waiting_batch',
-                                _changes={'notice_wait_reason': 'image_batch'})
+                                _changes={'notice_wait_reason': reason})
+            elif group_id and not self.group_status(group_id)['terminal'] and self.merge_unread_issue(key, notice):
+                continue
             else:
                 ready.append((key, notice))
         if not ready:
             return []
+        group_id = self.rows[ready[0][0]]['state'].get('group_id')
+        if group_id:
+            return [(key, notice) for key, notice in ready if self.rows[key]['state'].get('group_id') == group_id]
+        ready = [(key, notice) for key, notice in ready if not self.rows[key]['state'].get('group_id')]
         first = self.rows[ready[0][0]]['input']
         if first.task_type == 'image' and first.image_batch_id:
             return [(key, notice) for key, notice in ready
@@ -59,6 +83,25 @@ class TaskNotifications:
                     and self.rows[key]['input'].image_batch_id == first.image_batch_id]
         return [(key, notice) for key, notice in ready
                 if not (self.rows[key]['input'].task_type == 'image' and self.rows[key]['input'].image_batch_id)]
+
+    def merge_unread_issue(self, key, notice):
+        issue = self.task_issue(key)
+        for member in self.group_members(key):
+            for previous in reversed(self.rows[member]['state'].get('notices', [])):
+                if previous.get('issue') != issue or previous['delivery'] not in ('sent', 'sending', 'delivery_unknown'):
+                    continue
+                batch_id = previous['batch_id']
+                delivery = self.db.execute('SELECT state FROM notification_batches WHERE id=?', (batch_id,)).fetchone()[0]
+                if delivery not in ('sent', 'sending', 'delivery_unknown'):
+                    continue
+                # The outstanding message points to a live group report. Merge
+                # peers until read; after receipt a new fault must wake the agent.
+                notice.update(delivery=delivery, batch_id=batch_id, issue=issue)
+                self.record(key, 'notification', 'merged', notification_id=batch_id,
+                            _changes={'notification': delivery, 'notice_wait_reason': None})
+                self.refresh_reports([key])
+                return True
+        return False
 
     def queue_notice(self, key, event_id, kind, message):
         state = self.rows[key]['state']
@@ -113,7 +156,15 @@ class TaskNotifications:
         has_report = self.db.execute('SELECT 1 FROM notification_reports WHERE batch_id=?', (batch_id,)).fetchone()
         new_ids = []
         if has_report:
-            for key in ids:
+            current = self.result_report(ids)
+            received_ids = list(dict.fromkeys([task['id'] for task in current['tasks']
+                if not self.rows[task['id']]['state'].get('group_id') or task['status'] in (
+                    'completed', 'failed', 'rejected', 'collection_failed', 'needs_attention', 'submission_unknown', 'cancelled', 'resolved') or task.get('error')] + [
+                task['task_id'] for scope in current.get('rounds', []) for task in scope.get('tasks', [])
+                if task['task_id'] and (task['terminal'] or task['error'])]))
+            if any(key not in self.rows or self.rows[key]['input'].thread_id != thread_id for key in received_ids):
+                raise ValueError('报告任务与来源会话不匹配')
+            for key in received_ids:
                 outcome = self.notice_outcome(key)
                 if self.rows[key]['state'].get('reported_outcome') != outcome:
                     new_ids.append(key)
@@ -121,6 +172,8 @@ class TaskNotifications:
                                 _changes={'reported_outcome': outcome})
         elif not reused:
             new_ids = ids
+        # Receipt writes change task timestamps. Persist only their final state,
+        # so a repeated read does not repair a snapshot created before the receipt.
         self.refresh_reports(ids)
         saved = self.db.execute('SELECT report FROM notification_reports WHERE batch_id=?', (batch_id,)).fetchone()
         # Old delivered notices have no snapshot. Reading them never restarts collection/registration.
@@ -197,6 +250,18 @@ class TaskNotifications:
         return self.result_report(ids)
 
     def result_report(self, ids):
+        # A terminal image batch must retain cancelled members even when their
+        # earlier notice was already read. Never infer a batch from its title.
+        if ids:
+            first = self.rows[ids[0]]['input']
+            if not self.rows[ids[0]]['state'].get('group_id') and first.task_type == 'image' and first.image_batch_id:
+                members = self.image_batch_members(ids[0])
+                if (set(ids) <= set(members) and len(members) == first.image_batch_size and all(
+                        self.rows[key]['state']['status'] in ('cancelled', 'resolved') or (
+                            self.rows[key]['state']['status'] == 'completed' and
+                            self.rows[key]['state'].get('closeout', {}).get('status') == 'completed') for key in members)):
+                    ids = members
+        ids = list(dict.fromkeys(member for key in ids for member in self.group_members(key)))
         completed = [key for key in ids if self.rows[key]['state']['status'] == 'completed']
         tasks = [summary(self, key) for key in ids]
         for task in tasks:
@@ -204,21 +269,51 @@ class TaskNotifications:
         results = [{'task_id': task['id'], **(task['closeout'] or {})}
                    for task in tasks if task['id'] in completed]
         report = {'tasks': tasks, 'results': results, 'reported_at': self.client.now(),
+                'handoff': {'receipt_only': True, 'scope': 'notification',
+                            'next_action': 'resume-round-delivery',
+                            'record_dirs': [task['record_dir'] for task in tasks]},
                 'user_message_ready': bool(tasks) and all(
                     task['status'] == 'completed' and
                     (task.get('closeout') or {}).get('status') == 'completed'
                     for task in tasks)}
-        delivery = image_delivery(self, tasks) or video_delivery(self, tasks)
+        business_sync = [{'task_id': task['id'], **task['closeout']['business_sync']} for task in tasks
+                         if (task.get('closeout') or {}).get('business_sync') is not None]
+        if business_sync:
+            report['business_sync'] = business_sync
+        delivery = group_delivery(self, tasks)
         if delivery is not None:
             report['delivery'] = delivery
+        group_ids = list(dict.fromkeys(self.rows[key]['state']['group_id'] for key in ids if self.rows[key]['state'].get('group_id')))
+        if group_ids:
+            report['groups'] = [self.group_status(group_id) for group_id in group_ids]
+            report['handoff'].update(scope='task-group', next_action='resume-group-delivery')
+            if any(group['issues'] for group in report['groups']):
+                report['handoff'].update(next_action='repair-group-silently',
+                    user_notification='decision-or-blocker-only')
+        rounds = round_results(self, [key for key in ids if not self.rows[key]['state'].get('group_id')])
+        if rounds:
+            report['rounds'] = rounds
         return report
 
-    def notification_text(self, key):
-        row = self.rows[key]
-        state, data = row['state'], row['input']
-        return (f'本地任务ID：{key}；项目：{state["project"]}；任务：{data.title}\n'
-                f'任务类型：{data.task_type}\n'
-                f'记录位置：{data.record_dir}\n')
+    def notification_prompt(self, notification_id, thread_id, report):
+        if report.get('groups'):
+            group = report['groups'][0]
+            scope = f'项目：{group["project"]}\n任务组：{group["title"]}'
+        else:
+            scope = '任务：\n' + '\n'.join(
+                f'- {self.rows[task["id"]]["state"]["project"]}：{self.rows[task["id"]]["input"].title}'
+                for task in report['tasks'])
+        script = self.workspace / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        rules = self.workspace / '.agents/skills/nora-generation/references/ComfyUI-任务监控规范.md'
+        return ('后台任务有更新\n\n'
+                + scope + '\n\n'
+                'Agent将读取最新结果并继续处理。需要你决定的事项，会单独说明。\n\n'
+                'Agent接续信息\n'
+                f'通知编号：{notification_id}\n来源会话：{thread_id}\n\n'
+                '读取报告：\n```text\n'
+                f'python "{script}" report --notification-id {notification_id}\n```\n\n'
+                f'接续规范：[后台通知接续](<{rules}#后台通知接续>)\n'
+                '先读取该章节，再静默读取报告并按规范接续；以本次报告为准。')
 
     async def notify(self, key):
         from backend.services.desktop_channel import DesktopChannel
@@ -237,7 +332,7 @@ class TaskNotifications:
                 channels.pop(thread_id, None)
                 await channel.close()
                 # A new outcome may arrive while the old channel is closing.
-                if not cancelled and any(task == key and not self.image_batch_waiting(task)
+                if not cancelled and any(task == key and not self.group_waiting(task)
                                          for task, _ in self.notification_pending(thread_id)):
                     self.notifiers[key] = asyncio.create_task(self.notify(key))
 
@@ -286,23 +381,30 @@ class TaskNotifications:
                 continue
             ids = list(dict.fromkeys(task for task, _ in pending))
             report = self.result_report(ids)
+            ids = [task['id'] for task in report['tasks']]
+            # Use the selected group's connection, never another group's latest caller.
+            data = self.rows[ids[0]]['input']
             batch_id = str(uuid.uuid4())
-            prompt = (f'后台任务结果通知。通知ID：{batch_id}；来源会话：{data.thread_id}。\n'
-                      '请调用 browser_tasks.py report --notification-id 上述ID，读取后台已保存的最新结果；读取同时自动确认收到。\n'
-                      '先静默读取report；若should_notify_user=false，表示实际结果此前已读取，只确认接收，不再发进度、解释或完成回复；否则仅汇报new_task_ids中的新结果。\n'
-                      '通知可能延迟送达，当前状态、异常是否已修复及成果清单以本次report为准，历史经过保留在过程记录。\n'
-                      + '\n'.join(self.notification_text(task) for task in ids)
-                      + '\n图片、超分与视频的技术核验、记录更新及网页核验由后台执行，以报告结果为准；正常成功只读取report，图片按本批完整清单集中展示成果和审核入口，视频汇报数量与审核入口。正常超分静默；历史已发出的正常超分通知只读确认，不发处理进度、完成回复或图片。正常成功时不再调用ack、register-results或重复查文件／刷新网页。成果保存不等于内容获批。'
-                      '失败请从报告中的失败阶段复查；已授权范围内的登记修复由Agent直接处理，可使用register-results补完已有结果的登记，不重新生成、不扩大批准范围，也不让用户决定内部命令。超出既有授权或不能保留用户修改时，再说明实际影响并请求决定；未知任务不自动重新生成。')
+            prompt = self.notification_prompt(batch_id, data.thread_id, report)
             self.db.execute('INSERT INTO notification_batches VALUES (?, ?, ?, ?, ?)',
                             (batch_id, data.thread_id, json.dumps(ids), prompt, 'sending'))
             self.db.execute('INSERT INTO notification_reports VALUES (?, ?)', (batch_id, json.dumps(report, ensure_ascii=False)))
+            group_id = report.get('groups', [{}])[0].get('id')
+            previous_terminal = self.groups[group_id].get('notified_terminal') if group_id else None
+            if group_id and report['groups'][0]['terminal']:
+                self.groups[group_id]['notified_terminal'] = [self.notice_outcome(task) for task in ids]
+                self.save_group(group_id)
             for task, notice in pending:
                 notice.update(delivery='sending', batch_id=batch_id)
+                if group_id and not report['groups'][0]['terminal']:
+                    notice['issue'] = self.task_issue(task)
                 self.record(task, 'notification', 'sending', notification_id=batch_id,
                             _changes={'notification': 'sending', 'notice_wait_reason': None})
+            receipt = {}
             try:
                 receipt = await self.desktop_call(data, 'send', prompt)
+            except NotificationNotStarted as error:
+                delivery, detail = 'not_started', str(error)
             except (OSError, subprocess.TimeoutExpired, ValueError) as error:
                 delivery = 'delivery_unknown'
                 detail = str(error)
@@ -313,16 +415,25 @@ class TaskNotifications:
             if acknowledged:
                 delivery = 'acknowledged'
             self.db.execute('UPDATE notification_batches SET state=? WHERE id=?', (delivery, batch_id))
+            if group_id and delivery == 'not_started':
+                self.groups[group_id]['notified_terminal'] = previous_terminal
+                self.save_group(group_id)
             for task, notice in pending:
-                notice['delivery'] = delivery
-                changes = {'notification': delivery, 'notification_attempted_at': self.client.now()}
+                notice['delivery'] = 'pending' if delivery == 'not_started' else delivery
+                if delivery == 'not_started':
+                    notice.pop('batch_id', None)
+                changes = {'notification': 'waiting_connection' if delivery == 'not_started' else delivery,
+                           'notice_wait_reason': 'connection' if delivery == 'not_started' else None,
+                           'notification_attempted_at': self.client.now()}
                 if delivery in ('sent', 'acknowledged'):
                     changes['notification_sent_at'] = self.client.now()
                 self.record(task, 'notification', 'delivery_confirmed' if acknowledged else delivery,
                             _changes=changes, notification_id=batch_id, error=detail, message=prompt,
-                            receipt=receipt.get('receipt') if detail is None else None)
+                            delivery_receipt=receipt.get('receipt') if detail is None else None)
             if delivery == 'delivery_unknown':
                 self.notifiers['ack:' + batch_id] = asyncio.create_task(self.wait_ack(batch_id))
+            elif delivery == 'not_started':
+                await asyncio.sleep(30)
 
     async def wait_ack(self, batch_id):
         events = self.__dict__.setdefault('_ack_events', {})

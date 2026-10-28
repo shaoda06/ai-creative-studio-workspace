@@ -106,15 +106,15 @@ try {
         assert.equal(await productSelect.count(), candidate === '候选二' ? 1 : 0);
         if (candidate === '候选二') {
           await sameStyle(productSelect, expected, `${context} / 产物选择`);
-          assert.match(await productSelect.innerText(), /最终产物/);
+          assert.match(await productSelect.innerText(), /默认/);
           await productSelect.click();
           const productMenu = page.getByRole('listbox', { name: '产物选择', exact: true });
           const productBounds = await productMenu.boundingBox();
           assert.ok(productBounds.x >= 0 && productBounds.x + productBounds.width <= width, '[产物菜单越界]');
-          await productMenu.getByRole('option', { name: /绿底 MP4 过程产物/ }).click();
+          await productMenu.getByRole('option', { name: /绿底 MP4/ }).click();
           assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /process=1/);
           await productSelect.click();
-          await productMenu.getByRole('option', { name: /透明 MOV 最终产物/ }).click();
+          await productMenu.getByRole('option', { name: /透明 MOV 默认/ }).click();
           assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /final=1/);
           assert.match(await business.locator('.segment-video video').getAttribute('src'), /preview=1/);
         }
@@ -335,6 +335,18 @@ try {
     assert.equal(await showcase.getByRole('link', { name: '查看原图 ↗', exact: true }).count(), 1);
     assert.equal(await showcase.getByRole('link', { name: '下载原图', exact: true }).count(), 1);
     await showcase.getByRole('button', { name: '选集与分段', exact: true }).click();
+    const episodeButtons = showcase.locator('.episode-grid-pairs .episode-button');
+    assert.equal(await episodeButtons.count(), 4);
+    assert.deepEqual(await episodeButtons.locator('.episode-button-duration').allTextContents(), ['1分20秒', '2分5.5秒*', '9.4秒']);
+    const episodeBounds = await episodeButtons.evaluateAll(nodes => nodes.map(node => {
+      const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width };
+    }));
+    assert.equal(episodeBounds[0].y === episodeBounds[1].y, width > 700, '选集最多两列，手机换行');
+    assert.ok(episodeBounds[2].y > episodeBounds[0].y, '第三集另起一行');
+    for (const button of await episodeButtons.all()) {
+      await contained(button, `${width}px / 选集按钮及其时长`);
+      for (const meta of await button.locator('.episode-button-meta').all()) await contained(meta, `${width}px / 选集时长与状态`);
+    }
     for (const [titleStatus, background, color] of [
       ['待定集名', 'rgb(239, 241, 239)', 'rgb(105, 118, 111)'],
       ['临时集名', 'rgb(255, 241, 220)', 'rgb(162, 105, 22)'],
@@ -347,6 +359,27 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '集名状态示例不可横向越界');
     await checkSharedNavigation(page, width, selfTest);
     await checkSharedPlayback(page, width);
+    await showcase.getByRole('button', { name: '任务卡片', exact: true }).click();
+    const taskLinkStyles = [];
+    for (const [selector, rowSelector] of [['.comfy-task', '.comfy-task-session-row'], ['.local-queue-card', '.local-queue-card-title']]) {
+      const card = showcase.locator(selector), detail = card.getByRole('button', { name: /查看.*详情/ });
+      assert.equal(await detail.textContent(), '任务组详情 →');
+      taskLinkStyles.push(await styleOf(detail));
+      assert.match(await detail.evaluate(el => getComputedStyle(el).textDecorationLine), /underline/);
+      const edges = await detail.evaluate(el => ({ button: el.getBoundingClientRect().right, row: el.parentElement.getBoundingClientRect().right }));
+      assert.ok(Math.abs(edges.button - edges.row) <= 1, `${width}px / 任务详情入口右对齐`);
+      await contained(card.locator(rowSelector), `${width}px / 任务详情行`);
+      await contained(card, `${width}px / 任务卡片`);
+      await detail.click();
+      await showcase.getByRole('status').filter({ hasText: '示例任务组：' }).waitFor();
+    }
+    assert.deepEqual(taskLinkStyles[0], taskLinkStyles[1], '运行与排队的任务组详情使用同一链接外观');
+    await showcase.getByRole('button', { name: '按钮与切换', exact: true }).click();
+    const linkExample = showcase.getByRole('button', { name: '链接操作示例', exact: true });
+    await sameStyle(linkExample, taskLinkStyles[0], `${width}px / 公共下划线链接`);
+    assert.equal(await showcase.getByRole('button', { name: '禁用链接示例', exact: true }).isDisabled(), true);
+    await linkExample.focus(); await page.keyboard.press('Enter');
+    await showcase.getByRole('status').filter({ hasText: '链接示例已点击' }).waitFor();
     assert.deepEqual(forbidden, [], '测试不得访问API、外部网络或写入业务');
     assert.deepEqual(errors, [], '浏览器错误');
     console.log(`公共组件布局检查：${width}px普通/宽屏、最新/旧候选、展示页同规格样式、父容器及菜单边界通过。`);

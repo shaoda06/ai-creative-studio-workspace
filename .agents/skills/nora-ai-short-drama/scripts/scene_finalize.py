@@ -83,6 +83,17 @@ def episode_missing(root, episode):
     return missing
 
 
+def retrospective_status(summary):
+    """Use a current explicit decision, never infer completion from a history heading."""
+    text = summary.read_text('utf-8-sig')
+    text = re.split(r'^#{2,6}[ \t]+', text, maxsplit=1, flags=re.M)[0]
+    explicit = re.search(r'^- 完集复盘状态：([^\n]*)', text, re.M)
+    current = re.search(r'^- 当前状态及待办：([^\n]*)', text, re.M)
+    completed = (explicit[1].strip() == '已完成' if explicit else
+                 bool(current and '完集复盘与经验归并已完成' in current[1]))
+    return {'status': 'completed' if completed else 'pending', 'record': str(summary)}
+
+
 def update_progress(root, episode, scene, stage, summary, *, failure_record=None):
     path = root / '项目进度.md'
     pending, next_steps = [], []
@@ -111,6 +122,8 @@ def update_progress(root, episode, scene, stage, summary, *, failure_record=None
                 pending.append(reference + '定稿留档尚未齐备')
                 next_steps.append('补齐' + reference + '的定稿留档')
     complete = failure_record is None and not missing
+    if complete and retrospective_status(summary)['status'] == 'pending':
+        next_steps.append('完成本集复盘与经验归并，记录于[生成说明工作稿](' + adopt.link(path, summary) + ')')
     folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[-1] + '-场次')
     outputs = '[' + scene + stage + '采用视频](' + adopt.link(path, folder) + ')、[制作与留档记录](' + adopt.link(path, summary) + ')'
     text = path.read_text('utf-8-sig')
@@ -168,10 +181,9 @@ def director(source_item, part):
     if timeline.get('runSelectEnabled') and index not in timeline['runSelection']:
         raise ValueError('该分段不在来源任务实际执行范围：' + part)
     editor = timeline['batchWorkspaces']['r2v']
-    if (pairs.director_editor_state(editor['globalCommon'], True) != pairs.director_editor_state(timeline['global'], True)
-            or [pairs.director_editor_state(g) for g in editor['segments']]
-            != [pairs.director_editor_state(g) for g in timeline['segments']]):
-        raise ValueError('来源导演台根／编辑工作区不同步：' + part)
+    stale_editor = (pairs.director_editor_state(editor['globalCommon'], True) != pairs.director_editor_state(timeline['global'], True)
+                    or [pairs.director_editor_state(g) for g in editor['segments']]
+                    != [pairs.director_editor_state(g) for g in timeline['segments']])
     if timeline['keyframes'] or timeline['videoClips'] or timeline['video'].get('fileName'):
         raise ValueError('分组汇总不改写带源视频／关键帧时间轴的工程：' + part)
     prompt = '\n\n'.join(p.strip() for p in
@@ -180,6 +192,12 @@ def director(source_item, part):
     frozen = adopt.local_path(source_item['root'], source_item['context']['prompts']['english'])
     if frozen.read_text(encoding='utf-8-sig').strip() != prompt:
         raise ValueError('实际正文与冻结提示词不同：' + part)
+    if stale_editor:
+        # source() has verified the API against the actual submitted request.
+        # Restore only the parsed export copy; never alter submitted API/canvas evidence.
+        editor['globalCommon'] = copy.deepcopy(timeline['global'])
+        editor['segments'] = copy.deepcopy(timeline['segments'])
+        source_item['restoration'].append('按实际提交及冻结正文同步留档副本编辑区：' + part)
     return key, node, timeline, group
 
 
@@ -423,7 +441,9 @@ def verify_pack(prepared):
             raise ValueError('导演包分组文件未完整覆盖整场')
         for group, filename in zip(portable['segments'], group_names):
             actual = client.strict_json(archive.read(filename))
-            if {k: group[k] for k in actual} != actual:
+            # Native group exports materialize these optional empty fields.
+            expected = {'loras': [], 'refImageSize': None, **group}
+            if any(k not in expected or expected[k] != value for k, value in actual.items()):
                 raise ValueError('包内分组与时间线不一致：' + filename)
 
 

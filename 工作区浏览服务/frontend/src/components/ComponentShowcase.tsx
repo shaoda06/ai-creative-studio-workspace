@@ -72,6 +72,9 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <UnderlineTabs label="长文字页签演示" items={[{ value: 'one', label: '简短页签' }, { value: 'long', label: '长文字与连续英文换行：' + 'LongNavigationReference'.repeat(4) }]} selected={longTab} onChange={setLongTab} />
           <p>{tab === 'overview' ? '这里是概览内容。' : '这里是详情内容。'}</p>
         </Example>
+        <Example title="轮次修改标记" rule="普通页签右上角的小黄点表示本轮有新视频，与分段条共用；选中与未选中时都保留标记。" usage="场次标签、分段条">
+          <TabNav label="场次标记示例" items={[{ value: 'one', label: '场次 C001' }, { value: 'long', label: '场次 C002', marker: '本轮新生成视频' }]} selected={longTab} onChange={setLongTab} />
+        </Example>
         <Example title="文本输入与禁用" rule="单行与多行输入沿用网站全局样式；长内容在输入框内部显示，窄容器不越界。禁用后不能编辑，只读内容可以选择但不能修改。开关支持点击、空格和回车，长标签不压缩开关。" usage="提示词标题与正文、分类表单、编辑模式">
           <div className="component-demo-row"><span>禁用输入</span><Switch label="禁用输入示例" checked={fieldsDisabled} onChange={setFieldsDisabled} /><button disabled={fieldsDisabled} onClick={() => setFieldDraft(longSampleText)}>填入长文字</button></div>
           <div className="component-demo-stack">
@@ -91,7 +94,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p className="component-draft">已选择：{options.find(item => item.value === selection)!.label}</p>
       </Example>}
       {category === 'messages' && <>
-        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。长消息最多520像素，手机上换行；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
+        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，手机上换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
           <div className="component-demo-row"><button onClick={() => showNotice('演示：操作成功')}>显示成功提示</button><button onClick={() => showNotice('演示：操作失败，请重试', 'error')}>显示错误提示</button><button onClick={() => showNotice(longSampleText, 'error')}>显示长错误提示</button><button disabled={pending} onClick={() => setPending(true)}>显示持续提示</button></div>
           <p>演示状态：{pending ? '进行中' : '未进行'}</p>
           <div className="component-demo-row"><button disabled={!pending} onClick={() => { setPending(false); showNotice('演示已结束'); }}>结束演示</button><button className="link" onClick={clearNotices}>清除演示消息</button></div>

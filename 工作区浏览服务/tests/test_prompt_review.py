@@ -7,7 +7,7 @@ from unittest.mock import patch
 from backend.services import comfy_tasks as tasks, execution_checks as checks
 from tests import test_submission_lifecycle as lifecycle
 from tests.prompt_review_fixture import ENGLISH, CHINESE
-from h3_prompt_checks import audit, text_findings, group_mode, bind_review
+from h3_prompt_checks import audit, text_findings, group_mode, bind_review, spatial_review_findings
 
 FL_ENGLISH = '''How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 4.46-second mark of the target video.
 
@@ -25,7 +25,57 @@ overall_soundscape: 风声和一次命中声。
 non_diegetic_music: N/A'''
 
 
+def semantic_warnings(*args, **kwargs):
+    warnings = []
+    text_findings(*args, **kwargs, warnings=warnings)
+    return warnings
+
+
 class TextChecks(unittest.TestCase):
+    def test_spatial_candidates_warn_without_blocking_text_and_translation(self):
+        for phrase in ('stands to the north of the gate', '站在白台北3米', '西北冷月光照来', '贴水绕向西侧阵眼'):
+            with self.subTest(phrase=phrase):
+                bad = ENGLISH.replace('stands screen right', phrase)
+                self.assertEqual(text_findings(bad), [])
+                self.assertIn('spatial_coordinates', [e['code'] for e in semantic_warnings(bad)])
+        bad_cn = CHINESE.replace('站在画面右侧', '站在南侧')
+        self.assertIn('spatial_coordinates', [e['code'] for e in semantic_warnings(ENGLISH, bad_cn)])
+
+    def test_spatial_words_in_names_dialogue_and_visible_text_are_preserved(self):
+        good = ENGLISH.replace('陈甲', '北方守卫').replace('stands screen right',
+            'says <d>Go north.</d> beside the sign “南门”, then stands screen right')
+        self.assertNotIn('spatial_coordinates', [e['code'] for e in semantic_warnings(good)])
+
+    def test_art_style_alias_and_equivalent_subtitle_wording_do_not_block(self):
+        prompt = ENGLISH.replace('stands screen right',
+            'stands screen right. East Asian fantasy rendering. The man watches')
+        prompt = prompt.replace('No subtitles or title cards appear throughout the entire video.',
+                                'Every frame remains free of captions.')
+        chinese = CHINESE.replace('站在画面右侧', '站在画面右侧。东方幻想三维渲染')
+        warnings = []
+        self.assertEqual(text_findings(prompt, chinese, warnings=warnings), [])
+        self.assertNotIn('spatial_coordinates', {item['code'] for item in warnings})
+        self.assertTrue({'role_alias', 'subtitle_rule'} <=
+                        {item['code'] for item in warnings})
+
+    def test_style_names_do_not_hide_actual_coordinates_in_the_same_description(self):
+        english = ENGLISH.replace('stands screen right',
+            'stands east of the gate in an East Asian fantasy setting')
+        chinese = CHINESE.replace('站在画面右侧', '站在石门东侧，采用东方幻想画风')
+        warnings = semantic_warnings(english, chinese)
+        coordinates = [item['detail'] for item in warnings if item['code'] == 'spatial_coordinates']
+        self.assertTrue(any('模型正文' in detail and 'east' in detail for detail in coordinates))
+        self.assertTrue(any('中文参考' in detail and '东侧' in detail for detail in coordinates))
+        self.assertFalse(any('东方' in detail for detail in coordinates))
+
+    def test_spatial_review_must_cover_each_shot_and_quote_that_shot(self):
+        prompt = ENGLISH.replace('overall_soundscape:', '[Shot 2] The empty gate stays open.\noverall_soundscape:')
+        first = {'shot': 1, 'prompt_quote': 'stands screen right', 'note': '人物保持门边位置。'}
+        second = {'shot': 2, 'prompt_quote': 'The empty gate stays open.', 'note': '切门口局部，不增加人物移动。'}
+        self.assertTrue(spatial_review_findings(prompt, {'shots': [first]}))
+        self.assertTrue(spatial_review_findings(prompt, {'shots': [first, first]}))
+        self.assertTrue(spatial_review_findings(prompt, {'shots': [first, dict(second, prompt_quote='stands screen right')]}))
+        self.assertEqual([], spatial_review_findings(prompt, {'shots': [first, second]}))
     def test_fl2v_uses_base_sections_and_checks_the_supplied_pair(self):
         self.assertEqual(text_findings(FL_ENGLISH, FL_CHINESE, {}, mode='fl2v', images={0, 1}, duration=4.46), [])
         for slots in ({0}, {1}, set(), {0, 1, 2}):
@@ -37,12 +87,12 @@ class TextChecks(unittest.TestCase):
         chinese = FL_CHINESE.replace('女子抬起', '精致三维渲染。女子抬起')
         self.assertEqual(text_findings(english, chinese, mode='fl2v'), [])
 
-    def test_wrong_mode_wrong_end_time_and_translation_still_fail(self):
+    def test_wrong_mode_and_end_time_fail_but_translation_cues_warn(self):
         self.assertIn('sections', [x['code'] for x in text_findings(FL_ENGLISH, mode='r2v')])
         self.assertIn('keyframe_timing', [x['code'] for x in text_findings(FL_ENGLISH, mode='fl2v', duration=5)])
-        self.assertIn('translation_numbers', [x['code'] for x in text_findings(
+        self.assertIn('translation_numbers', [x['code'] for x in semantic_warnings(
             FL_ENGLISH, FL_CHINESE.replace('4.46', '4.47'), mode='fl2v')])
-        self.assertIn('translation_tags', [x['code'] for x in text_findings(
+        self.assertIn('translation_tags', [x['code'] for x in semantic_warnings(
             FL_ENGLISH, FL_CHINESE.replace('[Shot 1]', '[Shot 2]'), mode='fl2v')])
 
     def test_base_modes_do_not_borrow_ref2va_subject_requirements(self):
@@ -68,7 +118,7 @@ class TextChecks(unittest.TestCase):
         english = ENGLISH.replace('detailed_description:', 'detailed_description:\nUse 3D animation for 0.7 seconds.')
         chinese = CHINESE.replace('detailed_description:', 'detailed_description:\n采用3D动画，保持0.7秒。')
         self.assertEqual(text_findings(english, chinese), [])
-        codes = {x['code'] for x in text_findings(english, chinese.replace('0.7秒', '0.8秒'))}
+        codes = {x['code'] for x in semantic_warnings(english, chinese.replace('0.7秒', '0.8秒'))}
         self.assertIn('translation_numbers', codes)
 
     def test_specific_english_faults_are_blocked_not_just_bad_translation(self):
@@ -76,11 +126,14 @@ class TextChecks(unittest.TestCase):
         broken = broken.replace('stands screen right', 'stands screen right. The man moves')
         broken = broken.replace('No subtitles or title cards appear throughout the entire video.', '')
         codes = {x['code'] for x in text_findings(broken, CHINESE)}
-        self.assertTrue({'subject_name', 'subject_reference', 'role_alias', 'subtitle_rule'} <= codes)
+        self.assertTrue({'subject_name', 'subject_reference'} <= codes)
+        warnings = {x['code'] for x in semantic_warnings(broken, CHINESE)}
+        self.assertTrue({'role_alias', 'subtitle_rule'} <= warnings)
+        self.assertFalse({'role_alias', 'subtitle_rule'} & codes)
 
-    def test_summary_translation_fails_even_when_english_is_valid(self):
+    def test_translation_count_difference_is_a_review_hint(self):
         self.assertEqual(text_findings(ENGLISH, CHINESE, {'1': '陈甲'}), [])
-        codes = {x['code'] for x in text_findings(ENGLISH, CHINESE.replace('<Subject 1>陈甲', '陈甲'))}
+        codes = {x['code'] for x in semantic_warnings(ENGLISH, CHINESE.replace('<Subject 1>陈甲', '陈甲'))}
         self.assertIn('translation_tags', codes)
 
     def test_three_quarter_view_is_not_itself_a_forbidden_word(self):
@@ -89,7 +142,7 @@ class TextChecks(unittest.TestCase):
     def test_partial_subtitle_ban_cannot_borrow_full_duration_from_another_sentence(self):
         text = ENGLISH.replace('No subtitles or title cards appear throughout the entire video.',
                                'Keep the face consistent throughout the entire video. No subtitles in the first second.')
-        self.assertIn('subtitle_rule', [x['code'] for x in text_findings(text)])
+        self.assertIn('subtitle_rule', [x['code'] for x in semantic_warnings(text)])
 
     def test_explicit_chinese_whole_video_subtitle_ban_is_accepted(self):
         text = ENGLISH.replace('No subtitles or title cards appear throughout the entire video.',
@@ -103,7 +156,7 @@ class TextChecks(unittest.TestCase):
             with self.subTest(replacement=replacement):
                 text = ENGLISH.replace('No subtitles or title cards appear throughout the entire video.',
                                        replacement)
-                self.assertIn('subtitle_rule', [x['code'] for x in text_findings(text)])
+                self.assertIn('subtitle_rule', [x['code'] for x in semantic_warnings(text)])
 
     def test_dialogue_role_words_are_not_treated_as_action_aliases(self):
         self.assertFalse(text_findings(ENGLISH.replace(
@@ -139,6 +192,7 @@ class ContentPreparationTests(unittest.IsolatedAsyncioTestCase):
             check['chinese_quote'] = '女子抬起的腿向前伸出一次'
             for source in check['sources']:
                 source.pop('sha256')
+        review['checks']['space_action']['shots'] = [{'shot': 1, 'prompt_quote': 'The woman extends her raised leg once', 'note': '单镜固定视点，抬腿向前伸出并停在接触姿势。'}]
         mapping['content_review'] = bind_review(self.project, workflow, {'groups': [review]})
         self.assertTrue(audit(self.project, workflow, mapping)['ok'])
         timeline['segments'][0]['refs'].pop()
@@ -175,7 +229,11 @@ class ContentPreparationTests(unittest.IsolatedAsyncioTestCase):
         for authorization in (None, '', True):
             row['subtitle_instruction_omission_authorization'] = authorization
             report = audit(self.project, workflow, mapping)
-            self.assertIn('subtitle_rule', [i['code'] for i in report['groups'][0]['issues']])
+            self.assertIn('subtitle_rule', [i['code'] for i in report['groups'][0]['warnings']])
+            if authorization is None:
+                self.assertTrue(report['ok'], report)
+            else:
+                self.assertFalse(report['ok'], report)
         row['subtitle_instruction_omission_authorization'] = '用户明确授权本组删除字幕禁令对照。'
         report = audit(self.project, workflow, mapping)
         self.assertTrue(report['ok'], report)

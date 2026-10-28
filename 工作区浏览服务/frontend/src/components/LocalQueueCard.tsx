@@ -1,5 +1,6 @@
 import { TabSelect } from './TabSelect';
 import { PointerTooltip } from './PointerTooltip';
+import { LinkButton } from './LinkButton';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clockText, localDateTime, taskTypeLabels } from './TaskCard';
@@ -13,7 +14,7 @@ export const statusLabels: Record<string, string> = { local_queued: '排队中',
 
 export interface LocalQueueTask {
   queue: 'local';
-  id: string; project: string; title: string;
+  id: string; project: string; title: string; group_id?: string;
   task_type: keyof typeof taskTypeLabels;
   status: string; category?: keyof typeof localQueueStates;
   source_session_name?: string; error?: string | null; notification?: string;
@@ -23,9 +24,12 @@ export interface LocalQueueTask {
   created_at: string; updated_at?: string; started_at?: string | null; ended_at?: string | null;
   collection_auto_retry?: number | null; collection_next_retry_at?: string | null;
   resolution?: { summary: string; resolved_at: string };
+  closeout?: { status?: string; error?: string };
 }
 
-export function collectionStatus(task: Pick<LocalQueueTask, 'status' | 'collection_auto_retry' | 'collection_next_retry_at'>) {
+export function collectionStatus(task: Pick<LocalQueueTask, 'status' | 'collection_auto_retry' | 'collection_next_retry_at' | 'closeout'>) {
+  if (task.status === 'completed' && task.closeout?.status === 'registration_failed') return '成果已保存 · 登记失败';
+  if (task.status === 'completed' && task.closeout?.status === 'browser_pending') return '成果已保存 · 网页待同步';
   if (task.status === 'collecting' && (task.collection_auto_retry || task.collection_next_retry_at)) {
     return `取回重试中 · ${(task.collection_auto_retry || 0) + (task.collection_next_retry_at ? 1 : 0)}/3`;
   }
@@ -96,13 +100,11 @@ export function LocalQueueCard({ task, position, onReorder, onAction, onTransfer
       <strong className="local-queue-card-status" data-status={task.status}>{collectionStatus(task)}{position !== undefined && ` #${position}`}</strong>
     </div>
     <div className="local-queue-card-body">
-      <div className="local-queue-card-description">
-        <div className="local-queue-card-title"><h2>{task.title}</h2>
-          {history && onDetails && <button type="button" className="local-queue-card-detail"
-            aria-label={`查看${task.title}详情`} onClick={() => onDetails(task.id)}>详情 →</button>}
-        </div>
-        {!history && <PointerTooltip text={task.source_session_name}><p className="local-queue-card-session" >来源会话：{task.source_session_name || '会话名称暂不可用'}</p></PointerTooltip>}
+      <div className="local-queue-card-title"><h2>{task.title}</h2>
+          {(history || task.group_id) && onDetails && <LinkButton className="local-queue-card-detail"
+            aria-label={`查看${task.title}${task.group_id ? '任务组' : ''}详情`} onClick={() => onDetails(task.id)}>{task.group_id ? '任务组详情' : '任务详情'} →</LinkButton>}
       </div>
+      {!history && <div className="local-queue-card-description"><PointerTooltip text={task.source_session_name}><p className="local-queue-card-session" >来源会话：{task.source_session_name || '会话名称暂不可用'}</p></PointerTooltip></div>}
       {['local_queued', 'queued', 'paused'].includes(task.status) && <div className="local-queue-card-actions" aria-label="本地任务操作">
         <button type="button" data-tone="green" disabled={busy || !onAction} onClick={() => onAction?.(task.id, 'immediate')}>立即提交</button>
         <button type="button" data-tone="blue" disabled={busy || !onAction} onClick={() => onAction?.(task.id, 'insert')}>插队</button>

@@ -79,8 +79,10 @@ def service_call(route, payload=None):
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=30) as response:
             result = json.load(response)
-        for item in result.get('delivery', {}).get('tasks', []):
-            item['review_url'] = config['url'] + item['review_path']
+        deliveries = [result.get('delivery'), *(scope.get('delivery') for scope in [*result.get('rounds', []), *result.get('groups', [])])]
+        for delivery in deliveries:
+            for item in (delivery or {}).get('tasks', []):
+                item['review_url'] = config['url'] + item['review_path']
         return result
     except urllib.error.HTTPError as error:
         raise ValueError(str(json.load(error).get('detail'))) from error
@@ -90,9 +92,12 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='读取后台最终报告并自动确认收到、查询异常或重试原任务取回；不会重新生成')
     commands = parser.add_subparsers(dest='command', required=True)
-    for command in ('status', 'retry-collection'):
-        item = commands.add_parser(command)
-        item.add_argument('--task-id', required=True, help='Backend local UUID, not remote prompt_id')
+    item = commands.add_parser('status', help='按任务组查询汇总进度，也可查询单个子任务')
+    scope = item.add_mutually_exclusive_group(required=True)
+    scope.add_argument('--group-id', help='提交返回的真实任务组UUID')
+    scope.add_argument('--task-id', help='Backend local UUID, not remote prompt_id')
+    item = commands.add_parser('retry-collection')
+    item.add_argument('--task-id', required=True, help='原子任务UUID，仅重试该项取回')
     for name in ('report', 'ack', 'register-results'):
         item = commands.add_parser(name, help={'report': '读取现成报告并自动确认收到；正常完成只需此命令',
             'ack': '兼容旧通知的独立确认；正常完成不用', 'register-results': '显式修复待审登记或兼容旧任务；正常完成由后台自动执行'}[name])
@@ -101,7 +106,7 @@ def main():
             item.add_argument('--image-plans', help='Explicit legacy repair only: JSON object from local task UUID to its image closeout plan; cannot replace an accepted association')
             item.add_argument('--image-repairs', help='JSON object from task UUID to reason/expected_updates/updates; repairs only existing record targets, never generation or approval')
             item.add_argument('--record-updates', help='UTF-8 JSON array of exact path/old/new updates for this batch progress or production checks; paths relative to the project')
-    commands.choices['report'].add_argument('--details', action='store_true', help='显式读取完整报告；正常图片／视频报告只返回成果、数量和审核入口，异常自动保留完整报告')
+    commands.choices['report'].add_argument('--details', action='store_true', help='显式读取完整报告；正常报告返回成果、审核入口和接续要求；读取不代表已交付用户，异常自动保留完整报告')
     item = commands.add_parser('resolve', help='Close an investigated needs_attention task; preserve its original exception')
     item.add_argument('--task-id', required=True, help='Backend local UUID, not remote prompt_id')
     item.add_argument('--resolution', required=True, help='UTF-8 JSON resolution file with original prompt ID, evidence and replacement IDs')
@@ -123,7 +128,10 @@ def main():
         result = service_call('notifications/' + args.notification_id + '/' + args.command, payload)
         if args.command == 'report' and not args.details and result.get('user_message_ready') and result.get('delivery') is not None:
             result = {name: result[name] for name in ('notification_id', 'status', 'reused', 'user_message_ready',
-                                                     'should_notify_user', 'new_task_ids', 'delivery') if name in result}
+                                                     'should_notify_user', 'new_task_ids', 'delivery', 'handoff',
+                                                     'business_sync', 'rounds', 'groups') if name in result}
+    elif args.command == 'status' and args.group_id:
+        result = service_call('groups/' + args.group_id)
     elif args.command == 'repair-collection':
         payload = json.loads(Path(args.repair).read_text('utf-8-sig'))
         payload['thread_id'] = os.environ.get('CODEX_THREAD_ID')

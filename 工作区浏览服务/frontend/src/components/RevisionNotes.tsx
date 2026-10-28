@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
+import type { PointerEvent, ReactNode } from 'react';
 import { get, projectUrl, type SegmentVideo } from '../api';
 import { combinationKey, combinationLabel, episodeExportNotes, shotOrderedText, type CombinationSummary, type EpisodeReview, type SavedEpisodeNotes } from '../episodeRevisionNotes';
 import { Dialog } from '../components';
-import { editNote, loadNotes, noteKey, prepareNotesExport, saveNote, saveNotesExport, sceneNotesUrl, useSceneNotes } from '../revisionNotes';
+import { editNote, loadNotes, noteKey, prepareNotesExport, saveNote, saveReviewedNote, saveNotesExport, sceneNotesUrl, useSceneNotes } from '../revisionNotes';
 import type { NoteInput } from '../revisionNotes';
 import { FloatingMessage, useNotify } from './Notifications';
 import { CopyButton } from './CopyButton';
 import { candidateLabel } from './SegmentVideo';
 import { TabNav } from './TabNav';
+import { LinkButton } from './LinkButton';
 
 export interface NoteScope { project: string; episode: string; scene: string }
-export function RevisionNoteEditor({ scope, segment, current, fileRevision, time, shot, shotStart, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; fileRevision: string; time: number; shot?: string; shotStart?: number; roundNumber?: number }) {
+export type NoteShotTimeline = (passShot: (shot: string, start: number) => void, preserveFocus: (event: PointerEvent<HTMLButtonElement>) => void, disabled: boolean) => ReactNode;
+export function RevisionNoteEditor({ scope, segment, current, fileRevision, time, shot, renderShotTimeline, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; fileRevision: string; time: number; shot?: string; renderShotTimeline: NoteShotTimeline; roundNumber?: number }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const [review, setReview] = useState<{ key: string; text: string } | null>(null);
   const notify = useNotify();
   const data = useSceneNotes(scope.project, scope.episode, scope.scene);
   const identity = { roundNumber, segment, stage: current.stage, run: current.run };
@@ -22,9 +26,15 @@ export function RevisionNoteEditor({ scope, segment, current, fileRevision, time
   useEffect(() => () => { void saveNote(data.url, key); }, [data.url, key]);
   const status = draft ? { waiting: '等待保存', saving: '保存中…', saved: '已保存', error: '未保存' }[draft.status] : note ? '已保存' : '尚未填写';
   const statusKind = data.error ? 'error' : data.loading ? 'loading' : draft?.status ?? (note ? 'saved' : 'empty');
-  const insertTime = (passedShot = false) => {
-    const tenths = passedShot ? Math.round(shotStart! * 10) : Math.floor(time * 10);
-    const timestamp = `${String(Math.floor(tenths / 600)).padStart(2, '0')}.${String(Math.floor(tenths / 10) % 60).padStart(2, '0')}.${tenths % 10}秒${shot ? `，${shot}` : ''}：${passedShot ? '这个分镜没问题' : ''}`;
+  const reviewConflict = async () => {
+    const saved = await loadNotes(data.url, true);
+    if (saved) setReview({ key, text: saved.notes[key]?.text ?? '' });
+    else notify('最新意见读取失败或仍在读取，请稍后重新核对。', 'error');
+  };
+  const insertTime = (passedShot?: { id: string; start: number }) => {
+    const tenths = passedShot ? Math.round(passedShot.start * 10) : Math.floor(time * 10);
+    const targetShot = passedShot?.id ?? shot;
+    const timestamp = `${String(Math.floor(tenths / 600)).padStart(2, '0')}.${String(Math.floor(tenths / 10) % 60).padStart(2, '0')}.${tenths % 10}秒${targetShot ? `，${targetShot}` : ''}：${passedShot ? '这个分镜没问题' : ''}`;
     const editor = textarea.current!;
     const editing = document.activeElement === editor;
     const start = editing ? editor.selectionStart : text.length;
@@ -39,17 +49,24 @@ export function RevisionNoteEditor({ scope, segment, current, fileRevision, time
       editor.setSelectionRange(start + inserted.length, start + inserted.length);
     });
   };
+  const preserveFocus = (event: PointerEvent<HTMLButtonElement>) => { if (document.activeElement === textarea.current) event.preventDefault(); };
   return <div className="revision-note-editor">
-    <p className="revision-note-identity">{scope.project} / {scope.episode} / {scope.scene} / {roundNumber ? `第${roundNumber}轮 / ` : ''}{segment} / {current.stage} / {candidateLabel(current.candidateNumber, current.approved)} · {current.run}</p>
+    {renderShotTimeline((id, start) => insertTime({ id, start }), preserveFocus, !data.loaded || !current.url)}
     <div className="revision-note-heading">
-      <div className="revision-note-label"><button className="link" disabled={!data.loaded || !current.url || shotStart === undefined} onPointerDown={event => { if (document.activeElement === textarea.current) event.preventDefault(); }} onClick={() => insertTime(true)}>本镜通过</button><button className="link" disabled={!data.loaded || !current.url} onPointerDown={event => { if (document.activeElement === textarea.current) event.preventDefault(); }} onClick={() => insertTime()}>插入时间</button><button className="link" disabled={!data.loaded || !text} onClick={() => editNote(data.url, { ...identity, text: '', fileRevision })}>清空</button></div>
-      <div className="revision-note-status" role="status"><span className="revision-note-state" data-state={statusKind}>{data.error ? '读取失败' : data.loading ? '正在读取…' : status}</span>{note && <span className="muted">更新于 {new Date(note.updatedAt).toLocaleString('zh-CN')}</span>}{draft?.status === 'error' && <button onClick={() => { void saveNote(data.url, key); }}>重试保存</button>}</div>
+      <div className="revision-note-label"><LinkButton disabled={!data.loaded || !current.url} onPointerDown={event => { if (document.activeElement === textarea.current) event.preventDefault(); }} onClick={() => insertTime()}>插入时间</LinkButton><LinkButton disabled={!data.loaded || !text} onClick={() => editNote(data.url, { ...identity, text: '', fileRevision })}>清空</LinkButton></div>
+      <div className="revision-note-status" role="status"><span className="revision-note-state" data-state={statusKind}>{data.error ? '读取失败' : data.loading ? '正在读取…' : status}</span>{note && <span className="muted">更新于 {new Date(note.updatedAt).toLocaleString('zh-CN')}</span>}</div>
     </div>
     <textarea ref={textarea} id="revision-note-text" aria-label="修改意见" placeholder="填写修改意见..." maxLength={20000} disabled={!data.loaded} value={text}
       onChange={event => editNote(data.url, { ...identity, text: event.target.value, fileRevision })} onBlur={() => { void saveNote(data.url, key); }} />
 
-    {draft?.error && <FloatingMessage tone="error">{draft.error}</FloatingMessage>}
+    {draft?.error && <FloatingMessage tone="error">{draft.error}{draft.conflict ? <button disabled={data.loading} onClick={() => { void reviewConflict(); }}>核对最新意见</button> : <button onClick={() => { void saveNote(data.url, key); }}>重试保存</button>}</FloatingMessage>}
     {note && note.fileRevision !== fileRevision && <p className="muted">该意见记录于此版本更新前。</p>}
+    {review?.key === key && draft?.conflict && <Dialog title="核对修改意见" close={() => setReview(null)}>
+      <p>其他页面已更新这条意见。本页文字仍保留；请对照后整理，再保存。</p>
+      <label>项目中最新意见<textarea aria-label="项目中最新意见" readOnly value={review.text} /></label>
+      <label>本页待保存意见<textarea aria-label="本页待保存意见" maxLength={20000} value={text} onChange={event => editNote(data.url, { ...identity, text: event.target.value, fileRevision })} /></label>
+      <button onClick={() => { void saveReviewedNote(data.url, key, review.text); setReview(null); }}>保存核对后的本页意见</button>
+    </Dialog>}
   </div>;
 }
 
@@ -158,6 +175,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
     {exportError && <FloatingMessage tone="error">导出资料读取失败：{exportError}<button onClick={() => { void exportNotes(); }}>重试</button></FloatingMessage>}
     {data.error && <FloatingMessage tone="error">修改意见读取失败：{data.error}<button onClick={() => { void loadNotes(data.url); }}>重试</button></FloatingMessage>}</>,
     dialog: draft !== null && <Dialog title={`${draft.scope.episode}${draft.episode ? ' · ' + draft.label : ' · ' + draft.scope.scene} 导出修改意见`} close={close} headerActions={confirmClose ? <div className="revision-export-close-actions"><button autoFocus onClick={() => setConfirmClose(false)}>继续编辑</button><button className="revision-export-discard" onClick={() => { setDraft(null); setConfirmClose(false); }}>放弃修改并关闭</button></div> : undefined}>
+      <p className="muted">这是打开时读取的意见快照。修改后需保存才能写回项目；复制只放入剪贴板，请粘贴到制作会话交给 Agent。</p>
       <TabNav compact label="意见导出范围" items={[{ value: 'round', label: draft.episode && !draft.number ? '当前组合意见' : '本轮意见' }, { value: 'history', label: '全部历史意见' }]} selected={mode} onChange={value => { setMode(value as ExportMode); setConfirmClose(false); }} />
       {confirmClose && <p className="notice" role="alert">尚有未保存的修改。放弃修改并关闭后，这些修改不会保留。</p>}
       <div className="revision-export-structured">
@@ -174,7 +192,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
           {mode === 'history' && draft.combinationHistory.map(item => <section className="revision-export-legacy" key={combinationKey(item.scenes)}><strong>整集汇总意见（{combinationLabel(item.scenes)}）</strong><textarea aria-label={`整集汇总意见（${combinationLabel(item.scenes)}）`} readOnly value={item.text} /></section>)}
           {mode === 'history' && draft.legacyRounds.map(item => <section className="revision-export-legacy" key={`${item.scene}/${item.number}`}><strong>{item.scene} / 第{item.number}轮 · 整场总体意见（历史）</strong><textarea aria-label={`${item.scene} 第${item.number}轮 整场总体意见（历史只读）`} readOnly value={item.text} /></section>)}
         </fieldset>
-        <footer className="revision-export-save"><button disabled={!changed || saving} onClick={() => { void save(); }}>{saving ? '保存中…' : '保存'}</button><button disabled={!changed || saving} onClick={() => { setDraft({ ...draft, notes: draft.notes.map(item => ({ ...item, text: item.original })), rounds: draft.rounds.map(item => ({ ...item, text: item.original })), combination: draft.combination ? { ...draft.combination, text: draft.combination.original } : null }); setConfirmClose(false); setMessage(''); }}>还原</button><div className="revision-export-toolbar"><CopyButton label="复制" text={text} successMessage={changed ? '已复制；有未保存的修改' : '已复制'} /></div><span role="status" className="muted">{changed ? '有未保存的修改' : ''}</span>{message && <FloatingMessage tone="error">{message}</FloatingMessage>}</footer>
+        <footer className="revision-export-save"><button disabled={!changed || saving} onClick={() => { void save(); }}>{saving ? '保存中…' : '保存'}</button><button disabled={!changed || saving} onClick={() => { setDraft({ ...draft, notes: draft.notes.map(item => ({ ...item, text: item.original })), rounds: draft.rounds.map(item => ({ ...item, text: item.original })), combination: draft.combination ? { ...draft.combination, text: draft.combination.original } : null }); setConfirmClose(false); setMessage(''); }}>还原</button><div className="revision-export-toolbar"><CopyButton label="复制" text={(changed ? '【未保存草稿：以下内容尚未全部写回项目意见文件】\n\n' : '') + text} successMessage={changed ? '已复制；有未保存的修改' : '已复制'} /></div><span role="status" className="muted">{changed ? '有未保存的修改' : ''}</span>{message && <FloatingMessage tone="error">{message}</FloatingMessage>}</footer>
       </div>
     </Dialog> };
 }

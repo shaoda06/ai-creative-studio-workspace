@@ -24,6 +24,7 @@ episode_missing = final.episode_missing
 def source_items(root, plan, stage):
     """Only use the explicitly supplied submission plans, never latest-R scans."""
     found = {}
+    wanted = set(plan['identities'])
     task_type = {'一采': 'video-first-pass', '二采': 'video-second-pass', '后处理': 'video-postprocess'}[stage]
     for name in plan['submission_plans']:
         for task in adopt.load(adopt.local_path(root, name))['tasks']:
@@ -32,10 +33,13 @@ def source_items(root, plan, stage):
             record = adopt.local_path(root, task['record_dir'])
             mapping_path = record / '输入映射.json'
             mapping = adopt.load(mapping_path)
+            identities = [mapping['segments'][index]['segment'] + '-' + mapping['segments'][index]['round'] + '-' + stage
+                          for index in mapping['selected_indices']]
+            identities = [identity for identity in identities if identity in wanted]
+            if not identities:
+                continue
             execution = adopt.execution_metadata(root, mapping_path, mapping)
-            for index in mapping['selected_indices']:
-                entry = mapping['segments'][index]
-                identity = entry['segment'] + '-' + entry['round'] + '-' + stage
+            for identity in identities:
                 if identity not in {c['identity'] for c in mapping['generation_contexts']}:
                     raise ValueError('提交清单的实际执行阶段与本次批准阶段不符：' + identity)
                 output = next(o for o in execution['outputs'] if o['identity'] == identity)
@@ -95,17 +99,27 @@ def record_updates(root, episode, summary):
 
 
 def update_business(root, episode, scene, stage, summary, identities, finalized, complete):
+    text = summary.read_text('utf-8-sig')
+    heading = '批准收尾-' + scene + '-' + stage
+    retrospective = final.retrospective_status(summary)
+    previous = re.search(r'^### ' + re.escape(heading) + r'\s*$.*?(?=^### |\Z)', text, re.M | re.S)
+    previous_ids = re.search(r'^- 当前采用顺序：([^\n]*)', previous[0], re.M) if previous else None
+    if retrospective['status'] == 'completed' and previous_ids and previous_ids[1].strip() != ' → '.join(identities):
+        retrospective['status'] = 'pending'
+        text = re.sub(r'^- 完集复盘状态：[^\n]*', '- 完集复盘状态：待完成', text, flags=re.M)
     status = (episode + '分段制作与交付已完成。' if complete else
               scene + '的' + stage + '已采用' + str(len(identities)) + '段；'
               + (('本场后处理采用已齐备。' if finalized else '本场后处理采用尚未齐备。') if stage == '后处理' else
                  ('本场该阶段定稿留档完成。' if finalized else '本场该阶段定稿尚未完成。')))
-    text = summary.read_text('utf-8-sig')
+    if retrospective['status'] == 'completed':
+        status += '完集复盘与经验归并已完成。'
+    elif complete:
+        status += '待完成本集复盘与经验归并。'
     if re.search(r'^- 当前状态及待办：', text, re.M):
         text = re.sub(r'^- 当前状态及待办：[^\n]*', '- 当前状态及待办：' + status, text, count=1, flags=re.M)
     else:
         first, _, rest = text.partition('\n')
         text = first + '\n\n- 当前状态及待办：' + status + '\n' + rest
-    heading = '批准收尾-' + scene + '-' + stage
     folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[1] + '-场次')
     file_entry = '[阶段采用视频](' + adopt.link(summary, folder) + ')'
     if stage == '后处理':
@@ -124,6 +138,14 @@ def update_business(root, episode, scene, stage, summary, identities, finalized,
         text = text.rstrip() + '\n\n### ' + heading + '\n' + body
     final.replace_file(summary, text)
     final.update_progress(root, episode, scene, stage, summary)
+
+
+def completion_handoff(result, summary):
+    if result.get('episode_completed'):
+        result['retrospective'] = final.retrospective_status(summary)
+        result['next_action'] = ('deliver-completed' if result['retrospective']['status'] == 'completed'
+                                 else 'episode-retrospective')
+    return result
 
 
 def browser_sync(root, episode, stage, identities, complete, timeout):
@@ -196,12 +218,15 @@ def approve(args):
         raise ValueError('原提交清单未提供这些具体执行身份：' + ', '.join(sorted(set(ids) - available.keys())))
     items = [available[i] for i in ids]
     items.sort(key=lambda i: expected.index(i['identity'].rsplit('-', 2)[0]))
+    deliveries = plan.get('postprocess_delivery', {})
     if request_path.parent != Path(items[0]['mapping']).parent:
         raise ValueError('批准收尾请求须保存到本批最前P的实际共同执行附件')
     summary = adopt.local_path(root, plan.get('summary', '09-剧集制作/' + episode + '/其他资料/工作稿/' + episode + '-生成说明-工作稿.md'))
     adoption_plan = {k: plan[k] for k in ('approval_text', 'approval_time') if k in plan}
     adoption_plan.update(items=[{**{k: i[k] for k in ('identity', 'mapping', 'receipt')},
-                                 **({'approval_scope': plan['approval_scope']} if 'approval_scope' in plan else {})}
+                                 **({'approval_scope': plan['approval_scope']} if 'approval_scope' in plan else {}),
+                                 **({'postprocess_delivery': deliveries.get(i['identity'])}
+                                    if stage == '后处理' and isinstance(deliveries, dict) else {})}
                                 for i in items],
                          summary=str(summary), record_updates=record_updates(root, episode, summary))
     result = {'state': 'ready', 'phase': 'adoption', 'identities': ids, 'timings_seconds': {}, 'episode_completed': False}
@@ -211,8 +236,35 @@ def approve(args):
     previous = adopt.load(report) if report.exists() else {}
     if previous.get('request') and previous['request'] != plan:
         raise ValueError('已有批准收尾请求不同，请另存本次请求，保留原批准记录')
+    if (stage == '后处理' and 'postprocess_delivery' not in plan and args.apply
+            and previous.get('request') == plan and previous.get('state') in ('completed', 'adopted_partial')):
+        # Historical completed requests are receipts, not authorization for new adoption.
+        return {**previous, 'reused': True, 'historical_receipt': True}
+    if stage == '后处理' and (not isinstance(deliveries, dict) or set(deliveries) != set(ids)
+                              or any(value not in ('workflow', 'products') for value in deliveries.values())):
+        raise ValueError('后处理收尾须用postprocess_delivery逐身份声明workflow或products；未齐备不收尾')
+    if stage == '后处理' and (previous.get('local_completed') or previous.get('state') in ('completed', 'adopted_partial')):
+        for identity in ids:
+            product = adopt.postprocess_product(root, identity)
+            if (deliveries[identity] == 'products') != (product is not None):
+                raise ValueError('后处理交付范围与原收尾不同，须核对并另存接续请求')
+            part = identity.rsplit('-', 2)[0]
+            draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+            current = adopt.selected_output(root, draft, draft.read_text('utf-8-sig'), part, stage)
+            recorded = next(item for item in previous['adoption']['items'] if item['identity'] == identity)
+            if (current is None or not current['path'].is_file()
+                    or current['path'] != adopt.local_path(root, recorded['selected_path'])):
+                raise ValueError('后处理轮次产物缺失或采用关联已变化，不能复用旧完成报告')
+    if previous.get('episode_completed') and (previous.get('local_completed')
+                                             or previous.get('state') in ('completed', 'adopted_partial')):
+        missing = episode_missing(root, episode)
+        if missing:
+            raise ValueError('本集交付存在缺项，不能复用整集完成报告：' + '；'.join(missing))
     if args.apply and previous.get('state') in ('completed', 'adopted_partial'):
-        return {**previous, 'reused': True}
+        refreshed = completion_handoff(dict(previous), summary)
+        if refreshed != previous:
+            final.save_json(report, refreshed)
+        return {**refreshed, 'reused': True}
     result['request'] = plan
     result['previous_failures'] = list(previous.get('previous_failures', []))
     if previous.get('error'):
@@ -226,7 +278,7 @@ def approve(args):
             result.update(phase='browser', local_completed=True)
             result['browser'] = browser_sync(root, episode, stage, ids, result['episode_completed'], args.timeout)
             result['state'] = 'completed' if all(selected(root, p, stage) for p in expected) else 'adopted_partial'
-            return result
+            return completion_handoff(result, summary)
         result['adoption'] = adopt.adoption(args, plan=adoption_plan)
         result['timings_seconds']['adoption'] = round(time.monotonic() - start, 3)
         if not args.apply:
@@ -261,7 +313,7 @@ def approve(args):
         result['browser'] = browser_sync(root, episode, stage, ids, complete, args.timeout)
         result['timings_seconds']['browser'] = round(time.monotonic() - began, 3)
         result['state'] = 'completed' if ready else 'adopted_partial'
-        return result
+        return completion_handoff(result, summary)
     except (ValueError, KeyError, OSError, TimeoutError, urllib.error.URLError, final.client.ClientError, final.zipfile.BadZipFile, AssertionError) as error:
         result.update(state='browser_pending' if result['phase'] == 'browser' else 'needs_attention', error=str(error))
         return result
@@ -281,7 +333,7 @@ def main():
     try:
         result = approve(args)
         compact = {k: result[k] for k in ('state', 'phase', 'episode_completed', 'episode_missing',
-                   'report_file', 'timings_seconds', 'error', 'reused') if k in result}
+                   'report_file', 'timings_seconds', 'error', 'reused', 'historical_receipt', 'next_action', 'retrospective') if k in result}
         compact['identity_count'] = len(result['identities'])
         if 'browser' in result:
             compact['review_url'] = result['browser']['review_url']

@@ -1,10 +1,11 @@
+import { newVideoSegmentsForRound } from '../sceneRoundVideos';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, projectUrl } from '../api';
 import type { FileItem, RecordData, SceneRound, SegmentVideo as VideoItem } from '../api';
 import { Document, Result } from '../components';
 import { UnderlineTabs } from './UnderlineTabs';
-import { latestVideo, missingVideoState, selectedRevision } from './SegmentVideo';
+import { latestVideo, missingVideoState, selectedRevision, type RepeatPlaybackControl } from './SegmentVideo';
 import { SegmentWorkspace } from './SegmentWorkspace';
 import { useRevisionNotesExport } from './RevisionNotes';
 import { useSceneVideoCache } from './useSceneVideoCache';
@@ -33,15 +34,11 @@ export type EpisodePlayback = {
 
 type ReviewRound = { stage: string; order: string[]; versions: ReviewVersions };
 
-export function SceneWorkspace({ segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, showRoundSelector = true, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion }: { segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; showRoundSelector?: boolean; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string }) {
+export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, showRoundSelector = true, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; showRoundSelector?: boolean; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'> }) {
   const { scene } = scope;
   const productionRound = sceneRounds.find(item => item.number === selectedRound);
   const latestRound = sceneRounds.at(-1);
-  const newVideoSegments = new Set((productionRound?.segments || []).filter(entry =>
-    allSegments.find(item => item.id === entry.id)?.videos.some(video => video.stage === entry.stage && video.run === entry.run && video.url)
-    && !sceneRounds.some(round => round.number < productionRound!.number
-      && round.segments.some(previous => previous.id === entry.id && previous.stage === entry.stage && previous.run === entry.run))
-  ).map(entry => entry.id));
+  const newVideoSegments = newVideoSegmentsForRound(allSegments, sceneRounds, selectedRound);
   const segments = productionRound ? productionRound.segments.map(entry => ({ ...allSegments.find(item => item.id === entry.id)!, ...entry })) : allSegments.filter(item => !item.historical);
   const queryClient = useQueryClient();
   const positionKey = `scene/${scope.project}/${scope.episode}/${scene}`;
@@ -69,7 +66,6 @@ export function SceneWorkspace({ segmentTab, onSegmentTabChange, episodeNotesExp
   const reviewRound: (ReviewRound & { label?: string }) | null = productionRound ? { stage: roundStages.size === 1 ? productionRound.segments[0].stage : '混合阶段',
     label: `第${productionRound.number}轮`, order: productionRound.segments.map(entry => entry.id), versions: fixedVersions } : null;
   const { continuous, onChange: setContinuous } = episodePlayback;
-  const [wideVideo, setWideVideo] = useRefreshState(positionKey + '/wideVideo', false);
   const [autoPlay, setAutoPlay] = useState(!!episodePlayback.start);
   const [error, setError] = useState<{ message: string; unavailable: boolean } | null>(null);
   useEffect(() => {
@@ -229,7 +225,6 @@ export function SceneWorkspace({ segmentTab, onSegmentTabChange, episodeNotesExp
       view === 'segments' && !productionRound && !viewingPrevious && !!currentSegment && { id: 'round-missing', content: '本场尚未登记整场轮次，不能连续播放。' },
       view === 'segments' && !!error && { id: 'playback', tone: error.unavailable ? 'error' : 'info', content: error.message },
       view === 'segments' && viewingPrevious && { id: 'previous-ending', content: <>上集末段{productionRound ? '（接续参考，不属于本场修改轮次）' : ''} · {previousEnding!.episode} · {previousEnding!.scene} · {currentSegment!.id}，点击本集分段返回</> },
-      view === 'segments' && segments.some((item, index) => index > 0 && Number(item.id.slice(1)) < Number(segments[index - 1].id.slice(1))) && { id: 'segment-order', content: '分段按分镜索引中的剧情顺序排列，编号保留原标识。' },
       view === 'storyboard' && !!productionRound && !storyboardDocument && { id: 'storyboard-missing', tone: 'error', content: '本轮分镜文件不可用，请核对轮次资料。' },
       view === 'dialogue' && !!productionRound && productionRound.number !== sceneRounds.at(-1)?.number && { id: 'historical-round', content: '当前为历史轮次，请切换到最新修改轮次后编辑。' },
     ]} />
@@ -239,7 +234,7 @@ export function SceneWorkspace({ segmentTab, onSegmentTabChange, episodeNotesExp
       plannedScript={viewingRoundRevision ? { html: roundEntry.scriptHtml, url: roundEntry.scriptUrl,
         label: `第${productionRound!.number}轮保存的分镜${productionRound!.storyboard ? `（${productionRound!.storyboard.version}）` : ''}` } : undefined}
       segmentNavigation={navigation(true)}
-      wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)}
+      wideVideo={wideVideo} onToggleWide={onToggleWide} repeatControl={repeatControl}
       continuous={continuous}
       continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} disabled={!chosen.stage || !productionRound || !viewingRoundRevision} onChange={event => toggleContinuous(event.target.checked)} />连续播放</label>}
       autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance}
@@ -251,6 +246,6 @@ export function SceneWorkspace({ segmentTab, onSegmentTabChange, episodeNotesExp
         {!storyboardDocument && !productionRound && <Result loading={storyboard.isPending} error={storyboard.error} retry={storyboard.refetch} retrying={storyboard.isFetching} />}
         {(storyboardDocument || (!productionRound && storyboard.data)) && <Document key={productionRound?.number || 'current'} value={storyboardDocument || storyboard.data!} />}
       </>}
-    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} /> : view === 'dialogue' ? productionRound && productionRound.number !== sceneRounds.at(-1)?.number ? null : <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} /> : <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} />}
+    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} /> : view === 'dialogue' ? productionRound && productionRound.number !== sceneRounds.at(-1)?.number ? null : <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} /> : <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} />}
   </div></>;
 }

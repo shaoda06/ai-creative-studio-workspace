@@ -1,6 +1,7 @@
 """Persistent ComfyUI monitoring; browser clients only receive public snapshots."""
 import argparse
 import asyncio
+import errno
 from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
@@ -23,7 +24,7 @@ from websockets.exceptions import WebSocketException
 from backend.services import comfy_segments as segments
 from backend.services.comfy_nodes import RemoteQueues, initial_state
 from backend.services.local_queue import LocalQueue, LOCAL, TERMINAL
-from backend.services.task_notifications import TaskNotifications
+from backend.services.task_notifications import TaskNotifications, NotificationNotStarted
 from backend.services.collection_retry import DELAYS, failure, saved_files
 from backend.services.session_names import read_thread_name
 
@@ -75,11 +76,15 @@ class TaskInput(BaseModel):
     start_paused: bool = False
     image_plan: dict | None = None
     video_plan: dict | None = None
+    submission_plan: str | None = None
     image_batch_id: str | None = None
     image_batch_size: int = Field(default=1, ge=1)
 
 
-class TaskStore(LocalQueue, TaskNotifications):
+from backend.services.task_groups import TaskGroups
+
+
+class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
     queue_notifications = sys.platform == 'darwin'
 
     def __init__(self, runtime: Path, workspace: Path):
@@ -91,6 +96,7 @@ class TaskStore(LocalQueue, TaskNotifications):
         self.db.execute('CREATE TABLE IF NOT EXISTS notification_batches (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, task_ids TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL)')
         self.db.execute('CREATE TABLE IF NOT EXISTS notification_reports (batch_id TEXT PRIMARY KEY, report TEXT NOT NULL)')
         self.db.commit()
+        self.groups_init()
         self.rows = {}
         for key, payload, state in self.db.execute('SELECT id, payload, state FROM tasks'):
             data = TaskInput.model_validate_json(payload)
@@ -232,6 +238,8 @@ class TaskStore(LocalQueue, TaskNotifications):
                 resolved[value] = str(paths.project_file(project, value, recorded=recorded))
             return resolved[value]
         data.record_dir = local(data.record_dir)
+        if data.submission_plan:
+            data.submission_plan = local(data.submission_plan)
         for target in [*data.outputs, *(data.segment_plan.targets if data.segment_plan else [])]:
             target.path = local(target.path)
             if Path(target.path).is_relative_to(data.record_dir):
@@ -297,6 +305,8 @@ class TaskStore(LocalQueue, TaskNotifications):
             self.validate_registration(data)
         else:
             row = self.rows[existing]
+            if row.get('_repreparing'):
+                raise ValueError('任务正在重新准备，请等待准备结束后再操作')
             old = row['input']
             if (row['state']['status'] not in LOCAL or row['state'].get('prompt_id')
                     or old.thread_id != data.thread_id or old.desktop.caller_thread != data.desktop.caller_thread
@@ -310,18 +320,32 @@ class TaskStore(LocalQueue, TaskNotifications):
                 evidence.extend(item.response_name for item in old.segment_plan.targets)
             if any((record / name).exists() for name in evidence):
                 raise ValueError('已有提交或成果证据，不允许修改原执行资料')
-            # Repreparation must not race an idle scheduler after a successful await.
-            self.save(existing, status='paused', immediate=False)
-        result = await asyncio.to_thread(prepare_report, self, data)
-        if existing is not None:
-            row['input'] = data
-            for name in ('_prepared_run', '_source_digests', '_collection_ok', '_record_paths'):
-                row.pop(name, None)
-            self.record(existing, 'preparation', 'updated', _changes={'error': None, 'uploads_bound': False, 'prepared_files': {},
-                        'content_review_required': True,
-                        'scene_round_required': data.task_type.startswith('video-')})
-            result['local_task_id'] = existing
-        return result
+        try:
+            if existing is not None:
+                # Repreparation owns local controls until the writer finishes.
+                row['_repreparing'] = True
+                self.save(existing, status='paused', immediate=False)
+            preparation = asyncio.create_task(asyncio.to_thread(prepare_report, self, data))
+            try:
+                result = await asyncio.shield(preparation)
+            except asyncio.CancelledError:
+                # A cancelled caller cannot stop the local writer's thread.
+                # Keep queue controls blocked until that writer has finished.
+                await preparation
+                raise
+            if existing is not None:
+                row['input'] = data
+                for name in ('_prepared_run', '_source_digests', '_collection_ok', '_record_paths'):
+                    row.pop(name, None)
+                self.record(existing, 'preparation', 'updated', _changes={'error': None, 'uploads_bound': False, 'prepared_files': {},
+                            'content_review_required': True,
+                            'scene_round_required': data.task_type.startswith('video-')})
+                result['local_task_id'] = existing
+            return result
+        finally:
+            if existing is not None:
+                row.pop('_repreparing', None)
+                self.publish()
 
     def client_for(self, data):
         return self.remote_client(data.url, data.timeout)
@@ -399,8 +423,6 @@ class TaskStore(LocalQueue, TaskNotifications):
     async def start(self):
         for key, row in self.rows.items():
             state = row['state']
-            if state['status'] == 'resolved':
-                continue
             if state['status'] not in TERMINAL and not state.get('source_session_name'):
                 self.session_readers[key] = asyncio.create_task(self.read_session_name(key))
             for notice in state.get('notices', []):
@@ -410,7 +432,7 @@ class TaskStore(LocalQueue, TaskNotifications):
                 self.save(key, notification='delivery_unknown')
             if any(item['delivery'] == 'pending' for item in state.get('notices', [])):
                 self.notifiers[key] = asyncio.create_task(self.notify(key))
-            if state['status'] in LOCAL or state['status'] == 'cancelled':
+            if state['status'] in LOCAL or state['status'] in ('cancelled', 'resolved'):
                 continue
             if state['status'] == 'preparing':
                 self.record(key, 'restart', 'resume_local', _changes={'status': 'local_queued'})
@@ -434,6 +456,8 @@ class TaskStore(LocalQueue, TaskNotifications):
                 self.workers[key] = asyncio.create_task(self.collect_saved(key))
             else:
                 self.workers[key] = asyncio.create_task(self.watch(key))
+        for group in self.groups.values():
+            self.wake_group(group['task_ids'][0])
         for batch_id, in self.db.execute("SELECT id FROM notification_batches WHERE state IN ('sending','delivery_unknown')"):
             self.db.execute('UPDATE notification_batches SET state=? WHERE id=?', ('delivery_unknown', batch_id))
             self.notifiers['ack:' + batch_id] = asyncio.create_task(self.wait_ack(batch_id))
@@ -721,10 +745,16 @@ class TaskStore(LocalQueue, TaskNotifications):
         if self.queue_notifications and operation == 'send':
             cli = data.desktop.cli or os.environ.get('CODEX_CLI_PATH') or shutil.which('codex')
             if not cli:
-                raise OSError('找不到Codex CLI，无法投递后台通知')
+                raise NotificationNotStarted('找不到Codex CLI，通知尚未启动')
             def queue():
-                completed = subprocess.run([cli, 'queue', '--thread', data.thread_id, '--message', prompt],
-                    encoding='utf-8', capture_output=True, timeout=40)
+                try:
+                    completed = subprocess.run([cli, 'queue', '--thread', data.thread_id, '--message', prompt],
+                        encoding='utf-8', capture_output=True, timeout=40)
+                except OSError as error:
+                    if isinstance(error, (FileNotFoundError, PermissionError)) or error.errno in (
+                            errno.ENOEXEC, getattr(errno, 'EBADARCH', errno.ENOEXEC)):
+                        raise NotificationNotStarted(f'Codex CLI未启动：{error}') from error
+                    raise
                 if completed.returncode:
                     raise OSError(f'Codex queue退出{completed.returncode}：{completed.stderr.strip()}')
                 return {'receipt': completed.stdout.strip()}

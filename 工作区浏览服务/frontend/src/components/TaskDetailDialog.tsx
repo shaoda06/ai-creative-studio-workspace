@@ -13,6 +13,9 @@ interface Event {
   attempt?: number; auto_retry?: number; delay_seconds?: number; next_retry_at?: string; summary?: string;
 }
 interface Detail {
+  group?: { id: string; title: string; status: string; terminal: boolean;
+    completed_tasks: number; expected_tasks: number; collected_outputs: number; expected_outputs: number;
+    tasks: { task_id: string; title: string; status: string; completed: boolean; needs_attention: boolean }[] } | null;
   summary: {
     id: string; project: string; title: string; task_type: keyof typeof taskTypeLabels; status: string;
     source_session_name: string; enqueued_url: string; remote_url: string; prompt_id: string | null;
@@ -23,6 +26,8 @@ interface Detail {
     collection_attempt: number | null; collection_auto_retry: number | null;
     collection_next_retry_at: string | null; collection_retry_stop: string | null;
     resolution?: { summary: string; resolved_at: string; original_status: string };
+    closeout?: { status?: string; error?: string };
+    closeout_next_retry_at?: string | null;
   };
   events: Event[];
   outputs: { path: string; name: string; identity: string | null; available: boolean; bytes: number | null;
@@ -44,7 +49,7 @@ const results: Record<string, string> = { accepted: '已接受', started: '开�
   scheduled: '等待自动重试', attempt_failed: '本轮取回失败', resolved: '已结案' };
 const notices: Record<string, string> = { not_required: '无需通知', waiting: '等待发送', waiting_idle: '等待会话空闲',
   waiting_connection: '等待会话连接', sending: '正在发送', sent: '已发送，等待 Agent 确认',
-  acknowledged: 'Agent 已确认', delivery_unknown: '送达状态待核对' };
+  acknowledged: 'Agent 已确认接收', delivery_unknown: '送达状态待核对' };
 const outputStatuses: Record<string, string> = { saved: '已保存', failed: '取回失败', missing: '本机文件缺失', pending: '未记录保存成功' };
 const taskGuidance: Record<string, { title: string; text: string }> = {
   submission_unknown: { title: '请来源 Agent 核对提交结果', text: '提交是否成功还没有确认。请来源 Agent 查看提交请求、响应和远端任务记录，确认这次任务是否已被接收。核对前不要再次提交，后台不会自动重发生成请求。' },
@@ -58,6 +63,7 @@ const notificationGuidance: Record<string, string> = {
   waiting_connection: '来源会话暂时无法连接，后台会继续重试发送保存的结果通知。',
   sending: '后台正在发送结果通知，请等待发送结果。',
   sent: '通知已经发出，正在等待来源 Agent 确认收到；无需重复生成或再次发送通知。',
+  acknowledged: '来源 Agent 已确认接收；当前报告读取也会登记此回执，旧通知可能只有接收确认。这不代表已经向用户交付，也不代表内容获批。尚未交付的本轮成果由来源 Agent 沿既有制作记录继续汇总。',
   delivery_unknown: '通知是否送达还没有确认，后台只核对接收确认，不自动重发。请来源 Agent 查看会话是否已收到这条结果通知，收到后确认接收；无需重新生成或取回成果。',
 };
 function date(value: string | null | undefined) {
@@ -74,7 +80,7 @@ export function TaskDetailDialog({ id, updatedAt, nodes, close, openTask }: {
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || '任务详情读取失败');
     return body;
-  }, retry: false });
+  }, retry: false, refetchInterval: query => query.state.data?.group && !query.state.data.group.terminal ? 5000 : false });
   const { refetch } = query;
   useEffect(() => { void refetch(); }, [updatedAt, refetch]);
   const data = query.data;
@@ -99,7 +105,7 @@ export function TaskDetailDialog({ id, updatedAt, nodes, close, openTask }: {
     && events[index - 1]?.stage === 'execution' && events[index - 1]?.result === 'running')) ?? [];
   const duration = summary?.started_at && summary.ended_at
     ? Math.max(0, Math.floor((Date.parse(summary.ended_at) - Date.parse(summary.started_at)) / 1000)) : null;
-  return <Dialog title="任务历史详情" close={close}><div className="task-detail">
+  return <Dialog title="任务详情" close={close}><div className="task-detail">
     {query.isPending && <p role="status">正在读取任务详情…</p>}
     {query.isError && <FloatingMessage tone="error">{query.error.message}
       <button onClick={() => void refetch()}>重新读取</button></FloatingMessage>}
@@ -107,6 +113,17 @@ export function TaskDetailDialog({ id, updatedAt, nodes, close, openTask }: {
       <div className="task-detail-title"><div><p>{summary.project} · {taskTypeLabels[summary.task_type]}</p>
         <h3>{summary.title}</h3><p>来源会话：{summary.source_session_name || '未记录'}</p></div>
         <strong data-status={summary.status}>{collectionStatus(summary)}</strong></div>
+      {data.group && <section className="task-detail-guidance" aria-label="任务组进度">
+        <h4>{data.group.title}</h4>
+        <p>全组收尾：{data.group.completed_tasks} / {data.group.expected_tasks} 项 · 成果取回：{data.group.collected_outputs} / {data.group.expected_outputs}</p>
+        <p>{data.group.status === 'completed' ? '全组已完成，统一通知来源 Agent。'
+          : data.group.status === 'terminal_partial' ? '本组已结束，部分任务未完成，详见下列任务。'
+          : data.group.status === 'needs_attention' ? '本组有待处理问题，其他任务继续执行。'
+          : '各任务独立排队执行，全组完成后统一通知。'}</p>
+        <ul>{data.group.tasks.map(task => <li key={task.task_id}>{openTask && task.task_id !== id
+          ? <button className="link" onClick={() => openTask(task.task_id)}>{task.title}</button> : task.title}
+          {' · '}{task.completed ? '已完成收尾' : task.needs_attention ? '需要处理' : collectionStatus(task)}</li>)}</ul>
+      </section>}
       {summary.resolution && <section className="task-detail-guidance" aria-label="异常结案">
         <h4>已结案 · {date(summary.resolution.resolved_at)}</h4><p>{summary.resolution.summary}</p>
         <p className="task-detail-muted">结案不代表原任务生成成功；原任务ID、异常和保存计数保留。</p>
@@ -118,6 +135,11 @@ export function TaskDetailDialog({ id, updatedAt, nodes, close, openTask }: {
       </section>}
       {summary.error && <section className="task-detail-problem"><h4>{summary.status === 'resolved' ? '原异常（已结案）' : '当前问题'} · {stages[summary.failure_stage || ''] || summary.failure_stage || '阶段未记录'}</h4>
         <p>{summary.error}</p><p>原任务保存记录：{summary.collected} / {summary.expected}</p></section>}
+      {summary.status === 'completed' && ['registration_failed', 'browser_pending'].includes(summary.closeout?.status || '') && <section className="task-detail-problem" aria-label="结果收尾问题">
+        <h4>{summary.closeout?.status === 'browser_pending' ? '网页同步尚未完成' : '结果登记尚未完成'}</h4>
+        <p>{summary.closeout?.error}</p><p>成果已经保存，恢复登记或网页核验即可，不重新生成或取回。</p>
+        <p>{summary.closeout_next_retry_at ? `后台将在 ${date(summary.closeout_next_retry_at)} 重试收尾。` : '请来源 Agent 查看结果收尾报告，按具体失败阶段接续。'}</p>
+      </section>}
       {guidance && <section className="task-detail-guidance" aria-label="任务处理提示">
         <h4>{guidance.title}</h4><p>{guidance.text}</p>
         {summary.status === 'collection_failed' && <p>已经保存的成果保留，只重试未保存的成果，不重新生成。具体文件见下方“成果”，失败原因见“当前问题”和“过程记录”。</p>}

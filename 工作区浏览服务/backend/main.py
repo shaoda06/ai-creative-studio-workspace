@@ -34,7 +34,7 @@ from backend.services.collection_repair import CollectionRepairInput, repair_col
 from backend.services.result_summary import summary as result_summary
 from backend.services.result_registration import closeout as result_closeout
 from websockets.exceptions import WebSocketException
-from backend.services.revision_notes import Episode, Scene, NoteInput, RevisionNote, SceneNotes, RevisionNotes, ExportChanges, NotesChangedError
+from backend.services.revision_notes import Episode, Scene, NoteChange, RevisionNote, SceneNotes, RevisionNotes, ExportChanges, NotesChangedError
 from backend.services.episode_revision_notes import EpisodeRevisionNotes, EpisodeNotes, EpisodeExportChanges
 
 TOOL = Path(__file__).resolve().parent.parent
@@ -156,7 +156,16 @@ async def comfy_submit(request: Request, data: TaskInput) -> dict[str, Any]:
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
         raise HTTPException(403, '仅允许本机Agent通过专用凭证提交')
     try:
-        result = await tasks.enqueue(data)
+        tasks.resolve_input(data)
+        existing = next((row for row in tasks.rows.values() if row['input'].record_dir == data.record_dir), None)
+        if existing:
+            result = await tasks.enqueue(data)  # Recover a child without changing its membership.
+            if existing['state'].get('group_id'):
+                group_id = existing['state']['group_id']
+                result.update(group_id=group_id, group=tasks.group_status(group_id))
+        else:
+            group = await tasks.enqueue_group([data], data.title)
+            result = {**group['tasks'][0], 'group_id': group['group_id'], 'group': group['group']}
     except (ValueError, OSError, RuntimeError, WebSocketException) as error:
         raise HTTPException(409, str(error)) from error
     except comfy_client.ClientError as error:
@@ -306,6 +315,15 @@ async def agent_submit_plan(request: Request, data: SubmissionPlanInput) -> dict
         return await execute(tasks, data)
     except (ValueError, OSError, KeyError, TypeError, AssertionError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
+
+
+@app.get('/api/internal/comfy/groups/{group_id}')
+async def agent_group_status(group_id: str, request: Request) -> dict[str, Any]:
+    tasks = agent_request(request)
+    try:
+        return tasks.group_status(group_id)
+    except ValueError as error:
+        raise HTTPException(404, str(error)) from error
 
 
 class NoticeReceipt(BaseModel):
@@ -517,10 +535,11 @@ def generation_context(name: str, episode: Episode, candidate: str) -> dict[str,
 
 
 @app.get('/api/projects/{name}/episodes/{episode}/download')
-def completed_episode_download(name: str, episode: Episode):
+def completed_episode_download(name: str, episode: Episode,
+                               archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     try:
         files = completed_episode_videos(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'])
-        return zip_response(files, video_archive_name(name, episode))
+        return zip_response(files, video_archive_name(name, episode), archive_format)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -545,14 +564,15 @@ def episode_download_list(name: str, episode: Episode, scene: Scene | None = Non
 
 @app.get('/api/projects/{name}/episodes/{episode}/downloads/{stage}/{kind}')
 def episode_download(name: str, episode: Episode, stage: Literal['一采', '二采', '后处理'],
-                     kind: Literal['videos'], scene: Scene | None = None):
+                     kind: Literal['videos'], scene: Scene | None = None,
+                     archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     try:
         files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)[stage][kind]
         if not files:
             raise FileNotFoundError(('本场' if scene else '本集') + '该阶段没有可下载的' + KINDS[kind])
         label = episode if episode in ('片头', '片尾') else f'第{int(episode[2:])}集'
         filename = f'{name}-{label}-{scene}-{stage}-已采用视频.zip' if scene else video_archive_name(name, episode)
-        return zip_response(files, filename)
+        return zip_response(files, filename, archive_format)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -580,6 +600,10 @@ def project_file(name: str, path: str, request: Request, v: str | None = None, d
         raise HTTPException(404, str(error)) from error
     response = FileResponse(target, filename=target.name if download else None,
                             media_type='application/octet-stream' if download else None)
+    if not download:
+        # Project documents may contain scripts. Keep previews interactive without
+        # granting them the workbench origin or access to its management APIs.
+        response.headers['Content-Security-Policy'] = "sandbox allow-scripts; connect-src 'none'; form-action 'none'; base-uri 'none'"
     if v and not download and target.suffix.lower() in {'.mp4', '.webm', '.mov'}:
         stat = target.stat()
         if v == f'{stat.st_mtime_ns}-{stat.st_size}':
@@ -627,11 +651,13 @@ def scene_revision_notes(name: str, episode: Episode, scene: Scene) -> SceneNote
 
 
 @app.put('/api/projects/{name}/revision-notes/{episode}/{scene}')
-def save_revision_note(name: str, episode: Episode, scene: Scene, value: NoteInput, request: Request) -> RevisionNote:
+def save_revision_note(name: str, episode: Episode, scene: Scene, value: NoteChange, request: Request) -> RevisionNote:
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
         return EpisodeRevisionNotes(revision_notes).save_note(store.project(name), episode, scene, value)
+    except NotesChangedError as error:
+        raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, UnicodeError) as error:

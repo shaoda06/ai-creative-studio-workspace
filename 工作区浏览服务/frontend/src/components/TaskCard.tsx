@@ -1,4 +1,5 @@
 import { PointerTooltip } from './PointerTooltip';
+import { LinkButton } from './LinkButton';
 import { useEffect, useState } from 'react';
 import './TaskCard.css';
 
@@ -11,7 +12,7 @@ export interface LocalTask {
   error: string | null; collected: number; expected: number;
   created_at: string; started_at?: string | null;
   submitted_at?: string;
-  source_session_name?: string;
+  source_session_name?: string; group_id?: string;
   director_progress?: { segment: number; segment_total: number; phase_label: string };
   segment_warning?: string | null;
 }
@@ -37,7 +38,7 @@ export function localDateTime(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function TaskCard({ task }: { task: Task }) {
+export function TaskCard({ task, onDetails }: { task: Task; onDetails?: (id: string) => void }) {
   const external = task.source === 'external';
   const queued = task.status === 'queued' || task.status === 'submitting';
   const [now, setNow] = useState(Date.now);
@@ -69,13 +70,16 @@ export function TaskCard({ task }: { task: Task }) {
       <div className="comfy-local-title">
         <div className="comfy-task-description">
           <h2>{task.title}</h2>
-          <PointerTooltip text={task.source_session_name}><p className="comfy-task-session" >来源会话：{task.source_session_name || '会话名称暂不可用'}</p></PointerTooltip>
         </div>
         <div className="comfy-task-timing">
           {queued && submitted ? <>
             <time dateTime={task.submitted_at || task.created_at}>提交时间：{localDateTime(submitted)}</time>
             <span>等待时长：{clockText(Math.max(0, Math.floor((now - submitted.getTime()) / 1000)))}</span>
           </> : <PointerTooltip text={task.started_at ? undefined : '未保存该任务的执行开始事件，提交时间包含排队等待，不能作为运行开始时间'}><span >运行时长：{task.started_at ? clockText(Math.max(0, Math.floor((now - new Date(task.started_at).getTime()) / 1000))) : '开始时间未记录'}</span></PointerTooltip>}
+        </div>
+        <div className="comfy-task-session-row">
+          <PointerTooltip text={task.source_session_name}><p className="comfy-task-session">来源会话：{task.source_session_name || '会话名称暂不可用'}</p></PointerTooltip>
+          {task.group_id && onDetails && <LinkButton aria-label={`查看${task.title}任务组详情`} onClick={() => onDetails(task.id)}>任务组详情 →</LinkButton>}
         </div>
       </div>
       <details className="comfy-task-details"><summary>任务详情</summary>

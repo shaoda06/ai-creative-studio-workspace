@@ -39,6 +39,35 @@ STATUS_FIELDS = {"状态", "当前状态", "确认状态", "画风确认状态",
                  "agent 技术审查结论", "agent 内容审查状态", "agent 初审结论", "agent初审结论", "agent 画面初审结论", "用户采用状态", "用户决定"}
 
 
+def recovery_context_owner(key, identity, mappings):
+    """Follow declared recovery provenance; directory ancestry is legacy only."""
+    visited = set()
+    while mappings[key].get('recovery', {}).get('original_local_task_id'):
+        if key in visited:
+            raise ValueError('恢复来源循环：' + key)
+        visited.add(key)
+        source = mappings[key].get('execution_source', {}).get('mapping')
+        if source:
+            if source not in mappings:
+                raise ValueError('恢复来源映射不存在：' + source)
+            if not any(context['identity'] == identity
+                       for context in mappings[source].get('generation_contexts', [])):
+                # A new revision may reuse an earlier execution snapshot;
+                # provenance does not merge distinct candidate identities.
+                break
+        else:
+            # Older recovery records declared a task ID but no source path.
+            source = key
+            for parent in Path(key).parent.parents:
+                ancestor = (parent / '输入映射.json').as_posix()
+                if ancestor in mappings:
+                    source = ancestor
+            if source == key:
+                break
+        key = source
+    return key
+
+
 def live_task_record(relative):
     path = Path(relative)
     return (path.name in ("后台任务状态.json", "后台过程记录.json")
@@ -719,7 +748,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             decision = field(section, '决定')
             outputs = '\n'.join(field(section, name) for name in (
                 '对应具体输出', '被审具体输出文件及R编号／版本', '具体输出', '被审具体输出', '采用文件'))
-            exact_output = re.search(r'(?<![\w-])' + re.escape(video_name) + r'(?![\w.-])', outputs)
+            exact_output = re.search(r'(?<![\w.-])' + re.escape(video_name) + r'(?![\w.-])', outputs)
             return bool(exact_output and re.match(r'^(?:批准采用(?:$|[。；，\s])|通过并采用(?:$|[。；，\s]|本轮|P\d))', decision))
         # Old execution-only approvals remain readable; new records link their review.
         return bool(re.match(r'^批准采用(?:$|[。；，\s])', field(body, '用户决定')))
@@ -803,7 +832,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 state = match.group(1) if match else path.stem
                 image_type = "道具参考图"
             else:
-                match = re.fullmatch(re.escape(number) + r"-((?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?)-场景参考图", path.stem)
+                match = re.fullmatch(re.escape(number) + r"-((?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?|V\d{3,})-场景参考图", path.stem)
                 state = match.group(1) if match else path.stem
                 image_type = "场次环境图" if match else ("平面图" if "平面" in path.stem else "场景参考图")
             assets.append({kind: True, "type": image_type, "state": state, "media": media,
@@ -1018,8 +1047,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             record_url = formal_record_url(entry["采用的候选版本"], record, record_key)
             review_data = asset_review_metadata(reviews, record_url, formal_key=links[0]["key"] if links else "", adopted_version=entry["采用的候选版本"])
             scope = entry["场景状态与适用条件"]
-            # Only an explicit scene-origin filename qualifies as an episode environment.
-            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-(?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?-场景参考图\.(?:png|jpg|jpeg|webp)", Path(links[0]["key"]).name))
+            # Formal views may precede episode planning; retain explicit SC/V identity.
+            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-(?:(?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?|V\d{3,})-场景参考图\.(?:png|jpg|jpeg|webp)", Path(links[0]["key"]).name))
             if re.search(r"仅.*(?:空间|布局|结构)|不是实际|仅供.*结构|结构辅助", scope):
                 is_environment = False
             asset = {"scene": True, "type": "场次环境图" if is_environment else "辅助／既有参考图",
@@ -1280,6 +1309,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         files = inventory(root)
         episode_videos[episode.name] = [item for item in files if item["kind"] == "video"]
         if web_episode_navigation:
+            mappings = {}
             for item in files:
                 if item["name"] != "输入映射.json" or "执行附件" not in Path(item["key"]).parts:
                     continue
@@ -1289,13 +1319,25 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 snapshot = text_previews[item["key"]]
                 mapping_text = ((project / item["key"]).read_text("utf-8-sig")
                                 if snapshot.get('deferred') or snapshot.get('notice') else snapshot["text"])
-                for context in json.loads(mapping_text).get("generation_contexts", []):
+                mappings[item['key']] = json.loads(mapping_text)
+            context_sources = {}
+            for key, mapping in mappings.items():
+                for context in mapping.get("generation_contexts", []):
                     identity = context["identity"]
                     if not re.fullmatch(re.escape(episode.name) + r"-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)", identity):
-                        raise ValueError(item["key"] + "：生成资料身份格式不正确")
-                    if identity in generation_contexts and generation_contexts[identity] != context:
-                        raise ValueError("生成资料关联重复：" + identity)
+                        raise ValueError(key + "：生成资料身份格式不正确")
+                    owner = recovery_context_owner(key, identity, mappings)
+                    priority = ((True, datetime.fromisoformat(mapping['generation_contexts_recorded_at']).timestamp())
+                                if owner != key else (False, 0.0))
+                    if identity in generation_contexts:
+                        previous_owner, previous_priority = context_sources[identity]
+                        if generation_contexts[identity] != context and (
+                                owner != previous_owner or priority == previous_priority):
+                            raise ValueError("生成资料关联重复：" + identity)
+                        if priority < previous_priority:
+                            continue
                     generation_contexts[identity] = context
+                    context_sources[identity] = (owner, priority)
         children = file_tree(files, root, episode.name)["children"] if episode_mode == 'full' else []
         present = {item["name"] for item in children}
         for directory in sorted(episode.iterdir()) if episode_mode == 'full' else []:
@@ -1492,7 +1534,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                         name = Path(link['key']).name
                         if not re.fullmatch(re.escape(segment_identity + '-' + adopted['R编号'] + '-' + adopted['处理阶段'])
                                             + r'\.(?:mp4|webm|mov)', name) and not any(
-                                product['key'] == link['key'] and product['role'] == '最终产物'
+                                product['key'] == link['key']
                                 for product in products_for(adopted['R编号'], adopted['处理阶段'])):
                             continue
                         if video_adoption_approved(adopted, record, record_key, name):
@@ -1535,6 +1577,16 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 for run, stage in sorted(revisions - present):
                     videos.append({"key": segment_identity + "-" + run + "-" + stage,
                                    "url": "", "run": run, "stage": stage, "approved": False, "fileRevision": ""})
+                # Several files in a manifest still represent one candidate.
+                seen_product_runs, unique_videos = set(), []
+                for video in videos:
+                    pair = (video['run'], video['stage'])
+                    if products_for(*pair):
+                        if pair in seen_product_runs:
+                            continue
+                        seen_product_runs.add(pair)
+                    unique_videos.append(video)
+                videos = unique_videos
                 videos.sort(key=lambda item: (int(item["run"][1:]), item["stage"], item["key"]))
                 for video in videos:
                     body = video_record_body(record, video["run"], video["stage"])
@@ -1557,8 +1609,10 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     products = products_for(video['run'], video['stage'])
                     if products:
                         video['products'] = products
+                        primary = next(product for product in products if product['default'])
+                        video.update(key=primary['key'], url=primary.get('previewUrl', primary['url']), fileRevision=primary['fileRevision'])
                         video['approved'] = any(
-                            product['key'] in approved_keys and product['role'] == '最终产物' for product in products)
+                            product['key'] in approved_keys for product in products)
                     if episode_mode == 'full':
                         video["context"] = resolve_context(segment_identity + "-" + video["run"] + "-" + video["stage"],
                             generation_contexts, project, read, read_plain, text_previews)

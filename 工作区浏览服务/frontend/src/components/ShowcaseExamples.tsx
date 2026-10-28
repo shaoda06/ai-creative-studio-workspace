@@ -25,6 +25,7 @@ import { SegmentLayout } from './SegmentLayout';
 import type { SegmentVideoHandle } from './SegmentVideo';
 import { PromptSections } from './PromptSections';
 import { TaskCard } from './TaskCard';
+import { LinkButton } from './LinkButton';
 import { ReleaseFilms } from './ReleaseFilms';
 import { LocalQueueCard } from './LocalQueueCard';
 
@@ -56,6 +57,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [sync, setSync] = useState<{ error?: string; errorKind?: string; retryAt?: number; updating?: boolean }>({});
   const [wide, setWide] = useState(false);
   const [continuous, setContinuous] = useState(false);
+  const [repeat, setRepeat] = useState(false);
   const [time, setTime] = useState(0);
   const [segment, setSegment] = useState('P001');
   const [vertical, setVertical] = useState(false);
@@ -65,6 +67,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const playerRef = useRef<SegmentVideoHandle>(null);
   const sound = useAudioPreview(category === 'media', null, 1);
   return <PreviewContext.Provider value={setPreview}>
+    {category === 'controls' && <ComponentExample title="下划线链接按钮" rule="LinkButton统一13px字号、下划线、无边框与无悬停底色，保留按钮键盘及禁用行为；此处只更新示例文字。" usage="任务组详情、本镜通过、插入时间及清空"><LinkButton onClick={() => setText('链接示例已点击')}>链接操作示例</LinkButton><LinkButton disabled>禁用链接示例</LinkButton><p role="status">{text}</p></ComponentExample>}
     {category === 'layout' && <>
       <ComponentExample fullWidth title="标题与路径导航" rule="页面标题可带说明和操作区；纵向内容使用stacked规格统一间距；点击路径返回上一级示例。" usage="项目、资产、风格库、开发记录">
         <PageHeader eyebrow="示例栏目" title="示例页面" description="这里展示公共页面标题。" actions={<button onClick={() => setText('已点击标题操作')}>示例操作</button>} />
@@ -147,16 +150,16 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />
         <AudioPreviewButton name="缺少参考音频的示例" enabled={false} playing={false} progress={0} onClick={() => {}} />
       </ComponentExample>
-      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局；重复播放默认关闭，勾选后循环当前视频；连续播放开启会关闭并禁用重复播放，取消连续播放后不自动恢复。业务页连续播放可按本集轮次跨场次接续；此处仅演示互斥开关，不播放项目队列。宽屏时显示右侧分段导航，手机操作区使用整行宽度。" usage="剧集制作分段视频">
-        <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} />}>
+      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局；示例使用受控重复播放；业务页在同一集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频；连续播放开启会关闭并禁用重复播放，取消连续播放后不自动恢复。业务页连续播放可按本集轮次跨场次接续；此处仅演示互斥开关，不播放项目队列。宽屏时显示右侧分段导航，手机操作区使用整行宽度。" usage="剧集制作分段视频">
+        <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} />}>
           <section className="segment-script"><Rich html="<h3>示例分镜</h3><p>切换宽屏可查看播放器与分段导航的共同布局。</p>" /></section>
         </SegmentLayout>
         <p>示例播放位置：{time.toFixed(1)}秒</p><button onClick={() => playerRef.current!.seekTo(1)}>跳到1秒</button>
       </ComponentExample>
     </>}
     {category === 'production' && <>
-      <ComponentExample title="选集按钮" rule="点击只更新示例选集；集名状态采用灰色待定、黄色临时、绿色最终定名，与制作进度独立。" usage="分集大纲、剧集制作">
-        <div className="component-demo-stack">{(['待定集名', '临时集名', '最终定名'] as const).map((titleStatus, i) => <EpisodeButton key={titleStatus} item={{ kind: 'episode', name: `EP00${i + 1}`, title: titleStatus === '待定集名' ? '待定' : '组件演示集', titleStatus, statusHtml: '<span class="status-badge status-gray">未开始</span>' }} onSelect={setSelected} />)}</div><p>已选择：{selected === 'one' ? '尚未选集' : selected}</p>
+      <ComponentExample fullWidth title="选集按钮" rule="点击只更新示例选集；制作页最多两列，窄屏单列。可在制作状态前显示时长，*表示含计划值；片头片尾显示默认打开方案的时长，不累加独立方案；大纲不显示时长。集名状态与制作进度独立。" usage="分集大纲、剧集制作">
+        <div className="episode-grid episode-grid-pairs">{(['待定集名', '临时集名', '最终定名'] as const).map((titleStatus, i) => <EpisodeButton key={titleStatus} duration={['1分20秒', '2分5.5秒*', undefined][i]} item={{ kind: 'episode', name: `EP00${i + 1}`, title: titleStatus === '待定集名' ? '待定' : '组件演示集与很长的题名显示检查', titleStatus, statusHtml: '<span class="status-badge status-gray">未开始</span>' }} onSelect={setSelected} />)}<EpisodeButton duration="9.4秒" item={{ kind: 'episode', name: '片头', statusHtml: '<span class="status-badge status-green">已完成</span>' }} onSelect={setSelected} /></div><p>已选择：{selected === 'one' ? '尚未选集' : selected}</p>
       </ComponentExample>
       <ComponentExample fullWidth title="分段与制作状态" rule="P001标记本轮新生成；可切换分段和横竖布局，悬停状态图标查看详情。" usage="分段制作、宽屏分段导航">
         <button onClick={() => setVertical(!vertical)}>{vertical ? '切换横排' : '切换竖排'}</button>
@@ -165,16 +168,16 @@ export function ShowcaseExamples({ category }: { category: string }) {
       </ComponentExample>
     </>}
     {category === 'tasks' && <>
-      <ComponentExample fullWidth title="运行任务卡片" rule="显示固定示例进度，可以展开详情；没有提交或轮询生成任务。" usage="全局任务进度">
-        <TaskCard task={{ id: 'showcase-running', project: '示例项目', title: '组件展示任务', task_type: 'image', prompt_id: null, status: 'running', connection: 'connected', node: '示例节点', remote_url: '', progress: { value: 3, max: 10 }, error: null, collected: 0, expected: 1, created_at: started, started_at: started, source_session_name: '本地组件演示' }} />
+      <ComponentExample fullWidth title="运行任务卡片" rule="显示固定示例进度；“任务组详情”与来源会话同排靠右，长会话名省略并保留悬停全文；入口使用模拟回调。实际入口打开任务详情，查看全组进度与各成员；队列仍逐任务显示和执行。没有提交或轮询生成任务。" usage="全局任务进度">
+        <TaskCard task={{ id: 'showcase-running', group_id: 'showcase-group', project: '示例项目', title: '组件展示任务', task_type: 'image', prompt_id: null, status: 'running', connection: 'connected', node: '示例节点', remote_url: '', progress: { value: 3, max: 10 }, error: null, collected: 0, expected: 1, created_at: started, started_at: started, source_session_name: '本地组件演示' }} onDetails={() => setAction('示例任务组：已完成1 / 2项，真实入口显示各成员状态。')} />
       </ComponentExample>
-      <ComponentExample fullWidth title="排队任务卡片" rule="暂停、恢复、插队和提交按钮只更新演示状态，不操作真实队列。" usage="全局待提交与暂停列表">
-        <LocalQueueCard task={{ queue: 'local', id: 'showcase-queued', project: '示例项目', title: '本地演示队列', task_type: 'image', status: queueState, remote_url: '', created_at: started, source_session_name: '本地组件演示' }} position={1} onAction={(_id, next) => { setAction(({ pause: '已暂停示例', resume: '已恢复示例', immediate: '已模拟立即提交', insert: '已模拟插队' } as Record<string, string>)[next]); if (next === 'pause' || next === 'resume') setQueueState(next === 'pause' ? 'paused' : 'local_queued'); }} />
+      <ComponentExample fullWidth title="排队任务卡片" rule="“任务组详情”在标题行右侧，与运行卡片统一命名；暂停、恢复、插队和提交按钮只更新演示状态，不操作真实队列。组成员的详情入口可从排队阶段查看全组；这里仅演示回调。" usage="全局待提交与暂停列表">
+        <LocalQueueCard task={{ queue: 'local', id: 'showcase-queued', group_id: 'showcase-group', project: '示例项目', title: '本地演示队列', task_type: 'image', status: queueState, remote_url: '', created_at: started, source_session_name: '本地组件演示' }} position={1} onDetails={() => setAction('示例任务组：排队和执行仍按单任务进行。')} onAction={(_id, next) => { setAction(({ pause: '已暂停示例', resume: '已恢复示例', immediate: '已模拟立即提交', insert: '已模拟插队' } as Record<string, string>)[next]); if (next === 'pause' || next === 'resume') setQueueState(next === 'pause' ? 'paused' : 'local_queued'); }} />
         <p role="status">{action}</p>
       </ComponentExample>
     </>}
     {category === 'coverage' && <>
-      <ComponentExample title="全站框架就在当前页面" rule="这些组件在当前页面已真实运行，不重复嵌套第二套页头或任务侧栏。" usage="所有页面">
+      <ComponentExample title="全站框架就在当前页面" rule="这些组件在当前页面已真实运行，不重复嵌套。任务侧栏点击外部收起，侧栏菜单、详情和通知操作不误关；展开时侧栏内滚轮不传给背景，内部列表正常滚动，到顶底不带动背景；本地队列保持排序滚动位置，处理进度及结果使用左下角公共消息。交互回归使用隔离队列，不以演示操作真实任务。" usage="所有页面">
         <ul><li>AppShell：顶部、正文与公共页脚。</li><li>ProjectSwitcher：左上角品牌旁的项目菜单。</li><li>TaskSidebar：左侧任务栏。</li><li>Notifications：左下角消息。</li><li>PageCheckStatus：页脚最近检查时间，使用实际查询结果。</li><li>BottomTools：页面向下滚动后出现的返回顶部按钮，并避让消息。</li></ul>
       </ComponentExample>
       <ComponentExample title="展示范围与业务模块" rule="可复用控件及业务卡片在各分类演示；下列整页业务模块需要真实资料，保留在原页面，不在这里启动真实业务。" usage="项目制作、任务管理与设置">
