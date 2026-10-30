@@ -1,145 +1,57 @@
-# ComfyUI-图生图执行规范
+本文件仅保留旧路径，现行正文见[负责阶段或工具](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)。
 
-状态：现行图生图执行规范。\
-版本：v1.58。
-更新日期：2026-10-20。
-用途：执行 Qwen Image 2.1 普通版带参考图编辑，涵盖单图与多图输入、画布设置、任务执行和验收。
+<a id="comfyui-图生图执行规范"></a>
 
-提示词按 [Qwen Image 2.1 提示词规范](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md) 第 4 节整理，并依其[接入与适配](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#13-qwen-image-2-1-prompter接入与适配)使用qwen-image-2-1-prompter的Edit分支；素材规格、连续性和正式命名按 [核心参考图制作规范](../../nora-drama-assets/references/核心参考图制作规范.md)的实际资产类型。本文不重复规定提示词写法。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-本执行规范的适用类型和源素材由[固定生成方式索引](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#11-图片类型专用模板索引)确定；修订任务执行[参考图统一修订规则](../../nora-drama-assets/references/图片提示词规范.md#参考图统一修订规则)。下文节点能力和参数说明不扩大业务适用范围。
+<a id="1-输入与基准文件"></a>
 
-基础服装、场景和道具任务先按类型索引及专项生成规则确定分支与输入，再填写对应现有模板内的图生图大类；场景任务读取[场景生成规则](../../nora-drama-assets/references/场景资料与参考图规范.md#411-生成方式与参考输入)及[场景模板](../../nora-ai-short-drama/references/模板/Qwen-Image-2.1-场景参考图提示词模板.md)。资产状态任务读取[统一状态规则](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#27-资产状态参考图统一规则)及[资产状态模板](../../nora-ai-short-drama/references/模板/Qwen-Image-2.1-资产状态参考图提示词模板.md)。所选图生图任务按本文完成上传、连接及画布设置。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-首帧任务先读取[首帧参考图规范](../../short-drama-storyboard/references/首帧参考图规范.md)，将其中的开始状态与画面要求落实到提示词；目录、命名和共用集内记录读取该规范第2、4、5节及其链接的集内素材规则。实际选择图生图时，本文只维护上传、连接、画布与执行映射。
+<a id="2-参考图上传与输入顺序"></a>
 
-制作、修订和结果核对按[Qwen参考图生成与修订的七项约定](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#22-qwen参考图生成与修订的七项约定)执行；工具选型见[技能入口](../../nora-drama-assets/references/图片提示词规范.md#当前参考图生成选型)。候选先交用户审核；修订按[参考图统一修订规则](../../nora-drama-assets/references/图片提示词规范.md#参考图统一修订规则)执行。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-技术映射、规格核对及记录由脚本执行，职责以[图片执行分工](ComfyUI-服务配置与任务提交规范.md#图片执行分工)为准；Agent不因下列技术说明重新测文件、核对节点或抄写参数。
+<a id="3-参数映射"></a>
 
-## 1. 输入与基准文件
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-- 提示词结果：`rewritten_prompt`、`wh_ratio`、`ratio_follow`，后两者恰有一个非空；跟随画幅的内容输入按第4.3节换算后再交任务清单。用户明确指定直接使用原文时记录该选择。
-- 输入图：按实际顺序列出本地文件、用途、版本与确认状态；资格和来源记录读取[输入参考图规则](../../nora-drama-assets/references/图片提示词规范.md#源参考图与输入资格)。后台复用已核验的真实尺寸和来源，不因工作流替换放宽输入条件。
-- 输出要求：对应图片类型的原生送审宽高、1张PNG、保存位置和本次授权。
+<a id="4-参考图预处理与输出画布"></a>
 
-| 文件 | 用途 |
-| --- | --- |
-| [原始画布](../../nora-ai-short-drama/references/comfyui-workflow/Qwen-image-2-1/Qwen2.1-图生图-普通版.workflow.json) | 用户提供文件的原样副本，只保存在workflow目录，不修改、不生成任务画布 |
-| [API执行版](../../nora-ai-short-drama/references/comfyui-workflow/Qwen-image-2-1/Qwen2.1-图生图-普通版.api.json) | 单图基准13个节点；工具按实际参考图数量扩展，每增加一张增加加载和缩放两个节点 |
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-API中的正文、输入图片、尺寸、种子和输出前缀是任务占位值，不能直接提交。每任务只复制API，实际副本保存到项目执行附件；不回写基准，不执行画布与API一致性或差异比较。原画布保留示例文字、布局和开关；执行API独立维护。
+<a id="41-两套尺寸机制"></a>
 
-模型组合读取[共用模型组合](ComfyUI-文生图执行规范.md#共用模型组合)。API使用普通INT8主模型、BF16编码器及VAE，不使用Turbo主模型。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-## 2. 参考图上传与输入顺序
+<a id="42-已确定尺寸设置自定义画布"></a>
 
-当前API装配支持1–10张参考图；没有参考图时使用文生图分支。原画布的8组参考图不限制执行API的既有10图入口。每张输入都保留独立的加载、缩放及编码器槽位，不把多张图拼成一个批次。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-1. Agent在任务清单`references`中依次列出实际素材、用途及批准或用户指定依据，顺序与正文`<image1>`等标签对应。
-2. 后台上传到最终选中远端，使用`type=input`、`overwrite=false`，将响应返回的真实input相对路径写入对应`LoadImage.inputs.image`。不填写本机绝对路径或HTTP地址。
-3. 第一张为`475 → 532 → 497.inputs.images.image_1`；第二张为`700 → 701 → images.image_2`，后续加载／缩放ID按702／703、704／705递增，直到第十张716／717。工具生成上传映射，Agent不手填节点编号。
-4. 编码器图片输入使用点号键`images.image_N`，连接缩放节点第0输出；加载器图片也取第0输出，不接遮罩。未使用槽位直接省略，不遗留示例图、不重复填图凑数量。
+<a id="43-跟随输入图画幅"></a>
 
-单图正文可不带标签，API仍使用`images.image_1`。已确定顺序后不为处理尺寸调换图片。路径、选端及恢复读取[服务配置](ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-## 3. 参数映射
+<a id="5-执行与恢复"></a>
 
-| 信息 | API位置 | 允许操作／固定配置 |
-| --- | --- | --- |
-| 最终编辑正文 | `680.inputs.value` | 每任务填`rewritten_prompt`，经497编码，不经过提示词增强器 |
-| 实际参考图片 | 各`LoadImage.inputs.image` | 后台按真实上传响应填写，数量和顺序来自任务清单 |
-| 输出宽、高 | `479.inputs.width`、`height` | 按对应图片类型既定原生尺寸明确填写，均为32倍数 |
-| 种子 | `481.inputs.seed` | 按[项目七类图片默认种子](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#26-项目七类图片默认种子)选定整数，沿用输入种子避重及未知来源处理；不使用-1随机标记 |
-| 输出前缀 | `487.inputs.filename_prefix` | 按[远端输出目录](ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
-| 反向提示词 | `497.inputs.negative_prompt` | 默认空；已明确需要时以`parameters.negative_prompt`填写并记录 |
-| 参考缩放 | 532及扩展的`ImageScaleToTotalPixels` | 固定`upscale_method=lanczos`、`megapixels=1.5`、`resolution_steps=32` |
-| 编码器参考处理 | `497.inputs.resolution`、`vae` | 固定`0`、`["478",0]`，保留参考图编码链 |
-| 输出数量 | `479.inputs.batch_size` | 固定1，多候选建立独立任务 |
-| 采样 | `481.inputs` | 固定40步、CFG=1、euler／simple、denoise=1 |
-| TE加速 | `649.inputs` | 固定kitchen_int8、te_predictor、reuse_threshold=0.06、start_percent=0、end_percent=0、predictor_error_limit=0.08、verbose=true |
-| 参考条件缓存 | `483.inputs` | 固定device=auto、dtype=default，模型输入来自649 |
-| 保存链 | `487.inputs.images` | 固定`["480",0]`，直接保存解码原图；节点487的images第0项为正式取回目标 |
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-模型、节点类型、固定连接、采样、加速及参考缩放参数不由普通任务覆盖。`parameters`只接受`negative_prompt`；其他配置变更须有相应维护授权，再修改API及说明。CFG=1时反向提示词不发挥常规负向引导作用。
+<a id="6-验收与记录"></a>
 
-API不包含提示词增强器、文字显示、4步LoRA、图片对比、VOSR2放大、尺寸选择器、随机种子及界面控制节点。去除这些分支不改写原画布。参考图经编码器提供条件，采样latent来自479；不能把`denoise`当作未经验证的身份保持强度。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-## 4. 参考图预处理与输出画布
+<a id="提交前"></a>
 
-### 4.1 两套尺寸机制
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-- **参考图尺寸**：每张输入先按1.5MP目标和原比例进行lanczos缩放，按32对齐，再送入`resolution=0`的编码器。这是参考条件预处理，可能缩小或放大输入，不改写本地源图，不是批准后超分。
-- **输出尺寸**：由479的明确宽高独立决定，不跟随参考缩放尺寸，不使用编码器第2输出，也不采用原画布的3:4／2.2MP示例作为统一规格。
+<a id="生成后"></a>
 
-输入图与输出画布可以不同尺寸；不得为凑尺寸额外裁切、拉伸参考图或生成结果。参考图缩放不改变素材来源与批准记录。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-### 4.2 已确定尺寸：设置自定义画布
+<a id="7-异常纹理的单变量排查经验"></a>
 
-先取得本次原生送审宽高，再写入479的width／height；`wh_ratio`填写目标宽高的最简整数比，`ratio_follow`留空。不需要自定义开关。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)
 
-| 用途 | 送审尺寸与比例的规则入口 |
-| --- | --- |
-| 人物多视角图、角色多视角图、服装正背面图 | [人物专项规则](../../nora-drama-assets/references/人物参考图制作与记录规范.md#2-规格背景与布局) |
-| 场景图 | [场景规范第4.1节](../../nora-drama-assets/references/场景资料与参考图规范.md#41-画面要求) |
-| 首帧图 | [首帧规范第1节](../../short-drama-storyboard/references/首帧参考图规范.md#1-制作复用与画面要求) |
-| 道具三视图、虚拟道具基础界面 | [道具规格](../../nora-drama-assets/references/道具资料与参考图规范.md#3-三视图与状态规则) |
-| 资产状态参考图 | [统一状态规则的对应规格入口](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#27-资产状态参考图统一规则) |
-| 剧集专用参考图 | [集内素材规则](../../nora-ai-short-drama/references/流程规范/逐集目录与资产管理规范.md#21-剧集专用参考图) |
+<a id="本地配套基准"></a>
 
-上述图片尺寸与[批准后超分规则](ComfyUI-图片超分执行规范.md)保持独立：需超分类型先保存原生候选，批准后使用既有RTX两倍超分；人物本体及穿衣角色六视图按规定原生2048×2048直接保存。API不执行VOSR2放大。
-
-### 4.3 跟随输入图画幅
-
-内容结果使用`ratio_follow="<imageN>"`时，先按该图已有真实宽高及本类型交付规格明确输出宽高，不调换参考顺序。交给统一装配入口前填写`size:[宽,高]`及对应`wh_ratio`，将`ratio_follow`置空；它们是任务元数据，不作为编码器输入。
-
-若要求精确原尺寸而原图不符合32对齐或既定交付规格，先确定尺寸方案，不默默取整后宣称保持原尺寸。API没有自动跟随首图分支。
-
-
-## 5. 执行与恢复
-
-入队准备、审批依赖及Agent／后台分工读取[提交规则](ComfyUI-服务配置与任务提交规范.md#新任务的选端与提交)；监控、成果取回、技术留档、通知及失败处理读取[监控规范](ComfyUI-任务监控规范.md)第1–3节。下列步骤补充本工作流的配置、输出映射与业务交付。
-
-接口调用细节沿用 `comfyui-api`；正常提交不作远端能力预检；明确要求能力盘点时才使用 `comfyui-inventory`，获授权错误定位使用 `comfyui-troubleshooter`。
-
-1. **内容准备。** 按专用提示词模板完成本次正文，明确类型／状态、素材顺序与用途、来源批准、执行授权及既定规格；记录实际内容依据，不手填技术副本和重复台账。
-2. **一次装配并入队。** 使用[任务清单入口](../../nora-ai-short-drama/references/comfyui-scripts/README.md#一次装配与批量入队)，由工具从执行API基准生成任务API、上传与成果映射、种子及模板技术记录，统一准备检查后入队。只做准备加`--prepare-only`；清单范围与旧参数入口的适用条件按[任务组提交范围](ComfyUI-服务配置与任务提交规范.md#任务组提交范围)，不逐图拆组。入队成功只汇报数量并结束本轮，不继续补ID、进度或查网页。
-3. **后台结果。** 后台完成上传、提交、取回、技术核验和生成／审阅记录，核验审核入口后再通知。Agent读取一次report并直接展示图片供用户审核；异常才查原附件，不因质量判断自动再生成。
-
-仅本地准备可使用：
-
-```sh
-python /实际技能目录/scripts/comfyui_dispatch.py \
-  --project /实际项目目录 \
-  --plan 03-人物资料/其他资料/执行附件/本批次/任务清单.json \
-  --prepare-only
-```
-
-Python运行环境及清单完整字段见[任务清单入口](../../nora-ai-short-drama/references/comfyui-scripts/README.md#一次装配与批量入队)。清单中填写实际`references`和正文；工具读取项目种子、应用原定尺寸及远端命名。返回`prepared`表示本地准备通过，不上传、不生成，也不创建任务画布；已有生成授权时移除`--prepare-only`入队，成功返回`enqueued`。失败按报告处理，不自动重提。
-
-任务中断时读取[已提交任务的地址与恢复](ComfyUI-服务配置与任务提交规范.md#已提交任务的地址与恢复)及[异常检查与连接恢复](ComfyUI-任务监控规范.md#31-异常检查与连接恢复)。仅导出、整理说明或检查配置不触发生成。
-
-## 6. 验收与记录
-
-### 提交前
-
-Agent确认要表达的内容及本次授权，填写任务清单。脚本按[图片执行分工](ComfyUI-服务配置与任务提交规范.md#图片执行分工)完成字段格式、尺寸／比例、种子、输入关联及固定配置检查，不比较画布与API，自动写技术记录。Agent只读取提交报告，失败时处理报告指出的具体缺项；不再按本节人工核对一遍。
-
-### 生成后
-
-后台完成技术核验、实际来源／上传绑定记录、候选审阅登记及网页核验后再通知。Agent只读取report并直接展示其中的`delivery`清单，不量尺寸、不读请求／响应、不补技术字段或检查网页。画面质量与设计符合度由用户审核，视觉分析仍按主技能边界执行。用户要求修改时再形成新的内容输入和授权，不因正常收尾自动改稿或再生成。
-
-完成标准：请求和输出可追溯，真实规格已检查，文件与记录核对及用户审核状态已说明。技术测试结论与项目审批状态分别记录。
-
-
-## 7. 异常纹理的单变量排查经验
-
-用户明确反馈皮肤斑驳、过锐发丝、衣料失真或背景颗粒等异常，并授权种子对照时，核对已有输入和请求记录，按指定次数固定输入、提示词及其他参数，仅换有记录的新种子。结果直接展示给用户判断；如需agent视觉分析，先满足[看图能力调用边界](../../nora-ai-short-drama/SKILL.md#看图能力调用边界)，信息不足先询问。无效则保留结果，不自动追加对照或改动环境。
-
-单变量对照是排查手段，不证明根因或效果保证。候选须由用户审核；本节不授权额外看图、生成或远端配置修改。
-
-正常制作按[项目七类图片默认种子](../../nora-drama-assets/references/Qwen-Image-2.1-提示词规范.md#26-项目七类图片默认种子)执行，内容调整按默认方式重新生成。异常时更换该类默认种子及单变量测试的记录边界由该规则统一规定；不把某项目的数值写成跨项目通用默认。
-
-## 本地配套基准
-
-任务副本与基准维护边界统一读取[维护规范的工作流基准与任务副本](../../nora-ai-short-drama/维护规范.md#工作流基准与任务副本)；图生图配套文件入口见本文第1节。服务地址读取[工作区ComfyUI配置](ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
+- [现行入口](../../nora-qwen-image/references/ComfyUI-图生图执行规范.md)

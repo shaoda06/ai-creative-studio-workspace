@@ -1,3 +1,5 @@
+图片任务的业务输入和采用由[图片阶段](../../../nora-drama-images/SKILL.md)负责；共用[提交工具](../../../nora-comfyui/SKILL.md)和[任务后台](../../../nora-workspace-browser/SKILL.md)只处理明确请求。本文保留已有业务清单字段和兼容命令说明，类型尺寸、资格与记录由业务脚本执行，模型正文由Agent编写。
+
 # 通用 ComfyUI 执行工具
 
 入口：[comfyui_client.py](comfyui_client.py)。Python 3.9+，仅标准库；安装位置属于短剧技能，代码不包含短剧业务。与 `comfyui-api` 技能结合使用：技能提供连接、接口与安全规则，脚本执行上传、提交、单轮查询、下载和原生导演包导出。节点／模型检查仍按 `comfyui-inventory`；故障按 `comfyui-troubleshooter`。
@@ -18,7 +20,7 @@ Nora项目的调用入口和授权边界统一见[固定通信工具与证据](.
 
 全剧共用片头、片尾在09下使用固定制作对象，其目录和编号见[共用制作规则](../流程规范/逐集目录与资产管理规范.md#全剧共用片头与片尾)。立项时随已选配套建立目录，按[初始化脚本说明](../共用规则/项目初始化规范.md#项目与单集目录初始化脚本)传入选择参数；仅补齐某个共用对象的准备目录时仍可使用 `project_init.py --project 'projects/剧名' --episode 片尾`（片头同理）。制作对象命令的 `--episode` 参数及JSON的 `episode` 字段继续使用。场次轮次、准备与入队、视频采用／定稿、图片收尾均沿原命令，仅将EP前缀替换为“片头”或“片尾”。图片使用 `kind=剧集素材` 和对应的 `片尾-专用素材制作-工作稿.md`；同样执行真实来源、批准依赖及网页条目核验。
 
-入口：[imagegen_results.py](../../scripts/imagegen_results.py)。生图能力选型及每批确认仍由[统一分流入口](../../../nora-drama-assets/references/图片提示词规范.md#当前参考图生成选型)负责；固定代理、实际调用及父子交付边界见[Imagegen规范](../../../nora-generation/references/Imagegen生成与尺寸处理规范.md#子代理执行与父代理交付)。本脚本不生图、不超分、不远端入队、不发消息，也不自动批准；复用共享图片记录应用、审核模板和项目网页解析核验。需要完整工作区及浏览服务Python运行环境，独立技能包缺少该运行环境时说明限制，不伪装已同步网页。
+入口：[imagegen_results.py](../../scripts/imagegen_results.py)。生图能力选型及每批确认仍由[统一分流入口](../../../nora-drama-images/references/图片提示词规范.md#当前参考图生成选型)负责；固定代理、实际调用及父子交付边界见[Imagegen规范](../../../nora-drama-images/references/内置图片制作接续规范.md#子代理执行与父代理交付)。本脚本不生图、不超分、不远端入队、不发消息，也不自动批准；复用共享图片记录应用、审核模板和项目网页解析核验。需要完整工作区及浏览服务Python运行环境，独立技能包缺少该运行环境时说明限制，不伪装已同步网页。
 
 使用当前工作区浏览服务的Python环境，macOS／Linux为`工作区浏览服务/.venv/bin/python`，Windows为`工作区浏览服务/.venv/Scripts/python.exe`。以下示例解释器和技能路径替换为当前安装的实际绝对路径。主控在该项目既有执行附件保存一份请求JSON，字段如下；图片类型、目录、名称和创作字段仍沿原专项，不由脚本决定设计。
 
@@ -621,7 +623,7 @@ python /实际技能目录/scripts/comfyui_dispatch.py \
 ```
 
 - `kind`为人物／场景／道具／剧集素材／封面，沿用各自既有工作稿模板。封面不设固定提示词句式，Qwen备用调用仍遵守接口字段格式。有对应正式图片的新图片条目须填写`formal`，候选名和版本按该正式文件名分配，不从`image_type`拼接；同一正式图片独立累计v版本。画风样例保留固定对象名和样例身份，不虚构正式资产；手绘导演分镜表按正式场次及页码独立维护图表版本。工具自动建工作稿或追加下一生成编号、候选版本及同前缀执行附件；不另建人工调度台账。`fields`可提供该模板中特有的已确认业务内容，技术字段由工具填写。`record_dir`、`generation`、`output`只在明确指定既定入口时填写，显式`output`仍须与`formal`对应。
-- 人物肖像默认1024×1024、本体六视图和角色六视图默认2048×2048、服装默认1152×864；其他类型或用户明确变更须填`size:[宽,高]`，沿用原规格。`prompt`仍按Qwen规则填写文生图两字段／编辑三字段及准确画幅；工具只注入正文，不优化或扩写。文生图`parameters`只接受已明确的`negative_prompt`；其模型、40步和TE加速等固定值按[文生图说明](../../../nora-generation/references/ComfyUI-文生图执行规范.md#2-提示词与参数映射)维护，配置变更另行授权。图生图`parameters`同样只接受`negative_prompt`；按[图生图说明](../../../nora-generation/references/ComfyUI-图生图执行规范.md#3-参数映射)保留40步、TE加速、参考条件缓存和每张1.5MP缩放。支持1–10张参考图，由工具按清单顺序生成加载、缩放及上传绑定，直接保存解码原图。
+- 人物肖像默认1024×1024、本体六视图和角色六视图默认2048×2048、服装默认1152×864；其他类型或用户明确变更须填`size:[宽,高]`，沿用原规格。`prompt`仍按Qwen规则填写文生图两字段／编辑三字段及准确画幅；工具只注入正文，不优化或扩写。文生图`parameters`只接受已明确的`negative_prompt`；其模型、40步和TE加速等固定值按[文生图说明](../../../nora-qwen-image/references/ComfyUI-文生图执行规范.md#2-提示词与参数映射)维护，配置变更另行授权。图生图`parameters`同样只接受`negative_prompt`；按[图生图说明](../../../nora-qwen-image/references/ComfyUI-图生图执行规范.md#3-参数映射)保留40步、TE加速、参考条件缓存和每张1.5MP缩放。支持1–10张参考图，由工具按清单顺序生成加载、缩放及上传绑定，直接保存解码原图。
 - 新清单全体后台任务统一登记任务组，`group_id`由工具产生，Agent不手填。正常结果等全组完成后通知，异常提前按组报告；见[组级通知](../../../nora-generation/references/ComfyUI-任务监控规范.md#3-跟进与通知)。历史`image_batch_id/image_batch_size`仅兼容已登记图片批次；无组历史任务沿原记录接续，不追溯猜测合批。
 - 不传`seed`时由工具读取项目七类默认种子表；首次类别选定、登记并在同批复用，输入原始种子从批准记录读取。七类之外的图传`supplementary:true`，每次选择新种子，不新增类别默认值。来源／类别冲突停止，不暗中改已确认种子。用户指定参考图改用`user_reference:true,basis:"真实指定依据"`；可提供`source_seed`，非生成图写`source_kind:"非生成"`，生成来源种子未知须有`unknown_seed_basis:"用户明确允许按未知继续的依据"`。既有审批与未知来源处理规则保持。
 
@@ -637,7 +639,7 @@ python /实际技能目录/scripts/comfyui_dispatch.py \
  "adoption_fields":{"适用范围":"首集"}}
 ```
 
-图片后处理继续使用`task_type:"image-upscale"`及可选`size:[目标宽,目标高]`，单位为像素，须为两个正整数；未传时沿用原图宽高各2倍。工具按[图片后处理的方式选择](../../../nora-generation/references/ComfyUI-图片超分执行规范.md#指定尺寸处理的方式选择)读取原图真实宽高并自动分流，本地处理不装配RTX工作流。进入RTX的指定尺寸任务在副本同步`target dimensions`及宽高控件、API和成果计划，基准仍保留2倍，画布与API保留ULTRA、strength=1.0、8-bit RGB。
+图片后处理继续使用`task_type:"image-upscale"`及可选`size:[目标宽,目标高]`，单位为像素，须为两个正整数；未传时沿用原图宽高各2倍。工具按[图片后处理的方式选择](../../../nora-drama-images/references/图片后处理业务规范.md#指定尺寸处理的方式选择)读取原图真实宽高并自动分流，本地处理不装配RTX工作流。进入RTX的指定尺寸任务在副本同步`target dimensions`及宽高控件、API和成果计划，基准仍保留2倍，画布与API保留ULTRA、strength=1.0、8-bit RGB。
 
 需裁切时可选`crop_anchor:[水平位置,垂直位置]`，两个数均为0到1，默认`[0.5,0.5]`居中；例如`[0.5,0]`保持顶部、从底部裁去多余部分。必须符合本次已获授权的裁切范围。正式资产、原批准、`formal`、`archive`及`adoption_updates`仍按本节填写。本地分支同步完成处理与收尾，返回`status:"completed"`、`provider:"local"`、报告路径及空的`local_task_id`，不会产生ComfyUI任务或正常超分通知；`--prepare-only`不执行处理，`--start-paused`遇本地分支时整批停在准备阶段，去掉该参数再次调用才执行。
 
@@ -807,7 +809,7 @@ python /实际技能目录/scripts/comfyui_dispatch.py \
 
 用户授权后调用相同命令、移除`--prepare-only`即可登记队列。准备报告的复用、开工时文件变化处理和旧报告补项统一按[执行前检查与复用](../../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#执行前检查与复用)执行；固定检查、输入映射、上传绑定和防重复提交由该规范的[固定检查与动态条件](../../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#固定检查与动态条件)维护，不由Agent重复核验。底层提交错误字段见[submit调用说明](#submit只提交一次)。
 
-准备时的已知RTX输入检查按[RTX节点共用必填输入](../../../nora-generation/references/ComfyUI-图片超分执行规范.md#rtx节点共用必填输入)；普通准备不查询远端库存，出现真实接口错误时按[远端能力与错误返回](../../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)定点处理。
+准备时的已知RTX输入检查按[RTX节点共用必填输入](../../../nora-image-processing/references/ComfyUI-图片超分执行规范.md#rtx节点共用必填输入)；普通准备不查询远端库存，出现真实接口错误时按[远端能力与错误返回](../../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)定点处理。
 
 尚未提交的已登记任务需要修正资料时，先按[重新调度与失败恢复](../../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#重新调度与失败恢复)核对可重新准备的范围，再使用同一命令加`--prepare-only`。成功响应包含原`local_task_id`，任务仍保持暂停；之后从网页恢复原任务。普通恢复按钮不会重读修改后的JSON。失败、已有提交证据或远端ID的处理，以及重启、队列变化后的阶段复用，均沿该恢复规则，不改目录绕过原任务。
 

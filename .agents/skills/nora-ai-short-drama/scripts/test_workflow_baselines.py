@@ -217,7 +217,7 @@ class BaselineTests(unittest.TestCase):
         results = wb.verify(BASELINES)
         self.assertEqual(len(results), 6)
         for folder, group in workflow_directories(BASELINES):
-            self.assertEqual(len(wb.verify(folder)), 0 if group == 'backup' else 1 if folder.name == 'Minimax-H3' else 3 if folder.name == '后处理综合' else 2)
+            self.assertEqual(len(wb.verify(folder)), 0 if group == 'backup' else len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]
         self.assertEqual(h3, [])
 

@@ -4,6 +4,8 @@
 
 ## 开始使用
 
+跨业务分流可使用[Nora AI视频创作与制作](.agents/skills/nora-video/SKILL.md)。连续短剧由[一级业务入口](.agents/skills/nora-serial-drama/SKILL.md)接续；图片由[图片阶段](.agents/skills/nora-drama-images/SKILL.md)组织，并调用共用图片工具。已有短剧入口和H3执行继续兼容使用。
+
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
 2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
 3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-ai-short-drama/references/流程规范/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。

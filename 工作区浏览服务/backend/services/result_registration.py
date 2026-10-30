@@ -13,6 +13,7 @@ from backend.services.result_summary import batch_tasks, summary, outputs as col
 from project_paths import project_file
 from video_adopt import field
 import project_progress
+from backend.services.image_closeout import verify_browser_entries as verify_image_entries
 
 REPORT = '结果收尾报告.json'
 
@@ -30,7 +31,7 @@ def register(store, key):
     if state['status'] != 'completed' or state['collected'] != state['expected']:
         raise ValueError('只有全部成果取回的任务可以登记待审')
     if not data.task_type.startswith('video-'):
-        from backend.services.image_closeout import register as register_image
+        from backend.services.image_tasks import register as register_image
         return register_image(store, key, collected_outputs(store, key), Path(data.record_dir) / REPORT)
     root, record = Path(data.project), Path(data.record_dir)
     report_file = record / REPORT
@@ -166,11 +167,13 @@ def register(store, key):
 def verify(projects, store, key, report):
     data, state = store.rows[key]['input'], store.rows[key]['state']
     name = state['project']
+    if report['items'] and all(item.get('image') and not item.get('draft') for item in report['items']):
+        return {'status': 'not_requested', 'verified_at': store.client.now()}
     entry = projects.get(name, synchronize=True)
     status = projects.status(name)
     if status['updating'] or status['checking'] or status['error']:
         raise ValueError('源资料已登记，网页尚未同步：' + str(status['error']))
-    verify_image_entries(projects, name, [item for item in report['items'] if item.get('image')])
+    verify_image_entries(projects, name, [item for item in report['items'] if item.get('image') and item.get('draft')])
     for ep in dict.fromkeys(item['episode'] for item in report['items'] if not item.get('image')):
         parsed = projects.section(name, '09-剧集制作', ep, mode='playback')
         found = set()
@@ -192,35 +195,6 @@ def verify(projects, store, key, report):
             'review_path': '/#/projects/' + quote(name, safe='')}
 
 
-def verify_image_entries(projects, name, images):
-    """Verify native and downloaded images against their actual parsed review entries."""
-    image_groups = {}
-    for item in images:
-        parts = Path(item['draft']).parts
-        image_groups.setdefault((parts[0], parts[1] if parts[0] == '09-剧集制作' else None), []).append(item)
-    for (scope, episode), members in image_groups.items():
-        parsed = projects.section(name, scope, episode)
-        found = set()
-        def image_entries(value):
-            if isinstance(value, dict):
-                if value.get('key'):
-                    found.add(unquote(value['key']))
-                for child in value.values(): image_entries(child)
-            elif isinstance(value, list):
-                for child in value: image_entries(child)
-        if scope in ('03-人物资料', '04-场景资料', '05-道具资料'):
-            # A loose file in the directory is not a registered review/formal asset.
-            for collection in ('people', 'scenes', 'props'):
-                for asset in parsed.get(collection, []):
-                    if any(asset.get('recordKey') == item['draft'] for item in members):
-                        image_entries(asset.get('candidates', []))
-                        image_entries(asset.get('formal', []))
-                        image_entries(asset.get('auxiliary', []))
-        else:
-            image_entries(parsed)
-        for item in members:
-            if item.get('display_path', item['path']) not in found:
-                raise ValueError('源资料已登记，网页缺少本批图片：' + item['path'])
 
 
 def apply_record_updates(store, key, updates, episodes, report=None):
@@ -546,4 +520,4 @@ async def closeout_tasks(store, projects, ids, record_updates=(), *, batch_id=No
     for key in ids:
         store.wake_group(key)
     return {'notification_id': batch_id, 'results': reports, 'user_message_ready': bool(reports) and all(
-        item.get('browser', {}).get('status') == 'verified' for item in reports)}
+        item.get('browser', {}).get('status') in ('verified', 'not_requested') for item in reports)}

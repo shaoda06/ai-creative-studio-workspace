@@ -15,7 +15,15 @@ def workflow_root(skill=SKILL_ROOT):
 
 
 def workflow_directories(root):
-    return [(Path(root) / name, group) for name, group in WORKFLOW_GROUPS]
+    root = Path(root)
+    if root.resolve() == workflow_root().resolve():
+        skills = SKILL_ROOT.parent
+        return [(skills / 'nora-qwen-image/references/workflows', 'formal'),
+                (root / 'Minimax-H3', 'formal'),
+                (root / '后处理综合', 'formal'),
+                (skills / 'nora-image-processing/references/workflows', 'formal'),
+                (root / '非正式工作流', 'backup')]
+    return [(root / name, group) for name, group in WORKFLOW_GROUPS]
 
 
 def workflow_file(name, kind='workflow', *, root=None):

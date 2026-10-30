@@ -51,7 +51,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                     draft='05-道具资料/其他资料/工作稿/PR001-参考图-工作稿.md',
                     formal='05-道具资料/PR001-保温杯/参考图/PR001-基础-道具参考图.png')
         documents = plans.Documents(self.project)
-        with patch.object(plans, 'choose_seed', return_value=101):
+        with patch('drama_image_plans.choose_seed', return_value=101):
             task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
         self.assertEqual(Path(task['outputs'][0]['path']).name, 'PR001-基础-道具参考图-候选-v01.png')
         self.assertFalse((self.project / spec['draft']).exists())
@@ -62,7 +62,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         documents = plans.Documents(self.project)
         for view, expected in [('V001', 'v01'), ('V002', 'v01'), ('V001', 'v02')]:
             spec['formal'] = f'04-场景资料/SC001-办公室/参考图/SC001-EP001-C001-{view}-场景参考图.png'
-            with patch.object(plans, 'choose_seed', return_value=101):
+            with patch('drama_image_plans.choose_seed', return_value=101):
                 task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
             self.assertEqual(Path(task['outputs'][0]['path']).name,
                              f'SC001-EP001-C001-{view}-场景参考图-候选-{expected}.png')

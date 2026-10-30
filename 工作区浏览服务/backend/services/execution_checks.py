@@ -247,7 +247,7 @@ def fixed_checks(store, data, *, mapping=None, legacy=False):
     from backend.services import comfy_segments as segments
     fixed_input_checks(store, data)
     if data.image_plan is not None:
-        from backend.services.image_closeout import validate_plan
+        from backend.services.image_tasks import validate_plan
         validate_plan(data)
     path_scope = PreparationPaths.from_resolved(data.project,
                         [data.record_dir, *(item['file'] for item in data.uploads)])

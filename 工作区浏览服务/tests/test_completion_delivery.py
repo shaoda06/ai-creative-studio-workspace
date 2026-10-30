@@ -46,7 +46,7 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
             self.store.queue_notice('task', 'terminal', 'terminal', '完成')
             await self.store.notifiers['task']
         self.assertEqual(len(observations), 1)
-        self.assertIn('browser_tasks.py report', observations[0])
+        self.assertRegex(observations[0], r'browser_tasks\.py"? report --notification-id ')
         self.assertNotIn('请先调用 browser_tasks.py ack', observations[0])
         self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         self.assertTrue(candidate.is_file())
@@ -298,7 +298,7 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/report', main.agent_result_report, methods=['POST'])
         cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(t.SKILL / 'scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py', cli)
         async with serving(app) as url:
             config = self.root / '工作区浏览服务/runtime/task-service.json'
             config.parent.mkdir(parents=True, exist_ok=True)

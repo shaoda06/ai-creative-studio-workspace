@@ -125,7 +125,8 @@ def image_delivery(store, tasks):
             report_file=str(Path(data.record_dir) / '结果收尾报告.json'),
             images=[dict(file=str(Path(data.project) / item.get('display_path', item['path'])),
                 candidate_file=str(Path(data.project) / item['path']), width=item['width'], height=item['height'],
-                format=item['format'], bytes=item['bytes'], draft_file=str(Path(data.project) / item['draft'])) for item in pictures]))
+                format=item['format'], bytes=item['bytes'],
+                draft_file=str(Path(data.project) / item['draft']) if item.get('draft') else None) for item in pictures]))
     return dict(completed=len(ready), image_count=sum(len(item['images']) for item in ready), tasks=ready)
 
 

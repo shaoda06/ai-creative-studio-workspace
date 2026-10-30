@@ -4,6 +4,8 @@
 
 ## 日常启动
 
+Agent使用、任务接入和后台开发维护的统一入口为[浏览后台工具技能](../.agents/skills/nora-workspace-browser/SKILL.md)。图片业务准备和采用由[图片阶段](../.agents/skills/nora-drama-images/SKILL.md)维护；后台明确分发技术结果与业务接入，现有接口继续兼容。
+
 Windows双击本目录的 `启动（Windows）.bat`，macOS双击 `启动（Mac）.command`，就绪后自动打开 http://127.0.0.1:8782/ 。停止时双击“停止（Windows）.bat”或“停止（Mac）.command”。启动前核对前端入口、`dist/release.json`与`frontend/package.json`的版本：构建缺失或版本过期时自动构建，已是当前版本时跳过。源码修改仍须按发布规则递增版本，不以文件修改时间判断发布。
 
 自动构建通过Node.js自带的npm调用现有`build`命令，需要本机已安装Node.js及前端依赖，不自动安装或升级依赖；构建失败时显示具体错误，不停止原有服务。已构建且版本一致时不要求构建工具。重复启动复用同版本且就绪的本工作区服务；旧服务版本不一致时，构建成功后自动重启本工作区服务。端口被其他程序占用时明确报错，不终止其他进程。

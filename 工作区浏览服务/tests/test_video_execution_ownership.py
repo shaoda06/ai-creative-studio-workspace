@@ -107,7 +107,7 @@ class VideoExecutionTests(unittest.IsolatedAsyncioTestCase):
             app=FastAPI();app.state.comfy_tasks=self.store
             app.add_api_route('/api/internal/comfy/notifications/{batch_id}/report',main.agent_result_report,methods=['POST'])
             cli=self.root/'.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
-            cli.parent.mkdir(parents=True);shutil.copyfile(tasks.SKILL/'scripts/browser_tasks.py',cli)
+            cli.parent.mkdir(parents=True);shutil.copyfile(Path(__file__).resolve().parents[2]/'.agents/skills/nora-workspace-browser/scripts/browser_tasks.py',cli)
             async with serving(app) as url:
                 config=self.root/'工作区浏览服务/runtime/task-service.json'
                 config.parent.mkdir(parents=True,exist_ok=True);config.write_text(json.dumps({'url':url,'token':self.store.token}))

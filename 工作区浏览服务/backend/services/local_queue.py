@@ -228,7 +228,7 @@ class LocalQueue:
         data = row['input']
         self.record(key, 'preflight', 'started', _changes={'status': 'preparing', 'phase': 'preflight', 'preparation_attempt': row['state'].get('preparation_attempt', 0) + 1})
         if data.task_type == 'image-upscale':
-            from backend.services.image_closeout import validate_plan
+            from backend.services.image_tasks import validate_plan
             validate_plan(data)  # Also protects already-prepared legacy RTX tasks before any upload.
         # Re-check the endpoint and files at the moment of execution, not just at enqueue time.
         if self.client.Client(data.url, data.timeout).url not in self.remote_urls():
