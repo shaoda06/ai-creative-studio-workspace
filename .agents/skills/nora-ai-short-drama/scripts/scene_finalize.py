@@ -48,6 +48,8 @@ def indexed_parts(root, episode):
 
 def selected(root, part, stage):
     draft = root / '09-剧集制作' / part.split('-')[0] / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+    if not draft.is_file():
+        return None
     text = draft.read_text('utf-8-sig')
     output = adopt.selected_output(root, draft, text, part, stage)
     return output['identity'] if output else None
@@ -58,6 +60,9 @@ def episode_missing(root, episode):
     missing, records = [], {}
     for scene, part in indexed_parts(root, episode):
         draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+        if not draft.is_file():
+            missing.extend(part + ' ' + stage + '未采用' for stage in adopt.STAGES)
+            continue
         text = draft.read_text('utf-8-sig')
         for stage in adopt.STAGES:
             identity = selected(root, part, stage)
@@ -246,33 +251,65 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
         review = next(iter(reviews))
         if not adopt.approved_row(text, selected.name + f' [审核](#{review})', selected.name):
             raise ValueError('当前具体版本尚未批准采用：' + item['identity'])
-        actual = source(root, item)
+        mapping_path = adopt.local_path(root, item['mapping'])
+        mapped = adopt.load(mapping_path)
+        local_edit = mapped.get('local_edit')
+        if local_edit is not None:
+            # The approved silent MP4 has no model execution of its own.
+            if mapped.get('prompt_id') or mapped.get('operation') != 'local-video-audio-removal':
+                raise ValueError('本地衍生留档仅支持无新模型任务的整段静音视频')
+            content = source(root, item['generation_source'])
+            contexts = [c for c in mapped['generation_contexts'] if c['identity'] == item['identity']]
+            if (len(contexts) != 1 or contexts[0].get('source') != content['identity']
+                    or local_edit['source'] != content['identity']
+                    or content['identity'].rsplit('-', 2)[0] != part
+                    or content['identity'].rsplit('-', 1)[1] != stage):
+                raise ValueError('静音衍生与明确指定的原生成来源不一致')
+            parameters = local_edit['parameters']
+            if '-an' not in parameters or parameters[parameters.index('-c:v') + 1] != 'copy':
+                raise ValueError('静音衍生须保留原视频流，不把画面修改当作原生成缓存')
+            original_receipt = adopt.load(adopt.local_path(root, item['generation_source']['receipt']))
+            adopt.check_file(adopt.local_path(root, local_edit['source_file']),
+                             original_receipt.get('data', original_receipt))
+            actual = {'identity': item['identity'], 'mapping_path': mapping_path, 'mapping': mapped,
+                      'context': contexts[0], 'api_path': None, 'canvas_path': None, 'restoration': []}
+        else:
+            actual = source(root, item)
+            content = actual
         receipt_path = adopt.local_path(root, item['receipt'])
-        if not receipt_path.is_relative_to(actual['mapping_path'].parent):
+        if local_edit is not None:
+            receipt_document = adopt.load(receipt_path)
+            receipt = mapped['output'] if receipt_path == mapping_path else receipt_document.get('data', receipt_document)
+            if (not isinstance(receipt.get('bytes'), int) or receipt['bytes'] <= 0
+                    or adopt.local_path(root, receipt['path']).name != selected.name):
+                raise ValueError('静音衍生缺少本次采用文件的实际输出凭据')
+        elif not receipt_path.is_relative_to(actual['mapping_path'].parent):
             paths = [s.get(field) for s in actual['mapping']['segments']
                      for field in ('download_response', 'download_receipt', 'final_download_receipt') if s.get(field)]
             if receipt_path not in [adopt.local_path(root, p) for p in paths]:
                 raise ValueError('共同任务外的取回凭据须已在输入映射中明确关联')
-        receipt_document = adopt.load(receipt_path)
-        receipt = receipt_document.get('data', receipt_document)
+        if local_edit is None:
+            receipt_document = adopt.load(receipt_path)
+            receipt = receipt_document.get('data', receipt_document)
         mapped_parts = [s for i, s in enumerate(actual['mapping']['segments'])
+                        if local_edit is None
                         if i in actual['mapping']['selected_indices']
                         and s['segment'] + '-' + s['round'] + '-' + stage == item['identity']]
-        if len(mapped_parts) != 1:
+        if local_edit is None and len(mapped_parts) != 1:
             raise ValueError('来源映射的实际执行范围与采用身份不符')
-        mapped_part = mapped_parts[0]
-        remote = mapped_part.get('remote', mapped_part.get('remote_output', actual['mapping'].get('remote_output')))
-        if remote is None and mapped_part.get('final_output'):
-            remote = mapped_part['final_output']['remote']
-        if remote is None:
-            outputs = [o for o in actual['mapping'].get('outputs', []) if o.get('identity') == item['identity']]
-            if len(outputs) != 1 or adopt.local_path(root, outputs[0]['receipt']) != receipt_path:
-                raise ValueError('后台输出未唯一关联本段及指定取回凭据')
-            remote = outputs[0]['remote']
-        if remote != receipt['remote']:
-            raise ValueError('取回凭据的远端输出与本段映射不对应')
+        if local_edit is None:
+            mapped_part = mapped_parts[0]
+            remote = mapped_part.get('remote', mapped_part.get('remote_output', actual['mapping'].get('remote_output')))
+            if remote is None and mapped_part.get('final_output'):
+                remote = mapped_part['final_output']['remote']
+            if remote is None:
+                outputs = [o for o in actual['mapping'].get('outputs', []) if o.get('identity') == item['identity']]
+                if len(outputs) != 1 or adopt.local_path(root, outputs[0]['receipt']) != receipt_path:
+                    raise ValueError('后台输出未唯一关联本段及指定取回凭据')
+                remote = outputs[0]['remote']
+            if remote != receipt['remote']:
+                raise ValueError('取回凭据的远端输出与本段映射不对应')
         adopt.check_file(selected, receipt)
-        content = actual
         content['root'] = root
         content['director'] = director(content, part)
         sources.append((actual, content))
@@ -300,12 +337,16 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
                     raise ValueError('不同来源同一远端素材路径字节冲突：' + upload['input_path'])
                 media.setdefault(upload['input_path'], local)
         evidence.append({'identity': item['identity'], 'selected_path': str(selected), 'review': review,
-                         'mapping': str(actual['mapping_path']), 'api': str(actual['api_path']),
-                         'canvas': str(actual['canvas_path']), 'prompt_id': actual['mapping']['prompt_id'],
+                         'mapping': str(actual['mapping_path']),
+                         'api': str(actual['api_path']) if actual['api_path'] else None,
+                         'canvas': str(actual['canvas_path']) if actual['canvas_path'] else None,
+                         'prompt_id': actual['mapping'].get('prompt_id'),
                          'content_identity': content['identity'], 'content_mapping': str(content['mapping_path']),
                          'content_api': str(content['api_path']), 'content_canvas': str(content['canvas_path']),
                          'seed': content['director'][1]['inputs']['seed'], 'receipt': item['receipt'],
                          'restoration': actual['restoration'], 'content_restoration': content['restoration']})
+        if local_edit is not None:
+            evidence[-1].update(local_edit=local_edit, generation_source=item['generation_source'])
     first = sources[0][1]
     key, node, timeline, _ = first['director']
     workflow, canvas, timeline = copy.deepcopy(first['api']), copy.deepcopy(first['canvas']), copy.deepcopy(timeline)

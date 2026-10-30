@@ -11,6 +11,7 @@ from unittest.mock import patch
 import zipfile
 
 import scene_finalize as tool
+import video_approve
 from workflow_paths import workflow_file
 
 
@@ -63,6 +64,69 @@ class NativeClient:
 
 
 class FinalizeTests(unittest.TestCase):
+    def silent_item(self, part):
+        original = self.item(part)
+        identity = original['identity'].replace('-R001-', '-R002-')
+        record = self.extra / '执行附件' / identity
+        selected = self.ep / '06-阶段采用视频/01-一采/C001-场次' / (identity + '.mp4')
+        data = b'silent preview'
+        self.put(selected, data)
+        original_receipt = tool.adopt.load(Path(original['receipt']))['data']
+        context = copy.deepcopy(tool.adopt.load(Path(original['mapping']))['generation_contexts'][0])
+        context.update(identity=identity, source=original['identity'])
+        mapped = {'operation': 'local-video-audio-removal', 'segments': [],
+                  'generation_contexts': [context],
+                  'local_edit': {'tool': 'ffmpeg', 'source': original['identity'],
+                                 'source_file': original_receipt['path'], 'parameters': ['-c:v', 'copy', '-an']},
+                  'output': {'path': str(selected), 'bytes': len(data)}}
+        mapping = record / '输入映射.json'
+        self.put(mapping, mapped)
+        draft = self.extra / '工作稿' / f'EP001-C001-{part}-视频制作-工作稿.md'
+        text = draft.read_text('utf-8')
+        text = text.replace(tool.adopt.selected_row(text, '一采')[2],
+                            f'| 一采 | [{selected.name}]({tool.adopt.link(draft, selected)}) | R002 | [审核](#审阅-silent) | [依据](#审阅-silent) |')
+        self.put(draft, text + f'\n### 审阅-silent\n- 决定：批准采用\n- 对应具体输出：{selected.name}\n')
+        return {'identity': identity, 'mapping': str(mapping), 'receipt': str(mapping),
+                'generation_source': original}
+
+    def test_silent_derivative_archives_original_execution_without_fake_task(self):
+        self.plan['items'] = [self.item('P001'), self.silent_item('P002')]
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed')
+        source = next(s for s in result['sources'] if s['identity'].endswith('P002-R002-一采'))
+        self.assertIsNone(source['prompt_id'])
+        self.assertIsNone(source['api'])
+        self.assertEqual(source['content_identity'], 'EP001-C001-P002-R001-一采')
+        self.assertEqual(source['generation_source'], self.plan['items'][1]['generation_source'])
+        self.assertEqual(source['local_edit']['parameters'], ['-c:v', 'copy', '-an'])
+        resumed = video_approve.adopted_source(self.root, source['identity'], '一采')
+        self.assertEqual(resumed['generation_source'], source['generation_source'])
+        for path, before in self.originals.items():
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_silent_derivative_rejects_source_and_video_changes(self):
+        self.plan['items'] = [self.item('P001'), self.silent_item('P002')]
+        path = Path(self.plan['items'][1]['mapping'])
+        mapped = tool.adopt.load(path)
+        mapped['local_edit']['source'] = 'EP001-C001-P001-R001-一采'
+        self.put(path, mapped)
+        with self.assertRaisesRegex(ValueError, '原生成来源不一致'):
+            self.run_plan()
+        mapped['local_edit']['source'] = 'EP001-C001-P002-R001-一采'
+        mapped['local_edit']['parameters'] = ['-c:v', 'libx264', '-an']
+        self.put(path, mapped)
+        with self.assertRaisesRegex(ValueError, '保留原视频流'):
+            self.run_plan()
+        self.assertEqual(NativeClient.calls, [])
+
+    def test_unstarted_indexed_segments_are_missing_not_file_errors(self):
+        self.plan['items'] = [self.item('P001'), self.item('P002')]
+        index = self.ep / '03-分镜脚本/EP001-分镜索引.md'
+        index.write_text(index.read_text('utf-8') + '| EP001-C002 | 分镜 | EP001-C002-P001 | 其他 |\n', encoding='utf-8')
+        self.assertIsNone(tool.selected(self.root, 'EP001-C002-P001', '一采'))
+        self.assertIn('EP001-C002-P001 一采未采用', tool.episode_missing(self.root, 'EP001'))
+        self.assertEqual(self.run_plan()['state'], 'completed')
+
     def test_stale_editor_restored_from_verified_execution_without_rewriting_source(self):
         item = self.item('P001')
         path = Path(item['api'])

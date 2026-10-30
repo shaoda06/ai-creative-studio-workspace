@@ -68,6 +68,8 @@ def adopted_source(root, identity, stage):
             for source in record['sources']:
                 if source['identity'] == identity:
                     item = {key: source[key] for key in ('identity', 'mapping', 'api', 'canvas', 'receipt')}
+                    if source.get('generation_source'):
+                        item['generation_source'] = source['generation_source']
                     if item not in candidates:
                         candidates.append(item)
     if candidates:
