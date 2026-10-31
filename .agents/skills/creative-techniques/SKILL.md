@@ -40,7 +40,7 @@ description: 学习用户指定的图文和视频创作技巧，查重并维护�
 | 通用特效与材质 | 先检查[介质与分层](../sd-combat-engine/references/vfx-rendering-mandate.md)及相关题材资料的适用范围；已有归属原位更新，不把打戏专用要求扩大到全部视觉效果。确无合适归属且有实质内容时，才在本技能新增参考并同步入口 |
 | 修仙法术、阵法、剑气与灵力 | [玄幻专项](../sd-xuanhuan-engine/SKILL.md)的[法术表现方法](../sd-xuanhuan-engine/references/xuanhuan-elements-vfx.md)及[造型参考库](../sd-xuanhuan-engine/references/仙侠法术与特效造型参考库.md)；保留专业设计与调用流程 |
 | 武侠、通用动作与写实格斗 | [通用打戏](../sd-combat-engine/SKILL.md)或[写实专项](../sd-real-engine/SKILL.md)按问题选择方法；攻防因果、动力链和节奏不迁入本技能 |
-| 国风、古风等题材／风格分享 | 按实际知识点分到[画风定位](../short-drama-develop/references/项目定位与画风规范.md)、[资产设计](../nora-drama-assets/SKILL.md)、镜头或动作资料；项目已采用风格留在项目，不仅按标签另建混合库 |
+| 国风、古风等题材／风格分享 | 按实际知识点分到[画风定位](../nora-drama-positioning/references/项目定位与画风规范.md)、[资产设计](../nora-drama-assets/SKILL.md)、镜头或动作资料；项目已采用风格留在项目，不仅按标签另建混合库 |
 | 模型格式、输入标签、工作流及参数 | 沿[视频提示词](../nora-video-prompts/SKILL.md)、图片对应能力及[生成执行](../nora-generation/SKILL.md)的现行规范；外部技巧不能直接覆盖接口或执行规则 |
 
 同一帖子可以涉及多个主题，读取结果复用，逐项归位。新增内容优先补现有条目或章节；已有完整专业流程的资料继续原位维护。只有职责和工作流程确实独立时才考虑另设技能，不按每个知识主题创建技能或空参考文件。

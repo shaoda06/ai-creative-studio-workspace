@@ -1,4 +1,4 @@
 interface:
-  display_name: "Nora故事开发"
-  short_description: "按Nora模板开发定位、世界观、故事大纲与分集大纲"
-  default_prompt: "使用 $short-drama-develop 按Nora流程推进本次获授权的定位、故事或分集规划；方向不清时先给少量可选择方案。"
+  display_name: "Nora故事开发兼容入口"
+  short_description: "旧故事开发任务按实际产出转到定位、主旨世界观、大纲或分集阶段"
+  default_prompt: "使用 $short-drama-develop 定位当前任务，并进入负责的现行二级阶段。"

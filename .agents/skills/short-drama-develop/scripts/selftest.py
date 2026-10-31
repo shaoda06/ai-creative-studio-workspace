@@ -1,47 +1,18 @@
-#!/usr/bin/env python3
-"""Offline self-test for multi-episode source intake."""
-
-from __future__ import annotations
-
-import tempfile
-import sys
+"""Compatibility entry; implementation belongs to its business stage."""
+import importlib.util
 from pathlib import Path
+import sys
 
-from episode_intake import build_index, slice_episode, verify_index, write_index
-
-MINIMUM_PYTHON = (3, 9)
-if sys.version_info < MINIMUM_PYTHON:
-    raise SystemExit("selftest.py requires Python 3.9 or newer")
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise AssertionError(message)
-
-
-def main() -> int:
-    with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory)
-        source = root / "episodes.md"
-        index = root / "index.json"
-        source.write_text("第1集 开端\n行动一。\n第2集 反转\n行动二。\n", encoding="utf-8")
-
-        document = build_index(source, source_ref="输入/episodes.md")
-        require(document["episode_count"] == 2, "episode count")
-        require(document["problems"] == [], "valid episode index")
-        write_index(index, document)
-        require(verify_index(index, source)["verified"] is True, "fresh index")
-        require(
-            slice_episode(index, source, "EP002").startswith("第2集".encode()),
-            "verified episode slice",
-        )
-
-        source.write_text(source.read_text(encoding="utf-8") + "变更。\n", encoding="utf-8")
-        require(verify_index(index, source)["verified"] is False, "source drift")
-
-    print("5 self-tests passed")
-    return 0
-
-
+_PATH = Path(__file__).resolve().parents[2] / 'nora-drama-episodes/scripts/selftest.py'
+_spec = importlib.util.spec_from_file_location('nora_episodes_selftest', _PATH)
+_module = sys.modules.get('nora_episodes_selftest')
+if _module is None:
+    sys.path.insert(0, str(_PATH.parent))
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = _module
+    _spec.loader.exec_module(_module)
+globals().update({name: value for name, value in vars(_module).items() if not name.startswith("_")})
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_module.main())
+else:
+    sys.modules[__name__] = _module

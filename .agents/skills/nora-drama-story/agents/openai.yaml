@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nora故事大纲"
+  short_description: "依据主旨世界观展开全剧事件、人物关系与结局，按六章模板交付"
+  default_prompt: "使用 $nora-drama-story 按当前批准范围编写或修订全剧故事大纲。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nora分集规划"
+  short_description: "连续短剧分集索引与七章大纲、整稿定位及授权拆集顺延接续"
+  default_prompt: "使用 $nora-drama-episodes 完成本次分集规划或整稿接续，保留来源与批准边界。"

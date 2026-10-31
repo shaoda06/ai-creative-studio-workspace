@@ -140,7 +140,9 @@ class ServiceTests(HttpTestCase):
         ):
             with self.subTest(template=template_name):
                 script.write_text('# EP002-本集剧本\n', encoding='utf-8')
-                body = (templates / template_name).read_text(encoding='utf-8').split('```markdown\n', 1)[1].split('```', 1)[0]
+                template = (Path(__file__).resolve().parents[2] / '.agents/skills/nora-drama-episodes/templates' / template_name
+                            if template_name == '分集大纲模板.md' else templates / template_name)
+                body = template.read_text(encoding='utf-8').split('```markdown\n', 1)[1].split('```', 1)[0]
                 target.write_text(body.replace('EP编号', 'EP002').replace('- 本集题名：', '- 本集题名：这次不是样品')
                                   .replace('- 集名状态：', '- 集名状态：临时集名'), encoding='utf-8')
                 (outlines / '分集索引.md').write_text(
