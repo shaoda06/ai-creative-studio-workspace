@@ -1,6 +1,6 @@
 ---
 name: short-drama-write
-description: 为 Nora 新写、修订或规范化本集剧本，处理对白和表演、豆包台词润色交接及回稿；打戏按需调用专项，不承担分镜或生成执行。
+description: 连续短剧D07单集剧本阶段，为 Nora 新写、修订或规范化本集剧本，处理对白和表演、豆包台词润色交接及回稿；打戏按需调用专项，不承担分镜或生成执行。
 license: MIT
 ---
 
@@ -12,10 +12,10 @@ license: MIT
 
 | 任务 | 必要规则 |
 | --- | --- |
-| 新写本集或实质性场景修订 | [本集制作与接续](references/本集制作与剧本接续规范.md)、[单集剧本](references/单集剧本制作规范.md)和[本集故事剧本模板](../nora-ai-short-drama/references/模板/本集故事剧本模板.md) |
+| 新写本集或实质性场景修订 | [本集制作与接续](references/本集制作与剧本接续规范.md)、[单集剧本](references/单集剧本制作规范.md)和[本集故事剧本模板](templates/本集故事剧本模板.md) |
 | 局部对白、人物口吻或表演修订 | [对白与表演](references/对白与表演修订规范.md)中对应章节、完整交流及必要人物与处境依据 |
 | 豆包润色交接或回稿处理 | [交接与回稿](references/台词润色交接与回稿规范.md)及其模板；新写默认交接，已有批准稿不自动重做 |
-| 原稿规范化或续写 | [原稿边界](../nora-ai-short-drama/references/共用规则/创作定位与原稿规范.md)，按Nora模板保留实际采用原文与确认范围 |
+| 原稿规范化或续写 | [原稿边界](../nora-serial-drama/references/原稿接续规范.md)，按Nora模板保留实际采用原文与确认范围 |
 | 打戏构思与必要动作 | [通用打戏](../sd-combat-engine/SKILL.md)、[玄幻打戏](../sd-xuanhuan-engine/SKILL.md)或[写实格斗](../sd-real-engine/SKILL.md)，按戏型选构思和动作章节 |
 
 ## 编写与方法
@@ -33,3 +33,9 @@ license: MIT
 | 长任务接续 | [场景交接方法](references/scene-handoff-capsule.md)，复用既有工作稿或上下文，不另建台账 |
 
 剧本语法以Nora模板为准，时长按[对白与动作核对](../nora-ai-short-drama/references/共用规则/层级编号与时长规范.md#对白与动作时长核对)判断；方法中的通用字数估时不覆盖它。交付按[文本自检](../short-drama-review/references/文本自检与订正规范.md)合并处理。批准后的具体版本交[分镜设计](../short-drama-storyboard/SKILL.md)，不因润色完成推定已获批准。
+
+## 阶段分工与脚本边界
+
+输入是本集大纲、相关原稿、必要人物/空间状态和已确认调整；产出为制作前检查及整集故事剧本，豆包交接与回稿仍属于本阶段。Agent编写剧情、对白、必要表演并核对语义；原生索引、时长和声音清单脚本只做明确格式上的机械处理，使用条件见[脚本适配](references/脚本使用规范.md)，不能直接把原生JSONL当Nora正式产出。
+
+图片需求交D06，声音取样交D04引用共用工具，资料展示调用[浏览服务](../nora-workspace-browser/SKILL.md)。完成按当前规则记录真实批准版本后交D08；检查通过、豆包保存或文稿存在均不代替批准，不启动生成。

@@ -15,18 +15,18 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 | D02 主旨、简介和世界观 | [主旨简介与世界观](../nora-drama-worldbuilding/SKILL.md) |
 | D03 全剧故事大纲 | [故事大纲](../nora-drama-story/SKILL.md) |
 | D05 分集索引、大纲及拆集 | [分集规划](../nora-drama-episodes/SKILL.md) |
-| 人物、场景、道具资料卡和参考音视频 | [资产资料](../nora-drama-assets/SKILL.md) |
+| D04 人物、场景、道具资料卡和参考音视频 | [资产资料](../nora-drama-assets/SKILL.md) |
 | 图片资产、图片提示词、候选及批准后保存 | [图片业务阶段](../nora-drama-images/SKILL.md) |
-| 单集剧本、对白、表演 | [剧本](../short-drama-write/SKILL.md) |
-| 镜头、P段、首帧需求和导演表内容 | [分镜](../short-drama-storyboard/SKILL.md) |
+| D07 单集剧本、对白、表演 | [剧本](../short-drama-write/SKILL.md) |
+| D08 镜头、P段、首帧需求和导演表内容 | [分镜](../short-drama-storyboard/SKILL.md) |
 | 视频提示词、视频制作及返修 | [提示词](../nora-video-prompts/SKILL.md)、[视频执行](../nora-generation/SKILL.md) |
-| 专项审查 | [审查](../short-drama-review/SKILL.md) |
+| D12 专项审查 | [审查](../short-drama-review/SKILL.md) |
 | 本集交接、完成与复盘 | [本集收尾](../nora-ai-short-drama/references/流程规范/逐集目录与资产管理规范.md#5-分段交付与本集完成) |
 | 运营及发布 | [运营入口](../nora-social-operations/SKILL.md) |
 
 上游、产出和接续关系见[流程表](references/阶段流程与接续规范.md#整体流程)。阶段完成按其实际规则判断，不将阶段路由增加为审批。正式目录、编号和版本按[业务文件规范](../nora-ai-short-drama/references/共用规则/文件版本与工作稿规范.md)执行。
 
-图片阶段调用Imagegen、Qwen、图片处理和任务后台；业务输入资格、类型和规格留在图片阶段。工具结果完成后交回业务登记，技术成功不替代用户采用。需要跨阶段返修时按[返修归属](../nora-ai-short-drama/references/共用规则/制作返修与完整重做规范.md)回到负责阶段。
+图片阶段调用Imagegen、Qwen、图片处理和任务后台；业务输入资格、类型和规格留在图片阶段。工具结果完成后交回业务登记，技术成功不替代用户采用。需要跨阶段返修时按[返修归属](references/制作返修接续规范.md)回到负责阶段。
 
 ## 业务内共用约定
 
@@ -36,3 +36,7 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 - [开发方法使用](references/开发方法使用规范.md)：方法资源的适配边界；阶段SKILL维护具体读取时机。
 
 目录、编号、文件版本和项目进度仍引用各自有效业务规范。一级只组织流程、职责和接续；阶段实际做法与脚本由二级维护，共用工具的全局登记由nora-video负责。
+
+版本组合与跨阶段返修分别见[场次版本组合](references/场次版本组合规范.md)及[制作返修接续](references/制作返修接续规范.md)；完整分镜重做由D08规范维护，不在一级复制步骤。
+
+剧情、台词、镜头、素材与提示词的内容边界按[创作职责](references/创作职责与接续规范.md)分流；实际制作方法仍由二级阶段维护。

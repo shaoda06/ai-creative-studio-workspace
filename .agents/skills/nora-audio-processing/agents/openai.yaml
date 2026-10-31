@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nora本地音频处理"
+  short_description: "按明确文件与连续区间本地裁剪音频，返回格式时长和解码技术结果"
+  default_prompt: "使用 $nora-audio-processing 按明确源文件、起点、长度及输出路径处理音频并核对技术结果。"

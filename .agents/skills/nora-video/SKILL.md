@@ -21,6 +21,7 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | --- | --- |
 | 内置图片生成与编辑 | [Imagegen](../nora-imagegen/SKILL.md) |
 | 远端Qwen图片提示词和装配 | [Qwen图片工具](../nora-qwen-image/SKILL.md) |
+| 明确音频区间的本地裁剪与技术核对 | [本地音频工具](../nora-audio-processing/SKILL.md) |
 | 图片尺寸处理、RTX及技术文件核对 | [图片处理工具](../nora-image-processing/SKILL.md) |
 | 提交、查询、取回和服务开发维护 | [浏览服务与任务后台](../nora-workspace-browser/SKILL.md) |
 | ComfyUI通信、配置及诊断依赖 | [ComfyUI工具](../nora-comfyui/SKILL.md) |
