@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import './EpisodeProduction.css';
 import type { FileItem, SegmentVideo as VideoItem } from '../api';
 import { Document, FileTree, Groups, Preview, PreviewContext, Result, Rich } from '../components';
 import { SearchField } from './SearchField';
@@ -49,6 +51,7 @@ const retainSample = () => () => {};
 
 export function ShowcaseExamples({ category }: { category: string }) {
   const [text, setText] = useState('');
+  const [breadcrumbActions, setBreadcrumbActions] = useState<HTMLDivElement | null>(null);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState('one');
   const [preview, setPreview] = useState<FileItem | null>(null);
@@ -69,10 +72,16 @@ export function ShowcaseExamples({ category }: { category: string }) {
   return <PreviewContext.Provider value={setPreview}>
     {category === 'controls' && <ComponentExample title="下划线链接按钮" rule="LinkButton统一13px字号、下划线、无边框与无悬停底色，保留按钮键盘及禁用行为；此处只更新示例文字。" usage="任务组详情、本镜通过、插入时间及清空"><LinkButton onClick={() => setText('链接示例已点击')}>链接操作示例</LinkButton><LinkButton disabled>禁用链接示例</LinkButton><p role="status">{text}</p></ComponentExample>}
     {category === 'layout' && <>
-      <ComponentExample fullWidth title="标题与路径导航" rule="页面标题可带说明和操作区；纵向内容使用stacked规格统一间距；点击路径返回上一级示例。" usage="项目、资产、风格库、开发记录">
+      <ComponentExample fullWidth title="标题与路径导航" rule="页面标题可带说明和操作区；纵向内容使用stacked规格统一间距；点击路径返回上一级示例；路径右侧操作区在窄屏换行，示例下载仅保存固定文本。" usage="项目、资产、风格库、开发记录">
         <PageHeader eyebrow="示例栏目" title="示例页面" description="这里展示公共页面标题。" actions={<button onClick={() => setText('已点击标题操作')}>示例操作</button>} />
         <PageHeader stacked title="带附属内容的示例标题"><span>示例阶段信息</span><span>示例路径信息</span></PageHeader>
         <Breadcrumbs items={[{ label: '示例列表', href: '#/history', onClick: () => setText('已返回示例列表') }, { label: <>EP001 · 组件演示集 <EpisodeTitleStatus status="最终定名" /></> }]} />
+        <Breadcrumbs actionsRef={setBreadcrumbActions} items={[{ label: '剧集制作', href: '#/history', onClick: () => setText('已返回示例列表') }, { label: 'EP001 · 下载操作示例' }]} />
+        {breadcrumbActions && createPortal(<div className="episode-heading-actions">
+          <span className="muted">本集时长：6秒</span>
+          <DownloadButton url={null} label="剪映草稿包" title="固定文本下载示例，不是剪映草稿" file={{ text: '仅供布局与下载交互展示', name: 'draft-example.txt', type: 'text/plain' }} />
+          <DownloadButton url={null} label="本集打包下载" title="固定文本下载示例，不读取项目" file={{ text: '仅供布局与下载交互展示', name: 'episode-example.txt', type: 'text/plain' }} />
+        </div>, breadcrumbActions)}
         <p role="status">{text || '试试右侧操作或路径链接。'}</p>
       </ComponentExample>
       <ComponentExample title="入口卡片与搜索" rule="搜索框支持长文字、清空与禁用，窄容器不越界。输入文字筛选示例；点击卡片按正常链接跳转至网站入口页，会离开展示页。" usage="首页、资料目录、资产与风格库">

@@ -6,7 +6,23 @@ import { tmpdir } from 'node:os';
 export async function checkSharedDownloads(page, width) {
   await page.mouse.move(0, 0); // Compare normal styles before the explicit hover checks below.
   const fixture = page.getByTestId('downloads');
-  const styles = await fixture.locator('.download-control').evaluateAll(elements => elements.slice(0, 4).map(el => {
+  const breadcrumb = fixture.getByTestId('episode-breadcrumb');
+  const boundary = await breadcrumb.evaluate(el => {
+    const parent = el.getBoundingClientRect();
+    return { left: parent.left, right: parent.right, width: el.clientWidth, scroll: el.scrollWidth,
+      items: [...el.querySelectorAll('.breadcrumb-actions, .episode-heading-actions, button')].map(child => {
+        const r = child.getBoundingClientRect(); return { left: r.left, right: r.right };
+      }) };
+  });
+  assert.ok(boundary.scroll <= boundary.width + 1 && boundary.items.every(r => r.left >= boundary.left - 1 && r.right <= boundary.right + 1),
+    `${width}px / 单集路径操作区越界: ${JSON.stringify(boundary)}`);
+  assert.equal(await breadcrumb.getByRole('button', { name: '剪映布局检查', exact: true }).isDisabled(), true);
+  const episodeSaved = page.waitForEvent('download');
+  await breadcrumb.getByRole('button', { name: '本集打包下载', exact: true }).click();
+  const episodeFile = await episodeSaved;
+  assert.equal(episodeFile.suggestedFilename(), 'episode-layout.txt');
+  assert.equal(await readFile(await episodeFile.path(), 'utf8'), '双按钮布局检查');
+  const styles = await fixture.locator('.download-control').evaluateAll(elements => elements.slice(2, 6).map(el => {
     const style = getComputedStyle(el);
     return Object.fromEntries(['fontSize', 'fontWeight', 'lineHeight', 'padding', 'borderRadius', 'color', 'backgroundColor', 'borderColor'].map(key => [key, style[key]]));
   }));

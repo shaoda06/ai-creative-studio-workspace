@@ -82,10 +82,13 @@ try {
     await checkSharedInputs(page, width, selfTest);
     const showcase = page.getByTestId('showcase'), business = page.getByTestId('business');
     await showcase.getByRole('button', { name: '布局与搜索', exact: true }).click();
-    const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true });
+    const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
     assert.match(await namingPath.innerText(), /EP001 · 组件演示集/);
     assert.doesNotMatch(await namingPath.innerText(), /（最终定名）/);
     await contained(namingPath.locator('.episode-title-status.status-green'), `${width}px / 标题集名状态`);
+    const downloadPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '下载操作示例' });
+    await contained(downloadPath, `${width}px / 展示页路径与操作插槽`);
+    await contained(downloadPath.locator('.breadcrumb-actions'), `${width}px / 展示页双下载按钮`);
     await showcase.getByRole('button', { name: '下拉菜单', exact: true }).click();
     const reference = showcase.getByRole('combobox', { name: '高亮选项示例', exact: true });
     const expected = await styleOf(reference);
