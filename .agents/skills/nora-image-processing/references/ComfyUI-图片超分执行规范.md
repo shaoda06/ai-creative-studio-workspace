@@ -4,7 +4,7 @@
 
 ## 配套工作流与参数
 
-本地[画布基准](../../nora-image-processing/references/workflows/RTX-图片2倍超分.workflow.json)和[API基准](../../nora-image-processing/references/workflows/RTX-图片2倍超分.api.json)配套维护。每次复制API任务副本，替换输入路径及按[远端输出目录](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写输出前缀，不改写基准或远端保存的工作流。
+本地[画布基准](../../nora-image-processing/references/workflows/RTX-图片2倍超分.workflow.json)和[API基准](../../nora-image-processing/references/workflows/RTX-图片2倍超分.api.json)配套维护。每次复制API任务副本，替换输入路径及按[远端输出目录](../../nora-serial-drama/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写输出前缀，不改写基准或远端保存的工作流。
 
 | 节点 | 类名与输入 | 固定要求 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@
 
 图片超分和视频后处理使用 `RTXVideoSuperResolution` 时，任务API明确填写 `strength=1.0`、`image_encoding="8-bit RGB"`；画布的命名控件与位置控件同步保存这两个值。前者为处理强度，后者为SDK像素编码；它们不能因远端提供默认值而从API省略。尺寸、缩放方式、质量和帧率仍按各自图片／视频执行规范填写。
 
-现行图片与视频工作流的配对基准均保存这些字段。固定 `--prepare-only` 入口和离线API检查工具检查已知必填输入及取值；缺字段时在本地停止，不上传、不生成，也不由工具自动补值。准备报告复用与节点接口差异的处理见[服务配置与任务提交规范](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)。已生成任务的原请求、参数和批准记录保留，不因维护基准而改写。
+现行图片与视频工作流的配对基准均保存这些字段。固定 `--prepare-only` 入口和离线API检查工具检查已知必填输入及取值；缺字段时在本地停止，不上传、不生成，也不由工具自动补值。准备报告复用与节点接口差异的处理见[服务配置与任务提交规范](../../nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)。已生成任务的原请求、参数和批准记录保留，不因维护基准而改写。
 
 
 运行、尺寸分流与输入输出见[处理工具规范](图片处理工具规范.md)。业务记录和正式采用交回调用方。

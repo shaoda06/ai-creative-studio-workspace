@@ -1064,8 +1064,8 @@ class ProjectParserTests(unittest.TestCase):
                          ["成片索引.md", "EP001-C001-成片说明.md", "选定", "候选", "审阅记录", "执行记录", "其他附件"])
 
     def test_progress_uses_current_template_project_name_without_new_timestamp(self):
-        template = (Path(__file__).resolve().parents[2] / ".agents/skills/nora-ai-short-drama"
-                    / "references/模板/项目进度模板.md").read_text(encoding="utf-8")
+        template = (Path(__file__).resolve().parents[2] / ".agents/skills/nora-drama-positioning"
+                    / "templates/项目进度模板.md").read_text(encoding="utf-8")
         self.assertIn("- 项目名称或代号：", template)
         self.put("项目进度.md", template.replace("- 项目名称或代号：待确认", "- 项目名称或代号：模板项目"))
         data = portal.build_data(self.root)

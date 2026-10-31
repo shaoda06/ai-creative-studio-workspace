@@ -12,7 +12,8 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | 任务 | 入口 |
 | --- | --- |
 | AI连续短剧及其单集制作 | [连续短剧业务](../nora-serial-drama/SKILL.md) |
-| 商业视频订单 | 按项目AGENTS和README指定的商业业务入口，不套短剧目录；业务技能由实际工作区提供 |
+| 商业视频订单 | `ad-promo-video`一级业务（由商业工作区提供），按项目AGENTS和README定位实际入口，不套短剧目录 |
+| 社交媒体运营及发布 | [运营一级业务](../nora-social-operations/SKILL.md) |
 | 独立剧情短片或其他视频 | 先确定实际业务及交付范围，已有项目规则优先；不因调用图片工具初始化短剧 |
 
 ## 共用工具登记
@@ -25,9 +26,16 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | 图片尺寸处理、RTX及技术文件核对 | [图片处理工具](../nora-image-processing/SKILL.md) |
 | 提交、查询、取回和服务开发维护 | [浏览服务与任务后台](../nora-workspace-browser/SKILL.md) |
 | ComfyUI通信、配置及诊断依赖 | [ComfyUI工具](../nora-comfyui/SKILL.md) |
-| H3视频任务 | 使用现行[视频执行入口](../nora-generation/SKILL.md)及[提示词入口](../nora-video-prompts/SKILL.md) |
+| H3模型提示词、时间线、缓存与导演包 | [H3工具](../nora-h3/SKILL.md) |
+| 视频RIFE/RTX装配及客观媒体信息 | [视频处理](../nora-video-processing/SKILL.md) |
+| 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../nora-jianying/SKILL.md) |
+| 浏览器任务页、标签组和窗口收尾 | [浏览器操作](../nora-browser-operations/SKILL.md) |
 | 视频读取、提示词库和风格库 | [视频读取](../video-study/SKILL.md)、[提示词管理](../nora-prompt-library/SKILL.md)、[风格库](../krea2-style-library/SKILL.md) |
 
 主入口只维护职责和路由。图种、内容、布局、规格、来源资格、采用及业务完成条件由业务阶段维护；工具文档维护模型和接口要求。Agent负责理解、创作与语义核对，脚本负责确定性装配、文件处理和执行。
 
-维护时使用skill-creator；按所改业务或工具的维护入口执行。跨体系结构及唯一真源要求见[结构维护](../nora-ai-short-drama/维护规范.md#规则真源与引用)，不因本入口改变历史任务或实际授权。
+## 共用方法与资料
+
+[创作技法](../creative-techniques/SKILL.md)、[通用打戏](../sd-combat-engine/SKILL.md)、[玄幻动作](../sd-xuanhuan-engine/SKILL.md)、[写实格斗](../sd-real-engine/SKILL.md)按任务实际需要引用。它们提供方法，不管理制作阶段或批准；旧表情、镜头入口只跳转同一来源。
+
+维护时使用skill-creator；按所改业务或工具的维护入口执行。跨体系结构及唯一真源要求见[结构维护](维护规范.md#规则真源与引用)，不因本入口改变历史任务或实际授权。

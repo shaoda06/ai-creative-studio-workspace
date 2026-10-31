@@ -365,9 +365,11 @@ class LocalQueue:
                             [data.record_dir, *(item['file'] for item in data.uploads)])
             self.save(key, phase='upload_binding')
             await asyncio.to_thread(save_uploaded_workflow, data.project, Path(data.record_dir), data.workflow, workflow,
-                                    uploaded_materials, binding_results, path_scope=path_scope)
+                                    uploaded_materials, binding_results, path_scope=path_scope,
+                                    business_mapping=not (data.video_plan or {}).get("adapter") == "technical")
             self.record(key, 'upload_binding', 'success', _changes={'uploads_bound': True})
-        if data.task_type.startswith('video-'):
+        from backend.services.video_tasks import business as business_video
+        if business_video(data):
             self.save(key, phase='generation_context')
             await asyncio.to_thread(self.generation_context.prepare_generation_context,
                                     data.project, Path(data.record_dir), workflow, data.task_type, uploaded_materials,
@@ -377,15 +379,9 @@ class LocalQueue:
         record = Path(data.record_dir)
         files.update(record.glob('*.api.json'))
         files.update(record.glob('*.workflow.json'))
-        mapping_file = record / '输入映射.json'
-        if mapping_file.exists():
-            files.add(mapping_file)
-            mapping = json.loads(mapping_file.read_text('utf-8-sig'))
-            for context in mapping.get('generation_contexts', []):
-                files.update(Path(data.project) / name for name in context.get('prompts', {}).values())
-                if context.get('storyboard'):
-                    files.add(Path(data.project) / context['storyboard']['file'])
-                files.update(Path(data.project) / ref['file'] for refs in context.get('references', {}).values() for ref in refs)
+        if business_video(data):
+            from drama_uploaded_sources import frozen_sources
+            files.update(frozen_sources(data.project, record))
         final_stamps = {str(path): (stamp.st_size, stamp.st_mtime_ns) for path in files for stamp in [path.stat()]}
         for source, stamp in source_stamps.items():
             if final_stamps[str(source)] != stamp:

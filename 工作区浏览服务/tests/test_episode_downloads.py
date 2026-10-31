@@ -371,7 +371,7 @@ class EpisodeDownloadTests(HttpTestCase):
         self.video('后处理', 'C001', 'P001')
         url = self.url + '/后处理/videos?scene=C001'
         self.assertEqual(self.client.get(url + '&format=unknown').status_code, 422)
-        with patch.object(episode_downloads, 'encode_jypack', side_effect=OSError('write failed')):
+        with patch.object(episode_downloads.jianying_export, 'encode_jypack', side_effect=OSError('write failed')):
             with self.assertRaisesRegex(OSError, 'write failed'):
                 self.client.get(url + '&format=jypack')
         self.assertEqual(list((self.root / 'downloads').iterdir()), [])

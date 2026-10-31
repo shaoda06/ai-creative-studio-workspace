@@ -25,3 +25,19 @@ scripts/comfyui_config.py读取实际工作区comfyui-config.json，按既有格
 ## 状态和恢复
 
 查询与报告由[后台客户端](../../nora-workspace-browser/SKILL.md)完成。超时先查原任务；已取回成果的登记失败只修复登记；取回失败只请求原任务取回重试。真实错误保留，不自动换节点、重提或改配置。业务采用和网页同步按对应接入分别处理。
+
+## 无短剧资料的视频技术任务
+
+明确API入口在上述逐项参数基础上提供`--task-type video-first-pass`、`video-second-pass`或`video-postprocess`及`--video-plan`，其JSON为：
+
+~~~json
+{"adapter":"technical","metadata":"ffprobe"}
+~~~
+
+原生H3分段输出使用`--output-plan`空数组及`--segment-plan`，逐一填写实际运行组序、导演台/报告节点、远端output根和本机成果位置。其他视频使用明确`outputs`映射。任务组清单也支持`video_plan`同一适配，提供`canvas`、`output_nodes`、明确`outputs`或`segment_plan`、`record_dir`和本次授权；不填短剧mapping、人物卡或EP。
+
+工具只装配实际模式与参考槽位，后台保存取回凭据和ffprobe报告，不创建短剧候选审阅、修改轮次或采用。未知adapter报错；省略adapter的现行/历史短剧请求继续遵循其原业务检查。技术任务不得用来冒充短剧已完成或已采用。
+
+## 工作流资源登记与下载
+
+工作流仍保持唯一物理位置，scripts/workflow_paths.py同时登记逻辑分类与工具实际目录。浏览服务使用原分类URL列出并下载明确工作流/API文件，不假设资源都在旧主技能根内；只允许登记目录中的直接文件，并保留所属目录边界和越界拒绝。目录归属变化不修改模型参数或项目任务副本。

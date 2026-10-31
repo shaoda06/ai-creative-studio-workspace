@@ -46,8 +46,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         for route in main.app.routes:
             if getattr(route, 'path', '').startswith('/api/internal/comfy/'):
                 self.api.add_api_route(route.path, route.endpoint, methods=route.methods)
-        source = t.SKILL / 'scripts/browser_tasks.py'
-        self.cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        source = t.SKILL.parent / 'nora-workspace-browser/scripts/browser_tasks.py'
+        self.cli = self.root / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
         self.cli.parent.mkdir(parents=True)
         shutil.copyfile(source, self.cli)
 
@@ -267,8 +267,9 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.store.queue_notice('other', 'terminal', 'terminal', '完成')
                 await asyncio.wait_for(asyncio.gather(self.store.notifiers['task'], self.store.notifiers['other']), 5)
             self.assertEqual(len(sent), 1)
-            self.assertIn('本地任务ID：task', sent[0])
-            self.assertIn('本地任务ID：other', sent[0])
+            batch = self.store.rows['task']['state']['notices'][0]['batch_id']
+            self.assertIn(batch, sent[0])
+            self.assertEqual(set(json.loads(self.store.db.execute('SELECT task_ids FROM notification_batches WHERE id=?', (batch,)).fetchone()[0])), {'task', 'other'})
             self.assertIn(30, delays)
             self.assertNotIn(15, delays)
             self.assertEqual(len(reads), 2)  # Reconnect then deliver even while the thread stays busy.

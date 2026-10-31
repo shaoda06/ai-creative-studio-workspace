@@ -1,37 +1,13 @@
-"""Shared locations for bundled workflows; project task copies keep their own paths."""
+"""Compatibility import for the common workflow registry."""
+import importlib.util
 from pathlib import Path
-
-SKILL_ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_GROUPS = (
-    ('Qwen-image-2-1', 'formal'),
-    ('Minimax-H3', 'formal'),
-    ('后处理综合', 'formal'),
-    ('非正式工作流', 'backup'),
-)
-
-
-def workflow_root(skill=SKILL_ROOT):
-    return Path(skill) / 'references/comfyui-workflow'
-
-
-def workflow_directories(root):
-    root = Path(root)
-    if root.resolve() == workflow_root().resolve():
-        skills = SKILL_ROOT.parent
-        return [(skills / 'nora-qwen-image/references/workflows', 'formal'),
-                (root / 'Minimax-H3', 'formal'),
-                (root / '后处理综合', 'formal'),
-                (skills / 'nora-image-processing/references/workflows', 'formal'),
-                (root / '非正式工作流', 'backup')]
-    return [(root / name, group) for name, group in WORKFLOW_GROUPS]
-
-
-def workflow_file(name, kind='workflow', *, root=None):
-    """Locate one formal baseline by name, without coupling callers to its category."""
-    root = workflow_root() if root is None else Path(root)
-    matches = [directory / f'{name}.{kind}.json'
-               for directory, group in workflow_directories(root)
-               if group == 'formal' and (directory / f'{name}.{kind}.json').is_file()]
-    if len(matches) != 1:
-        raise ValueError(f'正式工作流应有唯一文件，实际找到{len(matches)}份：{name}.{kind}.json')
-    return matches[0]
+import sys
+_PATH = Path(__file__).resolve().parents[2] / 'nora-comfyui/scripts/workflow_paths.py'
+_spec = importlib.util.spec_from_file_location('nora_workflow_paths', _PATH)
+_module = sys.modules.get(_spec.name)
+if _module is None:
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = _module
+    _spec.loader.exec_module(_module)
+sys.modules[__name__] = _module
+globals().update({name: value for name, value in vars(_module).items() if not name.startswith('_')})

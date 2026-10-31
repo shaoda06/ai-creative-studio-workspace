@@ -1,0 +1,4 @@
+interface:
+  display_name: "剪映草稿与打包"
+  short_description: "共用剪映草稿与归档工具，按明确视频顺序、包内文件名和时间线选择输出ZIP或原生jypack；不决定业务采用、完集状态或剪辑内容。"
+  default_prompt: "使用$nora-jianying处理当前任务，先确定输入、授权和实际范围。"

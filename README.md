@@ -1,31 +1,31 @@
-# Nora AI短剧工作区
+# Nora AI视频创作与制作工作区
 
-`nora-ai-drama-workspace` 是用于AI连续短剧策划、剧本开发、资料与素材管理、ComfyUI制作及迭代的工作区模板。包含通用工作规则、Nora短剧技能、配套工作流与工具，以及Krea2本地风格库。真实短剧项目由使用者在本地创建，不随模板提供。
+`nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、连续短剧与运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。真实短剧项目由使用者在本地创建，不随模板提供。
 
 ## 开始使用
 
-跨业务分流可使用[Nora AI视频创作与制作](.agents/skills/nora-video/SKILL.md)。连续短剧由[一级业务入口](.agents/skills/nora-serial-drama/SKILL.md)接续；定位、主旨世界观、全剧大纲、分集规划分别进入[D01](.agents/skills/nora-drama-positioning/SKILL.md)、[D02](.agents/skills/nora-drama-worldbuilding/SKILL.md)、[D03](.agents/skills/nora-drama-story/SKILL.md)、[D05](.agents/skills/nora-drama-episodes/SKILL.md)；图片由[图片阶段](.agents/skills/nora-drama-images/SKILL.md)组织，并调用共用图片工具。已有短剧入口和H3执行继续兼容使用。
+统一入口为[Nora AI视频创作与制作](.agents/skills/nora-video/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，运营由[运营一级业务](.agents/skills/nora-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。旧路径保留兼容，现行正文与实现只维护一份。商业任务遵循实际商业工作区入口。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
-2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
-3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-ai-short-drama/references/流程规范/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
+2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [Nora统一入口](.agents/skills/nora-video/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
+3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
 4. 新增外部技能默认安装到本工作区 `.agents/skills/{技能名}/`，已有可用安装复用。该工作区是本README所在目录，不是某部短剧的项目目录。当前独立安装的外部技能按 `.gitignore` 排除；新增技能默认可被Git发现，提交前核对来源、许可及是否需要随模板提供。
-5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/nora-generation/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
+5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
 
-不需要ComfyUI即可进行策划、剧本和资料整理。执行生成时，使用者须自行准备能够运行配套工作流的ComfyUI服务；本工作区不附带模型权重、不自动安装服务端节点，也不保证任意后端都兼容。随包节点资源的存放、获授权安装及验证按[节点与安装包](.agents/skills/nora-ai-short-drama/维护规范.md#comfyui节点与安装包)执行；任务核对遵循执行规范。
+不需要ComfyUI即可进行策划、剧本和资料整理。执行生成时，使用者须自行准备能够运行配套工作流的ComfyUI服务；本工作区不附带模型权重、不自动安装服务端节点，也不保证任意后端都兼容。随包节点资源的存放、获授权安装及验证按[节点与安装包](.agents/skills/nora-video/维护规范.md#comfyui节点与安装包)执行；任务核对遵循执行规范。
 
 ## 会话组织
 
-会话职责、编号、标题、并行与逐集接续统一维护于[会话与进度管理规范](.agents/skills/nora-ai-short-drama/references/流程规范/会话与进度管理规范.md)，此处不另列会话清单。
+会话职责、编号、标题、并行与逐集接续统一维护于[会话与进度管理规范](.agents/skills/nora-serial-drama/references/会话与进度管理规范.md)，此处不另列会话清单。
 
 ## 目录
 
 | 位置 | 用途 |
 | --- | --- |
 | `AGENTS.md` | 工作区约定、默认依赖安装位置及本地Git提交规则 |
-| `.agents/skills/nora-ai-short-drama/` | 短剧主控、共用规则、模板、脚本及[配套工作流](.agents/skills/nora-ai-short-drama/references/comfyui-workflow)；视频工作流用途见[H3执行规范](.agents/skills/nora-generation/references/ComfyUI-H3视频执行规范.md#0-制作策略与工作流配置) |
-| 主控同级的7个业务技能 | [开发、写作、资产、分镜、视频提示词、生成执行、审查](.agents/skills/nora-ai-short-drama/SKILL.md#按任务读取)；现行规则归所属技能，四个适配short-drama技能随仓库保存 |
-| `.agents/skills/nora-social-operations/` | Nora模块化运营子技能，管理账号、个人页、封面、发布包、复盘和制作反馈 |
+| `.agents/skills/nora-ai-short-drama/` | 旧路径兼容与只读历史，现行入口为nora-video；[配套工作流](.agents/skills/nora-ai-short-drama/references/comfyui-workflow)；视频工作流用途见[H3执行规范](.agents/skills/nora-drama-production/references/ComfyUI-H3视频执行规范.md#0-制作策略与工作流配置) |
+| 一级业务及其二级阶段 | 连续短剧D01–D12、运营六阶段；阶段内仅规则、模板及脚本，不再嵌套业务子技能 |
+| `.agents/skills/nora-social-operations/` | 运营一级路由及六个二级业务阶段，管理账号、个人页、封面、发布包、复盘和制作反馈 |
 | `sd-combat-engine/`、`sd-xuanhuan-engine/`、`sd-real-engine/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
 | 主技能内 `dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
 | `.agents/skills/krea2-style-library/` | 风格库使用与维护指引 |
@@ -43,11 +43,11 @@
 
 ### 短剧流程技能
 
-流程依赖的使用条件与边界读取[主技能依赖入口](.agents/skills/nora-ai-short-drama/references/流程规范/技能依赖与协作规范.md#适用平台与技能依赖)；准确获取来源、版本与许可读取[依赖获取资料](.agents/skills/nora-ai-short-drama/维护规范.md#6-依赖获取与适配资料)。随包的三个ComfyUI适配版保留各自 `LICENSE`；第三方技能许可不由本仓库MIT许可证重新授权。
+流程依赖的使用条件与边界读取[主技能依赖入口](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)；准确获取来源、版本与许可读取[依赖获取资料](.agents/skills/nora-video/维护规范.md#6-依赖获取与适配资料)。随包的三个ComfyUI适配版保留各自 `LICENSE`；第三方技能许可不由本仓库MIT许可证重新授权。
 
 ### 本工作区技能与风格资源
 
-[Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频与交接等其余范围沿现行入口接续；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
+[Nora统一入口](.agents/skills/nora-video/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频与交接等其余范围沿现行入口接续；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
 
 | 资源 | 来源与作者 |
 | --- | --- |
@@ -62,7 +62,7 @@
 - [Python](https://www.python.org/downloads/)：原固定脚本使用3.9及以上标准库；新浏览服务使用3.10及以上和独立虚拟环境，依赖见服务目录。
 - [FFmpeg](https://ffmpeg.org/download.html)：本地音视频裁剪、解码及合成依赖；安装与调用统一按[FFmpeg初始化与运行](#ffmpeg初始化与运行)。
 - [Node.js](https://nodejs.org/)：浏览服务构建使用22及以上。
-- [ComfyUI](https://github.com/Comfy-Org/ComfyUI)：由使用者独立部署的图片／视频生成后端。本仓库携带工作流及[已登记的节点源码或安装包](.agents/skills/nora-ai-short-drama/维护规范.md#comfyui节点与安装包)，不携带模型权重，不自动部署服务端节点或依赖。服务地址与认证按[工作区共用配置](.agents/skills/nora-generation/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行；节点、模型与兼容性问题按执行规范处理，这里的技能依赖清单不是后端安装清单。
+- [ComfyUI](https://github.com/Comfy-Org/ComfyUI)：由使用者独立部署的图片／视频生成后端。本仓库携带工作流及[已登记的节点源码或安装包](.agents/skills/nora-video/维护规范.md#comfyui节点与安装包)，不携带模型权重，不自动部署服务端节点或依赖。服务地址与认证按[工作区共用配置](.agents/skills/nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行；节点、模型与兼容性问题按执行规范处理，这里的技能依赖清单不是后端安装清单。
 
 ## 环境
 
@@ -102,7 +102,7 @@ Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows�
 
 ## 维护与检查
 
-修改短剧技能前读取其[维护规范](.agents/skills/nora-ai-short-drama/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
+修改短剧技能前读取其[维护规范](.agents/skills/nora-video/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
 
 按影响范围选择已有测试，不因普通文档修改运行全部测试。下列命令均在工作区根目录执行：
 

@@ -16,111 +16,22 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-images/scripts"))
 from drama_image_plans import (SEEDS, SIZES, reference, choose_seed, generation_record,
                                adoption_updates, build_image, image_workflow, remote_prefix)
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-h3/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-drama-production/scripts'))
+from h3_workflow import prepare_technical, widget, disconnect
+from drama_video_plans import build_video as build_drama_video
 
 
 def build_video(root, spec, documents):
-    record = project_file(root, spec['record_dir'])
-    canvas = json.loads(project_file(root, spec['canvas']).read_text('utf-8-sig'))
-    mapping = deepcopy(spec.get('mapping'))
-    if mapping is None:
-        mapping = json.loads(documents.read(record / '输入映射.json'))
-    unbound_mapping = deepcopy(mapping)
-    unbound_mapping.setdefault('uploads', [])
-    source_index = mapping.setdefault('uploads', [])
-    for ref in spec.get('references', []):
-        file = project_file(root, ref['file']).relative_to(root.resolve()).as_posix()
-        matches = [item for item in source_index if item['input_path'] == ref['placeholder']]
-        if any(project_file(root, item['file']) != project_file(root, file) for item in matches):
-            raise ValueError('视频参考占位值对应不同源文件：' + ref['placeholder'])
-        if not matches:
-            source_index.append(dict(input_path=ref['placeholder'], file=file))
-    if spec.get('sync_timing'):
-        from backend.services.video_records import sync_timing
-        sync_timing(canvas, mapping, spec['task_type'])
-    stage = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}[spec['task_type']]
-    episode, scene = mapping['scene'].split('-')
-    native = any(node['type'] == 'MiniMaxH3Director' for node in canvas['nodes'])
-    selected = [mapping['segments'][index] for index in mapping['selected_indices']]
-    for node in canvas['nodes']:
-        if node['type'] not in ('SaveVideo', 'VHS_VideoCombine', 'SaveImage') or node.get('mode', 0) in (2, 4):
-            continue
-        if native:
-            saved_stage = {504: '一采', 506: '二采'}.get(node['id'], stage)
-            folder = '辅助预览'
-            identity = f"{mapping['scene']}-{record.name}-{saved_stage}-辅助预览-节点{node['id']}"
-        else:
-            folder = stage
-            identity = (selected[0]['segment'] + '-' + selected[0]['round'] if len(selected) == 1 else mapping['scene'] + '-' + record.name) + '-' + stage
-        widget(canvas, node, filename_prefix=remote_prefix(root, '视频生成', episode, scene, folder, identity))
-    api = pairs.Canvas(canvas).api(spec['output_nodes'])
-    if spec.get('content_review'):
-        if mapping.get('content_review'):
-            raise ValueError('已有内容核对映射不自动覆盖；新核对请明确使用本次无绑定映射及注释')
-        from h3_prompt_checks import bind_review
-        mapping['content_review'] = bind_review(root, api, spec['content_review'])
-    documents.new_json(record / '任务.workflow.json', canvas)
-    documents.new_json(record / '任务.api.json', api)
-    mapping_file = record / '输入映射.json'
-    existing_mapping = documents.read(mapping_file)
-    existing_unbound = json.loads(existing_mapping) if existing_mapping is not None else None
-    if existing_unbound is not None:
-        existing_unbound.setdefault('uploads', [])
-    if existing_unbound == unbound_mapping:
-        documents.put(mapping_file, json.dumps(mapping, ensure_ascii=False, indent=2))
-    else:
-        documents.new_json(mapping_file, mapping)
-    outputs = spec.get('outputs', [])
-    segment_plan = spec.get('segment_plan')
-    if spec['task_type'] in ('video-first-pass', 'video-second-pass') and segment_plan is None:
-        director = next(key for key, node in api.items() if node['class_type'] == 'MiniMaxH3Director')
-        targets = []
-        stage = {'video-first-pass': '一采', 'video-second-pass': '二采'}[spec['task_type']]
-        for index in mapping['selected_indices']:
-            entry = mapping['segments'][index]
-            identity = f"{entry['segment']}-{entry['round']}-{stage}"
-            targets.append(dict(index=index, path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name=f'最终取回-{index:03d}.json'))
-        segment_plan = dict(director_node=director, report_node=str(spec['report_node']), output_root=spec['output_root'], targets=targets)
-    if spec['task_type'] == 'video-postprocess' and not outputs:
-        savers = [key for key,node in api.items() if node['class_type']=='VHS_VideoCombine' and node['inputs'].get('format')=='video/h264-mp4']
-        if len(mapping['selected_indices']) != 1 or len(savers) != 1:
-            raise ValueError('非标准单段MP4后处理须显式提供outputs，不猜测保存节点')
-        entry = mapping['segments'][mapping['selected_indices'][0]]
-        identity = entry['segment']+'-'+entry['round']+'-后处理'
-        outputs = [dict(node_id=savers[0], output_key='gifs', index=0,
-            path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name='最终取回-000.json')]
-    uploads = list(spec.get('uploads', []))
-    timelines = {key: json.loads(node['inputs']['timeline_data']) for key,node in api.items() if node['class_type']=='MiniMaxH3Director'}
-    for ref in {item['placeholder']: item for item in spec.get('references', [])}.values():
-        file = project_file(root, ref['file'])
-        placeholder, matched = ref['placeholder'], False
-        for key, node in api.items():
-            for name, content in node['inputs'].items():
-                slots = []
-                if content == placeholder:
-                    slots.append(None)
-                elif node['class_type'] == 'MiniMaxH3Director' and name == 'timeline_data':
-                    timeline = timelines[key]
-                    for area, block in [(['global'], timeline['global']), *[(['segments', i], item) for i, item in enumerate(timeline['segments'])]]:
-                        for array, field in [('refs', 'imageFile'), ('refVideos', 'videoFile'), ('refAudios', 'audioFile')]:
-                            for index, item in enumerate(block.get(array, [])):
-                                if item.get(field) == placeholder:
-                                    slots.append(area + [array, index, field])
-                for path in slots:
-                    upload = dict(file=str(file), node=key, input=name, subfolder=record.name,
-                                  **{'response-name': f'上传响应-{len(uploads)+1:03d}.json'})
-                    if path is not None:
-                        upload['json-path'] = path
-                    uploads.append(upload)
-                    matched = True
-        if not matched:
-            raise ValueError('视频参考未对应实际画布槽位：' + placeholder)
-    from backend.services.comfy_tasks import SKILL
-    from backend.services.video_records import prepare_records
-    prepare_records(root, SKILL, spec, api, mapping, record, documents)
-    return dict(project=str(root), task_type=spec['task_type'], title=spec['title'], workflow=api, record_dir=str(record),
-        video_plan={'metadata': 'ffprobe'}, submission_plan=spec.get('submission_plan'),
-        uploads=uploads, outputs=outputs, segment_plan=segment_plan, attempt_name='提交尝试.json',
-        request_name='请求.json', response_name='提交响应.json', history_name='执行结果.json')
+    adapter = spec.get('video_plan', {}).get('adapter', 'serial-drama')
+    if adapter == 'technical':
+        return prepare_technical(root, spec, documents)
+    if adapter != 'serial-drama':
+        raise ValueError('未登记的视频计划适配：' + adapter)
+    return build_drama_video(root, spec, documents)
+
+
+
 
 
 def submission_response(store, journal, *, reused=False):
@@ -298,29 +209,3 @@ async def execute(store, payload):
                              **({'provider': 'local', 'report': result['report']} if result.get('provider') == 'local' else {})))
         write_json(journal_file, journal)
     return submission_response(store, journal)
-
-
-def widget(graph, node, **values):
-    named = node['widgets_values_named']
-    for key, content in values.items():
-        if key not in named:
-            raise ValueError('基准不存在控件：' + key)
-        slot = next((i for i in node.get('inputs', []) if i['name'] == key), None)
-        if slot and slot.get('link') is not None:
-            disconnect(graph, slot)
-        named[key] = content
-    if isinstance(node['widgets_values'], dict):
-        node['widgets_values'].update(values)
-    else:
-        node['widgets_values'] = list(named.values())
-
-
-def disconnect(graph, slot):
-    key = slot['link']
-    if key is None:
-        return
-    link = next(pairs.link_tuple(link) for link in graph['links'] if pairs.link_tuple(link)[0] == key)
-    origin = next(n for n in graph['nodes'] if n['id'] == link[1])
-    origin['outputs'][link[2]]['links'].remove(key)
-    graph['links'] = [item for item in graph['links'] if pairs.link_tuple(item)[0] != key]
-    slot['link'] = None

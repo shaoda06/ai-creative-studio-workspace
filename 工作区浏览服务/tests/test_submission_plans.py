@@ -199,7 +199,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         mapping = json.loads((self.record / '输入映射.json').read_text())
         task = dict(task_type='video-first-pass', title='目录测试', record_dir=self.rel(self.record / '新任务'),
             canvas=self.rel(source), mapping=mapping, output_nodes=['403', '504', '506'], segment_plan={})
-        with patch('backend.services.video_records.prepare_records'):
+        with patch('drama_video_records.prepare_records'):
             result = plans.build_video(self.project, task, plans.Documents(self.project))
         api = result['workflow']
         for key in ('504', '506'):
@@ -216,7 +216,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         task = dict(task_type='video-postprocess', title='后处理', record_dir='执行附件/后处理测试',
             canvas='post.workflow.json', mapping=mapping, output_nodes=['16'])
         documents = plans.Documents(self.project)
-        with patch('backend.services.video_records.prepare_records'):
+        with patch('drama_video_records.prepare_records'):
             result = plans.build_video(self.project, task, documents)
         prefix = '测试项目/视频生成/EP001/C001/后处理/EP001-C001-P002-R003-后处理'
         self.assertEqual(result['workflow']['16']['inputs']['filename_prefix'], prefix)

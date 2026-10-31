@@ -16,7 +16,7 @@ API基准含占位正文及输出前缀，不可直接提交。画布保留原�
 
 ### 共用模型组合
 
-文生图与图生图共用主模型`qwen_image_2.1_int8_convrot.safetensors`、编码器`qwen3vl_8b_bf16.safetensors`、VAE `qwen_image_2.1_vae_bf16.safetensors`。用户未明确调整时保持。普通任务不查询远端节点／模型库存；执行条件由远端实际响应确定，异常按[服务规范](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)处理。
+文生图与图生图共用主模型`qwen_image_2.1_int8_convrot.safetensors`、编码器`qwen3vl_8b_bf16.safetensors`、VAE `qwen_image_2.1_vae_bf16.safetensors`。用户未明确调整时保持。普通任务不查询远端节点／模型库存；执行条件由远端实际响应确定，异常按[服务规范](../../nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#远端能力与错误返回)处理。
 
 ## 2. 提示词与参数映射
 
@@ -27,7 +27,7 @@ API有效链包含10个节点。文本节点672接编码器522；主模型523经
 | 最终正向正文 | `672.inputs.value` | 每任务填`rewritten_prompt`，不把整个JSON送入模型 |
 | 宽、高 | `514.inputs.width`、`height` | 调用方明确宽高；均为32倍数 |
 | 种子 | `515.inputs.seed` | 调用方提供有效非负整数，不使用-1随机标记 |
-| 输出前缀 | `508.inputs.filename_prefix` | 每任务按[远端输出目录](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
+| 输出前缀 | `508.inputs.filename_prefix` | 每任务按[远端输出目录](../../nora-serial-drama/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
 | 反向提示词 | `522.inputs.negative_prompt` | 默认空；本次已明确需要时通过`parameters.negative_prompt`填写并记录 |
 | 图片数量 | `514.inputs.batch_size` | 固定1；多候选使用独立任务，仍按种子规则执行 |
 | 参考预处理 | `522.inputs.resolution` | 保留0；本工作流没有参考图输入 |

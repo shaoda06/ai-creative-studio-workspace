@@ -11,6 +11,8 @@ from urllib.parse import unquote
 
 import sys
 SKILLS = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SKILLS / 'nora-workspace-browser/scripts'))
+from document_fields import fields, link
 sys.path.insert(0, str(SKILLS / "nora-image-processing/scripts"))
 import image_files
 from image_files import inspect_remote
@@ -20,7 +22,7 @@ def png(raw):
     return image_files.png(raw)
 from project_paths import project_file
 import project_progress
-from backend.services.execution_checks import write_json
+from prepared_documents import write_json
 
 
 TEMPLATES = {'人物': '人物参考图工作稿模板.md', '场景': '场景参考图工作稿模板.md',
@@ -29,7 +31,7 @@ TEMPLATES = {'人物': '人物参考图工作稿模板.md', '场景': '场景参
 
 
 def template_path(skill, kind):
-    folder = (SKILLS / 'nora-social-operations/modules/03-封面制作/templates'
+    folder = (SKILLS / 'nora-cover-images/templates'
               if kind == '封面' else Path(__file__).resolve().parents[1] / 'references/模板')
     return folder / TEMPLATES[kind]
 
@@ -142,14 +144,8 @@ def value(text, name):
     return match[1].strip() if match else ''
 
 
-def fields(text, values):
-    for name, content in values.items():
-        text = re.sub(r'^- ' + re.escape(name) + r'：[^\n]*', lambda _: '- ' + name + '：' + content, text, flags=re.M)
-    return text
 
 
-def link(draft, target, title=None):
-    return '[' + (title or target.name) + '](' + os.path.relpath(target, draft.parent).replace(os.sep, '/').replace(' ', '%20') + ')'
 
 
 

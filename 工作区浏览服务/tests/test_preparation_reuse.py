@@ -32,7 +32,7 @@ class BindingReuseTests(unittest.IsolatedAsyncioTestCase):
     def counted_json(self, calls):
         class Reference(dict):
             def __getitem__(self, key):
-                if key == 'imageFile' and sys._getframe(1).f_globals.get('__name__') == checks.__name__:
+                if key == 'imageFile' and sys._getframe(1).f_globals.get('__name__') in (checks.__name__, 'drama_execution_checks'):
                     calls.append(sys._getframe(1).f_code.co_name)
                 return super().__getitem__(key)
         def loads(raw):
@@ -54,7 +54,7 @@ class BindingReuseTests(unittest.IsolatedAsyncioTestCase):
         self.video()
         self.store.resolve_input(self.data)
         calls = []
-        with patch.object(checks, 'json', self.counted_json(calls)):
+        with patch('drama_execution_checks.json', self.counted_json(calls)):
             result = checks.context_checks(self.store, self.data)
         self.assertEqual(calls, ['context_checks'])
         self.assertIn(str(self.project / 'reference.png'), result)

@@ -30,11 +30,11 @@ from backend.services.session_names import read_thread_name
 
 logger = logging.getLogger(__name__)
 SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama'
-sys.path.insert(0, str(SKILL / 'scripts'))
+sys.path.insert(0, str(SKILL.parent / 'nora-comfyui/scripts'))
 import project_paths as paths
 import comfyui_config as config
 client = config.client
-context_spec = importlib.util.spec_from_file_location('nora_generation_context', SKILL / 'scripts/generation_context.py')
+context_spec = importlib.util.spec_from_file_location('nora_generation_context', SKILL.parent / 'nora-drama-production/scripts/generation_context.py')
 generation_context = importlib.util.module_from_spec(context_spec)
 context_spec.loader.exec_module(generation_context)
 

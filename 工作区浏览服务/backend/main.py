@@ -21,7 +21,7 @@ from backend.services.episode_downloads import KINDS, resources as episode_resou
 from backend.services import krea2
 from backend.services.comfy_tasks import DesktopConnection, TaskInput, TaskStore, client as comfy_client
 from backend.services.workflows import catalogue as workflow_catalogue
-from workflow_paths import workflow_directories, workflow_root
+from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import node_config
@@ -447,10 +447,8 @@ def workflows() -> list[dict]:
 
 @app.get('/api/workflows/files/{filename:path}')
 def workflow_file(filename: str) -> FileResponse:
-    path = (WORKFLOWS / filename).resolve()
-    if (not path.is_relative_to(WORKFLOWS.resolve())
-            or path.parent not in tuple(folder.resolve() for folder, _ in workflow_directories(WORKFLOWS)) or not path.is_file()
-            or not filename.endswith(('.workflow.json', '.api.json'))):
+    path = workflow_download(WORKFLOWS, filename)
+    if path is None:
         raise HTTPException(404, '工作流文件不存在')
     return FileResponse(path, media_type='application/json', filename=path.name)
 

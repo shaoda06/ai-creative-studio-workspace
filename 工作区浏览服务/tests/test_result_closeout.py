@@ -280,7 +280,7 @@ class CloseoutTests(unittest.IsolatedAsyncioTestCase):
     async def test_registration_after_written_draft_reuses_journal_and_no_duplicate_review(self):
         _, draft = self.setup_video()
         await self.collect_and_notice()
-        from backend.services import result_registration as registration
+        import drama_video_results as registration
         write = registration.write_json
         def interrupted(path, value):
             if value.get('status') == 'registered': raise OSError('report write interrupted')

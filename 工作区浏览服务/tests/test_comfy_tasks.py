@@ -289,7 +289,8 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         run.assert_called_once()
         args = run.call_args.args[0]
         self.assertEqual(args[:5], ['/codex/app/cli', 'queue', '--thread', 'authorized-target', '--message'])
-        self.assertIn('本地任务ID：task', args[5])
+        self.assertIn('通知编号：', args[5])
+        self.assertIn('读取报告：', args[5])
         self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         event = json.loads(self.store.db.execute('SELECT event FROM task_events ORDER BY id DESC LIMIT 1').fetchone()[0])
         self.assertEqual(event['delivery_receipt'], 'Queued message queue-id')
@@ -401,9 +402,10 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
             await self.store.notifiers['task']
             await self.store.notifiers['second']
             self.assertEqual(sum(item.args[1] == 'send' for item in call.await_args_list), 1)
-            self.assertIn('本地任务ID：task', call.await_args_list[-1].args[2])
-            self.assertIn('本地任务ID：second', call.await_args_list[-1].args[2])
+            self.assertIn('通知编号：', call.await_args_list[-1].args[2])
             batch = self.store.rows['task']['state']['notices'][0]['batch_id']
+            self.assertEqual(set(json.loads(self.store.db.execute('SELECT task_ids FROM notification_batches WHERE id=?', (batch,)).fetchone()[0])), {'task', 'second'})
+            self.assertIn(batch, call.await_args_list[-1].args[2])
             self.assertEqual(self.store.rows['second']['state']['notification'], 'delivery_unknown')
             with self.assertRaises(ValueError):
                 self.store.acknowledge(batch, 'another-thread')

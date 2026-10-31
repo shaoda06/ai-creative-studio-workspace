@@ -11,8 +11,8 @@ import time
 from backend.parsers.project import SourceChangedError, build_data, live_task_record, live_revision_notes, FORMAL_SECTIONS
 from backend.parsers.generation import load_context
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama/scripts'))
-from project_index import read_index
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-workspace-browser/scripts'))
+from workspace_project_index import read_index
 
 logger = logging.getLogger(__name__)
 

@@ -31,7 +31,7 @@ API中的正文、输入图片、尺寸、种子和输出前缀是任务占位�
 3. 第一张为`475 → 532 → 497.inputs.images.image_1`；第二张为`700 → 701 → images.image_2`，后续加载／缩放ID按702／703、704／705递增，直到第十张716／717。工具生成上传映射，Agent不手填节点编号。
 4. 编码器图片输入使用点号键`images.image_N`，连接缩放节点第0输出；加载器图片也取第0输出，不接遮罩。未使用槽位直接省略，不遗留示例图、不重复填图凑数量。
 
-单图正文可不带标签，API仍使用`images.image_1`。已确定顺序后不为处理尺寸调换图片。路径、选端及恢复读取[服务配置](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
+单图正文可不带标签，API仍使用`images.image_1`。已确定顺序后不为处理尺寸调换图片。路径、选端及恢复读取[服务配置](../../nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
 
 ## 3. 参数映射
 
@@ -41,7 +41,7 @@ API中的正文、输入图片、尺寸、种子和输出前缀是任务占位�
 | 实际参考图片 | 各`LoadImage.inputs.image` | 后台按真实上传响应填写，数量和顺序来自任务清单 |
 | 输出宽、高 | `479.inputs.width`、`height` | 按调用方给出的宽高明确填写，均为32倍数 |
 | 种子 | `481.inputs.seed` | 调用方提供有效非负整数，不使用-1随机标记 |
-| 输出前缀 | `487.inputs.filename_prefix` | 按[远端输出目录](../../nora-generation/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
+| 输出前缀 | `487.inputs.filename_prefix` | 按[远端输出目录](../../nora-serial-drama/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
 | 反向提示词 | `497.inputs.negative_prompt` | 默认空；已明确需要时以`parameters.negative_prompt`填写并记录 |
 | 参考缩放 | 532及扩展的`ImageScaleToTotalPixels` | 固定`upscale_method=lanczos`、`megapixels=1.5`、`resolution_steps=32` |
 | 编码器参考处理 | `497.inputs.resolution`、`vae` | 固定`0`、`["478",0]`，保留参考图编码链 |

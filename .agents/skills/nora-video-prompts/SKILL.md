@@ -5,14 +5,14 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 # Nora 视频提示词
 
-本技能承担 Nora 的当前业务交付；直接调用遵循[业务技能共同约定](../nora-ai-short-drama/references/共用规则/主控操作规范.md#业务技能共同约定)，按下方当前任务入口接续。
+本技能是连续短剧D09业务阶段，负责依据、主体映射、正文和中文对应及内容核对；模型调用方法交[共用H3工具](../nora-h3/SKILL.md)。直接调用遵循[业务技能共同约定](../nora-serial-drama/references/主控操作规范.md#业务技能共同约定)，按下方当前任务入口接续。
 
 ## 按当前任务读取
 
 | 任务 | 入口 |
 | --- | --- |
 | 新建完整分段提示词 | [阶段接续](references/提示词阶段接续规范.md)，依其顺序进入正文制作规则及对应模板 |
-| 按生成结果反馈定位或修订问题 | 先按[问题参考](../nora-ai-short-drama/references/共用规则/制作问题与解决方案参考.md)检索现象并核对适用条件，再进入受影响正文与下方内容核对；处理结论按[经验维护](../nora-ai-short-drama/references/流程规范/逐集目录与资产管理规范.md#完集复盘与经验维护)回写既有项目记录，不自动生成 |
+| 按生成结果反馈定位或修订问题 | 先按[问题参考](../nora-serial-drama/references/制作问题与解决方案参考.md)检索现象并核对适用条件，再进入受影响正文与下方内容核对；处理结论按[经验维护](../nora-drama-handoff/references/逐集目录与资产管理规范.md#完集复盘与经验维护)回写既有项目记录，不自动生成 |
 | H3正文编写或修改 | Ref2VA先读[参考定义与保留说明](references/视频提示词制作规范.md#ref2va参考定义与保留说明)，落实到主体定义、保留说明与逐镜正文；再按[H3模式入口](references/H3提示词规范.md)，调用[h3-prompt-writing](../h3-prompt-writing/SKILL.md)的实际模式指南 |
 | 正文涉及玄幻法术、法阵、剑气流光、灵力抽丝或粒子，包括已确认动作的转写及效果反馈 | 读取[玄幻法术使用路径](../sd-xuanhuan-engine/SKILL.md#法术表现的使用路径)，按其方法展开本段可见表现；将[表现核对](../sd-xuanhuan-engine/references/xuanhuan-elements-vfx.md#表现核对)合并到现有内容核对，不等到用户反馈效果弱才调用 |
 | 表情转写或相关实际反馈 | [表情拆解](../creative-techniques/SKILL.md#表情表达)，按情境写出可见面部变化和必要过程，并落实首次使用告知与反馈更新 |
@@ -29,8 +29,10 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 镜头设计、P段与动作缺项回[分镜](../short-drama-storyboard/SKILL.md)，剧情和原台词缺项回[写作](../short-drama-write/SKILL.md)，资产设计或来源缺项回[资产](../nora-drama-assets/SKILL.md)。已确认的动作和法术设计按上表适用方法转写，不能以“不改剧情”为由省略法术视觉细化；细化边界按玄幻使用路径处理。不在转写时另编故事，也不默认重新加载打戏或山音全库。
 
-画风使用定位文件中已确认的适用视频短版及语言适配，缺少时回[定位](../short-drama-develop/references/项目定位与画风规范.md#项目画风展开示例验证与复用)补齐，不临时压缩长版。视觉方法按[视觉表达](../short-drama-storyboard/references/视觉表达方法规范.md)相关章节读取；画面文字沿[共用边界](../nora-ai-short-drama/references/共用规则/画面文字与字幕规范.md)。
+画风使用定位文件中已确认的适用视频短版及语言适配，缺少时回[定位](../short-drama-develop/references/项目定位与画风规范.md#项目画风展开示例验证与复用)补齐，不临时压缩长版。视觉方法按[视觉表达](../short-drama-storyboard/references/视觉表达方法规范.md)相关章节读取；画面文字沿[共用边界](../nora-serial-drama/references/画面文字与字幕规范.md)。
 
 初稿或实质性修订完成后，直接按[文本交付前自检](../short-drama-review/references/文本自检与订正规范.md#文本交付前的自检与订正)的第6步，合并本次内容核对与视听文本审查方法；订正受影响正文及中文对应，不另回审查技能入口或增加检查轮次。仅改错字、格式或记录时按该规则处理受影响范围。
 
-交付、状态与接续执行[提示词自检与执行授权](../nora-ai-short-drama/references/共用规则/主控操作规范.md#提示词自检与执行授权)。仅写或核对提示词时在正文交付结束；获授权生成才交[生成执行](../nora-generation/SKILL.md)。正常结果通知不重新做内容审查；修订依据和授权边界按[返修归属](../nora-ai-short-drama/references/共用规则/制作返修与完整重做规范.md)。
+交付、状态与接续执行[提示词自检与执行授权](../nora-serial-drama/references/主控操作规范.md#提示词自检与执行授权)。仅写或核对提示词时在正文交付结束；获授权生成才交[D10视频制作](../nora-drama-production/SKILL.md)。正常结果通知不重新做内容审查；修订依据和授权边界按[返修归属](../nora-ai-short-drama/references/共用规则/制作返修与完整重做规范.md)。
+
+导演台的公共/本组正文、中文对应与资料映射按[业务接续](references/导演台正文与素材业务接续规范.md)落实；共用工具不读取短剧资料来补业务设定。

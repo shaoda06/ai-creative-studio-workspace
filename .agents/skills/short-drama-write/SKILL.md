@@ -6,7 +6,7 @@ license: MIT
 
 # Nora 剧本写作
 
-本技能承担 Nora 的当前业务交付；直接调用遵循[业务技能共同约定](../nora-ai-short-drama/references/共用规则/主控操作规范.md#业务技能共同约定)，按下方当前任务入口接续。
+本技能承担 Nora 的当前业务交付；直接调用遵循[业务技能共同约定](../nora-serial-drama/references/主控操作规范.md#业务技能共同约定)，按下方当前任务入口接续。
 
 ## 按任务读取
 
@@ -22,7 +22,7 @@ license: MIT
 
 先明确人物当前目的、阻力、行动结果和场次退出状态，再写完整交流、动作、听者反应、停顿和声音。只对本集实际使用的选择、证据、次数或死线做对应推演，不为了检查创造输入没有的机关。故事、台词和决定因果的必要表演在剧本完成，具体机位、镜长和P段交分镜。
 
-按[山音范围](../nora-ai-short-drama/references/共用规则/山音方法适配规范.md)自动读取当前阶段方法，无需用户点名。对白诊断使用[dialogue](../dialogue/SKILL.md)，具体表达问题使用[humanizer-zh](../humanizer-zh/SKILL.md)，均按对白规范的适用条件合并到当前正文。
+按[山音范围](../nora-serial-drama/references/山音方法适配规范.md)自动读取当前阶段方法，无需用户点名。对白诊断使用[dialogue](../dialogue/SKILL.md)，具体表达问题使用[humanizer-zh](../humanizer-zh/SKILL.md)，均按对白规范的适用条件合并到当前正文。
 
 | 问题 | 方法资料 |
 | --- | --- |
@@ -32,7 +32,7 @@ license: MIT
 | 同一义务的不同可拍实现 | [可替代实现](references/substitutable-realization.md) |
 | 长任务接续 | [场景交接方法](references/scene-handoff-capsule.md)，复用既有工作稿或上下文，不另建台账 |
 
-剧本语法以Nora模板为准，时长按[对白与动作核对](../nora-ai-short-drama/references/共用规则/层级编号与时长规范.md#对白与动作时长核对)判断；方法中的通用字数估时不覆盖它。交付按[文本自检](../short-drama-review/references/文本自检与订正规范.md)合并处理。批准后的具体版本交[分镜设计](../short-drama-storyboard/SKILL.md)，不因润色完成推定已获批准。
+剧本语法以Nora模板为准，时长按[对白与动作核对](../nora-serial-drama/references/层级编号与时长规范.md#对白与动作时长核对)判断；方法中的通用字数估时不覆盖它。交付按[文本自检](../short-drama-review/references/文本自检与订正规范.md)合并处理。批准后的具体版本交[分镜设计](../short-drama-storyboard/SKILL.md)，不因润色完成推定已获批准。
 
 ## 阶段分工与脚本边界
 

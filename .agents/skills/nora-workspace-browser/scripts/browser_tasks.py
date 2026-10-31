@@ -55,6 +55,8 @@ def submit(args, workflow, url, uploads=None):
         thread_id=thread, desktop=desktop)
     if getattr(args, 'image_plan', None):
         payload['image_plan'] = json.loads(Path(args.image_plan).read_text('utf-8-sig'))
+    if getattr(args, 'video_plan', None):
+        payload['video_plan'] = json.loads(Path(args.video_plan).read_text('utf-8-sig'))
     preparing = getattr(args, 'prepare_only', False)
     route = '/prepare' if preparing else '/submit'
     return local_post(config, route, payload, args.timeout)

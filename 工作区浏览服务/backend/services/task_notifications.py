@@ -290,7 +290,9 @@ class TaskNotifications:
             if any(group['issues'] for group in report['groups']):
                 report['handoff'].update(next_action='repair-group-silently',
                     user_notification='decision-or-blocker-only')
-        rounds = round_results(self, [key for key in ids if not self.rows[key]['state'].get('group_id')])
+        from backend.services.video_tasks import business as business_video
+        rounds = round_results(self, [key for key in ids if not self.rows[key]['state'].get('group_id')
+                                     and business_video(self.rows[key]['input'])])
         if rounds:
             report['rounds'] = rounds
         return report
@@ -303,8 +305,8 @@ class TaskNotifications:
             scope = '任务：\n' + '\n'.join(
                 f'- {self.rows[task["id"]]["state"]["project"]}：{self.rows[task["id"]]["input"].title}'
                 for task in report['tasks'])
-        script = self.workspace / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
-        rules = self.workspace / '.agents/skills/nora-generation/references/ComfyUI-任务监控规范.md'
+        script = self.workspace / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+        rules = self.workspace / '.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md'
         return ('后台任务有更新\n\n'
                 + scope + '\n\n'
                 'Agent将读取最新结果并继续处理。需要你决定的事项，会单独说明。\n\n'

@@ -143,7 +143,7 @@ class VideoExecutionTests(unittest.IsolatedAsyncioTestCase):
         result=video_records.probe(output)
         self.assertEqual((result['width'],result['height']),(64,48));self.assertEqual(result['frame_rate'],24)
         self.assertAlmostEqual(result['duration'],.5,places=3);self.assertEqual(result['audio'],[])
-        with patch.object(video_records.shutil,'which',return_value=None),self.assertRaisesRegex(FileNotFoundError,'ffprobe'):
+        with patch.object(__import__('video_metadata').shutil,'which',return_value=None),self.assertRaisesRegex(FileNotFoundError,'ffprobe'):
             video_records.probe(output)
 
 

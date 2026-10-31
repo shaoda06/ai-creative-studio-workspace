@@ -1,4 +1,5 @@
 import tempfile
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -6,7 +7,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from tests.http_case import HttpTestCase
 from backend import main
-from workflow_paths import workflow_file
+from workflow_paths import workflow_file, workflow_root
 
 
 class WorkflowTests(HttpTestCase):
@@ -79,3 +80,27 @@ class WorkflowTests(HttpTestCase):
         (backup / '样例.workflow.json').write_text('{}')
         with self.assertRaisesRegex(ValueError, '0份'):
             workflow_file('样例', root=self.root)
+
+    def test_default_tool_folders_have_readable_logical_download_urls(self):
+        # Actual bundled resources include tool folders outside the legacy root.
+        with patch.object(main, 'WORKFLOWS', workflow_root()):
+            response = self.client.get('/api/workflows')
+            self.assertEqual(response.status_code, 200)
+            items = [row for row in response.json() if row['group'] == 'formal']
+            self.assertTrue(any(row['name'].startswith('Qwen2.1-') for row in items))
+            self.assertTrue(any(row['name'] == 'RTX-图片2倍超分' for row in items))
+            for row in items:
+                for key, kind in (('canvasUrl', 'workflow'), ('apiUrl', 'api')):
+                    self.assertNotIn('..', row[key])
+                    downloaded = self.client.get(row[key])
+                    self.assertEqual(downloaded.status_code, 200)
+                    self.assertEqual(downloaded.content, workflow_file(row['name'], kind).read_bytes())
+            self.assertEqual(self.client.get('/api/workflows/files/Qwen-image-2-1/%2E%2E/secret.api.json').status_code, 404)
+
+    @unittest.skipIf(os.name == 'nt', 'Requires a POSIX directory symlink')
+    def test_registered_category_symlink_cannot_escape_its_root(self):
+        outside = self.root.parent / 'outside'
+        outside.mkdir()
+        (outside / 'secret.api.json').write_text('{}')
+        (self.root / 'Minimax-H3').symlink_to(outside, target_is_directory=True)
+        self.assertEqual(self.client.get('/api/workflows/files/Minimax-H3/secret.api.json').status_code, 404)

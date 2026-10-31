@@ -27,4 +27,4 @@ Agent理解任务，确定图种及布局、写作并核对实际提示词，选
 
 按[业务能力选择](references/图片提示词规范.md#当前参考图生成选型)进入[Imagegen](../nora-imagegen/SKILL.md)或[Qwen](../nora-qwen-image/SKILL.md)，获批后调用[图片处理](../nora-image-processing/SKILL.md)。[浏览后台](../nora-workspace-browser/SKILL.md)提供执行及展示，不替本阶段决定图种或采用。已备提示词只做原样执行，不由脚本重新创作。
 
-技术完成、业务登记、网页同步和用户采用分别记录。文件核对不等于画面已符合目标，查看范围沿[媒体查看边界](../nora-ai-short-drama/SKILL.md#看图能力调用边界)。恢复只处理失败步骤，不重复生成。修改本阶段及资源时按[维护规范](../nora-ai-short-drama/维护规范.md)完成适用复查。
+技术完成、业务登记、网页同步和用户采用分别记录。文件核对不等于画面已符合目标，查看范围沿[媒体查看边界](../nora-serial-drama/references/业务工作约定.md#看图能力调用边界)。恢复只处理失败步骤，不重复生成。修改本阶段及资源时按[维护规范](../nora-video/维护规范.md)完成适用复查。

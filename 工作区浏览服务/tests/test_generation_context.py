@@ -14,7 +14,7 @@ from backend.parsers.project import build_data
 from backend.services.projects import ProjectStore
 
 spec = importlib.util.spec_from_file_location('generation_writer', Path(__file__).resolve().parents[2] /
-    '.agents/skills/nora-ai-short-drama/scripts/generation_context.py')
+    '.agents/skills/nora-drama-production/scripts/generation_context.py')
 writer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(writer)
 

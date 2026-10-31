@@ -266,7 +266,7 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
         def observed(path, *args, **kwargs):
             if path.name == registration.REPORT: reports.append(path)
             return read(path, *args, **kwargs)
-        with patch.object(Path, 'read_text', observed), patch.object(registration, 'digest', wraps=registration.digest) as digest:
+        with patch.object(Path, 'read_text', observed), patch('drama_video_results.digest', wraps=__import__('drama_video_results').digest) as digest:
             result = await registration.closeout(self.store, self.projects, batch, self.data.thread_id, updates)
         self.assertTrue(result['user_message_ready'])
         self.assertEqual(len(reports), 0)  # Initial register creates its report and passes that object to updates.
