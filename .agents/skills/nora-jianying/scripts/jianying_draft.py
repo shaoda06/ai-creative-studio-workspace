@@ -57,6 +57,11 @@ def draft_files(files, name, timeline_members=None):
         'roughcut_time_range': {'start': 0, 'duration': material.duration},
         'sub_time_range': {'start': -1, 'duration': -1},
     } for material, (_, member) in zip(materials, files)]
-    content = script.dumps()
+    content = json.loads(script.dumps())
+    # The client-library ID is distinct from the timeline object's ID.
+    # Let Jianying bind local media on import so Link Media updates the track.
+    for material in content['materials']['videos']:
+        material['material_id'] = ''
+    content = json.dumps(content, ensure_ascii=False, indent=4)
     return {'draft_content.json': content, 'draft_info.json': content,
             'draft_meta_info.json': json.dumps(meta, ensure_ascii=False, indent=2)}
