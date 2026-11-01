@@ -35,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
   useEffect(() => restoreRefreshScroll(main.current!), []);
   return <Notifications><HeaderControlsContext.Provider value={controlsRoot}><FooterCheckContext.Provider value={checkRoot}>
-    <div className="workspace-with-tasks"><TaskSidebar />
+    <div className="workspace-with-tasks"><TaskSidebar spaceId={/^\/spaces\/([^/]+)/.exec(location.pathname)?.[1] || 'nora'} />
     <header className="site-header" ref={header}>
       <div className="header-main"><ProjectSwitcher />
         <div className="header-controls" ref={setControlsRoot} /></div>

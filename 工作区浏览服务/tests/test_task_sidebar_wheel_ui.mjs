@@ -16,6 +16,7 @@ try{
   page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
   await page.route('**/api/**',route=>{
    const req=route.request();if(req.method()!=='GET'){writes.push(req.url());return route.abort()}
+   if(new URL(req.url()).pathname==='/api/workspaces') return route.fulfill({json:[{id:'nora',name:'示例空间',view:'serial-drama',projects:[]}]});
    assert.equal(new URL(req.url()).pathname,'/api/comfy/tasks');
    return route.fulfill({json:{tasks:[],local_tasks:Array.from({length:20},(_,i)=>({queue:'local',id:'wheel-'+i,project:'隔离项目',title:'滚动示例 '+i,task_type:'image',status:'local_queued',category:'queued',remote_url:'http://fixture-node',created_at:'2026-10-28T00:00:00Z'})),remote_nodes:[{url:'http://fixture-node',name:'隔离节点',connection:'connected',queue:[],running_count:0,queued_count:0,updated_at:'2026-10-28T00:00:00Z'}],local_counts:{'http://fixture-node':{queued:20,paused:0,history:0}},history_updated_at:{}}});
   });
@@ -33,7 +34,7 @@ try{
   await local.locator('.local-queue-card').first().waitFor();
   assert.ok(await local.evaluate(e=>e.scrollHeight>e.clientHeight));
   assert.ok(await remote.evaluate(e=>e.scrollHeight<=e.clientHeight));
-  for(const [name,area] of [['节点标题',side.locator('.comfy-node-heading')],['空列表',remote],['分类标题',side.locator('.comfy-local-heading')],['侧边窄栏',side.locator('.comfy-rail-label')]]){
+  for(const [name,area] of [['节点标题',side.locator('.comfy-node-heading').last()],['空列表',remote],['分类标题',side.locator('.comfy-local-heading')],['侧边窄栏',side.locator('.comfy-rail-label')]]){
    await reset();await wheel(area,250);assert.equal(await windowTop(),300,`${width}px ${name}不应滚动背景`);
   }
   await reset();await local.evaluate(e=>e.scrollTop=0);await wheel(local,250);

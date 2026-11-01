@@ -63,7 +63,7 @@ def submit(args, workflow, url, uploads=None):
 
 
 def local_post(config, route, payload, timeout):
-    request = urllib.request.Request(config['url'] + '/api/internal/comfy' + route,
+    request = urllib.request.Request(config['url'] + config.get('api_prefix', '/api') + '/internal/comfy' + route,
         data=json.dumps(payload, ensure_ascii=False, allow_nan=False).encode('utf-8'),
         headers={'Content-Type': 'application/json', 'x-nora-task-token': config['token']})
     # Bypass system proxies for local service. Never retry a possibly accepted POST.
@@ -78,7 +78,7 @@ def local_post(config, route, payload, timeout):
 def service_call(route, payload=None):
     service = Path(__file__).resolve().parents[4] / '工作区浏览服务'
     config = json.loads((service / 'runtime/task-service.json').read_text('utf-8'))
-    request = urllib.request.Request(config['url'] + '/api/internal/comfy/' + route,
+    request = urllib.request.Request(config['url'] + config.get('api_prefix', '/api') + '/internal/comfy/' + route,
         data=json.dumps(payload, ensure_ascii=False).encode('utf-8') if payload is not None else None,
         headers={'Content-Type': 'application/json', 'x-nora-task-token': config['token']})
     try:

@@ -37,3 +37,7 @@ export function searchTree(items: FileItem[], search: string): FileItem[] {
     return children.length ? [{ ...item, children, files: undefined }] : [];
   });
 }
+
+export interface WorkspaceSpace { id: string; name: string; view: 'serial-drama' | 'files'; projects: { id: string; name: string }[] }
+export const spaceProjectPath = (space: WorkspaceSpace, name: string) => space.view === 'serial-drama'
+  ? `/projects/${encodeURIComponent(name)}` : `/spaces/${space.id}/projects/${encodeURIComponent(name)}`;

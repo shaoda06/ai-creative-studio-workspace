@@ -40,7 +40,7 @@ try {
     await page.route('**/api/**', route => {
       if (route.request().method() !== 'GET') { writes.push(route.request().url()); return route.abort(); }
       const url = new URL(route.request().url());
-      const data = url.pathname === '/api/projects' ? [] : url.pathname === '/api/service'
+      const data = url.pathname === '/api/workspaces' ? [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: [] }] : url.pathname === '/api/projects' ? [] : url.pathname === '/api/service'
         ? { version: 'fixture', ready: false, environment: 'development' }
         : url.pathname === '/api/comfy/tasks' ? snapshot : undefined;
       assert.notEqual(data, undefined, 'unexpected API: ' + url.pathname);

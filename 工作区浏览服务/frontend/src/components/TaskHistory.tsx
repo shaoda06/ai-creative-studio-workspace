@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { TaskApiContext } from './TaskApiContext';
 import { FloatingMessage } from './Notifications';
 import { SearchField } from './SearchField';
 import { TabSelect } from './TabSelect';
@@ -10,6 +12,7 @@ interface HistoryPage { items: LocalQueueTask[]; total: number; next_offset: num
 export function TaskHistory({ updatedAt, total, onDetails }: {
   updatedAt?: string | null; total: number; onDetails: (id: string) => void;
 }) {
+  const api = useContext(TaskApiContext);
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [result, setResult] = useState('all');
@@ -17,10 +20,10 @@ export function TaskHistory({ updatedAt, total, onDetails }: {
     const timer = window.setTimeout(() => setSearch(text.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [text]);
-  const query = useInfiniteQuery({ queryKey: ['task-history', search, result], initialPageParam: 0,
+  const query = useInfiniteQuery({ queryKey: ['task-history', api, search, result], initialPageParam: 0,
     queryFn: async ({ pageParam }): Promise<HistoryPage> => {
       const params = new URLSearchParams({ q: search, result, offset: String(pageParam), limit: '20' });
-      const response = await fetch(`/api/comfy/history?${params}`);
+      const response = await fetch(`${api}/comfy/history?${params}`);
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '任务历史读取失败');
       return data;

@@ -38,7 +38,7 @@ Windows入口使用`pythonw`等待启动结果；构建通过`npm.cmd`执行，�
 
 ## 项目列表与排序
 
-首页项目卡片和顶部项目切换菜单共用 `/api/projects` 的顺序；项目总索引、登记及排序规则见[项目初始化规范](../.agents/skills/nora-ai-short-drama/references/共用规则/项目初始化规范.md#项目总索引)。两处每5秒重新读取，索引修改不需要重启。项目初始化脚本直接维护总索引，服务只读，不回写项目资料。
+Nora项目空间的项目卡片和顶部项目切换菜单共用原 `/api/projects` 的顺序；统一登记接口也沿用这一顺序。项目总索引、登记及排序规则见[项目初始化规范](../.agents/skills/nora-ai-short-drama/references/共用规则/项目初始化规范.md#项目总索引)。两处每5秒重新读取，索引修改不需要重启。项目初始化脚本直接维护总索引，服务只读，不回写项目资料。
 
 ## 内置工作流
 
@@ -335,3 +335,18 @@ HTTP接口测试继承 `tests.http_case.HttpTestCase`，覆写 `setUp` 时先调
 ### 后处理多产物接入
 
 Agent按[同轮次后处理产物](../.agents/skills/nora-ai-short-drama/references/流程规范/逐集目录与资产管理规范.md#同轮次后处理产物)填写本R执行附件中的`后处理产物.json`及采用依据。后端`parsers/video_products.py`读取清单；原版本旁多产物才显示选择器，以default选择默认播放项，整轮共同采用；播放关联不增加类别，已采用视频打包下载包含该轮全部文件，剪映时间线只使用每段默认项。旧单产物记录无需迁移。回归：`.venv/bin/python -m unittest tests.test_video_products tests.test_episode_downloads -q`（Windows使用`.venv/Scripts/python.exe`）。
+
+
+## 统一项目空间
+
+公共首页提供共用工具及一级项目空间；项目空间登记不同资料根目录，浏览服务仍只运行一份。原Nora短剧入口与URL保留；其他登记空间使用通用目录、文档与媒体浏览，不依赖EP编号或短剧资料卡。任务侧栏可切换所属空间，节点配置、队列、历史和详情均使用选中空间的数据与权限。
+
+服务代码目录的runtime/workspaces.json保存本机登记，不提交Git。例如：
+
+```json
+[{"id":"commercial","name":"商业视频制作","path":"/本机商业资料目录"}]
+```
+
+id使用小写字母、数字和连字符，目录必须有projects。默认Nora空间继续使用原工作区；登记空间保留其工作区浏览服务/runtime下的任务数据库，统一进程启动对应TaskStore并更新任务客户端配置，不复制或重编号任务。业务阶段不得另建服务或监控器；接管前停止旧服务，防止两个进程处理同一任务库。服务启动后更新各空间的task-service.json：url是统一地址，api_prefix为`/api/workspaces/{id}`空间路由，token只供本机Agent使用。
+
+/api/workspaces公开登记名称、视图和项目索引；/api/workspaces/{id}/projects提供该空间目录与文件，/api/workspaces/{id}/comfy及/internal/comfy复用同一套任务处理和认证。未登记空间返回404，凭据不得跨空间使用。公共资产、提示词、工作流和风格库仍在工作区首页独立访问。实际资料路径与运行配置均排除在分发之外。

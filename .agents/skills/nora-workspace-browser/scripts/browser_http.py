@@ -14,7 +14,7 @@ def open_service(workspace, timeout):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def get(route, *, text=False):
-        with opener.open(base + route, timeout=timeout) as response:
+        with opener.open(base + (config.get('api_prefix', '/api') + route[4:] if route.startswith('/api/') else route), timeout=timeout) as response:
             return response.read().decode('utf-8-sig') if text else json.load(response)
 
     service = get('/api/service')

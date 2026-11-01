@@ -1,3 +1,10 @@
+import type { ReactNode } from 'react';
+import { get } from '../api';
+import type { WorkspaceSpace } from '../api';
+import { Result } from '../components';
+import { TabSelect } from './TabSelect';
+import { useContext } from 'react';
+import { TaskApiContext } from './TaskApiContext';
 import { UnderlineTabs } from './UnderlineTabs';
 import { FloatingMessage, useNotify } from './Notifications';
 import { PointerTooltip } from './PointerTooltip';
@@ -20,10 +27,23 @@ interface RemoteNode {
 const nodeConnectionLabels = { connecting: '正在连接', connected: '已连接', reconnecting: '连接中断，正在自动重连' };
 const actionLabels: Record<string, string> = { immediate: '已接受立即提交请求', insert: '已移到队首', pause: '已暂停', resume: '已恢复排队', cancel: '已取消' };
 
-export function TaskSidebar() {
+export function TaskSidebar({ spaceId = 'nora' }: { spaceId?: string }) {
+  const routeSpace = spaceId;
+  const [selected, setSelected] = useState(routeSpace);
+  const [open, setOpen] = useState(false);
+  const spaces = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
+  useEffect(() => { if (!open && !document.querySelector('[data-node-config-unsaved="true"]')) setSelected(routeSpace); }, [routeSpace, open]);
+  const api = selected === 'nora' ? '/api' : `/api/workspaces/${selected}`;
+  const controls = (disabled: boolean) => <><div className="comfy-node-heading"><TabSelect label="任务所属项目空间" size="compact" disabled={disabled} selected={selected} onChange={setSelected}
+    items={(spaces.data || []).map(space => ({ value: space.id, label: space.name }))} /></div>
+    <Result loading={false} error={spaces.error} retry={spaces.refetch} retrying={spaces.isFetching} /></>;
+  return <TaskApiContext.Provider value={api}><ScopedTaskSidebar key={api} open={open} setOpen={setOpen} controls={controls} /></TaskApiContext.Provider>;
+}
+
+function ScopedTaskSidebar({ open, setOpen, controls }: { open: boolean; setOpen: (value: boolean) => void; controls: (disabled: boolean) => ReactNode }) {
+  const api = useContext(TaskApiContext);
   const notify = useNotify();
   const sidebar = useRef<HTMLElement>(null);
-  const [open, setOpen] = useState(false);
   const [editingNodes, setEditingNodes] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<(Task | LocalQueueTask)[]>([]);
@@ -50,9 +70,9 @@ export function TaskSidebar() {
     return () => document.removeEventListener('pointerdown', outside, true);
   }, [open]);
   const taskQuery = useQuery({
-    queryKey: ['task-sidebar'],
+    queryKey: ['task-sidebar', api],
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/comfy/tasks?include_history=false', { signal });
+      const response = await fetch(`${api}/comfy/tasks?include_history=false`, { signal });
       if (!response.ok) throw new Error('任务列表刷新失败');
       return response.json();
     },
@@ -80,7 +100,7 @@ export function TaskSidebar() {
   useEffect(() => {
     return () => {
       window.clearInterval(dragTimer.current);
-      if (dragToken.current) void fetch('/api/comfy/drag', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+      if (dragToken.current) void fetch(`${api}/comfy/drag`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: dragToken.current, release: true }) });
     };
   }, []);
@@ -116,7 +136,7 @@ export function TaskSidebar() {
       ? '远端连接中断，显示上次队列，正在自动重连' : '远端暂未连接，正在自动重连'
     : selectedNode?.queue_error;
   const write = useCallback(async (path: string, value: unknown, method = 'POST') => {
-    const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+    const response = await fetch(api + path.slice(4), { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
     const data = await response.json();
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
     return data;
@@ -234,12 +254,14 @@ export function TaskSidebar() {
         </span>
       </span></button>
     <div id="comfy-task-list" className="comfy-task-content" data-view={editingNodes ? 'nodes' : 'tasks'} hidden={!open}>
-      {editingNodes ? <NodeEditor close={() => setEditingNodes(false)} /> : <>
+      <div>{controls(editingNodes || busy || dragToken.current !== null)}{!editingNodes && <>
       <div className="comfy-node-heading"><UnderlineTabs scrollable label="远端节点" selected={selectedNode?.url || ''} disabled={busy || dragToken.current !== null}
         onChange={url => setSelectedUrl(url)} items={nodes.map(node => ({ value: node.url, label: node.name,
           tooltip: connection === 'connected' ? nodeConnectionLabels[node.connection] : '等待后台连接恢复',
           icon: <span className="comfy-node-dot" data-connection={connection === 'connected' ? node.connection : 'connecting'} aria-hidden="true" /> }))} /><button className="comfy-node-edit" disabled={busy || dragToken.current !== null}
         onClick={() => setEditingNodes(true)}>编辑</button></div>
+      </>}</div>
+      {editingNodes ? <NodeEditor close={() => setEditingNodes(false)} /> : <>
       <section className="comfy-queue" aria-label="远端队列">
       <div className="comfy-task-heading"><strong>远端</strong>
       <div className="comfy-node-counts" aria-label="当前节点任务数量">

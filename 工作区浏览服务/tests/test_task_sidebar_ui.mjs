@@ -26,6 +26,7 @@ try {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     const body = req.method() !== 'GET' ? req.postDataJSON() : null;
     if (req.method() !== 'GET') writes.push({ path, body });
+    if (path === '/api/workspaces') return route.fulfill({ json: [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: [] }] });
     if (path === '/api/comfy/tasks') {
       if (failReload) { failReload = false; return route.fulfill({ status: 503, json: { detail: '模拟刷新失败' } }); }
       const counts = node => ({ queued: rows.filter(t => t.remote_url === node && t.category === 'queued').length, paused: rows.filter(t => t.remote_url === node && t.category === 'paused').length, history: node === 'http://fixture-node' ? 1 : 0 });
@@ -68,12 +69,14 @@ try {
     await page.waitForFunction(() => !document.querySelector('.local-queue-card button:disabled'));
     await body.evaluate((el,id) => { const card = el.querySelector(`[data-local-task-id="fixture-${id}"]`); el.scrollTop += card.getBoundingClientRect().top - el.getBoundingClientRect().top - 2; }, from);
     const before = await body.evaluate(el => el.scrollTop);
-    const source = await card(from).locator('h2').boundingBox(), target = await card(to).locator('h2').boundingBox();
+    const source = await card(from).locator('h2').boundingBox(), target = await card(to).boundingBox();
     const hit = await page.evaluate(({x,y}) => document.elementFromPoint(x,y)?.closest('[data-local-task-id]')?.getAttribute('data-local-task-id'), {x:source.x+10,y:source.y+8});
     assert.equal(hit,'fixture-'+from,JSON.stringify({width,from,source,target,body:await body.boundingBox(),scroll:before}));
+    const targetHit = await page.evaluate(({x,y}) => document.elementFromPoint(x,y)?.closest('[data-local-task-id]')?.getAttribute('data-local-task-id'), {x:Math.max(10,target.x+10),y:target.y+8});
+    assert.equal(targetHit, 'fixture-'+to, JSON.stringify({width,source,target,body:await body.boundingBox()}));
     await page.mouse.move(source.x + 10, source.y + 8); await page.mouse.down();
     await page.locator('.local-queue-card-floating').waitFor();
-    await page.mouse.move(target.x + 10, target.y + 8);
+    await page.mouse.move(Math.max(10, target.x + 10), target.y + 8);
     await page.mouse.up();
     await page.locator('.local-queue-card-floating').waitFor({ state: 'detached' });
     await page.waitForFunction(() => !document.querySelector('.local-queue-card button:disabled'));

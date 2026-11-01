@@ -51,7 +51,7 @@ export function TaskCard({ task, onDetails }: { task: Task; onDetails?: (id: str
   return <section className="comfy-task" data-source={external ? 'external' : 'local'}>
     <div className="comfy-task-top">
       <div className="comfy-task-identity">
-        <span className="comfy-task-source">{external ? '其他设备提交' : '本机提交'}</span>
+        <span className="comfy-task-source">{external ? '其他来源提交' : '本空间提交'}</span>
         {task.source !== 'external' && <>
           <PointerTooltip text={task.project}><span className="comfy-task-project" >{task.project}</span></PointerTooltip>
           <span className="comfy-task-type">{taskTypeLabels[task.task_type]}</span>

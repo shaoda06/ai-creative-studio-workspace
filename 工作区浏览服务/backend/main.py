@@ -9,12 +9,14 @@ import os
 from ipaddress import ip_address, ip_network
 from urllib.parse import quote, urlsplit
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ValidationError
 
 from backend.parsers import project as parser
+from backend.parsers import documents
 from backend.services.projects import ProjectStore
+from backend.services.workspaces import Workspaces, project_tree, scope_links
 from project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
@@ -53,6 +55,11 @@ async def lifespan(app):
     tasks = TaskStore(TOOL / 'runtime', WORKSPACE)
     tasks.projects = store
     app.state.comfy_tasks = tasks
+    spaces = app.state.workspaces = Workspaces(WORKSPACE, TOOL / 'runtime', store, VERSION)
+    spaces.get('nora').tasks = tasks
+    for space in list(spaces.items.values())[1:]:
+        space.tasks = TaskStore(space.runtime, space.root)
+        space.tasks.projects = space.projects
     config_path = TOOL / 'runtime/service.json'
     config = json.loads(config_path.read_text('utf-8-sig')) if config_path.is_file() else {}
     port = int(os.environ.get('NORA_SERVICE_PORT', config.get('port', 8782)))
@@ -60,6 +67,13 @@ async def lifespan(app):
         json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
     await tasks.start()
     await tasks.remote_queues.start()
+    for space in list(spaces.items.values())[1:]:
+        (space.runtime / 'task-service.json').write_text(json.dumps({
+            'url': f'http://127.0.0.1:{port}', 'api_prefix': space.api,
+            'token': space.tasks.token}), encoding='utf-8')
+        (space.runtime / 'task-service.json').chmod(0o600)
+        await space.tasks.start()
+        await space.tasks.remote_queues.start()
     diagnostics = app.state.request_diagnostics = RequestDiagnostics(TOOL / 'runtime')
     diagnostics.start()
     try:
@@ -67,15 +81,26 @@ async def lifespan(app):
     finally:
         await diagnostics.close()
         await tasks.close()
+        for space in list(spaces.items.values())[1:]:
+            await space.tasks.close()
 
 
 app = FastAPI(title='Nora工作区浏览服务', version=VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(RequestDiagnosticsMiddleware)
 
 
+def task_store(request: Request):
+    return getattr(request.state, 'workspace_tasks', request.app.state.comfy_tasks)
+
+
+def workspace_reply(request: Request, value):
+    space = getattr(request.state, 'workspace_space', None)
+    return scope_links(value, space.api) if space else value
+
+
 @app.get('/api/comfy/tasks')
 async def comfy_tasks(request: Request, include_history: bool = True) -> dict[str, Any]:
-    return request.app.state.comfy_tasks.public(include_history=include_history)
+    return task_store(request).public(include_history=include_history)
 
 
 @app.get('/api/comfy/config')
@@ -93,7 +118,7 @@ async def read_comfy_config(request: Request, response: Response) -> dict[str, A
 
 def node_config_response(request: Request, response: Response, *, credentials=False):
     response.headers['Cache-Control'] = 'no-store'
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     try:
         return node_config.snapshot(tasks, *node_config.read_config(tasks), credentials=credentials)
     except node_config.ConfigConflict as error:
@@ -112,7 +137,7 @@ async def save_comfy_config(request: Request, response: Response) -> dict[str, A
         # Validation responses must not echo a submitted credential-bearing object.
         raise HTTPException(422, '节点配置请求格式不正确') from error
     try:
-        return node_config.save_config(request.app.state.comfy_tasks, edit, credentials=True)
+        return node_config.save_config(task_store(request), edit, credentials=True)
     except node_config.ConfigConflict as error:
         raise HTTPException(409, str(error)) from error
     except comfy_client.ClientError as error:
@@ -128,15 +153,17 @@ async def comfy_history(request: Request, url: str | None = None, q: str = '',
                         result: Literal['all', 'completed', 'abnormal', 'cancelled', 'resolved'] = 'all',
                         offset: Annotated[int, Query(ge=0)] = 0,
                         limit: Annotated[int, Query(ge=1, le=100)] = 20) -> dict[str, Any]:
-    return task_history(request.app.state.comfy_tasks, url, q, result, offset, limit)
+    return task_history(task_store(request), url, q, result, offset, limit)
 
 
 @app.get('/api/comfy/tasks/{key}/detail')
 async def comfy_task_detail(key: str, request: Request) -> dict[str, Any]:
-    if key not in request.app.state.comfy_tasks.rows:
+    if key not in task_store(request).rows:
         raise HTTPException(404, '任务不存在')
     try:
-        return await task_detail(request.app.state.comfy_tasks, key)
+        value = await task_detail(task_store(request), key)
+        space = getattr(request.state, 'workspace_space', None)
+        return scope_links(value, space.api) if space else value
     except (OSError, ValueError, KeyError) as error:
         raise HTTPException(503, '任务详情读取失败：' + str(error)) from error
 
@@ -150,7 +177,7 @@ async def comfy_events() -> Response:
 
 @app.post('/api/internal/comfy/submit')
 async def comfy_submit(request: Request, data: TaskInput) -> dict[str, Any]:
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     # Local agent only. No token/connection metadata is returned to browser readers.
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
@@ -175,7 +202,7 @@ async def comfy_submit(request: Request, data: TaskInput) -> dict[str, Any]:
 
 @app.post('/api/internal/comfy/prepare')
 async def comfy_prepare(request: Request, data: TaskInput) -> dict[str, Any]:
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
         raise HTTPException(403, '仅允许本机Agent通过专用凭证检查')
@@ -214,7 +241,7 @@ app.include_router(asset_router(AssetLibrary(WORKSPACE / '综合资料/资产管
 
 
 def agent_request(request: Request):
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
         raise HTTPException(403, '仅允许本机Agent通过专用凭证调用')
@@ -225,7 +252,7 @@ def agent_request(request: Request):
 async def local_task_action(key: str, data: QueueAction, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.task_action(key, data.action)
+        return task_store(request).task_action(key, data.action)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -234,7 +261,7 @@ async def local_task_action(key: str, data: QueueAction, request: Request) -> di
 async def local_task_transfer(key: str, data: TransferInput, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.transfer(key, data.url)
+        return task_store(request).transfer(key, data.url)
     except (ValueError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -243,7 +270,7 @@ async def local_task_transfer(key: str, data: TransferInput, request: Request) -
 async def local_queue_drag(data: DragInput, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.drag(data.token, data.release, data.url)
+        return task_store(request).drag(data.token, data.release, data.url)
     except (ValueError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -252,8 +279,8 @@ async def local_queue_drag(data: DragInput, request: Request) -> dict[str, Any]:
 async def local_queue_order(data: QueueOrder, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        request.app.state.comfy_tasks.reorder(data.ids, data.token)
-        return request.app.state.comfy_tasks.public()
+        task_store(request).reorder(data.ids, data.token)
+        return task_store(request).public()
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -349,7 +376,7 @@ async def agent_notice_ack(batch_id: str, data: NoticeReceipt, request: Request)
 async def agent_result_report(batch_id: str, data: NoticeReceipt, request: Request) -> dict[str, Any]:
     tasks = agent_request(request)
     try:
-        return tasks.read_report(batch_id, data.thread_id)
+        return workspace_reply(request, tasks.read_report(batch_id, data.thread_id))
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -360,7 +387,9 @@ async def agent_register_results(batch_id: str, data: ResultRegistrationInput, r
     try:
         locks = tasks.__dict__.setdefault('_closeout_locks', {})
         async with locks.setdefault(batch_id, asyncio.Lock()):
-            return await result_closeout(tasks, store, batch_id, data.thread_id, data.record_updates, data.image_plans, data.image_repairs)
+            space = getattr(request.state, 'workspace_space', None)
+            return workspace_reply(request, await result_closeout(tasks, space.projects if space else store,
+                batch_id, data.thread_id, data.record_updates, data.image_plans, data.image_repairs))
     except (ValueError, OSError, KeyError, TypeError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -592,8 +621,12 @@ def document(name: str, path: Annotated[str, Query()]) -> dict[str, Any]:
 
 @app.get('/api/projects/{name}/files/{path:path}')
 def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
+    return project_file_response(store, name, path, request, v, download)
+
+
+def project_file_response(projects, name, path, request, v=None, download=False):
     try:
-        target = store.file(name, path, v)
+        target = projects.file(name, path, v)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     response = FileResponse(target, filename=target.name if download else None,
@@ -759,6 +792,76 @@ def history_document(path: Annotated[str, Query()], page: Annotated[int, Query(g
         return {'title': target.stem, 'html': parser.markdown(introduction + ''.join(entries[start:start + page_size]), path),
                 'page': page, 'pageSize': page_size, 'total': total}
     return {'title': target.stem, 'html': parser.markdown(text, path)}
+
+
+@app.get('/api/workspaces')
+def workspace_list(request: Request):
+    return request.app.state.workspaces.public()
+
+
+async def select_workspace(workspace_id: str, request: Request):
+    try:
+        space = request.app.state.workspaces.get(workspace_id)
+    except KeyError as error:
+        raise HTTPException(404, '项目空间未登记') from error
+    request.state.workspace_space = space
+    request.state.workspace_tasks = space.tasks
+    return space
+
+
+spaces_router = APIRouter(prefix='/api/workspaces/{workspace_id}',
+                          dependencies=[Depends(select_workspace)])
+# The registered spaces use the exact same task handlers and authorization.
+for route in list(app.routes):
+    path = getattr(route, 'path', '')
+    if path.startswith(('/api/comfy/', '/api/internal/comfy/')):
+        spaces_router.add_api_route(path[4:], route.endpoint, methods=list(route.methods),
+                                    response_model=route.response_model)
+
+
+@spaces_router.get('/service')
+def workspace_service(request: Request):
+    space = request.state.workspace_space
+    return {**service(), 'workspace': str(space.root), 'space': space.id}
+
+
+@spaces_router.get('/projects')
+def workspace_projects(request: Request):
+    return request.state.workspace_space.projects.discover()
+
+
+@spaces_router.get('/projects/{name}')
+def workspace_project(name: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        return project_tree(space.projects, name, space.api)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/document')
+def workspace_document(name: str, path: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        target = space.projects.file(name, path)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    if target.suffix.lower() == '.md':
+        text = target.read_text('utf-8-sig')
+        value = {'title': next((line[2:].strip() for line in text.splitlines() if line.startswith('# ')), target.stem),
+                 'html': documents.markdown(text, path), 'url': quote(path, safe='/')}
+        return scope_links(view(value, name), space.api)
+    if target.suffix.lower() in ('.json', '.txt', '.log'):
+        return documents.plain_text_preview(target)[0]
+    raise HTTPException(404, '没有可用的文档预览，请打开原文件')
+
+
+@spaces_router.get('/projects/{name}/files/{path:path}')
+def workspace_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
+    return project_file_response(request.state.workspace_space.projects, name, path, request, v, download)
+
+
+app.include_router(spaces_router)
 
 
 app.frontend('/', directory=TOOL / 'frontend/dist', fallback='index.html')

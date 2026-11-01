@@ -1,25 +1,22 @@
 from pathlib import Path
+from backend.services.project_files import ProjectFiles
 import logging
 import json
 import os
 import re
 import stat
-import sys
 import threading
 import time
 
 from backend.parsers.project import SourceChangedError, build_data, live_task_record, live_revision_notes, FORMAL_SECTIONS
 from backend.parsers.generation import load_context
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-workspace-browser/scripts'))
-from workspace_project_index import read_index
-
 logger = logging.getLogger(__name__)
 
 # Increment only when the parsed project data or interpretation becomes incompatible.
 CACHE_SCHEMA = 24
 
-class ProjectStore:
+class ProjectStore(ProjectFiles):
     """Parse on demand; keep the last complete result while a change is read."""
 
     def __init__(self, root: Path, *, cache_directory: Path | None = None, version: str = ''):
@@ -31,18 +28,7 @@ class ProjectStore:
         self.entries = {}
         self.lock = threading.Lock()
 
-    def project(self, name: str) -> Path:
-        path = (self.root / name).resolve()
-        if path.parent != self.root or not path.is_dir() or name.startswith('.'):
-            raise FileNotFoundError('项目不存在')
-        return path
 
-    def discover(self):
-        projects = {p.name for p in self.root.iterdir()
-                    if p.is_dir() and not p.name.startswith('.') and p.resolve().parent == self.root}
-        _, indexed = read_index(self.root)
-        names = dict.fromkeys([*indexed, *sorted(projects)])
-        return [{'id': name, 'name': name} for name in names if name in projects]
 
     def snapshot(self, path: Path):
         # mtime and size detect edits, additions, removal and renames without reading media.

@@ -22,7 +22,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
       requests.push(`${req.method} ${url}`);
       assert.equal(req.method, 'GET');
       let data;
-      if (url === '/api/projects') data = projects.map(id => ({ id, name: id }));
+      if (url === '/api/workspaces') data = [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: projects.map(id => ({ id, name: id })) }];
+      else if (url === '/api/projects') data = projects.map(id => ({ id, name: id }));
       else {
         const match = url.match(/^\/api\/projects\/([^/]+)\/(.+)$/);
         const [, name, route] = match || [];
@@ -53,7 +54,7 @@ try {
     await body.getByText('甲项目的主旨与简介正文', { exact: true }).waitFor();
     const switchProject = async name => {
       await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
-      await page.getByRole('option', { name: new RegExp(`^0[12]-${name}`) }).click();
+      await page.getByRole('option', { name: new RegExp(`示例空间 / ${name}$`) }).click();
     };
     await switchProject('乙项目');
     try { await body.getByText('乙项目的项目定位正文', { exact: true }).waitFor({ timeout: 4000 }); }

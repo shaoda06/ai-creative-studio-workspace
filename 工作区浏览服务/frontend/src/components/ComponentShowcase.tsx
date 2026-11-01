@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog, Document, FileTree, PreviewContext } from '../components';
+import { Dialog, Document, FileTree, Preview, PreviewContext } from '../components';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { TabSelect } from './TabSelect';
@@ -32,6 +32,7 @@ const sampleDocument = { html: '<h1>示例阅读文档</h1><p>这里的内容仅
 const sampleItems = Array.from({ length: 18 }, (_, i) => `示例记录 ${String(i + 1).padStart(2, '0')}`);
 
 export function ComponentShowcase({ onImplementation }: { onImplementation: () => void }) {
+  const [spacePreview, setSpacePreview] = useState(false);
   const [category, setCategory] = useState('controls');
   const [clicks, setClicks] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -103,6 +104,8 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: '示例资料待确认。', actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
         </Example>
       </>}
+      {category === 'reading' && <Example title="项目空间预览" rule="不同项目空间使用同一预览组件；预览关闭后保留当前项目位置。演示使用静态正文，不访问真实项目。" usage="统一项目资料浏览"><button onClick={() => setSpacePreview(true)}>打开项目空间文档</button></Example>}
+      {spacePreview && <Preview project="demo-space" baseUrl="/api/workspaces/demo/projects/example" item={{ kind: 'document', name: '项目空间示例', doc: sampleDocument }} revision={0} close={() => setSpacePreview(false)} />}
       {category === 'reading' && <Example title="文档弹窗" rule="弹窗复用正文排版和章节导航。点击关闭、按Esc或点击遮罩可退出，回到原阅读位置。长标题不挤压关闭按钮，正文连续长串也会换行；fullscreen规格使用深灰蓝半透明蒙版，内容四周留白；无顶部栏时右上角保留独立关闭叉号。" usage="开发记录、项目总索引、项目文档预览">
         <div className="component-demo-row"><button onClick={() => setDialog('示例阅读文档')}>打开示例文档</button><button onClick={() => { setDialogBusy(false); setDialog('紧凑弹窗示例'); }}>打开紧凑弹窗</button><button onClick={() => setDialog(longSampleTitle)}>打开长内容弹窗</button><button onClick={() => { setDialogBusy(false); setDialog('全屏查看示例'); }}>打开全屏示例</button></div>
         <p>打开后可展开章节、跳转正文，或复制示例文字。</p>

@@ -185,14 +185,14 @@ export function Dialog({ title, children, close, headerActions, size = "default"
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   return <dialog ref={ref} className={size === "default" ? undefined : `dialog-${size}`} aria-label={title} onCancel={event => { event.preventDefault(); if (!closeDisabled) close(); }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
 }
-export function Preview({ project, item, revision, close }: { project: string; item: FileItem; revision: number; close: () => void }) {
+export function Preview({ project, item, revision, close, baseUrl = projectUrl(project) }: { project: string; item: FileItem; revision: number; close: () => void; baseUrl?: string }) {
   // Keep the opened item and revision until the user chooses to load newer text.
   const [openedRevision, setOpenedRevision] = useState(revision);
   const [mediaError, setMediaError] = useState('');
   const kind = item.kind;
   const text = ['markdown', 'json', 'text', 'log', 'outline'].includes(kind) || /\.(md|json|txt|log)(#.*)?$/i.test(item.key || item.name);
   const key = (item.key || '').split('#')[0];
-  const query = useQuery({ queryKey: ['document', project, key, openedRevision], queryFn: () => get<RecordData>(`${projectUrl(project)}/document?path=${encodeURIComponent(key)}`), enabled: text && !item.doc });
+  const query = useQuery({ queryKey: ['document', baseUrl, key, openedRevision], queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key)}`), enabled: text && !item.doc });
   useEffect(() => {
     const hash = item.key?.split('#')[1];
     if (hash && query.data) requestAnimationFrame(() => {
