@@ -3,9 +3,9 @@ name: nora-drama-images
 description: 连续短剧图片业务阶段，规定人物、服装、场景、道具和集内图片的类型、内容、布局、规格、来源、候选及采用；Agent编写提示词，业务脚本整理记录，共用工具负责执行。
 ---
 
-# Nora短剧图片资产制作
+# Nora 图片资产制作
 
-以当前项目资料卡、定位或分镜需求为依据完成本次图片任务。本阶段是二级业务技能，内部使用规则、模板和脚本模块，不再嵌套业务子技能。资料设计缺项回[资产资料](../nora-drama-assets/SKILL.md)，镜头需求回[分镜](../short-drama-storyboard/SKILL.md)。
+以当前项目资料卡、定位或分镜需求为依据完成本次图片任务。本阶段是二级业务技能，内部使用规则、模板和脚本模块，不再嵌套业务子技能。资料设计缺项回[资产资料](../nora-drama-assets/SKILL.md)，镜头需求回[分镜](../nora-drama-storyboard/SKILL.md)。
 
 ## 按对象和动作读取
 
@@ -14,7 +14,7 @@ description: 连续短剧图片业务阶段，规定人物、服装、场景、�
 | 图片制作范围与阶段依赖 | [核心参考图](references/核心参考图制作规范.md) |
 | 人物、服装及穿衣角色图片 | [人物图片](references/人物参考图制作与记录规范.md) |
 | 场景与机位、道具与虚拟界面 | [场景业务](references/场景图片制作规范.md)、[道具业务](references/道具图片制作规范.md) |
-| 首帧与逐集专用图 | [首帧需求](../short-drama-storyboard/references/首帧参考图规范.md)、[专用素材](references/逐集专用素材规范.md) |
+| 首帧与逐集专用图 | [首帧需求](../nora-drama-storyboard/references/首帧参考图规范.md)、[专用素材](references/逐集专用素材规范.md) |
 | 类型模板、业务种子和状态图 | [Qwen业务适配](references/Qwen-Image-2.1-提示词规范.md) |
 | 能力选择、参考资格及内容修订 | [图片提示词业务规则](references/图片提示词规范.md) |
 | 内置生成交接及原图送审 | [内置图片接续](references/内置图片制作接续规范.md) |

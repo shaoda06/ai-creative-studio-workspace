@@ -1,4 +1,4 @@
 interface:
-  display_name: "Nora短剧图片资产制作"
+  display_name: "Nora 图片资产制作"
   short_description: "连续短剧图片业务阶段，规定人物、服装、场景、道具和集内图片的类型、内容、布局、规格、来源、候选及采用；Agent编写提示词，业务"
   default_prompt: "使用$nora-drama-images处理当前任务，先确定输入、授权和实际范围。"

@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import sys
 
-_PATH = Path(__file__).resolve().parents[2] / 'short-drama-storyboard/scripts/scene_rounds.py'
+_PATH = Path(__file__).resolve().parents[2] / 'nora-drama-storyboard/scripts/scene_rounds.py'
 _spec = importlib.util.spec_from_file_location('nora_storyboard_scene_rounds', _PATH)
 _module = sys.modules.get('nora_storyboard_scene_rounds')
 if _module is None:

@@ -12,7 +12,7 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | 任务 | 入口 |
 | --- | --- |
 | AI连续短剧及其单集制作 | [连续短剧业务](../nora-serial-drama/SKILL.md) |
-| 商业视频订单 | `ad-promo-video`一级业务（由商业工作区提供），按项目AGENTS和README定位实际入口，不套短剧目录 |
+| 商业视频订单 | `iris-commercial-video`一级业务（由Iris商业工作区提供），按项目AGENTS和README定位实际入口，不套短剧目录 |
 | 社交媒体运营及发布 | [运营一级业务](../nora-social-operations/SKILL.md) |
 | 独立剧情短片或其他视频 | 先确定实际业务及交付范围，已有项目规则优先；不因调用图片工具初始化短剧 |
 

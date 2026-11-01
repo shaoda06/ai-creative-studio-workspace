@@ -1,44 +1,19 @@
-"""Project episode compositions and retain explicit legacy scene history."""
+"""Compatibility entry; the implementation lives in the workspace-prefixed skill."""
 import importlib.util
-import json
-import sys
 from pathlib import Path
-from urllib.parse import quote
+import sys
 
-import scene_rounds as rounds
-
-from episode_rounds import episode_manifest_key, scene_entries, validate_episode_manifest
-
-
-def load_episode_rounds(episode, read):
-    raw = read(episode_manifest_key(episode))
-    if raw is None:
-        return []
-    return [{'number': item['number'], 'scenes': list(item['scenes'])}
-            for item in validate_episode_manifest(json.loads(raw), episode)['rounds']]
-
-def load_scene_rounds(project, episode, scene, read):
-    from backend.parsers.project import field, markdown, document_header
-    from backend.parsers.generation import segment_body
-    result = []
-    for entry in scene_entries(project, episode, scene, read):
-        item = {**entry, 'issues': []}
-        documents = {}
-        for kind in ('script', 'storyboard'):
-            reference = entry[kind]
-            file = reference['file']
-            if Path(file).is_absolute() or not (project / file).resolve().is_relative_to(project):
-                raise ValueError('场次轮次文档越出项目：' + file)
-            text = read(file)
-            if text is None or field(text, '文档版本').rstrip('。') != reference['version']:
-                item['issues'].append(('剧本' if kind == 'script' else '分镜') + '文件缺失或版本不匹配')
-                item[kind] = None
-                continue
-            documents[kind] = text
-            doc = {'title': Path(file).stem, 'html': markdown(text, file), 'url': quote(file, safe='/-._~'), **document_header(text, file)}
-            item[kind] = {'kind': 'document', 'name': Path(file).stem, 'key': file, 'url': doc['url'], 'doc': doc, 'version': reference['version']}
-        item['segments'] = [{**segment,
-            'scriptHtml': markdown(segment_body(documents.get('storyboard', ''), segment['id']), entry['storyboard']['file']),
-            'scriptUrl': quote(entry['storyboard']['file'], safe='/-._~')} for segment in entry['segments']]
-        result.append(item)
-    return result
+_PATH = (Path(__file__).resolve().parent / '../../nora-drama-storyboard/scripts/drama_browser_rounds.py').resolve()
+sys.path.insert(0, str(_PATH.parent))
+if __name__ == '__main__':
+    import runpy
+    runpy.run_path(str(_PATH), run_name='__main__')
+else:
+    _spec = importlib.util.spec_from_file_location('_nora_compat_nora_drama_storyboard_drama_browser_rounds', _PATH)
+    _module = sys.modules.get(_spec.name)
+    if _module is None:
+        _module = importlib.util.module_from_spec(_spec)
+        sys.modules[_spec.name] = _module
+        _spec.loader.exec_module(_module)
+    sys.modules[__name__] = _module
+    globals().update(vars(_module))

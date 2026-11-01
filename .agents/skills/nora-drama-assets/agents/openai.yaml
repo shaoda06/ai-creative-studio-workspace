@@ -1,4 +1,4 @@
 interface:
-  display_name: "Nora资料设计"
+  display_name: "Nora 资料设计"
   short_description: "连续短剧人物场景道具资料与参考音视频，按阶段规则维护索引和状态"
   default_prompt: "使用 $nora-drama-assets 依据剧情与实际授权维护资料卡及来源，图片制作交图片阶段。"

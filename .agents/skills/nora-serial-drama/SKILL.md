@@ -17,12 +17,12 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 | D04 人物、场景、道具资料卡和参考音视频 | [资产资料](../nora-drama-assets/SKILL.md) |
 | D05 分集索引、大纲及拆集 | [分集规划](../nora-drama-episodes/SKILL.md) |
 | D06 图片资产、图片提示词、候选及批准后保存 | [图片业务阶段](../nora-drama-images/SKILL.md) |
-| D07 单集剧本、对白、表演 | [剧本](../short-drama-write/SKILL.md) |
-| D08 镜头、P段、首帧需求和导演表内容 | [分镜](../short-drama-storyboard/SKILL.md) |
+| D07 单集剧本、对白、表演 | [剧本](../nora-drama-write/SKILL.md) |
+| D08 镜头、P段、首帧需求和导演表内容 | [分镜](../nora-drama-storyboard/SKILL.md) |
 | D09 视频提示词、参考绑定与内容核对 | [视频提示词](../nora-video-prompts/SKILL.md) |
 | D10 视频制作、返修、采用和留档 | [视频制作](../nora-drama-production/SKILL.md) |
 | D11 本集交接、完成与复盘 | [交付收尾](../nora-drama-handoff/SKILL.md) |
-| D12 专项审查 | [审查](../short-drama-review/SKILL.md) |
+| D12 专项审查 | [审查](../nora-drama-review/SKILL.md) |
 | 运营及发布 | [运营入口](../nora-social-operations/SKILL.md) |
 
 上游、产出和接续关系见[流程表](references/阶段流程与接续规范.md#整体流程)。阶段完成按其实际规则判断，不将阶段路由增加为审批。正式目录、编号和版本按[业务文件规范](references/文件版本与工作稿规范.md)执行。

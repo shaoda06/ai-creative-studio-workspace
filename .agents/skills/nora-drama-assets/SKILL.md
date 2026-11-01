@@ -3,7 +3,7 @@ name: nora-drama-assets
 description: 连续短剧D04资料设计阶段，维护人物、场景、道具资料卡、稳定设计和参考音视频；图片类型与制作交图片业务阶段，不承担模型执行。
 ---
 
-# Nora资产资料设计
+# Nora 资料设计
 
 依据当前剧情和已确认设定设计资料卡。卡片完成不要求同步生图；图片由[图片业务阶段](../nora-drama-images/SKILL.md)组织，具体执行交共用工具。
 
@@ -16,7 +16,7 @@ description: 连续短剧D04资料设计阶段，维护人物、场景、道具�
 | 道具卡、基础设计及虚拟界面 | [道具资料](references/道具资料卡规范.md)及[道具设计](references/道具资料卡规范.md) |
 | 参考音视频和人物声音 | [音视频资料](references/参考音视频管理规范.md) |
 | 图片、状态延伸、机位图、图片提示词及采用 | [图片阶段](../nora-drama-images/SKILL.md) |
-| 首帧、导演表和实际选图需求 | [分镜](../short-drama-storyboard/SKILL.md)，图片制作回图片阶段 |
+| 首帧、导演表和实际选图需求 | [分镜](../nora-drama-storyboard/SKILL.md)，图片制作回图片阶段 |
 | 运营头像、背景和封面设计 | [运营](../nora-social-operations/SKILL.md) |
 | 指定视频获取与分析 | [视频读取](../video-study/SKILL.md) |
 | 玄幻法术外观 | [玄幻方法](../sd-xuanhuan-engine/SKILL.md#法术表现的使用路径)，只落实本次静态设计 |

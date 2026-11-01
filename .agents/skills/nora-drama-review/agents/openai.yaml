@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nora 专项审查与自检"
+  short_description: "按现行业务规则审查故事资产分镜与提示词，合并自检并说明依据"
+  default_prompt: "使用 $nora-drama-review 按本次范围做专项审查或合并自检，按实际权限交付问题或订正。"

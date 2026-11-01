@@ -1,6 +1,8 @@
 """Temporary project compositions: one episode number, selective scenes and old evidence."""
 from copy import deepcopy
 import json
+import subprocess
+import sys
 from pathlib import Path
 import unittest
 
@@ -16,6 +18,22 @@ class EpisodeRoundTests(unittest.TestCase):
     layout = fixture.SceneRoundTests.layout
     plan = fixture.SceneRoundTests.plan
     episode = fixture.SceneRoundTests.episode
+
+    def test_legacy_cli_and_current_cli_preserve_shared_episode_history(self):
+        scripts = Path(__file__).resolve().parents[2] / '.agents/skills'
+        plan = self.project / 'plan.json'
+        plan.write_text(json.dumps(self.plan()), encoding='utf-8')
+        draft = self.project / self.root / '其他资料/工作稿/EP001-C001-P001-视频制作-工作稿.md'
+        before = draft.read_bytes()
+        for number, skill in enumerate(('short-drama-storyboard', 'nora-drama-storyboard'), 1):
+            result = subprocess.run([sys.executable, str(scripts / skill / 'scripts/scene_rounds.py'),
+                                     '--project', str(self.project), '--episode', 'EP001',
+                                     '--scene', 'C001', '--plan', str(plan)],
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)['number'], number)
+        episode = self.episode()
+        self.assertEqual(episode['episodeRounds'], [{'number': 1, 'scenes': ['C001']}, {'number': 2, 'scenes': ['C001']}])
+        self.assertEqual(draft.read_bytes(), before)
 
     def two_scenes(self):
         self.write(self.script, '# 剧本\n- 文档版本：v1\n## 1. 故事剧本正文\n### EP001-C001\n一。\n### EP001-C002\n二。\n')

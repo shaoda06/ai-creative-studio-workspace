@@ -128,7 +128,7 @@ class ServiceTests(HttpTestCase):
         self.assertEqual(self.client.get('/api/projects/示例项目/episodes/EP001').json()['title'], '序章')
 
     def test_episode_title_from_real_templates_reaches_both_lists_and_detail(self):
-        templates = Path(__file__).resolve().parents[2] / '.agents/skills/short-drama-write/templates'
+        templates = Path(__file__).resolve().parents[2] / '.agents/skills/nora-drama-write/templates'
         outlines = self.project / '06-分集大纲'
         outlines.mkdir()
         script_key = '09-剧集制作/EP002/02-剧集剧本/EP002-本集剧本.md'

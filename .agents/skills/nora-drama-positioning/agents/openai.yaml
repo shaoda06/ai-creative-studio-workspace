@@ -1,4 +1,4 @@
 interface:
-  display_name: "Nora项目定位与建档"
+  display_name: "Nora 项目定位与建档"
   short_description: "连续短剧定位、画风确认与获授权建档，维护本阶段规则及固定模板"
   default_prompt: "使用 $nora-drama-positioning 完成本次获授权的项目定位、画风整理或建档，复用已有决定。"

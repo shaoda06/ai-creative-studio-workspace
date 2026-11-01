@@ -109,7 +109,7 @@
 - [视频阶段编号迁移](../../../nora-drama-production/references/固定脚本接口规范.md#视频阶段编号迁移)
 
 <a id="修改轮次登记"></a>
-- [修改轮次登记](../../../short-drama-storyboard/references/固定脚本接口规范.md#修改轮次登记)
+- [修改轮次登记](../../../nora-drama-storyboard/references/固定脚本接口规范.md#修改轮次登记)
 
 <a id="h3正文与内容核对检查"></a>
 - [H3正文与内容核对检查](../../../nora-video-prompts/references/固定脚本接口规范.md#h3正文与内容核对检查)

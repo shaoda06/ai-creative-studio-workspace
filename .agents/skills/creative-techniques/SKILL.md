@@ -36,7 +36,7 @@ description: 学习用户指定的图文和视频创作技巧，查重并维护�
 | 表情意图、面部变化、强度及组合 | 本技能的[拆解方法](references/表情拆解方法.md)和[参考表](references/表情参考表.md)；通用拆解方法与具体写法分开维护 |
 | 景别、构图、机位、运镜、光影、焦点 | 本技能的[镜头指南](references/镜头语言参考指南.md) |
 | 完整动作链的镜头组织、转写与连读检查 | 本技能的[完整动作链指南](references/完整动作链设计与转写指南.md)集中维护方法和完整示例；镜号、P段及已确认动作归分镜，模型结构与标签归视频提示词，打戏动作机制沿下方专业入口 |
-| 转场与镜间衔接技巧 | 优先补入镜头指南相关章节；独立内容足够时再拆参考。区分镜内变化、切镜和后期转场，明确前镜结束、后镜开始及匹配条件；正式镜号、切点和分段仍归[分镜](../short-drama-storyboard/SKILL.md)，实现格式归[视频提示词](../nora-video-prompts/SKILL.md)或实际执行规范，不把术语当作模型已支持的功能 |
+| 转场与镜间衔接技巧 | 优先补入镜头指南相关章节；独立内容足够时再拆参考。区分镜内变化、切镜和后期转场，明确前镜结束、后镜开始及匹配条件；正式镜号、切点和分段仍归[分镜](../nora-drama-storyboard/SKILL.md)，实现格式归[视频提示词](../nora-video-prompts/SKILL.md)或实际执行规范，不把术语当作模型已支持的功能 |
 | 通用特效与材质 | 先检查[介质与分层](../sd-combat-engine/references/vfx-rendering-mandate.md)及相关题材资料的适用范围；已有归属原位更新，不把打戏专用要求扩大到全部视觉效果。确无合适归属且有实质内容时，才在本技能新增参考并同步入口 |
 | 修仙法术、阵法、剑气与灵力 | [玄幻专项](../sd-xuanhuan-engine/SKILL.md)的[法术表现方法](../sd-xuanhuan-engine/references/xuanhuan-elements-vfx.md)及[造型参考库](../sd-xuanhuan-engine/references/仙侠法术与特效造型参考库.md)；保留专业设计与调用流程 |
 | 武侠、通用动作与写实格斗 | [通用打戏](../sd-combat-engine/SKILL.md)或[写实专项](../sd-real-engine/SKILL.md)按问题选择方法；攻防因果、动力链和节奏不迁入本技能 |
