@@ -37,6 +37,18 @@ class RevisionNotesTests(HttpTestCase):
     def put(self, value=None, url=None):
         return self.client.put(url or self.url, json=value or self.value, headers={'Origin': 'http://localhost:8782'})
 
+    def test_archived_project_keeps_notes_readable_and_rejects_all_writes(self):
+        (self.project / '.archived').write_text('已迁移历史')
+        for url, value in [(self.url, self.value),
+                           (self.url + '/export', {'notes': [], 'rounds': []}),
+                           ('/api/projects/示例项目/revision-notes/EP001/export', {'notes': [], 'rounds': []})]:
+            with self.subTest(url=url):
+                response = self.put(value, url)
+                self.assertEqual(response.status_code, 409)
+                self.assertIn('只读历史入口', response.json()['detail'])
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertFalse(list(self.project.rglob('*修改意见*')))
+
     def test_read_empty_does_not_create_files(self):
         self.assertEqual(self.client.get(self.url).json(), {'episode': 'EP001', 'scene': 'C001', 'notes': {}, 'rounds': {}})
         self.assertFalse((self.project / '09-剧集制作/EP001/其他资料').exists())

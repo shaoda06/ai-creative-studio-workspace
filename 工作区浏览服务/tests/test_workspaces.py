@@ -40,6 +40,18 @@ class WorkspaceTests(HttpTestCase):
         self.addCleanup(self.client.close)
         self.api = '/api/workspaces/commercial'
 
+    def test_archived_projects_leave_discovery_but_keep_file_access(self):
+        for identity, root in [('nora', self.primary), ('commercial', self.other)]:
+            project = root / 'projects/同名项目'
+            (project / '.archived').write_text('已迁移，原地址只读')
+            (root / 'projects/项目总索引.md').write_text('| 01 | 同名项目 |')
+            self.assertEqual(self.spaces.get(identity).projects.discover(), [])
+            self.assertEqual(self.client.get(f'/api/workspaces/{identity}/projects/同名项目/files/说明.md').status_code, 200)
+            with self.assertRaises(PermissionError):
+                self.spaces.get(identity).projects.project('同名项目', writable=True)
+            for path in ['../说明.md', '.archived']:
+                self.assertEqual(self.client.get(f'/api/workspaces/{identity}/projects/同名项目/files/{path}').status_code, 404)
+
     def test_catalogue_lists_projects_without_private_runtime_details(self):
         response = self.client.get('/api/workspaces')
         self.assertEqual(response.status_code, 200)

@@ -662,7 +662,9 @@ def save_episode_revision_export(name: str, episode: Episode, value: EpisodeExpo
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save(store.project(name), episode, value)
+        return EpisodeRevisionNotes(revision_notes).save(store.project(name, writable=True), episode, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -686,7 +688,9 @@ def save_revision_note(name: str, episode: Episode, scene: Scene, value: NoteCha
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save_note(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_note(store.project(name, writable=True), episode, scene, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -700,7 +704,9 @@ def save_revision_export(name: str, episode: Episode, scene: Scene, value: Expor
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save_scene_export(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_scene_export(store.project(name, writable=True), episode, scene, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:

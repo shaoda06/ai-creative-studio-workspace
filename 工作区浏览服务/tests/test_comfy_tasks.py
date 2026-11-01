@@ -54,6 +54,15 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.store.rows[key]['state'].pop('content_review_required', None)
         self.store.save(key)
 
+    async def test_archived_project_rejects_new_input_but_restores_history(self):
+        (self.project / '.archived').write_text('历史入口')
+        with self.assertRaisesRegex(ValueError, '不能在旧入口提交新任务'):
+            self.store.resolve_input(self.data.model_copy(deep=True))
+        recorded = self.data.model_copy(deep=True)
+        self.store.resolve_input(recorded, recorded=True)
+        self.assertEqual(recorded.project, str(self.project))
+        self.assertEqual(recorded.record_dir, str(self.record))
+
     async def test_websocket_opens_before_post_and_same_client_id(self):
         await self.store.prepare_only(self.data)
         order = []

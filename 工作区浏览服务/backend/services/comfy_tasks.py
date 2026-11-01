@@ -27,6 +27,7 @@ from backend.services.local_queue import LocalQueue, LOCAL, TERMINAL
 from backend.services.task_notifications import TaskNotifications, NotificationNotStarted
 from backend.services.collection_retry import DELAYS, failure, saved_files
 from backend.services.session_names import read_thread_name
+from backend.services.project_files import ARCHIVE_MARKER
 
 logger = logging.getLogger(__name__)
 SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama'
@@ -231,6 +232,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                    if recorded or not Path(data.project).is_absolute() else Path(data.project)).resolve()
         if project.parent != self.workspace / 'projects':
             raise ValueError('任务必须属于当前工作区projects下的项目')
+        if not recorded and (project / ARCHIVE_MARKER).is_file():
+            raise ValueError('项目已迁移或归档，不能在旧入口提交新任务')
         data.project = str(project)
         resolved = {}
         def local(value):
