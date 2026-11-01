@@ -5,6 +5,7 @@ import { Document, FileTree, Preview, PreviewContext } from '../src/components';
 import type { FileItem } from '../src/api';
 import { AssetMedia } from '../src/components/AssetMedia';
 import { CoverLibrary } from '../src/components/CoverLibrary';
+import { Notifications } from '../src/components/Notifications';
 import '../src/style.css';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -20,8 +21,8 @@ function Demo() {
       <FileTree items={[{ kind: 'markdown', name: name + '-资料卡.md', key: name + '.md', url: files + '/fixture/' + name + '.md?revision=7#章节' }]} />
     </section>)}
     <section aria-label="正文"><Document value={{ html: '<h2>资料卡正文</h2>', url: '/fixture/正文.md' }} /></section>
-    <section aria-label="封面"><CoverLibrary revision={1} value={{ items: [{ name: '封面', setName: '测试套组', platforms: ['通用'], media: { ...media('成品'), width: 4, height: 3, ratio: '4:3' }, original: { ...media('原图'), width: 8, height: 6, ratio: '4:3' }, targetSize: '4×3', targetRatio: '4:3', scope: '通用', layout: '横版', version: 'v01' }], candidates: [], groups: [] }} /></section>
+    <section aria-label="封面"><CoverLibrary revision={1} value={{ assets: [{ id: 'cover', name: '封面', platforms: ['通用'], scope: '全剧通用', current: { ready: true, name: '封面', setName: '测试套组', platforms: ['通用'], statusHtml: '', media: { ...media('成品'), width: 4, height: 3, ratio: '4:3' }, original: { ...media('原图'), width: 8, height: 6, ratio: '4:3' }, targetSize: '4×3', targetRatio: '4:3', scope: '通用', layout: '横版', version: 'v01' }, rounds: [], hasUpdate: false }], unassigned: [], groups: [] }} /></section>
     {preview && <Preview key={preview.key} project="文件测试" item={preview} revision={1} close={() => setPreview(null)} />}
   </main></PreviewContext.Provider>;
 }
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><Demo /></QueryClientProvider>);
+createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><Notifications><Demo /></Notifications></QueryClientProvider>);

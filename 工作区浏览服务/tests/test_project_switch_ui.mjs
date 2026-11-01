@@ -40,8 +40,8 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
 try {
-  for (const width of [1362, 390, 320]) {
-    const context = await browser.newContext({ viewport: { width, height: 916 } });
+  for (const width of [1280, 1366, 1920]) {
+    const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -72,5 +72,5 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
     await context.close();
   }
-  console.log(`PASS: 项目恢复后下拉切换、栏目切换、往返切换；1362/390/320px；无写请求或浏览器错误。截图：${screenshots}`);
+  console.log(`PASS: 项目恢复后下拉切换、栏目切换、往返切换；1280/1366/1920px；无写请求或浏览器错误。截图：${screenshots}`);
 } finally { await browser.close(); await server.close(); }

@@ -69,13 +69,13 @@ function ProjectPage({ name }: { name: string }) {
     return () => window.clearTimeout(timer);
   }, [name, retryAt, syncing, refetch]);
   const revision = status.data?.revision || 1;
-  const production = useQuery<RecordData>({ queryKey: ['section', name, section, revision], enabled: false, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
+  const production = useQuery<RecordData>({ queryKey: ['section', name, section, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/sections/${encodeURIComponent(section)}`), enabled: false, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const episodeItem = production.data?.children?.find((item: FileItem) => item.name === episode);
   const episodeTitle = episodeItem?.title || (episode === '片头' || episode === '片尾' ? '全剧通用' : '题名未记录');
   const overview = useQuery({ queryKey: ['overview', name, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/overview`), enabled: !!status.data, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const releaseCount = section === '98-成片交付' && production.data?.key === '98-成片交付' ? releaseVideos(production.data.children).length : null;
   const sectionTitle = (overview.data?.directories.find((dir: RecordData) => dir.name === section)?.label || section.replace(/^\d+-/, '')) + (releaseCount === null ? '' : `（${releaseCount}）`);
-  const episodeDetail = useQuery<FileItem>({ queryKey: ['episode', name, episode, revision], enabled: false });
+  const episodeDetail = useQuery<FileItem>({ queryKey: ['episode', name, episode, revision], queryFn: () => get<FileItem>(`${projectUrl(name)}/episodes/${episode}`), enabled: false });
   const episodeWarnings = section === '09-剧集制作' && episodeDetail.data?.name === episode
     ? episodeDetail.data.warnings || [] : [];
   const warnings = [...new Set<string>([...(overview.data?.warnings || []), ...(production.data?.warnings || []), ...episodeWarnings])];

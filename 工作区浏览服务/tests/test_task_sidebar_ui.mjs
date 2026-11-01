@@ -14,8 +14,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
 await server.listen();
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
- for (const width of (process.argv.includes('--probe') ? [1362] : [1362,390,320])) {
-  const page = await browser.newPage({ viewport: { width, height: 916 } }), errors = [], unexpected = [], writes = [];
+ for (const width of (process.argv.includes('--probe') ? [1362] : [1280, 1366, 1920])) {
+  const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } }), errors = [], unexpected = [], writes = [];
   let rows = Array.from({ length: 20 }, (_, i) => ({ queue: 'local', id: 'fixture-' + (i + 1), project: '示例项目', title: '隔离任务 ' + (i + 1), task_type: 'video-first-pass', status: 'local_queued', category: 'queued',
     remote_url: 'http://fixture-node', created_at: '2026-10-27T00:00:00+08:00', source_session_name: '测试会话', can_transfer: true, transfer_targets: [{ url: 'http://fixture-backup', name: '备选节点' }] }));
   let failAction = false, failOrder = false, failReload = false, breakNextReload = false;

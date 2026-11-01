@@ -26,7 +26,7 @@ const options = [
   { value: 'long', label: '这是一条较长的选项名称，用来查看菜单在窄屏下的换行效果' },
 ];
 const sampleText = '这是一段公共组件演示文字。';
-const longSampleText = '这是长文字演示，用来检查手机上的换行与关闭入口，不读取或修改项目资料。'.repeat(4) + 'LongUnbrokenReference'.repeat(10);
+const longSampleText = '这是长文字演示，用来检查桌面窗口内的换行与关闭入口，不读取或修改项目资料。'.repeat(4) + 'LongUnbrokenReference'.repeat(10);
 const longSampleTitle = '长标题与正文换行演示：' + 'DocumentRevisionReference'.repeat(4);
 const sampleDocument = { html: '<h1>示例阅读文档</h1><p>这里的内容仅用于演示，不属于任何项目。</p><h2 id="demo-overview">内容概览</h2><p>可以展开章节导航、跳到指定章节，也可以复制示例文字。</p><h3 id="demo-detail">阅读细节</h3><p>正文沿用网站的字体、段落与表格样式。</p><h2 id="demo-checks">示例清单</h2><ul><li>打开文档弹窗</li><li>查看章节与正文</li><li>关闭后继续浏览组件</li></ul><table><thead><tr><th>状态</th><th>说明</th></tr></thead><tbody><tr><td>示例</td><td>不读取或修改真实项目资料</td></tr></tbody></table>' };
 const sampleItems = Array.from({ length: 18 }, (_, i) => `示例记录 ${String(i + 1).padStart(2, '0')}`);
@@ -95,7 +95,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p className="component-draft">已选择：{options.find(item => item.value === selection)!.label}</p>
       </Example>}
       {category === 'messages' && <>
-        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，手机上换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
+        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，在桌面窗口内换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
           <div className="component-demo-row"><button onClick={() => showNotice('演示：操作成功')}>显示成功提示</button><button onClick={() => showNotice('演示：操作失败，请重试', 'error')}>显示错误提示</button><button onClick={() => showNotice(longSampleText, 'error')}>显示长错误提示</button><button disabled={pending} onClick={() => setPending(true)}>显示持续提示</button></div>
           <p>演示状态：{pending ? '进行中' : '未进行'}</p>
           <div className="component-demo-row"><button disabled={!pending} onClick={() => { setPending(false); showNotice('演示已结束'); }}>结束演示</button><button className="link" onClick={clearNotices}>清除演示消息</button></div>

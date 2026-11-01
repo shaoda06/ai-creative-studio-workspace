@@ -36,6 +36,7 @@ try {
   await page.route(`**/episodes/${episode}`, async route => {
     const response = await route.fetch();
     const data = await response.json();
+    data.episodeRounds = []; data.episodeRoundIssues = [];
     data.scenes = ['C001']; data.previousEpisode = null; data.productionIssues = []; data.warnings = [];
     data.segments = { C001: segments }; data.sceneRounds = { C001: fixtureRounds };
     await route.fulfill({ response, json: data });
@@ -52,7 +53,7 @@ try {
   const chooseRound = async number => { await choose.click(); await page.getByRole('option', { name: new RegExp('^第' + number + '轮：') }).click(); };
   assert.equal(await choose.innerText(), '第2轮：剧本v2 · 分镜v2');
   assert.equal(await page.locator('.scene-round-selector .production-latest').innerText(), '当前最新');
-  assert.equal(await page.locator('.segment-round-new').count(), 0, 'pending video and inherited video must not be marked');
+  assert.equal(await page.locator('.segment-strip .round-new-dot, .segment-vertical-strip .round-new-dot').count(), 0, 'pending video and inherited video must not be marked');
   assert.equal(await page.locator('.segment-selectors .production-latest').innerText(), '当前最新');
   assert.equal(await page.locator('.production-latest-link').count(), 0, 'latest selections need no switch links');
   const latestBox = await page.locator('.scene-round-selector .production-latest').boundingBox();
@@ -103,7 +104,7 @@ try {
   await page.getByRole('button', { name: '导出修改意见', exact: true }).click();
   const exported = page.locator('.revision-export-note textarea');
   await exported.waitFor();
-  assert.ok(await page.getByRole('textbox', { name: '第1轮 整场总体意见', exact: true }).isVisible());
+  assert.ok(await page.getByRole('textbox', { name: '本轮汇总意见', exact: true }).isVisible());
   assert.ok((await exported.inputValue()).includes('旧轮意见'));
   assert.ok(!(await exported.inputValue()).includes('新轮意见'));
   await page.getByRole('button', { name: '关闭', exact: true }).click();
@@ -127,20 +128,20 @@ try {
   assert.equal(await page.getByRole('button', { name: '切换到本段最新版本', exact: true }).count(), 0, 'new round does not make an unchanged candidate outdated');
   await page.getByRole('button', { name: '切换到最新修改轮次', exact: true }).click();
   assert.equal(await choose.getAttribute('data-value'), '3');
-  assert.equal(await page.locator('.segment-round-new').count(), 0, 'returning to an older video is not a new generation');
+  assert.equal(await page.locator('.segment-strip .round-new-dot, .segment-vertical-strip .round-new-dot').count(), 0, 'returning to an older video is not a new generation');
   segments[0].videos.find(video => video.run === 'R002').url = '/fixture-P001-R002.mp4';
   refreshRevision = 2;
   await chooseRound('2');
-  await page.locator('.segment-strip button[aria-label^="分段 P001，"] .segment-round-new').waitFor();
-  assert.equal(await page.locator('.segment-round-new').count(), 1, 'only the newly generated P001 should be marked');
+  await page.locator('.segment-strip button[aria-label^="分段 P001，"] .round-new-dot').waitFor();
+  assert.equal(await page.locator('.segment-strip .round-new-dot, .segment-vertical-strip .round-new-dot').count(), 1, 'only the newly generated P001 should be marked');
   await page.screenshot({ path: path.join(out, 'new-round-segment.png') });
   await page.getByRole('button', { name: '宽屏显示', exact: true }).click();
-  assert.equal(await page.locator('.segment-vertical-strip .segment-round-new').count(), 1);
+  assert.equal(await page.locator('.segment-vertical-strip .round-new-dot').count(), 1);
   await page.getByRole('button', { name: '恢复布局', exact: true }).click();
   await chooseRound('1');
-  assert.equal(await page.locator('.segment-round-new').count(), 3, 'first round marks its available videos');
+  assert.equal(await page.locator('.segment-strip .round-new-dot, .segment-vertical-strip .round-new-dot').count(), 3, 'first round marks its available videos');
   await chooseRound('3');
-  assert.equal(await page.locator('.segment-round-new').count(), 0);
+  assert.equal(await page.locator('.segment-strip .round-new-dot, .segment-vertical-strip .round-new-dot').count(), 0);
   await page.mouse.move(5, 5);
   await choose.press('ArrowDown');
   await page.locator('[role="combobox"][aria-label="场次修改轮次"][aria-expanded="true"]').waitFor();
@@ -155,12 +156,12 @@ try {
   await choose.click();
   await page.screenshot({ path: path.join(out, 'desktop-round-selection.png') });
   await choose.press('Escape');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1280, height: 640 });
   await page.locator('.scene-round-selector').scrollIntoViewIfNeeded();
   await choose.click();
-  await page.screenshot({ path: path.join(out, 'mobile-round-selection.png') });
+  await page.screenshot({ path: path.join(out, 'minimum-desktop-round-selection.png') });
   const menuBox = await page.getByRole('listbox', { name: '场次修改轮次' }).boundingBox();
-  assert.ok(menuBox.x >= 0 && menuBox.x + menuBox.width <= 391);
+  assert.ok(menuBox.x >= 0 && menuBox.x + menuBox.width <= 1280);
   assert.equal(await page.getByRole('button', { name: '切换到最新修改轮次', exact: true }).count(), 0);
   await choose.press('Escape');
   await page.locator('[role="combobox"][aria-label="场次修改轮次"][aria-expanded="false"]').waitFor();

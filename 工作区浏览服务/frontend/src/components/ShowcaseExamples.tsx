@@ -90,9 +90,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <SearchField size="compact" label="紧凑搜索示例" placeholder="紧凑搜索…" value={search} onChange={setSearch} /><SearchField label="禁用搜索示例" placeholder="不可搜索" value="" onChange={setSearch} disabled />
         {(!search || '公共组件示例'.includes(search)) ? <EntryCard to="/" title="公共组件示例" description="返回网站入口页" icon="▤" /> : <p className="muted">没有匹配的示例。</p>}</div>
       </ComponentExample>
-      <ComponentExample title="导航的分组与方向" rule="同一组件支持横排、竖排、紧凑和分组下拉；加宽规格用于项目顶部，竖排示例在手机上改为两列。禁用项不可选择。" usage="顶部栏目、侧栏、制作模式">
+      <ComponentExample title="导航的分组与方向" rule="同一组件支持横排、竖排、紧凑和分组下拉；加宽规格用于项目顶部，竖排示例保持桌面侧栏排列。禁用项不可选择。" usage="顶部栏目、侧栏、制作模式">
         <TabNav wide label="示例分组导航" selected={selected} onChange={setSelected} groups={[{ label: '示例分组', values: ['two', 'three'] }]} items={[{ value: 'one', label: '普通页签' }, { value: 'two', label: '子项甲' }, { value: 'three', label: '子项乙' }, { value: 'disabled', label: '禁用页签', disabled: true }]} />
-        <TabNav label="示例竖排导航" vertical mobileLayout="grid" compact selected={selected} onChange={setSelected} items={[{ value: 'one', label: '示例甲' }, { value: 'two', label: '示例乙' }]} />
+        <TabNav label="示例竖排导航" vertical compact selected={selected} onChange={setSelected} items={[{ value: 'one', label: '示例甲' }, { value: 'two', label: '示例乙' }]} />
       </ComponentExample>
       <ComponentExample title="悬停与键盘提示" rule="悬停或键盘聚焦显示说明，移开或按Esc关闭；提示不挤动布局。" usage="长标题、播放入口、状态详情">
         <PointerTooltip text="这是公共提示框的完整说明。"><button>查看悬停说明</button></PointerTooltip>
@@ -159,7 +159,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />
         <AudioPreviewButton name="缺少参考音频的示例" enabled={false} playing={false} progress={0} onClick={() => {}} />
       </ComponentExample>
-      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局；示例使用受控重复播放；业务页在同一集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频；连续播放开启会关闭并禁用重复播放，取消连续播放后不自动恢复。业务页连续播放可按本集轮次跨场次接续；此处仅演示互斥开关，不播放项目队列。宽屏时显示右侧分段导航，手机操作区使用整行宽度。" usage="剧集制作分段视频">
+      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局；示例使用受控重复播放；业务页在同一集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频；连续播放开启会关闭并禁用重复播放，取消连续播放后不自动恢复。业务页连续播放可按本集轮次跨场次接续；此处仅演示互斥开关，不播放项目队列。宽屏时显示右侧分段导航，操作区按桌面公共规格排列。" usage="剧集制作分段视频">
         <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} />}>
           <section className="segment-script"><Rich html="<h3>示例分镜</h3><p>切换宽屏可查看播放器与分段导航的共同布局。</p>" /></section>
         </SegmentLayout>

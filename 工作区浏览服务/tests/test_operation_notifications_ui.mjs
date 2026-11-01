@@ -26,8 +26,8 @@ const out = await mkdtemp(path.join(os.tmpdir(), 'nora-operation-notifications-'
 let browser;
 try {
   browser = await chromium.launch({ headless: true });
-  for (const width of [1362, 390]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } }), errors = [];
+  for (const width of [1280, 1366, 1920]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } }), errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => {
       if (window.failCopy) throw new Error('模拟复制失败');

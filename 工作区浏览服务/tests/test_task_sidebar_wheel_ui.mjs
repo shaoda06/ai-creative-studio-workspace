@@ -11,8 +11,8 @@ const out=await mkdtemp('/tmp/nora-sidebar-wheel-');
 const server=await createServer({configFile:false,root:fileURLToPath(new URL('../frontend',import.meta.url)),plugins:[react()],server:{host:'127.0.0.1',port:0}});
 await server.listen();const browser=await chromium.launch({channel:'chrome',headless:true});
 try{
- for(const width of (process.argv.includes('--probe')?[1362]:[1362,390,320])){
-  const page=await browser.newPage({viewport:{width,height:916}}),errors=[],writes=[];
+ for(const width of (process.argv.includes('--probe')?[1362]:[1280, 1366, 1920])){
+  const page=await browser.newPage({viewport:{ width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 }}),errors=[],writes=[];
   page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
   await page.route('**/api/**',route=>{
    const req=route.request();if(req.method()!=='GET'){writes.push(req.url());return route.abort()}
@@ -44,7 +44,7 @@ try{
    const before=await local.evaluate(e=>e.scrollTop);await wheel(local,delta);
    assert.ok(Math.abs(await local.evaluate(e=>e.scrollTop)-before)<=1,'列表边界允许浏览器1px取整');assert.equal(await windowTop(),300,`${edge}边界不传给背景`);
   }
-  if(width>700){await reset();await page.mouse.move(900,700);await page.mouse.wheel(0,250);await page.waitForTimeout(200);assert.ok(await windowTop()>300,'侧栏外仍可滚动背景')}
+  if(width>700){await reset();await page.mouse.move(900, width === 1280 ? 560 : 700);await page.mouse.wheel(0,250);await page.waitForTimeout(200);assert.ok(await windowTop()>300,'侧栏外仍可滚动背景')}
   await page.screenshot({path:`${out}/${width}.png`});
   await page.getByRole('button',{name:'收起任务进度',exact:true}).click();
   await reset();await page.mouse.move(width-20,700);await page.mouse.wheel(0,250);await page.waitForTimeout(200);assert.ok(await windowTop()>300,'收起后背景正常滚动');

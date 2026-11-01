@@ -13,8 +13,8 @@
 .component-draft { white-space: pre-wrap; overflow-wrap: anywhere; }
 .component-usage { border-top: 1px solid var(--line); padding-top: 14px; margin: 20px 0 0; color: var(--muted); font-size: 12px; }
 .component-sample-list { padding-left: 22px; line-height: 2; }
-@media (max-width: 1000px) { .component-examples { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 600px) { .component-showcase-heading { flex-wrap: wrap; gap: 12px; } .component-example { padding: 16px; } }
+
+
 .component-example.is-full-width { grid-column: 1 / -1; }
 .component-demo-textarea { width: 100%; min-height: 100px; margin-top: 12px; }
 .component-demo-stack { display: grid; gap: 12px; min-width: 0; }

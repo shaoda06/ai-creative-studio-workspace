@@ -30,7 +30,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
   if (!url.startsWith('/api/')) return next();
   if (req.method !== 'GET') { writes.push(url); res.writeHead(405); return res.end(); }
   let data;
-  if (url === '/api/projects') data = [{ id: '轮次示例', name: '轮次示例' }];
+  if (url === '/api/workspaces') data = [{ id: 'nora', name: 'Nora示例空间', view: 'serial-drama', projects: [{ id: '轮次示例', name: '轮次示例' }] }];
+  else if (url === '/api/projects') data = [{ id: '轮次示例', name: '轮次示例' }];
   else if (url.endsWith('/status')) data = { revision: 1, updating: false, checking: false };
   else if (url.endsWith('/overview')) data = { active: [], warnings: [], directories: [{ name: '00-项目定位', label: '项目定位' }, { name: '09-剧集制作', label: '剧集制作' }] };
   else if (url.endsWith('/sections/00-项目定位')) data = { exists: false, groups: [] };
@@ -45,9 +46,9 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 try {
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
   missing = false;
-  const context = await browser.newContext({ viewport: { width, height: 916 } });
+  const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });

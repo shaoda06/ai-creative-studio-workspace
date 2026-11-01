@@ -28,8 +28,8 @@ try {
   server = await preview({ ...config, preview: { host: '127.0.0.1', port: 0 } });
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   browser = await chromium.launch({ headless: true });
-  for (const width of [1362, 390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } });
+  for (const width of [1280, 1366, 1920]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
     const errors = [], requests = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {

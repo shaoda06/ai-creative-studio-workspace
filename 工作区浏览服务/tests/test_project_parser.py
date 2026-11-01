@@ -933,6 +933,15 @@ class ProjectParserTests(unittest.TestCase):
         self.assertIsNone(data["peopleIndex"])
         self.assertEqual(data["catalogues"]["08-参考视频"]["indexKey"], "08-参考视频/参考视频索引.md")
 
+    def test_outline_index_accepts_explicit_formal_episode_script(self):
+        script = "09-剧集制作/EP002/02-剧集剧本/EP002-本集剧本.md"
+        self.put(script, "# EP002 本集剧本\n\n## 1. 故事剧本正文\n测试剧情")
+        self.put("06-分集大纲/分集索引.md", "# 分集索引\n| 集号 | 一句话概要 | 大纲入口 |\n| --- | --- | --- |\n| EP002 | 已有正式剧本 | [正式剧本](../" + script + ") |")
+        data = portal.build_data(self.root)
+        items = data["catalogues"]["06-分集大纲"]["children"]
+        self.assertFalse(any("EP002大纲入口未识别" in warning for warning in data["warnings"]))
+        self.assertEqual(next(item for item in items if item["name"] == "EP002")["key"], script)
+
     def test_catalogue_outlines_follow_index_not_production_status(self):
         self.put("06-分集大纲/分集索引.md", "# 索引\n| 集号 | 所属故事阶段 | 一句话概要 | 大纲入口 |\n| --- | --- | --- | --- |\n| EP001 | 第一阶段 | 原概要 | [文档](EP001-分集大纲.md) |\n| EP002 | 第二阶段 | 缺文件 | [文档](EP002-分集大纲.md) |")
         source = self.put("06-分集大纲/EP001-分集大纲.md", "# EP001\n- 确认状态：已确认\n本集题名：先撑过今晚。\n## 剧情\n原剧情")

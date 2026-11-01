@@ -52,7 +52,7 @@ export async function checkSharedFeedback(page, width, selfTest) {
     const box = await fitsViewport(dialog, `${width}px ${trigger}`);
     if (trigger.includes('紧凑')) assert.ok(box.width <= 441);
     await usableClose(dialog, close, `${width}px 长标题`);
-    if (selfTest && width === 390 && trigger === '打开长内容弹窗') {
+    if (selfTest && width === 1280 && trigger === '打开长内容弹窗') {
       let injected = await page.addStyleTag({ content: '.dialog-body{overflow-wrap:normal!important}' });
       await assert.rejects(fitsViewport(dialog, '模拟长串不换行'), /越界/);
       await injected.evaluate(el => el.remove());
@@ -114,7 +114,7 @@ export async function checkSharedFeedback(page, width, selfTest) {
   assert.notEqual(await cards.evaluate(el => getComputedStyle(el).color), infoColor, '错误提示需有区别样式');
   await page.clock.fastForward(10000);
   assert.equal(await cards.count(), 1, '错误提示不能定时消失');
-  if (selfTest && width === 390) {
+  if (selfTest && width === 1280) {
     let injected = await page.addStyleTag({ content: '.floating-message{min-width:600px!important}' });
     await assert.rejects(messageFits(page, cards, '模拟消息超宽'), /越界|消息宽度/);
     await injected.evaluate(el => el.remove());

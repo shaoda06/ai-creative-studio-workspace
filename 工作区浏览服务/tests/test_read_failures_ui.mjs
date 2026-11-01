@@ -22,7 +22,7 @@ const out = await mkdtemp(path.join(os.tmpdir(), 'nora-read-failure-'));
 let browser;
 try {
   browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
-  for (const viewport of [{ width: 1362, height: 918 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     const page = await browser.newPage({ viewport }), errors = [], writes = [], reads = { A: 0, B: 0, Modal: 0 };
     let releaseB, releaseA;
     const holdB = new Promise(resolve => { releaseB = resolve; });

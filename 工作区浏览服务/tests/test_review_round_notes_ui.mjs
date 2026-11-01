@@ -12,7 +12,7 @@ const out = path.join(os.tmpdir(), 'nora-review-round-notes-ui');
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge', headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 1362, height: 918 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
@@ -102,11 +102,11 @@ try {
   await page.getByRole('button', { name: '复制', exact: true }).click();
   const history = await page.evaluate(() => navigator.clipboard.readText());
   assert.ok(history.includes(old.text) && history.includes(unknown.text) && history.includes('本轮导出中修订的意见'));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1280, height: 640 });
   const box = await page.getByRole('dialog').boundingBox();
-  assert.ok(box.x >= 0 && box.x + box.width <= 391);
-  await page.screenshot({ path: path.join(out, 'history-mobile.png') });
-  await page.setViewportSize({ width: 1362, height: 918 });
+  assert.ok(box.x >= 0 && box.x + box.width <= 1280);
+  await page.screenshot({ path: path.join(out, 'history-minimum-desktop.png') });
+  await page.setViewportSize({ width: 1366, height: 768 });
   await closeExport();
   assert.equal(await editor.inputValue(), '本轮导出中修订的意见');
   await page.getByRole('button', { name: '清空', exact: true }).click();
@@ -119,7 +119,7 @@ try {
   assert.deepEqual(errors, []);
   assert.equal(await page.title(), 'Nora工作台');
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
-  const evidence = { url: page.url(), title: await page.title(), viewport: '1362x918', browser: 'Browser plugin not available; existing Playwright with bundled Chromium',
+  const evidence = { url: page.url(), title: await page.title(), viewport: '1366x768 and 1280x640', browser: 'Browser plugin not available; existing Playwright with bundled Chromium',
     checks: ['inherited candidate starts empty', 'editor save includes round', 'switch round restores independent text', 'export only current round', 'history retains prior and unknown rounds', 'export edit preserves round', 'clear current round preserves history'], pageErrors: errors, mockedPuts: puts.length, productionWrites: 0 };
   await writeFile(path.join(out, 'evidence.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence, null, 2));

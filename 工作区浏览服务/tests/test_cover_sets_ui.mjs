@@ -20,8 +20,8 @@ const base = await new Promise((resolve, reject) => {
 const out = await mkdtemp(path.join(os.tmpdir(), 'nora-cover-lineage-'));
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
 try {
-  for (const width of [1362, 390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } }), errors = [], api = [];
+  for (const width of [1280, 1366, 1920]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } }), errors = [], api = [];
     page.on('pageerror', error => errors.push(String(error)));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.route('**/api/**', route => { api.push(route.request().url()); return route.abort(); });

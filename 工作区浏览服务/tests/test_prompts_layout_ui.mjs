@@ -11,7 +11,7 @@ assert.ok(base, 'Usage: node tests/test_prompts_layout_ui.mjs URL');
 const out = await mkdtemp(path.join(os.tmpdir(), 'nora-prompts-layout-'));
 const browser = await chromium.launch({ headless: true });
 try {
-  const page = await browser.newPage({ viewport: { width: 1362, height: 918 } });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   const release = await (await page.request.get(base + '/release.json')).json();
@@ -102,8 +102,8 @@ try {
   await tree.getByRole('button', { name: /^主目录 \(\d+\)$/ }).click();
   await page.getByRole('dialog', { name: '修改尚未保存' }).waitFor();
   const unsaved = page.getByRole('dialog', { name: '修改尚未保存', exact: true });
-  for (const width of [1362, 390, 320]) {
-    await page.setViewportSize({ width, height: 918 });
+  for (const width of [1280, 1366, 1920]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 });
     const actions = unsaved.locator('.prompt-actions');
     assert.deepEqual(await actions.getByRole('button').allTextContents(), ['保存并继续', '继续修改', '放弃修改']);
     const dangerStyle = locator => locator.evaluate(el => { const style = getComputedStyle(el); return [style.color, style.backgroundColor, style.borderColor]; });
@@ -121,7 +121,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await unsaved.screenshot({ path: path.join(out, `${width}-unsaved-actions.png`) });
   }
-  await page.setViewportSize({ width: 1362, height: 918 });
+  await page.setViewportSize({ width: 1366, height: 768 });
   await page.getByRole('button', { name: '继续修改', exact: true }).click();
   assert.equal(await category.innerText(), '图片/反推');
   await category.click();
@@ -151,7 +151,7 @@ try {
   await page.getByLabel('提示词正文', { exact: true }).fill(doc.body);
   await page.getByRole('switch', { name: '编辑模式', exact: true }).click();
   console.log('PASS directory scroll regression, fixed workspace, long preview, custom category picker and unsaved guard');
-  for (const viewport of [{ width: 1362, height: 700 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     await page.setViewportSize(viewport);
     const title = page.getByLabel('提示词标题', { exact: true });
     const field = title.locator('..'), label = field.locator('span');
@@ -159,14 +159,14 @@ try {
     assert.ok(Math.abs(inputBox.y + inputBox.height / 2 - labelBox.y - labelBox.height / 2) < 2, 'title label should align beside input');
     await category.click();
     await page.waitForFunction(() => document.querySelector('[role="combobox"][aria-label="提示词所在分类"]').getAttribute('aria-expanded') === 'true');
-    const target = viewport.width > 1000 ? '图片/反推' : '';
+    const target = doc.category ? '' : '图片/反推';
     await options.getByRole('option', { name: target || '主目录', exact: true }).click();
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await page.locator('.floating-message-content').filter({ hasText: '已保存' }).last().waitFor();
     assert.equal(doc.category, target);
     assert.equal(doc.body, '测试正文\n第二行');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'no page overflow at desktop or mobile sizes');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'no page overflow at supported desktop sizes');
     const panelBox = await detail.boundingBox(), actionsBox = await detail.locator('.prompt-actions').boundingBox();
     assert.ok(panelBox.y + panelBox.height - actionsBox.y - actionsBox.height <= 21, 'actions must sit at panel bottom');
     const bodyBox = await page.locator('.prompt-preview').boundingBox();
@@ -180,7 +180,7 @@ try {
     assert.ok(menuBox.x >= 0 && menuBox.x + menuBox.width <= viewport.width);
     await page.keyboard.press('Escape');
   }
-  await page.setViewportSize({ width: 1362, height: 918 });
+  await page.setViewportSize({ width: 1366, height: 768 });
   await page.waitForFunction(() => document.querySelectorAll('.floating-message').length === 0, null, { timeout: 5000 });
   const toggle = page.getByRole('switch', { name: '编辑模式', exact: true });
   const body = page.getByLabel('提示词正文', { exact: true });
@@ -241,16 +241,16 @@ try {
   await page.getByRole('button', { name: '保存', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: '保存', exact: true }).isDisabled(), true);
   assert.equal(doc.local_only, true, 'checked sends local storage on save');
-  for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 918 });
+  for (const width of [1280, 1366, 1920]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 });
     assert.equal(await localOnly.getAttribute('aria-checked'), 'true');
     const box = await page.locator('.prompt-controls').boundingBox();
-    assert.ok(box.x >= 0 && box.x + box.width <= width, 'storage control stays inside the phone');
+    assert.ok(box.x >= 0 && box.x + box.width <= width, 'storage control stays inside the desktop window');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(out, `local-storage-${width}.png`) });
   }
-  await page.setViewportSize({ width: 1362, height: 918 });
-  console.log('PASS local/shared toggle save payloads, unsaved guard, badges and 390/320px layout');
+  await page.setViewportSize({ width: 1366, height: 768 });
+  console.log('PASS local/shared toggle save payloads, unsaved guard, badges and 1280/1366/1920px layout');
   while (await page.getByRole('button', { name: '关闭通知', exact: true }).count()) await page.getByRole('button', { name: '关闭通知', exact: true }).first().click();
   await page.getByRole('button', { name: '删除', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: '移入回收站', exact: true });
@@ -283,5 +283,5 @@ try {
   await page.getByRole('button', { name: '放弃修改', exact: true }).click();
   console.log('PASS preview/edit switch, preserved drafts on preview/save failure, current badge, delete wording, shared save/delete/restore notices and automatic dismissal');
   assert.deepEqual(errors, []);
-  console.log(`PASS desktop/mobile inline fields, picker selection and save, no page errors; screenshots: ${out}`);
+  console.log(`PASS desktop inline fields, picker selection and save, no page errors; screenshots: ${out}`);
 } finally { await browser.close(); }

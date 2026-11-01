@@ -48,10 +48,10 @@ export async function checkSharedNavigation(page, width, selfTest) {
     await fits(menu, `${width}/${label}/菜单及当前标记`);
     await combo.press('Escape');
   }
-  for (const id of ['nav-normal', 'nav-group', 'nav-grid', 'nav-scroll', 'underline', 'underline-scroll', 'select-field']) {
+  for (const id of ['nav-normal', 'nav-group', 'nav-vertical', 'nav-scroll', 'underline', 'underline-scroll', 'select-field']) {
     await fixture.getByRole('button', { name: '重置导航', exact: true }).click();
     const host = fixture.getByTestId(id);
-    const scrollable = id === 'underline-scroll' || (id === 'nav-scroll' && width <= 600);
+    const scrollable = id === 'underline-scroll';
     await host.scrollIntoViewIfNeeded();
     await fits(host.locator('nav, [role=combobox]').first(), `${width}/${id}`, scrollable);
     await host.locator('nav').evaluateAll(els => els.forEach(el => { el.scrollLeft = 0; }));
@@ -64,7 +64,7 @@ export async function checkSharedNavigation(page, width, selfTest) {
       const menuBox = await menu.boundingBox();
       const comboBox = await combo.boundingBox();
       assert.ok(menuBox.width >= Math.min(comboBox.width, width - 16) - 1 && menuBox.width <= width - 16 + 1, '菜单以按钮宽度为最小值，由内容撑宽，只受屏幕限制');
-      assert.ok(menuBox.y >= 0 && menuBox.y + menuBox.height <= 918, '菜单必须处于屏幕内');
+      assert.ok(menuBox.y >= 0 && menuBox.y + menuBox.height <= page.viewportSize().height, '菜单必须处于屏幕内');
       const unavailable = menu.getByRole('option', { name: '不可选择', exact: true });
       assert.equal(await unavailable.isDisabled(), true, '分组/下拉禁用选项必须不可点击');
       // Exercise keyboard skipping as well as pointer selection of a long option.
@@ -150,8 +150,8 @@ export async function checkSharedNavigation(page, width, selfTest) {
   await fits(pagination, `${width}/10页`);
   await pagination.getByRole('button', { name: '上一页' }).click();
   assert.equal(await fixture.getByTestId('page-value').innerText(), '9');
-  if (selfTest && width === 390) {
-    const broken = await page.addStyleTag({ content: '.tabs:not(.tabs-vertical) > button {min-width:700px!important}' });
+  if (selfTest && width === 1280) {
+    const broken = await page.addStyleTag({ content: `.tabs:not(.tabs-vertical) > button {min-width:${width + 100}px!important}` });
     await assert.rejects(fits(fixture.getByTestId('nav-normal').locator('nav'), '模拟长选项越界'), /导航边界/);
     await broken.evaluate(el => el.remove());
     const moved = await page.addStyleTag({ content: '.pagination button {transform:translateX(12px)}' });
@@ -189,13 +189,13 @@ export async function checkSharedNavigation(page, width, selfTest) {
     await fits(menu, `${width}/${name}/长文字及当前标记`);
     assert.equal(await menu.getByRole('option', { name: '暂不可选', exact: true }).isDisabled(), true);
     if (name === '表单选项示例') {
-      await page.setViewportSize({ width: width + 80, height: 918 });
+      await page.setViewportSize({ width: width + 80, height: page.viewportSize().height });
       await page.waitForFunction(() => {
         const trigger = document.querySelector('[role=combobox][aria-label="表单选项示例"]').getBoundingClientRect();
         const menu = document.querySelector('[role=listbox][aria-label="表单选项示例"]').getBoundingClientRect();
         return menu.width >= Math.min(trigger.width, innerWidth - 16) - 1 && menu.left >= 8 && menu.right <= innerWidth - 8;
       });
-      await page.setViewportSize({ width, height: 918 });
+      await page.setViewportSize({ width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 });
     }
     await menu.getByRole('option').last().click();
     await combo.click();
@@ -217,5 +217,5 @@ export async function checkSharedNavigation(page, width, selfTest) {
     await page.screenshot({ path: screenshot });
     console.log(`导航展示页截图：${screenshot}`);
   }
-  console.log(`导航检查：${width}px长选项、普通/分组/网格/滚动导航、菜单键盘禁用、分页边界与切换稳定性通过。`);
+  console.log(`导航检查：${width}px长选项、普通/分组/竖排/滚动导航、菜单键盘禁用、分页边界与切换稳定性通过。`);
 }

@@ -39,7 +39,7 @@ const base=`http://127.0.0.1:${server.httpServer.address().port}`;
 let browser;
 try{
  browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'chrome',headless:true});
- for(const viewport of [{width:1362,height:918},{width:390,height:844},{width:320,height:740}]){
+ for(const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]){
   const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[];
   page.on('pageerror',error=>errors.push(String(error)));mode='normal';writes=[];unexpected=[];
   await page.goto(base+'/tests/release-films.html');

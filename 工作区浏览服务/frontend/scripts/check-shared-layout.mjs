@@ -50,8 +50,9 @@ try {
   server = await preview({ ...config, preview: { host: '127.0.0.1', port: 0, open: false } });
   const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
   browser = await chromium.launch({ headless: true });
-  for (const width of [1362, 390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } });
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
+    const { width, height } = viewport;
+    const page = await browser.newPage({ viewport });
     const errors = [], forbidden = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -126,13 +127,13 @@ try {
         assert.equal(overflow, false, `[页面越界] ${context}`);
       }
     }
-    if (selfTest && width === 390) {
+    if (selfTest && width === 1280) {
       // Inject each known failure, then run the very same assertions used above.
       let injected = await page.addStyleTag({ content: '.video-source{font-size:11px!important}.segment-selectors .tab-select{font-size:inherit!important}' });
       await assert.rejects(sameStyle(business.getByRole('combobox', { name: '画质选择', exact: true }), expected, '模拟宽屏继承'), /字号\/样式继承/);
       await injected.evaluate(el => el.remove());
-      injected = await page.addStyleTag({ content: '.segment-selectors{max-width:none!important;flex-wrap:nowrap!important}' });
-      await assert.rejects(contained(selectors, '模拟手机越界'), /容器越界/);
+      injected = await page.addStyleTag({ content: `.segment-selectors{min-width:${width + 100}px!important;max-width:none!important;flex-wrap:nowrap!important}` });
+      await assert.rejects(contained(selectors, '模拟桌面容器越界'), /容器越界/);
       await injected.evaluate(el => el.remove());
       await contained(selectors, '恢复后');
       const screenshot = join(tmpdir(), `nora-shared-layout-${process.pid}.png`);
@@ -197,11 +198,11 @@ try {
     assert.equal(fullscreenBox.x, 0);
     assert.equal(fullscreenBox.y, 0);
     assert.equal(fullscreenBox.width, width);
-    assert.equal(fullscreenBox.height, 918);
+    assert.equal(fullscreenBox.height, height);
     const fullscreenStyle = await sheetDialog.evaluate(el => ({ background: getComputedStyle(el).backgroundColor, padding: getComputedStyle(el.querySelector('.dialog-body')).padding }));
     assert.equal(fullscreenStyle.background, 'rgba(24, 34, 47, 0.9)', '深灰蓝半透明蒙版');
     const imageFrame = await sheetDialog.locator('.director-sheet-fullscreen-image').boundingBox();
-    assert.ok(imageFrame.x >= 16 && imageFrame.y >= 48 && imageFrame.x + imageFrame.width <= width - 16 && imageFrame.y + imageFrame.height <= 918 - 24, '全屏图像四周留空隙');
+    assert.ok(imageFrame.x >= 16 && imageFrame.y >= 48 && imageFrame.x + imageFrame.width <= width - 16 && imageFrame.y + imageFrame.height <= height - 24, '全屏图像四周留空隙');
     const closeCircle = await sheetDialog.getByRole('button', { name: '关闭', exact: true }).boundingBox();
     assert.equal(closeCircle.width, 40);
     assert.equal(closeCircle.height, 40);
@@ -268,7 +269,7 @@ try {
     assert.equal(await sheetArrows.count(), 0, '单页不出现翻页箭头');
     await sheets.getByRole('button', { name: '模拟空场次', exact: true }).click();
     assert.equal(await sheets.getByText('分镜 v07 尚未制作导演分镜表。', { exact: true }).count(), 1);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '导演表手机无横向溢出');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '导演表桌面无横向溢出');
     await checkEpisodeDirectorSheets(page, sheets, width);
     console.log(`导演分镜表检查：${width}px单图、移除重复版本文字、数字跳页与高亮同步、圆形箭头、首尾隐藏、记录与下载同排靠右、全视口看图与退出、审阅入口靠右、来源版本筛选、候选采用状态、单页及空场次通过。`);
     await showcase.getByRole('button', { name: '列表与分页', exact: true }).click();
@@ -344,7 +345,7 @@ try {
     const episodeBounds = await episodeButtons.evaluateAll(nodes => nodes.map(node => {
       const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width };
     }));
-    assert.equal(episodeBounds[0].y === episodeBounds[1].y, width > 700, '选集最多两列，手机换行');
+    assert.equal(episodeBounds[0].y, episodeBounds[1].y, '桌面选集保持两列');
     assert.ok(episodeBounds[2].y > episodeBounds[0].y, '第三集另起一行');
     for (const button of await episodeButtons.all()) {
       await contained(button, `${width}px / 选集按钮及其时长`);

@@ -78,6 +78,7 @@ const server = await createServer({ configFile: false, cacheDir: path.join(scree
       }
     } else { const scene = url.split('/').at(-1); data = scene === 'EP001' ? saved : saved.scenes[scene]; }
   } else if (req.method !== 'GET') { unexpected.push(`${req.method} ${url}`); res.statusCode = 405; data = {}; }
+  else if (url === '/api/workspaces') data = [{ id: 'nora', name: 'Nora示例空间', view: 'serial-drama', projects: [{ id: '意见示例', name: '意见示例' }] }];
   else if (url === '/api/projects') data = [{ id: '意见示例', name: '意见示例' }];
   else if (url.endsWith('/status')) data = { revision: 1, updating: false, checking: false };
   else if (url.endsWith('/overview')) data = { active: [], warnings: [], directories: [{ name: '00-项目定位', label: '项目定位' }, { name: '09-剧集制作', label: '剧集制作' }] };
@@ -92,9 +93,9 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
   reset(); legacy = false; conflict = false; failRead = false;
-  const context = await browser.newContext({ viewport: { width, height: 916 } });
+  const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('意见示例'));
@@ -253,6 +254,10 @@ try {
   await reconcile.getByRole('textbox', { name: '本页待保存意见', exact: true }).fill('核对后的合并意见');
   await page.screenshot({ path: path.join(screenshots, `conflict-${width}.png`) });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  // Acknowledge the persistent conflict error before using the low-height dialog.
+  await page.locator('.floating-message').filter({ hasText: '意见已在其他页面更新' }).getByRole('button', { name: '关闭通知', exact: true }).click();
+  assert.ok(await reconcile.isVisible(), '关闭错误提示不取消核对');
+  assert.equal(await reconcile.getByRole('textbox', { name: '本页待保存意见', exact: true }).inputValue(), '核对后的合并意见');
   await reconcile.getByRole('button', { name: '保存核对后的本页意见', exact: true }).click();
   await page.locator('.revision-note-state[data-state="saved"]').waitFor();
   assert.equal(saved.scenes.C001.notes[noteId].text, '核对后的合并意见');
@@ -299,7 +304,7 @@ try {
   assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
   await context.close(); console.log(`PASS ${width}px: 整集汇总排序、候选身份、统一总体意见、跨场恢复、旧历史及冲突保留输入`);
  }
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
  legacy = true; reset();
  for (const [scene, value] of Object.entries(saved.scenes)) {
   value.notes = Object.fromEntries(Object.values(value.notes).map(note => {
@@ -307,7 +312,7 @@ try {
    return [key(value), value];
   }));
  }
- const context = await browser.newContext({ viewport: { width, height: 916 } });
+ const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
  const page = await context.newPage();
  await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('意见示例'));
  await page.getByRole('button', { name: '剧集制作', exact: true }).click();

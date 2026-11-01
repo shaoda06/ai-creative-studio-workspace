@@ -54,19 +54,3 @@
 .asset-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .asset-library .error { margin-bottom: 16px; }
 .asset-library .error button { margin-left: 12px; }
-@media (max-width: 1050px) {
-  .asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .asset-editor { grid-template-columns: minmax(240px, .8fr) minmax(0, 1.2fr); gap: 16px; }
-  .asset-fixed-images, .asset-album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 760px) {
-  .asset-editor { grid-template-columns: minmax(0, 1fr); }
-  .asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .asset-cover, .asset-cover img { height: 180px; }
-  .asset-toolbar { flex-wrap: wrap; }
-  .asset-toolbar input { flex-basis: 100%; }
-  .asset-toolbar select { flex: 1; min-width: 0; }
-  .asset-info, .asset-images { padding: 16px; }
-  .asset-fixed-images { grid-template-columns: minmax(0, 1fr); }
-  .asset-card-text { padding: 12px; }
-}

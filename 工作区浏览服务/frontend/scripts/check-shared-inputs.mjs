@@ -90,7 +90,7 @@ export async function checkSharedInputs(page, width, selfTest) {
   await control.click(); assert.equal((await counts()).toggles, disabledState.toggles + 1);
   await fixture.getByRole('button', { name: '提交示例输入', exact: true }).click();
   assert.equal((await counts()).submits, 1);
-  if (selfTest && width === 390) {
+  if (selfTest && width === 1280) {
     let injected = await page.addStyleTag({ content: '.search-field{min-width:600px!important}' });
     await assert.rejects(fieldFits(fixture.getByLabel('标准搜索检查', { exact: true }), '模拟搜索越界'), /输入边界/);
     await injected.evaluate(el => el.remove());

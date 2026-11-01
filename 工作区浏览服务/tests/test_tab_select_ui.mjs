@@ -11,7 +11,7 @@ assert.ok(base, 'Usage: node tests/test_tab_select_ui.mjs DEV_URL');
 const out = await mkdtemp(path.join(os.tmpdir(), 'nora-tab-select-'));
 const browser = await chromium.launch({ headless: true });
 try {
-  const page = await browser.newPage({ viewport: { width: 1362, height: 918 } });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   await page.goto(base + '/tests/tab-select.html');
@@ -55,7 +55,7 @@ try {
   assert.equal(await menu('转移任务').locator('.tab-select-badge').count(), 0, 'action picker has no selected destination before transfer');
   await menu('转移任务').getByRole('option', { name: '目标节点', exact: true }).click();
   assert.equal(await page.getByTestId('destination').innerText(), 'target');
-  for (const viewport of [{ width: 1362, height: 918 }, { width: 390, height: 700 }]) {
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     await page.setViewportSize(viewport);
     await combo('底部菜单').click(); await current('底部菜单', '第19项');
     const box = await menu('底部菜单').boundingBox();
@@ -67,5 +67,5 @@ try {
     assert.equal(await combo('底部菜单').getAttribute('aria-expanded'), 'false');
   }
   assert.deepEqual(errors, []);
-  console.log('PASS default current badge, empty value, change/reselect, keyboard, modal, icon-only, disabled/empty, transfer callback, desktop/mobile bottom positioning; screenshots: ' + out);
+  console.log('PASS default current badge, empty value, change/reselect, keyboard, modal, icon-only, disabled/empty, transfer callback, desktop bottom positioning; screenshots: ' + out);
 } finally { await browser.close(); }

@@ -18,7 +18,7 @@ export function NavigationFixture() {
     <output data-testid="nav-value">{selected}</output>
     <div data-testid="nav-normal"><TabNav label="长文字导航" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>
     <div data-testid="nav-group"><TabNav label="分组导航" items={items} groups={[{ label: '分组长选项', values: items.map(item => item.value) }]} selected={selected} onChange={setSelected} disabled={disabled} /></div>
-    <div data-testid="nav-grid"><TabNav vertical mobileLayout="grid" label="网格导航" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>
+    <div data-testid="nav-vertical"><TabNav vertical label="竖排导航" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>
     <div data-testid="nav-scroll"><TabNav vertical label="滚动导航" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>
     <div data-testid="underline"><UnderlineTabs label="长文字页签" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>
     <div data-testid="underline-scroll"><UnderlineTabs compact scrollable label="滚动页签" items={items} selected={selected} onChange={setSelected} disabled={disabled} /></div>

@@ -32,7 +32,7 @@ const snapshot = { tasks: [task], local_tasks: [], remote_nodes: [{ url: nodeUrl
 let browser;
 try {
   browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
-  for (const viewport of [{ width: 1362, height: 918 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     task.status = 'running'; snapshot.remote_nodes[0].queue[0].status = 'running';
     const page = await browser.newPage({ viewport }), errors = [], writes = [];
     page.on('pageerror', error => errors.push(String(error)));
@@ -60,10 +60,8 @@ try {
         scrollWidth: document.documentElement.scrollWidth, font: getComputedStyle(element.querySelector('.comfy-task-timing')).fontVariantNumeric };
     });
     const first = await geometry();
-    if (viewport.width > 700) {
       assert.equal(first.timing.width, 182, 'reserve a stable timing column');
       assert.ok(first.copy.x + first.copy.width + 11 <= first.timing.x);
-    } else assert.ok(first.session.y >= first.timing.y + first.timing.height, 'mobile source row sits below timing');
     assert.equal(first.font, 'tabular-nums');
     for (const milliseconds of [1000, 9000, 40000, 3600000]) {
       await page.clock.fastForward(milliseconds);
