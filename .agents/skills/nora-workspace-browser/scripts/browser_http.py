@@ -33,7 +33,7 @@ def main():
     provider = Path(metadata['tool']).parent
     print(json.dumps({'ready': metadata['ready'], 'version': metadata['version'],
                       'workspace': metadata['workspace'], 'tool': metadata['tool'],
-                      'workspace_skills': str(Path(metadata['workspace']) / '.agents/skills'),
+                      'workspace_skills': str(provider / '.agents/skills'),
                       'provider_skills': str(provider / '.agents/skills')}, ensure_ascii=False))
 
 

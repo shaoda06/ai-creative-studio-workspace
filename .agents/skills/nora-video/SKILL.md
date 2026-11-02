@@ -1,9 +1,9 @@
 ---
 name: nora-video
-description: Nora AI视频创作与制作统一入口，识别业务类型并路由一级业务技能，登记共用工具及其开发维护入口；不规定具体业务阶段的制作规则。
+description: AI创作与制作统一入口，识别业务类型并路由一级业务技能，登记共用工具及其开发维护入口；不规定具体业务阶段的制作规则。
 ---
 
-# Nora AI视频创作与制作
+# AI创作与制作
 
 先识别当前业务、项目和实际动作，再进入对应业务入口。项目已有明确阶段时直接进入该阶段，不重新走全流程。用户授权和项目约定按原适用范围执行。
 
@@ -12,7 +12,7 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | 任务 | 入口 |
 | --- | --- |
 | AI连续短剧及其单集制作 | [连续短剧业务](../nora-serial-drama/SKILL.md) |
-| 商业视频订单 | `iris-commercial-video`一级业务（由Iris商业工作区提供），按项目AGENTS和README定位实际入口，不套短剧目录 |
+| 商业视频订单 | [Iris商业一级业务](../iris-commercial-video/SKILL.md)，不套短剧目录 |
 | 社交媒体运营及发布 | [运营一级业务](../nora-social-operations/SKILL.md) |
 | 独立剧情短片或其他视频 | 先确定实际业务及交付范围，已有项目规则优先；不因调用图片工具初始化短剧 |
 
@@ -29,13 +29,13 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | H3模型提示词、时间线、缓存与导演包 | [H3工具](../nora-h3/SKILL.md) |
 | 视频RIFE/RTX装配及客观媒体信息 | [视频处理](../nora-video-processing/SKILL.md) |
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../nora-jianying/SKILL.md) |
-| Markdown与实际配图的带水印PDF | `pdf-delivery-export`，由Iris工作区提供；按登记空间的技能目录定位，业务批准留调用方 |
+| Markdown与实际配图的带水印PDF | [PDF导出](../pdf-delivery-export/SKILL.md)，业务批准留调用方 |
 | 浏览器任务页、标签组和窗口收尾 | [浏览器操作](../nora-browser-operations/SKILL.md) |
 | 视频读取、提示词库和风格库 | [视频读取](../video-study/SKILL.md)、[提示词管理](../nora-prompt-library/SKILL.md)、[风格库](../krea2-style-library/SKILL.md) |
 
-跨工作区业务按[登记空间定位](../nora-workspace-browser/references/浏览服务使用规范.md#共享工具真源定位)取得实际根目录，再读取该空间AGENTS、README及对应一级业务。已有项目或阶段明确时直接接续，不复制业务文件到提供端。
+所有业务与公共技能统一在总目录.agents/skills中维护。Nora资料在workspaces/Nora Workspace，Iris资料在workspaces/Iris Workspace；先明确真实项目，读取所属资料区及项目AGENTS、README和当前进度，再按同库入口接续。用户只需从总工作区新建对话，不要求切换到子目录发现技能。
 
-共用工具的维护真源与服务代码提供端统一；资料子工作区可以保留客户端与旧入口，但不复制另一套现行规则。跨空间定位按[共用工具真源](../nora-workspace-browser/references/浏览服务使用规范.md#共享工具真源定位)执行；Iris提供的PDF从其本地登记工具读取。
+调用公共脚本时显式传入所属资料空间或实际项目，不以脚本所在总目录判断业务归属。后台查询与通知按[任务空间接续](../nora-workspace-browser/references/浏览服务使用规范.md#项目空间与统一入口)执行。
 
 主入口只维护职责和路由。图种、内容、布局、规格、来源资格、采用及业务完成条件由业务阶段维护；工具文档维护模型和接口要求。Agent负责理解、创作与语义核对，脚本负责确定性装配、文件处理和执行。
 

@@ -105,6 +105,34 @@ class WorkspaceTests(HttpTestCase):
 
 
 class WorkspaceClientTests(HttpTestCase):
+    def test_shared_query_selects_explicit_workspace_without_changing_default(self):
+        import importlib.util
+        import io
+        path = Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+        spec = importlib.util.spec_from_file_location('shared_workspace_query_test', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+            script.parent.mkdir(parents=True)
+            script.touch()
+            other = root / 'workspaces/Iris Workspace'
+            for owner, folder, prefix in [('nora', root, '/api'), ('commercial', other, '/api/workspaces/commercial')]:
+                config = folder / '工作区浏览服务/runtime/task-service.json'
+                config.parent.mkdir(parents=True)
+                config.write_text(json.dumps({'url': 'http://fixture.invalid', 'token': owner, 'api_prefix': prefix}))
+
+            def reply(request, timeout):
+                owner = 'commercial' if '/api/workspaces/commercial/' in request.full_url else 'nora'
+                self.assertEqual(request.get_header('X-nora-task-token'), owner)
+                return io.BytesIO(json.dumps({'id': 'same-id', 'owner': owner}).encode())
+
+            with patch.object(module, '__file__', str(script)), patch.object(module.urllib.request, 'build_opener', return_value=SimpleNamespace(open=reply)):
+                self.assertEqual(module.service_call('groups/same-id')['owner'], 'nora')
+                self.assertEqual(module.service_call('groups/same-id', workspace=other)['owner'], 'commercial')
+                self.assertEqual(module.service_call('groups/same-id', workspace=root)['owner'], 'nora')
+
     def test_client_prefix_keeps_legacy_and_registered_agent_routes(self):
         import importlib.util
         import io

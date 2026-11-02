@@ -1,13 +1,15 @@
-# Nora AI视频创作与制作工作区
+# AI Creative Studio Workspace
 
 `nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、连续短剧与运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。真实短剧项目由使用者在本地创建，不随模板提供。
 
 ## 开始使用
 
-统一入口为[Nora AI视频创作与制作](.agents/skills/nora-video/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，运营由[运营一级业务](.agents/skills/nora-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。旧路径保留兼容，现行正文与实现只维护一份。商业任务遵循实际商业工作区入口。
+在Codex中选择本总目录。Nora、Iris是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
+
+统一入口为[AI创作与制作](.agents/skills/nora-video/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，运营由[运营一级业务](.agents/skills/nora-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。旧路径保留兼容，现行正文与实现只维护一份。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
-2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [Nora统一入口](.agents/skills/nora-video/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
+2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/nora-video/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
 3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
 4. 新增外部技能默认安装到本工作区 `.agents/skills/{技能名}/`，已有可用安装复用。该工作区是本README所在目录，不是某部短剧的项目目录。当前独立安装的外部技能按 `.gitignore` 排除；新增技能默认可被Git发现，提交前核对来源、许可及是否需要随模板提供。
 5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/nora-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
@@ -34,7 +36,8 @@
 | `提示词管理/` | 仅本地保存的提示词与原有资料库，不入Git；与共享内容在同一页面管理 |
 | `工作区浏览服务/` | React＋FastAPI浏览服务、双击启动、共用解析器与开发历史 |
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
-| `projects/` | 使用者真实短剧项目，模板仅保留目录说明 |
+| `workspaces/Nora Workspace/projects/` | Nora真实短剧及角色项目 |
+| `workspaces/Iris Workspace/projects/` | Iris商业订单，原Git历史独立保留 |
 | `综合资料/` | 跨项目资料、未分类资料和本机过程资料，模板仅保留目录说明 |
 
 技能历史版本、真实服务库存、项目、个人配置和工具缓存仍可留在本机，但由 `.gitignore` 排除。不要把它们的本地存在误认为已被Git备份。
@@ -47,7 +50,7 @@
 
 ### 本工作区技能与风格资源
 
-[Nora统一入口](.agents/skills/nora-video/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频提示词、视频制作与交接同样由D09–D11维护；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
+[统一入口](.agents/skills/nora-video/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频提示词、视频制作与交接同样由D09–D11维护；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
 
 | 资源 | 来源与作者 |
 | --- | --- |
@@ -90,7 +93,7 @@ FFmpeg是工作区的本地音视频处理依赖。只在初始化项目工作�
 
 ## 工作区浏览服务
 
-Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页自动发现 `projects/` 项目，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
+Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现Nora与Iris的projects项目，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
 
 首次安装、构建、开发及测试说明见[服务README](工作区浏览服务/README.md)。服务需要Python 3.10＋及项目依赖，前端构建需要Node.js 22＋、pnpm 11；已构建后普通浏览不需要Node.js；ComfyUI后台的Codex会话通知需要本机Node，具体接入见服务README。项目页面由浏览服务读取源资料展示，不再生成或维护项目静态HTML。
 

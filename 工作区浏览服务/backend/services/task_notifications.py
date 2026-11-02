@@ -305,15 +305,16 @@ class TaskNotifications:
             scope = '任务：\n' + '\n'.join(
                 f'- {self.rows[task["id"]]["state"]["project"]}：{self.rows[task["id"]]["input"].title}'
                 for task in report['tasks'])
-        script = self.workspace / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
-        rules = self.workspace / '.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md'
+        skills = Path(__file__).resolve().parents[3] / '.agents/skills'
+        script = skills / 'nora-workspace-browser/scripts/browser_tasks.py'
+        rules = skills / 'nora-workspace-browser/references/ComfyUI-任务监控规范.md'
         return ('后台任务有更新\n\n'
                 + scope + '\n\n'
                 'Agent将读取最新结果并继续处理。需要你决定的事项，会单独说明。\n\n'
                 'Agent接续信息\n'
                 f'通知编号：{notification_id}\n来源会话：{thread_id}\n\n'
                 '读取报告：\n```text\n'
-                f'python "{script}" report --notification-id {notification_id}\n```\n\n'
+                f'python "{script}" report --notification-id {notification_id} --workspace "{self.workspace}"\n```\n\n'
                 f'接续规范：[后台通知接续](<{rules}#后台通知接续>)\n'
                 '先读取该章节，再静默读取报告并按规范接续；以本次报告为准。')
 

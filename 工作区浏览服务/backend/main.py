@@ -42,11 +42,13 @@ from backend.services.revision_notes import Episode, Scene, NoteChange, Revision
 from backend.services.episode_revision_notes import EpisodeRevisionNotes, EpisodeNotes, EpisodeExportChanges
 
 TOOL = Path(__file__).resolve().parent.parent
-WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', TOOL.parent)).resolve()
-WORKFLOWS = workflow_root(WORKSPACE / '.agents/skills/nora-ai-short-drama')
+PUBLIC_ROOT = TOOL.parent
+DEFAULT_WORKSPACE = PUBLIC_ROOT / 'workspaces/Nora Workspace'
+WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', DEFAULT_WORKSPACE if DEFAULT_WORKSPACE.is_dir() else PUBLIC_ROOT)).resolve()
+WORKFLOWS = workflow_root(PUBLIC_ROOT / '.agents/skills/nora-ai-short-drama')
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
-prompt_library = WorkspacePromptLibrary(WORKSPACE / '提示词管理', WORKSPACE / '共享提示词')
+prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词管理', PUBLIC_ROOT / '共享提示词')
 VERSION = json.loads((TOOL / 'frontend/package.json').read_text('utf-8'))['version']
 FRONTEND_RELEASE = TOOL / 'frontend/dist/release.json'
 store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/project-cache', version=VERSION)
@@ -67,6 +69,11 @@ async def lifespan(app):
     port = int(os.environ.get('NORA_SERVICE_PORT', config.get('port', 8782)))
     (TOOL / 'runtime/task-service.json').write_text(
         json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
+    if WORKSPACE != PUBLIC_ROOT:
+        connection = WORKSPACE / '工作区浏览服务/runtime/task-service.json'
+        connection.parent.mkdir(parents=True, exist_ok=True)
+        connection.write_text(json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
+        connection.chmod(0o600)
     await tasks.start()
     await tasks.remote_queues.start()
     for space in list(spaces.items.values())[1:]:
@@ -239,7 +246,7 @@ def queue_write(request: Request):
 
 
 app.include_router(prompt_router(prompt_library, queue_write))
-app.include_router(asset_router(AssetLibrary(WORKSPACE / '综合资料/资产管理'), queue_write))
+app.include_router(asset_router(AssetLibrary(PUBLIC_ROOT / '综合资料/资产管理'), queue_write))
 
 
 def agent_request(request: Request):

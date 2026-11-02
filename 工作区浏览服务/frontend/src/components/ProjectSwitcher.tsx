@@ -11,7 +11,7 @@ export function ProjectSwitcher() {
   const projects = useQuery({ queryKey: ['workspaces'],
     queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
   return <div className="brand-project-switcher">
-    <Link className="brand" to="/">Nora工作台</Link>
+    <Link className="brand" to="/">AI创作工作台</Link>
     {location.pathname !== '/' && <TabSelect iconOnly label={projects.isPending ? '正在读取项目' : projects.data?.length === 0 ? '暂无项目' : '切换项目'}
       selected={location.pathname} onChange={navigate}
       items={(projects.data || []).flatMap(space => [{ value: `/spaces/${space.id}`, label: space.name }, ...space.projects.map(project => ({ value: spaceProjectPath(space, project.id), label: `${space.name} / ${project.name}` }))])} />}

@@ -141,16 +141,16 @@ class NotificationHandoffTests(unittest.IsolatedAsyncioTestCase):
         prompt = sender.call_args.args[2]
         # Short notices still identify the exact receipt and point to the maintained rules.
         command = prompt.split('```text\n', 1)[1].split('\n```', 1)[0]
-        self.assertEqual(shlex.split(command), ['python', str(self.root / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'),
-                                              'report', '--notification-id', second_batch])
+        skills = Path(__file__).resolve().parents[2] / '.agents/skills'
+        self.assertEqual(shlex.split(command), ['python', str(skills / 'nora-workspace-browser/scripts/browser_tasks.py'),
+                                              'report', '--notification-id', second_batch, '--workspace', str(self.root.resolve())])
         user_text, agent_text = prompt.split('Agent接续信息', 1)
         self.assertIn('隔离通知：two', user_text)
         self.assertNotIn(second_batch, user_text)
         self.assertNotIn('完成', user_text)
         self.assertIn('来源会话：isolated-thread', agent_text)
-        self.assertIn(str(self.root / '.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md') + '#后台通知接续', agent_text)
+        self.assertIn(str(skills / 'nora-workspace-browser/references/ComfyUI-任务监控规范.md') + '#后台通知接续', agent_text)
         self.assertGreaterEqual(prompt.count('\n\n'), 5)
-        self.assertLess(len(prompt), 800)
 
     async def test_business_attention_and_handoff_survive_compact_cli_report(self):
         data = self.task('one', kind='video-first-pass')

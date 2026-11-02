@@ -24,7 +24,7 @@ function Fixture() {
   return <HeaderControlsContext.Provider value={header}>
     <div className="workspace-with-tasks">
     <header className="site-header" ref={headerElement}><div className="header-main">
-      <div className="brand-project-switcher"><Link className="brand" to="/">Nora工作台</Link><TabSelect iconOnly label="项目切换示例" items={[{ value: 'fixture', label: '只读项目示例' }]} selected="fixture" onChange={() => {}} /></div>
+      <div className="brand-project-switcher"><Link className="brand" to="/">AI创作工作台</Link><TabSelect iconOnly label="项目切换示例" items={[{ value: 'fixture', label: '只读项目示例' }]} selected="fixture" onChange={() => {}} /></div>
       <div className="header-controls" ref={setHeader} />
     </div></header>
     <main className="project-page"><Routes><Route path="/projects/:name" element={<Project />} /></Routes></main>

@@ -45,3 +45,12 @@
 !/共享提示词/**/*.md
 /共享提示词/.trash/
 /共享提示词/**/.prompt-*.tmp
+
+# One total workspace; real data, nested Iris repository and legacy path alias stay local.
+/projects
+/workspaces/Iris Workspace/
+/workspaces/Nora Workspace/projects/*
+!/workspaces/Nora Workspace/projects/README.md
+/workspaces/Nora Workspace/综合资料/*
+/workspaces/Nora Workspace/comfyui-config.json
+/workspaces/Nora Workspace/工作区浏览服务/

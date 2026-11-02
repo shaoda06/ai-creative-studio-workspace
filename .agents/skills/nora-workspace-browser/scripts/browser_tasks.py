@@ -75,8 +75,8 @@ def local_post(config, route, payload, timeout):
         raise ValueError(('准备检查失败：' if route == '/prepare' else '本地入队未成功，检查后台任务状态：') + str(detail)) from error
 
 
-def service_call(route, payload=None):
-    service = Path(__file__).resolve().parents[4] / '工作区浏览服务'
+def service_call(route, payload=None, *, workspace=None):
+    service = (Path(workspace).resolve() if workspace is not None else Path(__file__).resolve().parents[4]) / '工作区浏览服务'
     config = json.loads((service / 'runtime/task-service.json').read_text('utf-8'))
     request = urllib.request.Request(config['url'] + config.get('api_prefix', '/api') + '/internal/comfy/' + route,
         data=json.dumps(payload, ensure_ascii=False).encode('utf-8') if payload is not None else None,
@@ -118,6 +118,8 @@ def main():
     item = commands.add_parser('repair-collection', help='仅修复原H3任务取回根目录，保留生成输入；不重新生成或自动重试')
     item.add_argument('--task-id', required=True)
     item.add_argument('--repair', required=True, help='含expected_prompt_id、output_root、reason的UTF-8 JSON文件')
+    for item in commands.choices.values():
+        item.add_argument('--workspace', type=Path, help='任务所属资料空间根目录；省略时沿用默认Nora空间')
     args = parser.parse_args()
     if args.command in ('report', 'ack', 'register-results'):
         thread = os.environ.get('CODEX_THREAD_ID')
@@ -130,23 +132,23 @@ def main():
             payload['image_plans'] = json.loads(Path(args.image_plans).read_text('utf-8-sig'))
         if args.command == 'register-results' and args.image_repairs:
             payload['image_repairs'] = json.loads(Path(args.image_repairs).read_text('utf-8-sig'))
-        result = service_call('notifications/' + args.notification_id + '/' + args.command, payload)
+        result = service_call('notifications/' + args.notification_id + '/' + args.command, payload, workspace=args.workspace)
         if args.command == 'report' and not args.details and result.get('user_message_ready') and result.get('delivery') is not None:
             result = {name: result[name] for name in ('notification_id', 'status', 'reused', 'user_message_ready',
                                                      'should_notify_user', 'new_task_ids', 'delivery', 'handoff',
                                                      'business_sync', 'rounds', 'groups') if name in result}
     elif args.command == 'status' and args.group_id:
-        result = service_call('groups/' + args.group_id)
+        result = service_call('groups/' + args.group_id, workspace=args.workspace)
     elif args.command == 'repair-collection':
         payload = json.loads(Path(args.repair).read_text('utf-8-sig'))
         payload['thread_id'] = os.environ.get('CODEX_THREAD_ID')
-        result = service_call('tasks/' + args.task_id + '/repair-collection', payload)
+        result = service_call('tasks/' + args.task_id + '/repair-collection', payload, workspace=args.workspace)
     elif args.command == 'resolve':
         result = service_call('tasks/' + args.task_id + '/resolve',
-                              json.loads(Path(args.resolution).read_text('utf-8-sig')))
+                              json.loads(Path(args.resolution).read_text('utf-8-sig')), workspace=args.workspace)
     else:
         result = service_call('tasks/' + args.task_id + ('/retry-collection' if args.command == 'retry-collection' else ''),
-                              {} if args.command == 'retry-collection' else None)
+                              {} if args.command == 'retry-collection' else None, workspace=args.workspace)
     print(json.dumps(result, ensure_ascii=False))
 
 

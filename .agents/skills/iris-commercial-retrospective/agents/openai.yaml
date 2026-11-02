@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 完单复盘"
+  short_description: "Iris 商业视频完单复盘二级业务阶段，用户明确最终交付后复盘，查重并提出经验规则建议，按需整理结项摘要。"
+  default_prompt: "使用 $iris-commercial-retrospective 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

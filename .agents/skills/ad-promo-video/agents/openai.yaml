@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 商业视频制作（旧入口兼容）"
+  short_description: "兼容旧技能名称并转到现行业务入口，规则和实际执行实现只维护一份。"
+  default_prompt: "使用 $ad-promo-video 时转到 $iris-commercial-video，按现行规则与实际授权继续。"

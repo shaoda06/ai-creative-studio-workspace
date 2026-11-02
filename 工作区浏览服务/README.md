@@ -1,3 +1,5 @@
+> 总工作区为AI Creative Studio Workspace。所有技能位于总目录.agents/skills；Nora资料位于workspaces/Nora Workspace，Iris位于workspaces/Iris Workspace。服务代码、公共提示词/资产和工作流从总层定位，项目及节点配置从所属资料空间定位。无本机覆盖配置时，存在新Nora资料区就使用它；旧版平铺布局仍可使用原根。
+
 # Nora 工作区浏览服务
 
 当前版本见 `frontend/package.json`，网页底栏显示已加载的版本。项目浏览、Krea2风格库和开发记录共用一个入口，源文件仍是内容依据。
@@ -359,7 +361,7 @@ Agent按[同轮次后处理产物](../.agents/skills/nora-ai-short-drama/referen
 [{"id":"commercial","name":"商业视频制作","path":"/本机商业资料目录"}]
 ```
 
-id使用小写字母、数字和连字符，目录必须有projects。默认Nora空间继续使用原工作区；登记空间保留其工作区浏览服务/runtime下的任务数据库，统一进程启动对应TaskStore并更新任务客户端配置，不复制或重编号任务。业务阶段不得另建服务或监控器；接管前停止旧服务，防止两个进程处理同一任务库。服务启动后更新各空间的task-service.json：url是统一地址，api_prefix为`/api/workspaces/{id}`空间路由，token只供本机Agent使用。
+id使用小写字母、数字和连字符，目录必须有projects。默认Nora空间使用其资料根；登记空间保留其工作区浏览服务/runtime下的任务数据库，统一进程启动对应TaskStore并更新任务客户端配置，不复制或重编号任务。业务阶段不得另建服务或监控器；接管前停止旧服务，防止两个进程处理同一任务库。服务启动后更新各空间的task-service.json：url是统一地址，api_prefix为`/api/workspaces/{id}`空间路由，token只供本机Agent使用。
 
 /api/workspaces公开登记名称、视图和项目索引；/api/workspaces/{id}/projects提供该空间目录与文件，/api/workspaces/{id}/comfy及/internal/comfy复用同一套任务处理和认证。未登记空间返回404，凭据不得跨空间使用。公共资产、提示词、工作流和风格库仍在工作区首页独立访问。实际资料路径与运行配置均排除在分发之外。
 
