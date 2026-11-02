@@ -18,8 +18,8 @@ description: 连续短剧D04资料设计阶段，维护人物、场景、道具�
 | 图片、状态延伸、机位图、图片提示词及采用 | [图片阶段](../nora-drama-images/SKILL.md) |
 | 首帧、导演表和实际选图需求 | [分镜](../nora-drama-storyboard/SKILL.md)，图片制作回图片阶段 |
 | 运营头像、背景和封面设计 | [运营](../nora-social-operations/SKILL.md) |
-| 指定视频获取与分析 | [视频读取](../video-study/SKILL.md) |
-| 玄幻法术外观 | [玄幻方法](../sd-xuanhuan-engine/SKILL.md#法术表现的使用路径)，只落实本次静态设计 |
+| 指定视频获取与分析 | [视频读取](../studio-video-study/SKILL.md) |
+| 玄幻法术外观 | [玄幻方法](../studio-fantasy-combat/SKILL.md#法术表现的使用路径)，只落实本次静态设计 |
 
 稳定场景、外观与剧情临时状态分别维护，不用既有素材替代当前剧情。机位需求来自分镜，环境图不自动成为人物首帧。资料设计发生变化时说明对图片及下游引用的影响，按实际授权交接，不自动生成或更换采用。
 
@@ -29,4 +29,4 @@ description: 连续短剧D04资料设计阶段，维护人物、场景、道具�
 
 输入为已确认世界观、故事大纲、相关原稿及实际设计授权；分集形成后再补具体集号，不虚构未来出场。正式产出为人物/场景/道具索引及资料卡、按实际授权形成的参考音视频索引和素材。三类卡片与索引使用本阶段templates；图片候选和采用交D06，不以卡片完成要求同步生图。
 
-Agent负责稳定设计、剧情状态、已有资料复用及素材用途判断；音频的明确区间处理调用[本地音频工具](../nora-audio-processing/SKILL.md)，视频内容读取调用既有video-study。工具不决定资料字段或素材采用，后台仅展示实际资料。按各专项核对索引/资料卡与上游一致、必要确认和当前缺项，再交[D05分集](../nora-drama-episodes/SKILL.md)、[D06图片](../nora-drama-images/SKILL.md)或实际逐集阶段。
+Agent负责稳定设计、剧情状态、已有资料复用及素材用途判断；音频的明确区间处理调用[本地音频工具](../studio-audio-processing/SKILL.md)，视频内容读取调用既有studio-video-study。工具不决定资料字段或素材采用，后台仅展示实际资料。按各专项核对索引/资料卡与上游一致、必要确认和当前缺项，再交[D05分集](../nora-drama-episodes/SKILL.md)、[D06图片](../nora-drama-images/SKILL.md)或实际逐集阶段。

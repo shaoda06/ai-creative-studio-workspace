@@ -12,7 +12,7 @@ from tests import test_image_closeout as image_fixture
 png = image_fixture.png
 
 SKILLS = Path(__file__).resolve().parents[2] / '.agents/skills'
-for name in ('nora-qwen-image', 'nora-imagegen', 'nora-image-processing'):
+for name in ('studio-qwen-image', 'studio-imagegen', 'studio-image-processing'):
     sys.path.insert(0, str(SKILLS / name / 'scripts'))
 from qwen_image_workflow import assemble
 from imagegen_tool import generation_call, preserve_original

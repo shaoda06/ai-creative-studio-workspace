@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _name in ('nora-ai-short-drama', 'nora-comfyui', 'nora-h3', 'nora-drama-images'):
+for _name in ('studio-comfyui', 'studio-h3', 'nora-drama-images'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from project_paths import project_file
 import workflow_graph as pairs

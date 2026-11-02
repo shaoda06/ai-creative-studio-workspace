@@ -4,7 +4,7 @@ from pathlib import Path
 import execution_records as recordio
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-image-processing/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-image-processing/scripts'))
 from image_files import inspect_remote
 from project_paths import project_file
 from backend.services.execution_checks import write_json

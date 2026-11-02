@@ -12,9 +12,9 @@ from urllib.parse import unquote
 
 import sys
 SKILLS = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SKILLS / 'nora-workspace-browser/scripts'))
+sys.path.insert(0, str(SKILLS / 'studio-workspace-browser/scripts'))
 from document_fields import fields, link
-sys.path.insert(0, str(SKILLS / "nora-image-processing/scripts"))
+sys.path.insert(0, str(SKILLS / "studio-image-processing/scripts"))
 import image_files
 from image_files import inspect_remote
 from image_processing import validate_processing
@@ -22,6 +22,7 @@ from image_processing import validate_processing
 def png(raw):
     return image_files.png(raw)
 from project_paths import project_file
+sys.path.insert(0, str(SKILLS / "nora-serial-drama/scripts"))
 import project_progress
 from execution_records import write as write_json
 

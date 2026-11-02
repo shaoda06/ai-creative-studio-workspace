@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'nora-imagegen/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-imagegen/scripts'))
 from imagegen_tool import EXECUTOR, validate_inputs, generation_call, preserve_original
 from project_paths import project_file
 from backend.services import image_closeout as images

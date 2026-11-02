@@ -2,7 +2,7 @@
 from pathlib import Path
 import execution_records as recordio
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-workspace-browser/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-workspace-browser/scripts'))
 from workspace_project_index import read_index
 
 

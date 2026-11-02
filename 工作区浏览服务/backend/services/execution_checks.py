@@ -10,7 +10,7 @@ from backend.services.video_tasks import business as business_video
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
-for _name in ('nora-h3', 'nora-drama-production', 'nora-serial-drama', 'nora-workspace-browser'):
+for _name in ('studio-h3', 'nora-drama-production', 'nora-serial-drama', 'studio-workspace-browser'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from h3_inputs import director_checks
 from drama_execution_checks import (context_checks, storyboard_index_checks, content_checks,

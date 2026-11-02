@@ -1,4 +1,0 @@
-interface:
-  display_name: "AI创作与制作"
-  short_description: "统一创作入口，分流Nora与Iris业务并登记共用工具和维护入口"
-  default_prompt: "使用$nora-video处理当前任务，先确定输入、授权和实际范围。"

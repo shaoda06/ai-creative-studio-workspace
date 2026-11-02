@@ -1,4 +1,0 @@
-interface:
-  display_name: "Nora故事开发兼容入口"
-  short_description: "旧故事开发任务按实际产出转到定位、主旨世界观、大纲或分集阶段"
-  default_prompt: "使用 $short-drama-develop 定位当前任务，并进入负责的现行二级阶段。"

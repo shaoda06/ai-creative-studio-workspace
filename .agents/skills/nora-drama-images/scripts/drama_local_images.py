@@ -5,7 +5,7 @@ import execution_records as recordio
 import re
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'nora-image-processing/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-image-processing/scripts'))
 from image_processing import resize
 
 from project_paths import project_file

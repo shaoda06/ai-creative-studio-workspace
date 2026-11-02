@@ -306,8 +306,8 @@ class TaskNotifications:
                 f'- {self.rows[task["id"]]["state"]["project"]}：{self.rows[task["id"]]["input"].title}'
                 for task in report['tasks'])
         skills = Path(__file__).resolve().parents[3] / '.agents/skills'
-        script = skills / 'nora-workspace-browser/scripts/browser_tasks.py'
-        rules = skills / 'nora-workspace-browser/references/ComfyUI-任务监控规范.md'
+        script = skills / 'studio-workspace-browser/scripts/browser_tasks.py'
+        rules = skills / 'studio-workspace-browser/references/ComfyUI-任务监控规范.md'
         return ('后台任务有更新\n\n'
                 + scope + '\n\n'
                 'Agent将读取最新结果并继续处理。需要你决定的事项，会单独说明。\n\n'

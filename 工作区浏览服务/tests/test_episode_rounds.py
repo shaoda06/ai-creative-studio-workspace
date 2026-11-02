@@ -19,13 +19,14 @@ class EpisodeRoundTests(unittest.TestCase):
     plan = fixture.SceneRoundTests.plan
     episode = fixture.SceneRoundTests.episode
 
-    def test_legacy_cli_and_current_cli_preserve_shared_episode_history(self):
+    def test_current_cli_preserves_shared_episode_history(self):
         scripts = Path(__file__).resolve().parents[2] / '.agents/skills'
         plan = self.project / 'plan.json'
         plan.write_text(json.dumps(self.plan()), encoding='utf-8')
         draft = self.project / self.root / '其他资料/工作稿/EP001-C001-P001-视频制作-工作稿.md'
         before = draft.read_bytes()
-        for number, skill in enumerate(('short-drama-storyboard', 'nora-drama-storyboard'), 1):
+        for number in (1, 2):
+            skill = 'nora-drama-storyboard'
             result = subprocess.run([sys.executable, str(scripts / skill / 'scripts/scene_rounds.py'),
                                      '--project', str(self.project), '--episode', 'EP001',
                                      '--scene', 'C001', '--plan', str(plan)],

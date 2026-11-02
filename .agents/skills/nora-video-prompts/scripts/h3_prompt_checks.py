@@ -8,7 +8,7 @@ from pathlib import Path
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("nora-ai-short-drama", "nora-comfyui", "nora-h3", "nora-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
+for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 import re
 

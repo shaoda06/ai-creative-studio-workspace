@@ -25,7 +25,7 @@ class SegmentPlan(BaseModel):
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
-for _name in ('nora-h3', 'nora-drama-production'):
+for _name in ('studio-h3', 'nora-drama-production'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from h3_results import remote_file, export_paths, REPORT
 from drama_video_segments import targets as drama_targets, validate as drama_validate

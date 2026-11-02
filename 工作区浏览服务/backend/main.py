@@ -19,7 +19,7 @@ from backend.services.projects import ProjectStore
 import execution_records as recordio
 from backend.services.workspaces import Workspaces, project_tree, scope_links
 from backend.services.project_packages import package_response
-from project_index import INDEX_NAME
+from workspace_project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
 from backend.services import krea2
@@ -45,7 +45,7 @@ TOOL = Path(__file__).resolve().parent.parent
 PUBLIC_ROOT = TOOL.parent
 DEFAULT_WORKSPACE = PUBLIC_ROOT / 'workspaces/Nora Workspace'
 WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', DEFAULT_WORKSPACE if DEFAULT_WORKSPACE.is_dir() else PUBLIC_ROOT)).resolve()
-WORKFLOWS = workflow_root(PUBLIC_ROOT / '.agents/skills/nora-ai-short-drama')
+WORKFLOWS = workflow_root()
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
 prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词库/隐私', PUBLIC_ROOT / '提示词库/公开')

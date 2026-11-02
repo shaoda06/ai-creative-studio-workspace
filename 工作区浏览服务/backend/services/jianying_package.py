@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import sys
 
-_PATH = Path(__file__).resolve().parents[3] / '.agents/skills/nora-jianying/scripts/jianying_package.py'
+_PATH = Path(__file__).resolve().parents[3] / '.agents/skills/studio-jianying/scripts/jianying_package.py'
 _spec = importlib.util.spec_from_file_location('nora_jianying_package', _PATH)
 _module = sys.modules.get('nora_jianying_package')
 if _module is None:

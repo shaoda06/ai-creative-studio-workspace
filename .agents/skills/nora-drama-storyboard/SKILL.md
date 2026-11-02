@@ -14,13 +14,13 @@ license: MIT
 | --- | --- |
 | 新建完整场次分镜 | [分镜阶段接续](references/分镜阶段接续规范.md#4-整理场次分镜并划分视频生成分段)，依其顺序进入场次规则、分段规则及模板，从已批准剧本落实SH镜头及P段 |
 | 局部镜头、空间或动作修订 | [场次分镜规则](references/场次分镜制作规范.md)中的受影响章节及必要上下游；完整重做先读[完整重做要求](references/完整重做规范.md#完整重做的范围与完成要求) |
-| 同一事件的连续动作、跨镜头接续或动作重复／跳步返修 | 按[场次分镜中的动作链调用](references/场次分镜制作规范.md#3-场次分镜脚本)使用[完整动作链指南](../creative-techniques/references/完整动作链设计与转写指南.md)，把整条事件落实到既有镜头字段、时长和P段接续，不另建分镜产物 |
+| 同一事件的连续动作、跨镜头接续或动作重复／跳步返修 | 按[场次分镜中的动作链调用](references/场次分镜制作规范.md#3-场次分镜脚本)使用[完整动作链指南](../studio-creative-techniques/references/完整动作链设计与转写指南.md)，把整条事件落实到既有镜头字段、时长和P段接续，不另建分镜产物 |
 | 分段、拆段或输入容量调整 | [视频分段规划规范](references/视频分段规划规范.md)，核对当前及相邻段、真实素材与模型容量 |
 | 手绘导演分镜表及讨论反馈 | [导演分镜表规范](references/手绘导演分镜表规范.md)及其固定模板；内容来自对应场次分镜，图像制作接续交D06并调用共用图片工具 |
 | 开场素材选择、首帧需求判断、提示词或已有素材复用 | 先按[首帧使用条件与质量取舍](references/首帧参考图规范.md#1-制作复用与画面要求)确定本段是否采用，再按[分段素材与首帧规范](references/分段素材与首帧规范.md)落实输入用途；实际需要写Qwen正文时调用[图片提示词入口](../nora-drama-images/references/图片提示词规范.md#图片提示词) |
 | 场景机位需求及选图 | [视图规划与复用](../nora-drama-images/references/场景图片制作规范.md#42-视图规划与复用)；分镜维护本次镜头选择，设计缺项回D04，缺图交[图片阶段](../nora-drama-images/SKILL.md) |
 | 打戏、斗法、写实格斗 | 下方打戏方法入口；按实际段落选择，不要求三技能全读 |
-| 景别、构图、机位、运镜、光影、焦点方法及技巧学习 | [镜头语言与表达](../creative-techniques/SKILL.md#镜头表达)，按观看目的辅助选择并落实到既有分镜／首帧字段；方法库由该技能维护，正式镜头设计与P段仍在本技能 |
+| 景别、构图、机位、运镜、光影、焦点方法及技巧学习 | [镜头语言与表达](../studio-creative-techniques/SKILL.md#镜头表达)，按观看目的辅助选择并落实到既有分镜／首帧字段；方法库由该技能维护，正式镜头设计与P段仍在本技能 |
 
 ## 方法与专项
 
@@ -34,13 +34,13 @@ license: MIT
 | 多方案导演设计、群戏调度或覆盖缺口 | [场次视觉计划](references/scene-visual-plan.md)、[调度手册](references/blocking-playbooks.md)、[覆盖检查](references/coverage-audition.md)，只选对应问题 |
 | 光线、冻结关键帧及漫剧表现 | [光线](references/lighting-craft.md)、[关键帧](references/keyframe-craft.md)、[漫剧词表](references/comic-keyframe-lexicon.md)、[转写示例](references/screenplay-to-keyframe-example.md) |
 | 修订关联与连续性检查 | [镜头修订方法](references/shot-revision-identity.md)、[连续性示例](references/review-and-fixtures.md)；编号与采用沿Nora规则 |
-| 通用武侠或打斗因果、力量与节奏 | [通用打戏](../sd-combat-engine/SKILL.md) |
-| 修仙拆招、法术、剑阵与大场面 | [玄幻打戏](../sd-xuanhuan-engine/SKILL.md) |
-| 写实格斗、步法、防守与多人调度 | [写实格斗](../sd-real-engine/SKILL.md) |
+| 通用武侠或打斗因果、力量与节奏 | [通用打戏](../studio-combat-methods/SKILL.md) |
+| 修仙拆招、法术、剑阵与大场面 | [玄幻打戏](../studio-fantasy-combat/SKILL.md) |
+| 写实格斗、步法、防守与多人调度 | [写实格斗](../studio-realistic-combat/SKILL.md) |
 
-分镜正文涉及玄幻法术时，执行[玄幻法术使用路径](../sd-xuanhuan-engine/SKILL.md#法术表现的使用路径)，将本镜采用的形态、运动、作用与反馈写入已有镜头字段；交付前按该路径所链表现核对复查。不只在“缺招式”时调用，也不把需要下游呈现的效果留成一个法术名称。
+分镜正文涉及玄幻法术时，执行[玄幻法术使用路径](../studio-fantasy-combat/SKILL.md#法术表现的使用路径)，将本镜采用的形态、运动、作用与反馈写入已有镜头字段；交付前按该路径所链表现核对复查。不只在“缺招式”时调用，也不把需要下游呈现的效果留成一个法术名称。
 
-分镜中的表情可用抽象词交代意图；编写首帧或视频模型提示词时，按[表情拆解](../creative-techniques/SKILL.md#表情表达)细化为可见面部变化，不要求在分镜阶段提前写满提示词。
+分镜中的表情可用抽象词交代意图；编写首帧或视频模型提示词时，按[表情拆解](../studio-creative-techniques/SKILL.md#表情表达)细化为可见面部变化，不要求在分镜阶段提前写满提示词。
 
 ## 交接与完成
 

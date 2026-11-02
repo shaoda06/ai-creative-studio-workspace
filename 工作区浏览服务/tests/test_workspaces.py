@@ -108,13 +108,13 @@ class WorkspaceClientTests(HttpTestCase):
     def test_shared_query_selects_explicit_workspace_without_changing_default(self):
         import importlib.util
         import io
-        path = Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+        path = Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         spec = importlib.util.spec_from_file_location('shared_workspace_query_test', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            script = root / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+            script = root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
             script.parent.mkdir(parents=True)
             script.touch()
             other = root / 'workspaces/Iris Workspace'
@@ -136,7 +136,7 @@ class WorkspaceClientTests(HttpTestCase):
     def test_client_prefix_keeps_legacy_and_registered_agent_routes(self):
         import importlib.util
         import io
-        path = Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+        path = Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         spec = importlib.util.spec_from_file_location('workspace_client_test', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

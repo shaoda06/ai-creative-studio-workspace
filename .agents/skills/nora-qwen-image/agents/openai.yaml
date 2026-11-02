@@ -1,4 +1,0 @@
-interface:
-  display_name: "Qwen图片工具"
-  short_description: "共用Qwen Image 2.1图片工具，指导Agent按模型编写或适配提示词，按明确模式、宽高、种子和参考图装配文生图或图生图"
-  default_prompt: "使用$nora-qwen-image处理当前任务，先确定输入、授权和实际范围。"

@@ -142,14 +142,14 @@ class NotificationHandoffTests(unittest.IsolatedAsyncioTestCase):
         # Short notices still identify the exact receipt and point to the maintained rules.
         command = prompt.split('```text\n', 1)[1].split('\n```', 1)[0]
         skills = Path(__file__).resolve().parents[2] / '.agents/skills'
-        self.assertEqual(shlex.split(command), ['python', str(skills / 'nora-workspace-browser/scripts/browser_tasks.py'),
+        self.assertEqual(shlex.split(command), ['python', str(skills / 'studio-workspace-browser/scripts/browser_tasks.py'),
                                               'report', '--notification-id', second_batch, '--workspace', str(self.root.resolve())])
         user_text, agent_text = prompt.split('Agent接续信息', 1)
         self.assertIn('隔离通知：two', user_text)
         self.assertNotIn(second_batch, user_text)
         self.assertNotIn('完成', user_text)
         self.assertIn('来源会话：isolated-thread', agent_text)
-        self.assertIn(str(skills / 'nora-workspace-browser/references/ComfyUI-任务监控规范.md') + '#后台通知接续', agent_text)
+        self.assertIn(str(skills / 'studio-workspace-browser/references/ComfyUI-任务监控规范.md') + '#后台通知接续', agent_text)
         self.assertGreaterEqual(prompt.count('\n\n'), 5)
 
     async def test_business_attention_and_handoff_survive_compact_cli_report(self):
@@ -161,7 +161,7 @@ class NotificationHandoffTests(unittest.IsolatedAsyncioTestCase):
         batch, _ = self.reports()[0]
         report = self.store.read_report(batch, data.thread_id)
         self.assertEqual(report['business_sync'], [{'task_id': 'one', **business}])
-        spec = importlib.util.spec_from_file_location('isolated_browser_tasks', t.SKILL.parent / 'nora-workspace-browser/scripts/browser_tasks.py')
+        spec = importlib.util.spec_from_file_location('isolated_browser_tasks', t.SKILL.parent / 'studio-workspace-browser/scripts/browser_tasks.py')
         cli = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cli)
         output = io.StringIO()

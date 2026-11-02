@@ -16,7 +16,7 @@ license: MIT
 | 局部对白、人物口吻或表演修订 | [对白与表演](references/对白与表演修订规范.md)中对应章节、完整交流及必要人物与处境依据 |
 | 豆包润色交接或回稿处理 | [交接与回稿](references/台词润色交接与回稿规范.md)及其模板；新写默认交接，已有批准稿不自动重做 |
 | 原稿规范化或续写 | [原稿边界](../nora-serial-drama/references/原稿接续规范.md)，按Nora模板保留实际采用原文与确认范围 |
-| 打戏构思与必要动作 | [通用打戏](../sd-combat-engine/SKILL.md)、[玄幻打戏](../sd-xuanhuan-engine/SKILL.md)或[写实格斗](../sd-real-engine/SKILL.md)，按戏型选构思和动作章节 |
+| 打戏构思与必要动作 | [通用打戏](../studio-combat-methods/SKILL.md)、[玄幻打戏](../studio-fantasy-combat/SKILL.md)或[写实格斗](../studio-realistic-combat/SKILL.md)，按戏型选构思和动作章节 |
 
 ## 编写与方法
 
@@ -38,4 +38,4 @@ license: MIT
 
 输入是本集大纲、相关原稿、必要人物/空间状态和已确认调整；产出为制作前检查及整集故事剧本，豆包交接与回稿仍属于本阶段。Agent编写剧情、对白、必要表演并核对语义；原生索引、时长和声音清单脚本只做明确格式上的机械处理，使用条件见[脚本适配](references/脚本使用规范.md)，不能直接把原生JSONL当Nora正式产出。
 
-图片需求交D06，声音取样交D04引用共用工具，资料展示调用[浏览服务](../nora-workspace-browser/SKILL.md)。完成按当前规则记录真实批准版本后交D08；检查通过、豆包保存或文稿存在均不代替批准，不启动生成。
+图片需求交D06，声音取样交D04引用共用工具，资料展示调用[浏览服务](../studio-workspace-browser/SKILL.md)。完成按当前规则记录真实批准版本后交D08；检查通过、豆包保存或文稿存在均不代替批准，不启动生成。

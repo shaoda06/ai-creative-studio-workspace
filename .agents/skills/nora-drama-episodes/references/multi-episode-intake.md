@@ -67,7 +67,7 @@ python3 <本技能目录>/scripts/episode_intake.py verify \
   项目开发/_work/episode-intake-index.next.json 输入/<完整剧本>
 
 python3 <core 技能目录>/scripts/project_tool.py publish <项目根> \
-  --owner short-drama-develop --artifact-id series:episode-intake-index \
+  --owner nora-drama-positioning --artifact-id series:episode-intake-index \
   --output 项目开发/episode-intake-index.json=项目开发/_work/episode-intake-index.next.json \
   --input 输入/<完整剧本>
 ```
@@ -113,7 +113,7 @@ no-op。合并成功后，通过 core 的公开生命周期把 `episode-map.next
 
 ```text
 python3 <core 技能目录>/scripts/project_tool.py publish <项目根> \
-  --owner short-drama-develop --artifact-id series:episode-map \
+  --owner nora-drama-positioning --artifact-id series:episode-map \
   --output 项目开发/episode-map.jsonl=项目开发/episode-map.next.jsonl \
   --input 输入/<完整剧本> \
   --input 项目开发/episode-intake-index.json

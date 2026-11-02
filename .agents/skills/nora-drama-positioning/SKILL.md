@@ -22,7 +22,7 @@ license: MIT
 
 方向新写或实质修订时，按问题读取[故事方法](../nora-drama-story/references/story-craft.md)、[题材卡](references/genre-cards.md)或[导演阐述](references/director-brief-craft.md)，将受众兴趣、题材机制和视觉倾向落实到定位既有字段。采用方法前遵循[开发方法使用规范](../nora-serial-drama/references/开发方法使用规范.md)，不另建外部简报或引擎。
 
-风格库仅在选择画风时调用[krea2-style-library](../krea2-style-library/SKILL.md)。获授权制作画风样例时，按本阶段验证规则调用[图片阶段](../nora-drama-images/SKILL.md)与其共用图片工具；样例属于定位验证，不登记为正式人物资产。浏览与同步使用[浏览工具](../nora-workspace-browser/SKILL.md)，不把网页实现写进定位规则。
+风格库仅在选择画风时调用[studio-krea2-style-library](../studio-krea2-style-library/SKILL.md)。获授权制作画风样例时，按本阶段验证规则调用[图片阶段](../nora-drama-images/SKILL.md)与其共用图片工具；样例属于定位验证，不登记为正式人物资产。浏览与同步使用[浏览工具](../studio-workspace-browser/SKILL.md)，不把网页实现写进定位规则。
 
 ## 输入输出与接续
 

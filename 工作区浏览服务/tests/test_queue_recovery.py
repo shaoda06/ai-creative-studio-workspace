@@ -46,8 +46,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         for route in main.app.routes:
             if getattr(route, 'path', '').startswith('/api/internal/comfy/'):
                 self.api.add_api_route(route.path, route.endpoint, methods=route.methods)
-        source = t.SKILL.parent / 'nora-workspace-browser/scripts/browser_tasks.py'
-        self.cli = self.root / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py'
+        source = t.SKILL.parent / 'studio-workspace-browser/scripts/browser_tasks.py'
+        self.cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         self.cli.parent.mkdir(parents=True)
         shutil.copyfile(source, self.cli)
 

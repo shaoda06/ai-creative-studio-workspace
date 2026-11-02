@@ -31,8 +31,8 @@ from backend.services.session_names import read_thread_name
 from backend.services.project_files import ARCHIVE_MARKER
 
 logger = logging.getLogger(__name__)
-SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama'
-sys.path.insert(0, str(SKILL.parent / 'nora-comfyui/scripts'))
+SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3'
+sys.path.insert(0, str(SKILL.parent / 'studio-comfyui/scripts'))
 import project_paths as paths
 import execution_records as recordio
 import comfyui_config as config

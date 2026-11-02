@@ -8,7 +8,7 @@ from pathlib import Path
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("nora-ai-short-drama", "nora-comfyui", "nora-h3", "nora-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
+for _skill in ("nora-serial-drama", "studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 from urllib.parse import unquote
 import re
@@ -19,7 +19,7 @@ import project_progress
 from postprocess_products import product_rows
 from datetime import datetime
 
-sys.path.insert(0, str(_SKILLS / 'nora-comfyui/scripts'))
+sys.path.insert(0, str(_SKILLS / 'studio-comfyui/scripts'))
 import comfyui_client as client
 
 IDENTITY = re.compile(r'((?:EP\d{3}|片头|片尾))-(C\d{3})-(P\d{3})-(R\d{3})-(一采|二采|后处理)')

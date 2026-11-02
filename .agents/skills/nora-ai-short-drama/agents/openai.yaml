@@ -1,4 +1,0 @@
-interface:
-  display_name: "Nora短剧旧入口"
-  short_description: "兼容旧任务，转到统一视频入口或连续短剧一级与对应业务阶段"
-  default_prompt: "使用 $nora-video 识别业务，连续短剧转 $nora-serial-drama 及当前二级阶段。"

@@ -11,6 +11,6 @@ description: Iris 商业视频返修与交接二级业务阶段，评估局部�
 - 内部生产：[模板](templates/返修与剪辑交接.md)。
 - 交付整理：[模板](templates/素材与剪辑交接说明.md)，来源于当前生产资料与实际成果。
 
-Agent理解、写作、选择版本与处理反馈；脚本完成明确装配和文件处理。工具使用查[能力状态](../iris-commercial-video/references/工具适配.md)，不以登记工具名称代替实际验收。导出时按[交付规则](../iris-commercial-video/references/对外交付.md)调用[共用PDF工具](../pdf-delivery-export/SKILL.md)。项目状态归一级业务入口，客户批准不由本技能推定。
+Agent理解、写作、选择版本与处理反馈；脚本完成明确装配和文件处理。工具使用查[能力状态](../iris-commercial-video/references/工具适配.md)，不以登记工具名称代替实际验收。导出时按[交付规则](../iris-commercial-video/references/对外交付.md)调用[共用PDF工具](../studio-pdf-export/SKILL.md)。项目状态归一级业务入口，客户批准不由本技能推定。
 
 先评估局部修复，合适才修，不合适回相关段重做。剪映包默认jypack、ZIP按需；Agent只有用户明确要求时才调用脚本生成并提供包，不手工打包或逐包打开剪映。日常网页下载由用户点击触发后台脚本及自动检查，详细分工归阶段规则。

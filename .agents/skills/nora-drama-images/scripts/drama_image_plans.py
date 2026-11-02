@@ -7,7 +7,7 @@ import secrets
 import sys
 from urllib.parse import unquote
 SKILLS = Path(__file__).resolve().parents[2]
-for folder in ['nora-qwen-image', 'nora-image-processing']:
+for folder in ['studio-qwen-image', 'studio-image-processing']:
     sys.path.insert(0, str(SKILLS / folder / 'scripts'))
 from qwen_image_workflow import assemble as assemble_qwen, execution_facts
 from image_processing import assemble_rtx

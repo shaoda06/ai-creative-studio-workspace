@@ -21,4 +21,4 @@ license: MIT
 
 输入是主旨、世界规则、原稿及已确认核心设定；正式产出只有`02-故事大纲/故事大纲.md`。Agent完成剧情展开和语义核对，不由脚本拼接故事。新增或调整世界规则回[D02](../nora-drama-worldbuilding/SKILL.md)维护；不在大纲另写一套规则。
 
-交付按规范核对六章、补充说明三小节、因果、人物变化与结局，执行[合并自检](../nora-drama-review/references/文本自检与订正规范.md)及适用的[浏览同步](../nora-workspace-browser/SKILL.md)。完成后交[D04资料设计](../nora-drama-assets/SKILL.md)及[D05分集规划](../nora-drama-episodes/SKILL.md)，不自动展开完整资料卡或逐集正文。
+交付按规范核对六章、补充说明三小节、因果、人物变化与结局，执行[合并自检](../nora-drama-review/references/文本自检与订正规范.md)及适用的[浏览同步](../studio-workspace-browser/SKILL.md)。完成后交[D04资料设计](../nora-drama-assets/SKILL.md)及[D05分集规划](../nora-drama-episodes/SKILL.md)，不自动展开完整资料卡或逐集正文。

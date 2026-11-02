@@ -6,8 +6,7 @@ import sys
 
 WORKSPACE = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(WORKSPACE / '工作区浏览服务'))
-sys.path.insert(0, str(WORKSPACE / '.agents/skills/nora-ai-short-drama/scripts'))
-sys.path.insert(0, str(WORKSPACE / '.agents/skills/nora-comfyui/scripts'))
+sys.path.insert(0, str(WORKSPACE / '.agents/skills/studio-comfyui/scripts'))
 
 from project_paths import project_file
 from backend.services import imagegen_results as native
@@ -44,8 +43,9 @@ def main():
         job = native.prepare(root, args.request)
         result = {name: job[name] for name in ('manifest', 'executor', 'generation', 'candidate', 'prompt_file',
                   'generation_call_file', 'result_store_key', 'report') if name in job}
+        result['result_store_key'] = job.get('result_store_key', 'imagegen:' + root.name + ':' + job['manifest'])
         result['generation_call'] = native.generation_call(job['request']['prompt'],
-            [str(project_file(root, item['file'])) for item in job['request'].get('references', [])], job['result_store_key'])
+            [str(project_file(root, item['file'])) for item in job['request'].get('references', [])], result['result_store_key'])
         result['complete_command'] = [sys.executable, str(Path(__file__).resolve()), 'complete',
             '--project', str(root), '--manifest', job['manifest']]
     else:

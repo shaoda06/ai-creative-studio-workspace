@@ -16,4 +16,4 @@ description: 为 Nora 项目管理社交媒体运营配置、Chrome账号连接�
 | 后台数据、账号活跃时段、成片分析和正式运营报告 | [05 作品复盘与管理](../nora-operations-review/SKILL.md) |
 | 当前制作或发布准备如何参考既有报告 | [06 后续制作参考与指导](../nora-operations-guidance/SKILL.md) |
 
-项目初始化、制作接续和交付状态读取[运营与制作接续规范](references/运营与制作接续规范.md)。实际操控浏览器前读取[共用浏览器操作](../nora-browser-operations/SKILL.md)，各阶段提供账号与授权范围。运营分析与建议不构成发布、修改已发布作品、额外生成或自动调度的授权。
+项目初始化、制作接续和交付状态读取[运营与制作接续规范](references/运营与制作接续规范.md)。实际操控浏览器前读取[共用浏览器操作](../studio-browser-operations/SKILL.md)，各阶段提供账号与授权范围。运营分析与建议不构成发布、修改已发布作品、额外生成或自动调度的授权。

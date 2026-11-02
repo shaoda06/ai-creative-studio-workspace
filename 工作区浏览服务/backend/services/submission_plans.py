@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-images/scripts"))
 from drama_image_plans import (SEEDS, SIZES, reference, choose_seed, generation_record,
                                adoption_updates, build_image as build_drama_image, image_workflow, remote_prefix)
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-h3/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3/scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-drama-production/scripts'))
 from h3_workflow import prepare_technical, widget, disconnect
 from drama_video_plans import build_video as build_drama_video

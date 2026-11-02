@@ -465,9 +465,9 @@ class CloseoutTests(unittest.IsolatedAsyncioTestCase):
         app.state.comfy_tasks = self.store
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/ack', main.agent_notice_ack, methods=['POST'])
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/register-results', main.agent_register_results, methods=['POST'])
-        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
         async with serving(app) as url:
             config = self.root / '工作区浏览服务/runtime/task-service.json'
             config.parent.mkdir(parents=True)

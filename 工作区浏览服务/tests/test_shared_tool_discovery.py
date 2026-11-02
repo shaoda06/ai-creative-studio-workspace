@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / '.agents/skills/nora-workspace-browser/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts'))
 import browser_http
 
 

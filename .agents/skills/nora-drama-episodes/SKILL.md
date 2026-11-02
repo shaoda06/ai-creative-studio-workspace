@@ -19,4 +19,4 @@ license: MIT
 
 采用方法先遵循[开发方法使用规范](../nora-serial-drama/references/开发方法使用规范.md)。正式产出为`06-分集大纲/分集索引.md`及每集一份`EPNNN-分集大纲.md`；索引只定位正文，不复制剧情或制作进度。Agent负责剧情、边界、信息状态和承接，脚本只处理明确输入；本阶段不写完整对白、镜号或视频分段。
 
-新增人物或世界规则返回[D04资料设计](../nora-drama-assets/SKILL.md)、[D02世界观](../nora-drama-worldbuilding/SKILL.md)，全局事件变化返回[D03大纲](../nora-drama-story/SKILL.md)。交付按规范核对实际集数覆盖、状态承接、索引与必要审阅，执行[合并自检](../nora-drama-review/references/文本自检与订正规范.md)及适用的[浏览同步](../nora-workspace-browser/SKILL.md)，完成后交[单集剧本](../nora-drama-write/SKILL.md)。
+新增人物或世界规则返回[D04资料设计](../nora-drama-assets/SKILL.md)、[D02世界观](../nora-drama-worldbuilding/SKILL.md)，全局事件变化返回[D03大纲](../nora-drama-story/SKILL.md)。交付按规范核对实际集数覆盖、状态承接、索引与必要审阅，执行[合并自检](../nora-drama-review/references/文本自检与订正规范.md)及适用的[浏览同步](../studio-workspace-browser/SKILL.md)，完成后交[单集剧本](../nora-drama-write/SKILL.md)。
