@@ -91,8 +91,10 @@ def resources(store, name, episode, data, scene=None):
             if scene is not None and selected_scene != scene:
                 continue
             directory = stage_root / (selected_scene + '-场次') / '导演包'
-            for pattern, kind in (('*-导演包.mmxpack.zip', 'director'), ('*.workflow.json', 'canvas')):
+            for pattern, kind in (('*-导演包.director.json', 'director'), ('*-导演包.mmxpack.zip', 'director'), ('*.workflow.json', 'canvas')):
                 for source in sorted(directory.glob(episode + '-' + selected_scene + '-' + pattern)):
+                    if source.name.endswith('.mmxpack.zip') and source.with_name(source.name.removesuffix('.mmxpack.zip') + '.director.json').exists():
+                        continue
                     path = store.file(name, source.relative_to(root).as_posix())
                     result[stage][kind].append((path, selected_scene + '-场次/导演包/' + source.name))
     return result

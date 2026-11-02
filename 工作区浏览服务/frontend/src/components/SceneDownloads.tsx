@@ -7,10 +7,10 @@ import './SceneDownloads.css';
 type Resource = { count: number; url: string | null; files: { name: string; url: string }[] };
 type Downloads = Record<string, Record<'videos' | 'director' | 'canvas', Resource>>;
 
-function OriginalDownloads({ resource, label }: { resource: Resource; label: string }) {
+function OriginalDownloads({ resource, label, generated = false }: { resource: Resource; label: string; generated?: boolean }) {
   return resource.files.length
-    ? <>{resource.files.map(file => <DownloadButton key={file.url} url={file.url} label={file.name} title={`下载原文件：${file.name}`} />)}</>
-    : <DownloadButton url={null} label={label} title="本场该阶段暂无对应文件" />;
+    ? <>{resource.files.map(file => <DownloadButton key={file.url} url={file.url} label={file.name} title={`${generated ? '按需生成导演包' : '下载原文件'}：${file.name}`} />)}</>
+    : <DownloadButton url={resource.url} label={label} title={resource.url ? '按当前已采用来源临时生成导演包' : '本场该阶段暂无对应文件'} />;
 }
 
 export function SceneDownloads({ project, episode, scene, revision }: { project: string; episode: string; scene: string; revision: number }) {
@@ -36,7 +36,7 @@ export function SceneDownloads({ project, episode, scene, revision }: { project:
       <details className="stage-download-group" aria-label={stage + '导演包下载'}>
         <summary>导演包下载</summary>
         <div className="stage-download-actions">
-          <OriginalDownloads resource={downloads.data[stage].director} label="下载导演包" />
+          <OriginalDownloads resource={downloads.data[stage].director} label="下载导演包" generated />
           <OriginalDownloads resource={downloads.data[stage].canvas} label="下载画布" />
         </div>
       </details>

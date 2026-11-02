@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 import json
 import re
 import os
+import zipfile
 from ipaddress import ip_address, ip_network
 from urllib.parse import quote, urlsplit
 
@@ -19,6 +20,7 @@ from backend.services.projects import ProjectStore
 import execution_records as recordio
 from backend.services.workspaces import Workspaces, project_tree, scope_links
 from backend.services.project_packages import package_response
+from backend.services.director_packages import package_response as director_package_response, spec_response as director_spec_response
 from workspace_project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
@@ -585,24 +587,54 @@ def completed_episode_download(name: str, episode: Episode,
 @app.get('/api/projects/{name}/episodes/{episode}/downloads')
 def episode_download_list(name: str, episode: Episode, scene: Scene | None = None) -> dict[str, Any]:
     try:
-        files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)
+        data = entry(name, '09-剧集制作', episode, mode='playback')['data']
+        files = episode_resources(store, name, episode, data, scene)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     prefix = '/api/projects/' + quote(name, safe='') + '/episodes/' + episode + '/downloads/'
     file_prefix = '/api/projects/' + quote(name, safe='') + '/files/'
-    return {stage: {kind: {'count': len(items),
+    result = {stage: {kind: {'count': len(items),
                          'url': prefix + quote(stage, safe='') + '/videos' + ('?scene=' + scene if scene else '') if kind == 'videos' and items else None,
                          'files': [] if kind == 'videos' else [
-                             {'name': path.name, 'url': file_prefix + quote(path.relative_to(store.project(name)).as_posix(), safe='/') + '?download=true'}
+                             {'name': path.name.replace('.director.json', '.mmxpack.zip'),
+                              'url': ('/api/projects/' + quote(name, safe='') + '/director-download?path=' + quote(path.relative_to(store.project(name)).as_posix(), safe='')
+                                      if path.name.endswith('.director.json') else file_prefix + quote(path.relative_to(store.project(name)).as_posix(), safe='/') + '?download=true')}
                              for path, _ in items]}
                     for kind, items in groups.items()} for stage, groups in files.items()}
+    selected = data['catalogues']['09-剧集制作']['children']
+    selected = next(item for item in selected if item['name'] == episode)
+    if scene:
+        segments = selected['segments'][scene]
+        for stage in ('一采', '二采'):
+            if not result[stage]['director']['files'] and segments and all(
+                    sum(video['approved'] and video['stage'] == stage for video in segment['videos']) == 1 for segment in segments):
+                result[stage]['director'].update(count=1, url=prefix + quote(stage, safe='') + '/director?scene=' + scene)
+    return result
 
 
 @app.get('/api/projects/{name}/episodes/{episode}/downloads/{stage}/{kind}')
 def episode_download(name: str, episode: Episode, stage: Literal['一采', '二采', '后处理'],
-                     kind: Literal['videos'], scene: Scene | None = None,
+                     kind: Literal['videos', 'director'], request: Request, scene: Scene | None = None,
                      archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     try:
+        if kind == 'director':
+            if scene is None or stage == '后处理':
+                raise HTTPException(422, '导演包下载需要指定场次及一采或二采')
+            if not management_request(request):
+                raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
+            import scene_finalize
+            import video_approve
+            root = store.project(name)
+            parts = [part for current_scene, part in scene_finalize.indexed_parts(root, episode) if current_scene == episode + '-' + scene]
+            identities = [scene_finalize.selected(root, part, stage) for part in parts]
+            if not parts or not all(identities):
+                raise ValueError('本场该阶段尚未全部采用')
+            plan = {'episode': episode, 'scene': scene, 'stage': stage,
+                    'items': [video_approve.adopted_source(root, identity, stage) for identity in identities]}
+            prepared = scene_finalize.prepare(root, plan)
+            return director_spec_response(store, name, {'name': prepared['pack'].name, 'node_id': prepared['node'],
+                'url': prepared['url'], 'workflow': prepared['workflow'],
+                'media': {remote: local.relative_to(root).as_posix() for remote, local in prepared['media'].items()}})
         files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)[stage][kind]
         if not files:
             raise FileNotFoundError(('本场' if scene else '本集') + '该阶段没有可下载的' + KINDS[kind])
@@ -611,7 +643,7 @@ def episode_download(name: str, episode: Episode, stage: Literal['一采', '二�
         return zip_response(files, filename, archive_format)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
-    except ValueError as error:
+    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
 
@@ -628,12 +660,36 @@ def document(name: str, path: Annotated[str, Query()]) -> dict[str, Any]:
     raise HTTPException(404, '没有可用的文档预览，请打开原文件')
 
 
+def director_response(projects, name, path, request):
+    if not management_request(request):
+        raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
+    try:
+        return director_package_response(projects, name, path)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@app.get('/api/projects/{name}/director-download')
+def director_download(name: str, path: str, request: Request):
+    return director_response(store, name, path, request)
+
+
 @app.get('/api/projects/{name}/files/{path:path}')
 def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
     return project_file_response(store, name, path, request, v, download)
 
 
 def project_file_response(projects, name, path, request, v=None, download=False):
+    if download and path.endswith('.mmxpack.zip'):
+        manifest = path.removesuffix('.mmxpack.zip') + '.director.json'
+        try:
+            projects.file(name, manifest)
+        except FileNotFoundError:
+            pass
+        else:
+            return director_response(projects, name, manifest, request)
     try:
         target = projects.file(name, path, v)
     except FileNotFoundError as error:
@@ -884,6 +940,11 @@ def workspace_package(name: str, path: str, request: Request,
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/director-download')
+def workspace_director_download(name: str, path: str, request: Request):
+    return director_response(request.state.workspace_space.projects, name, path, request)
 
 
 @spaces_router.get('/projects/{name}/files/{path:path}')

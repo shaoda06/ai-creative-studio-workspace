@@ -13,7 +13,7 @@ downloadClient.setQueryData(['episode-downloads', 'fixture-only', '片头', 'C00
   Object.fromEntries(['后处理', '二采', '一采'].map(stage => [stage, {
     videos: { count: stage === '后处理' ? 1 : 0,
       url: stage === '后处理' ? '/component-samples/native-pack?scene=C002' : null, files: [] },
-    director: { count: 0, url: null, files: [] }, canvas: { count: 0, url: null, files: [] },
+    director: { count: stage === '一采' ? 1 : 0, url: stage === '一采' ? '/component-samples/director-check' : null, files: [] }, canvas: { count: 0, url: null, files: [] },
   }])));
 
 export function DownloadsFixture() {
@@ -38,6 +38,8 @@ export function DownloadsFixture() {
     </QueryClientProvider>
     <div data-testid="manifest-downloads"><FileTree showOriginal={false} showStatus={false} items={[
       { kind: 'file', name: '长清单名称LongMediaManifestReference.jianying.json', key: 'manifest-ready', jianying: { jypack: '/component-samples/manifest-check?format=jypack', zip: '/component-samples/manifest-check?format=zip' } },
+      { kind: 'file', name: '导演包重建清单.director.json', key: 'director-ready', director: '/component-samples/manifest-check?format=mmxpack.zip' },
+      { kind: 'file', name: '导演包缺少来源', key: 'director-disabled', director: null },
       { kind: 'file', name: '无下载入口的清单', key: 'manifest-disabled', jianying: { jypack: null, zip: null } },
     ]} /></div>
   </section>;

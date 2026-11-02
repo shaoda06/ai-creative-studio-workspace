@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""汇总已批准的整场一采或二采，原生导出导演包、配对画布并补齐现有记录。"""
+"""汇总已批准的整场一采或二采，准备按需导演包的汇总API、配对画布和重建清单，不预生成ZIP。"""
 import argparse
 import copy
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,7 +19,6 @@ from urllib.parse import unquote
 import video_adopt as adopt
 import workflow_baselines as pairs
 from h3_pack import lift_common, verify_pack
-import comfyui_config
 import project_progress
 
 client = adopt.client
@@ -352,7 +350,7 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
             previous_path = record / (base + ('-' + version if version else '') + '-留档记录.json')
             if previous_path.is_file():
                 previous = adopt.load(previous_path)
-                if (previous['sources'] == evidence and previous['stage'] == stage
+                if (previous['sources'] == evidence and previous['stage'] == stage and previous.get('delivery') == 'on-demand'
                         and previous.get('configuration_batch_authorization') == plan.get('configuration_batch_authorization')):
                     edition = version
                     break
@@ -365,6 +363,7 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
     stem = base + ('-' + edition if edition else '')
     return {'workflow': workflow, 'canvas': canvas, 'timeline': timeline, 'node': key,
             'url': next(iter(urls)), 'sources': sources, 'evidence': evidence, 'media': media,
+            'manifest': final / (stem + '-导演包.director.json'),
             'pack': final / (stem + '-导演包.mmxpack.zip'), 'canvas_path': final / (stem + '.workflow.json'),
             'api_path': record / (stem + '.api.json'), 'receipt': record / (stem + '-导出响应.json'),
             'record': record / (stem + '-留档记录.json'), 'drafts': drafts,
@@ -381,74 +380,36 @@ def finalize_one(root, plan, p, apply, timeout):
         path.read_text(encoding='utf-8-sig')
     project_progress.phase_row(p['progress'].read_text('utf-8-sig'), plan['episode'])
     record = {'stage': plan['stage'], 'sources': p['evidence'], 'url': p['url'], 'node_id': p['node'],
+              'delivery': 'on-demand', 'manifest': str(p['manifest']),
               'pack': str(p['pack']), 'canvas': str(p['canvas_path']), 'api': str(p['api_path']),
               'configuration_batch_authorization': plan.get('configuration_batch_authorization')}
     if p['record'].exists():
         old = adopt.load(p['record'])
         if any(old[k] != v for k, v in record.items()):
             raise ValueError('已有留档来源不同，保留原附件；使用新的 edition 明确另存版本')
-    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas'])):
+    spec = {'name': p['pack'].name, 'api': p['api_path'].relative_to(root).as_posix(),
+            'node_id': p['node'], 'url': p['url'],
+            'media': {remote: local.relative_to(root).as_posix() for remote, local in p['media'].items()}}
+    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas']), (p['manifest'], spec)):
         if path.exists() and adopt.load(path) != value:
             raise ValueError('已有汇总工程不同，不能覆盖：' + str(path))
-    if p['pack'].exists() and not p['record'].exists():
-        raise ValueError('已有同名导演包缺少本次留档来源记录，不能当作本轮导出')
     result = {'state': 'ready', 'mode': 'apply' if apply else 'dry_run', **record,
               'record': str(p['record']), 'browser_sync': 'not_checked'}
     if not apply:
         return result
     if not p['record'].exists():
         client.write_new(p['record'], {**record, 'state': 'prepared'})
-    if not p['api_path'].exists():
-        client.write_new(p['api_path'], p['workflow'])
-    p['canvas_path'].parent.mkdir(parents=True, exist_ok=True)
-    if not p['canvas_path'].exists():
-        client.write_new(p['canvas_path'], p['canvas'])
-    if not p['pack'].exists():
-        if p['receipt'].exists():
-            raise ValueError('已有导出响应但定稿包缺失，须先核对，不自动再次导出')
-        try:
-            response = client.export_pack(comfyui_config.client_for(comfyui_config.workspace_for_project(root), p['url'], timeout),
-                                          argparse.Namespace(workflow=p['api_path'], node_id=p['node'], output=p['pack']))
-        except (client.ClientError, ValueError, OSError, zipfile.BadZipFile) as error:
-            failure = {'ok': False, 'recorded_at': client.now(), 'error': str(error),
-                       'code': error.code if isinstance(error, client.ClientError) else type(error).__name__,
-                       'details': error.details if isinstance(error, client.ClientError) else {}}
-            client.write_new(p['receipt'], failure)
-            save_json(p['record'], {**record, 'state': 'export_failed', 'error': failure, 'receipt': str(p['receipt'])})
-            update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'],
-                            p['summary'], failure_record=p['record'])
-            raise
-        client.write_new(p['receipt'], {'ok': True, 'recorded_at': client.now(), 'data': response})
-    try:
-        verify_pack(p)
-        if p['receipt'].exists():
-            adopt.check_file(p['pack'], adopt.load(p['receipt'])['data'])
-    except (ValueError, KeyError, OSError, zipfile.BadZipFile) as error:
-        save_json(p['record'], {**record, 'state': 'verification_failed', 'error': str(error)})
-        for path in [*p['drafts'], p['summary']]:
-            text = path.read_text(encoding='utf-8-sig')
-            if re.search(r'^### ' + re.escape(p['heading']) + r'\s*$', text, re.M):
-                a, b = adopt.section(text, p['heading'])
-                body = adopt.field(text[a:b], '状态', p['scope'] + '定稿留档核对失败；具体问题见留档记录，视频批准事实保持。')
-                replace_file(path, text[:a] + body + '\n' + text[b:])
-        update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'],
-                        p['summary'], failure_record=p['record'])
-        raise
-    if not p['receipt'].exists():
-        # The native client may have published the ZIP before an interrupted receipt write.
-        with p['pack'].open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        client.write_new(p['receipt'], {'ok': True, 'recovered_at': client.now(),
-                                      'basis': '已有准备记录及实际包内容／素材字节核对；原远端导出时间未记录',
-                                      'data': {'path': str(p['pack']), 'bytes': p['pack'].stat().st_size, 'sha256': digest}})
+    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas']), (p['manifest'], spec)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            client.write_new(path, value)
     stamp = adopt.load(p['record']).get('verified_at', client.now())
     for path in [*p['drafts'], p['summary']]:
         text = path.read_text(encoding='utf-8-sig')
-        body = (f'\n- 状态：{p["scope"]}定稿留档完成；视频批准依据保持原记录。\n'
-                f'- 导演包：[下载]({adopt.link(path, p["pack"])})\n'
+        body = (f'\n- 状态：{p["scope"]}定稿留档完成；重建资料已保存，ZIP仅点击下载时临时生成。\n'
+                f'- 导演包：[重建清单]({adopt.link(path, p["manifest"])})\n'
                 f'- 配对画布：[下载]({adopt.link(path, p["canvas_path"])})\n'
-                f'- 来源及文件核对：[留档记录]({adopt.link(path, p["record"])})；'
-                f'[导出响应]({adopt.link(path, p["receipt"])})\n')
+                f'- 来源核对：[留档记录]({adopt.link(path, p["record"])})\n')
         if re.search(r'^### ' + re.escape(p['heading']) + r'\s*$', text, re.M):
             a, b = adopt.section(text, p['heading'])
             text = text[:a] + body + '\n' + text[b:]
@@ -460,9 +421,8 @@ def finalize_one(root, plan, p, apply, timeout):
         mapped.setdefault('scene_finalizations', {})[plan['stage']] = str(p['record'])
         save_json(actual['mapping_path'], mapped)
     save_json(p['record'], {**record, 'state': 'completed', 'verified_at': stamp,
-                           'checks': '全部P段实际批准／实际提交来源／原生包正文与素材字节／记录入口',
-                           'records': [str(path) for path in [*p['drafts'], p['summary']]],
-                           'receipt': str(p['receipt'])})
+                           'checks': '全部P段实际批准／实际提交来源／本地冻结素材／重建清单；尚未导出ZIP',
+                           'records': [str(path) for path in [*p['drafts'], p['summary']]]})
     update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'], p['summary'])
     saved = adopt.load(p['record'])
     save_json(p['record'], {**saved, 'records': saved['records'] + [str(p['progress'])]})
@@ -505,7 +465,7 @@ def finalize(args, *, plan=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅原生导出，绝不生成视频。路径及请求格式见 comfyui-scripts/README.md。')
+    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅保存重建资料，绝不生成ZIP或视频。路径及请求格式见 comfyui-scripts/README.md。')
     parser.add_argument('--project', required=True, help='项目根；相对当前工作目录解析')
     parser.add_argument('--plan', required=True, help='阶段留档请求JSON；相对项目根解析')
     parser.add_argument('--apply', action='store_true', help='直接导出到阶段定稿目录并补齐现有记录；默认只读预览')

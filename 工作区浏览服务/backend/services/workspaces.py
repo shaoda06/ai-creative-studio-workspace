@@ -82,6 +82,8 @@ def project_tree(projects, name, api):
                 if path.name.endswith('.jianying.json'):
                     package = api + '/projects/' + quote(name, safe='') + '/jianying-download?path=' + quote(key, safe='')
                     item['jianying'] = {'jypack': package + '&format=jypack', 'zip': package + '&format=zip'}
+                if path.name.endswith('.director.json'):
+                    item['director'] = api + '/projects/' + quote(name, safe='') + '/director-download?path=' + quote(key, safe='')
                 result.append(item)
         return result
 
