@@ -548,7 +548,7 @@ class LocalQueue:
         data = self.rows[key]['input']
         try:
             if result is None:
-                result = self.client.strict_json((Path(data.record_dir) / data.history_name).read_bytes())['data']
+                result = recordio.read(Path(data.record_dir) / data.history_name)['data']
             await self.finish_collection(key, result)
         except (self.client.ClientError, OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
             self.record(key, 'collection', 'failed', _changes={'status': 'collection_failed', 'error': str(error),

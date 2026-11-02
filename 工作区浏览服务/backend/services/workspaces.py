@@ -77,8 +77,12 @@ def project_tree(projects, name, api):
             if path.is_dir():
                 result.append({'kind': 'group', 'name': path.name, 'key': key, 'children': read(path)})
             elif path.is_file():
-                result.append({'kind': 'file', 'name': path.name, 'key': key,
-                               'url': prefix + quote(key, safe='/')})
+                item = {'kind': 'file', 'name': path.name, 'key': key,
+                        'url': prefix + quote(key, safe='/')}
+                if path.name.endswith('.jianying.json'):
+                    package = api + '/projects/' + quote(name, safe='') + '/jianying-download?path=' + quote(key, safe='')
+                    item['jianying'] = {'jypack': package + '&format=jypack', 'zip': package + '&format=zip'}
+                result.append(item)
         return result
 
     return {'name': name, 'files': read(root)}

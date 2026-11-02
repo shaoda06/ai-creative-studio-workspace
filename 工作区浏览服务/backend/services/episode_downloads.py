@@ -31,7 +31,7 @@ def clear_downloads():
         path.unlink()
 
 
-def zip_response(files, filename, archive_format='zip'):
+def zip_response(files, filename, archive_format='zip', *, timeline_members=None):
     # Videos are already compressed. Keep their original bytes.
     DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
     with ExitStack() as stack:
@@ -42,7 +42,8 @@ def zip_response(files, filename, archive_format='zip'):
         if len(set(members)) != len(members):
             raise ValueError('同一分段存在多个已采用，请核对采用记录后重新下载')
         jianying_export.export_archive(files, path, Path(filename).stem,
-                                       getattr(files, 'timeline_members', None), archive_format)
+                                       getattr(files, 'timeline_members', None) if timeline_members is None else timeline_members,
+                                       archive_format)
         if archive_format == 'jypack':
             filename = str(Path(filename).with_suffix('.jypack'))
         response = VideoZipResponse(archive.name, media_type=(

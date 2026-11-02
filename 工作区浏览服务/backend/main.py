@@ -18,6 +18,7 @@ from backend.parsers import documents
 from backend.services.projects import ProjectStore
 import execution_records as recordio
 from backend.services.workspaces import Workspaces, project_tree, scope_links
+from backend.services.project_packages import package_response
 from project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
@@ -865,6 +866,17 @@ def workspace_document(name: str, path: str, request: Request):
     if target.suffix.lower() in ('.json', '.txt', '.log'):
         return documents.plain_text_preview(target)[0]
     raise HTTPException(404, '没有可用的文档预览，请打开原文件')
+
+
+@spaces_router.get('/projects/{name}/jianying-download')
+def workspace_package(name: str, path: str, request: Request,
+                      archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'jypack'):
+    try:
+        return package_response(request.state.workspace_space.projects, name, path, archive_format)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @spaces_router.get('/projects/{name}/files/{path:path}')

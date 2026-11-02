@@ -114,6 +114,12 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <Example title="目录与文件" rule="目录按需展开，点击文件进入阅读。这里仅展示示例文件。" usage="项目文档目录、参考资料">
           <PreviewContext.Provider value={item => setDialog(item.name)}><FileTree showOriginal={false} items={[{ kind: 'group', name: '示例目录', files: [{ kind: 'markdown', name: '示例说明', key: 'demo-note', statusHtml: '<span class="status-badge status-gray">示例</span>' }, { kind: 'group', name: '子目录', files: [{ kind: 'markdown', name: '阅读示例', key: 'demo-reading', statusHtml: '<span class="status-badge status-gray">示例</span>' }] }] }]} /></PreviewContext.Provider>
         </Example>
+        <Example title="清单打包下载" rule="已登记的媒体清单复用公共下载按钮；点击才请求打包，ZIP按需。此示例的正常按钮仅下载固定示例文本，不生成真实剪映包；空入口禁用。" usage="登记项目空间的剪映媒体清单">
+          <PreviewContext.Provider value={item => setDialog(item.name)}><FileTree showOriginal={false} showStatus={false} items={[
+            { kind: 'file', name: '很长的剪映媒体清单名称示例.jianying.json', key: 'demo-package', jianying: { jypack: '/api/component-samples/file', zip: '/api/component-samples/file' } },
+            { kind: 'file', name: '不可下载的示例清单', key: 'demo-package-disabled', jianying: { jypack: null, zip: null } },
+          ]} /></PreviewContext.Provider>
+        </Example>
         <Example title="分页与空状态" rule="示例每页6项，首页和末页会禁用对应方向；无内容时不显示分页。逐页图片阅读可关闭条目总数；arrows规格为图片框左右的圆形按钮，首张隐藏上一张、末张隐藏下一张；与示例页码同步，普通分页仍首尾禁用。" usage="版本记录、资产列表、风格库、导演分镜表">
           <div className="component-demo-row"><span>显示空列表</span><Switch label="显示空列表" checked={empty} onChange={setEmpty} /></div>
           {empty ? <p className="muted">这里还没有记录。</p> : <ul className="component-sample-list">{sampleItems.slice((page - 1) * 6, page * 6).map(item => <li key={item}>{item}</li>)}</ul>}

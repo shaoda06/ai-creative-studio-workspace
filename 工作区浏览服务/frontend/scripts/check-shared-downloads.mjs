@@ -104,6 +104,37 @@ export async function checkSharedDownloads(page, width) {
   assert.equal(await readFile(await packFile.path(), 'utf8'), 'native-container-fixture');
   await page.unroute('**/component-samples/native-pack?*');
   while (await closes.count()) await closes.first().click();
+  const manifests = fixture.getByTestId('manifest-downloads');
+  let manifestRequests = 0;
+  await page.route('**/component-samples/manifest-check?*', route => {
+    manifestRequests++;
+    const format = new URL(route.request().url()).searchParams.get('format');
+    return route.fulfill({ headers: { 'Content-Disposition': `attachment; filename="manifest.${format}"` }, body: 'explicit-manifest-fixture' });
+  });
+  assert.equal(manifestRequests, 0, '清单展示不打包');
+  for (const [label, format] of [['下载剪映包', 'jypack'], ['下载 ZIP', 'zip']]) {
+    const buttons = manifests.getByRole('button', { name: label, exact: true });
+    assert.equal(await buttons.nth(1).isDisabled(), true);
+    const saved = page.waitForEvent('download');
+    await buttons.first().click();
+    const file = await saved;
+    assert.equal(file.suggestedFilename(), `manifest.${format}`);
+    assert.equal(await readFile(await file.path(), 'utf8'), 'explicit-manifest-fixture');
+  }
+  assert.equal(manifestRequests, 2, '一点击一请求');
+  await page.unroute('**/component-samples/manifest-check?*');
+  const showcase = page.getByTestId('showcase');
+  await showcase.getByRole('button', { name: '列表与分页', exact: true }).click();
+  await page.route('**/api/component-samples/file', route => route.fulfill({
+    headers: { 'Content-Disposition': 'inline; filename="component-sample.txt"' }, body: 'fixed sample only',
+  }));
+  const showcaseButtons = showcase.getByRole('button', { name: '下载剪映包', exact: true });
+  assert.equal(await showcaseButtons.nth(1).isDisabled(), true);
+  const showcaseSaved = page.waitForEvent('download');
+  await showcaseButtons.first().click();
+  assert.equal((await showcaseSaved).suggestedFilename(), 'component-sample.txt');
+  await page.unroute('**/api/component-samples/file');
+  while (await closes.count()) await closes.first().click();
   await fixture.screenshot({ path: join(tmpdir(), `nora-download-${width}.png`) });
-  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试通过。`);
+  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试及清单双格式点击下载/空入口禁用通过。`);
 }

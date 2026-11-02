@@ -11,6 +11,7 @@ import { Loading } from './components/Loading';
 import { ChapterNavigation } from './components/ChapterNavigation';
 import type { ChapterHeading } from './components/ChapterNavigation';
 import { FileActions } from './components/FileActions';
+import { DownloadButton } from './components/DownloadButton';
 export { FileActions, Original } from './components/FileActions';
 
 export const PreviewContext = createContext<(item: FileItem) => void>(() => {});
@@ -51,7 +52,10 @@ export function Rich({ html = '', languages = {} }: { html?: string; languages?:
 export function FileLink({ item, showOriginal = true, showStatus = true }: { item: FileItem; showOriginal?: boolean; showStatus?: boolean }) {
   const preview = useContext(PreviewContext);
   const target = item.kind === 'reference' && item.media ? { ...item.media, name: item.name, prompts: item.prompts } : item;
-  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{showOriginal && <FileActions url={target.url} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
+  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{showOriginal && <FileActions url={target.url} />}{item.jianying && <>
+    <DownloadButton url={item.jianying.jypack} label="下载剪映包" title={`生成剪映包：${item.name}`} pack />
+    <DownloadButton url={item.jianying.zip} label="下载 ZIP" title={`生成 ZIP：${item.name}`} pack />
+  </>}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
 }
 export function FileTree({ items, showOriginal = true, showStatus = true }: { items: FileItem[]; showOriginal?: boolean; showStatus?: boolean }) {
   const entries: FileItem[] = [];

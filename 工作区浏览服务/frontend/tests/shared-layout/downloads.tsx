@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Breadcrumbs } from '../../src/components/Breadcrumbs';
 import { DownloadButton } from '../../src/components/DownloadButton';
 import { DownloadControl } from '../../src/components/DownloadControl';
+import { FileTree } from '../../src/components';
 import { FileActions } from '../../src/components/FileActions';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SceneDownloads } from '../../src/components/SceneDownloads';
@@ -35,5 +36,9 @@ export function DownloadsFixture() {
     <QueryClientProvider client={downloadClient}>
       <SceneDownloads project="fixture-only" episode="片头" scene="C002" revision={0} />
     </QueryClientProvider>
+    <div data-testid="manifest-downloads"><FileTree showOriginal={false} showStatus={false} items={[
+      { kind: 'file', name: '长清单名称LongMediaManifestReference.jianying.json', key: 'manifest-ready', jianying: { jypack: '/component-samples/manifest-check?format=jypack', zip: '/component-samples/manifest-check?format=zip' } },
+      { kind: 'file', name: '无下载入口的清单', key: 'manifest-disabled', jianying: { jypack: null, zip: null } },
+    ]} /></div>
   </section>;
 }

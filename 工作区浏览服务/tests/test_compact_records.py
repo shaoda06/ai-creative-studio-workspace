@@ -80,6 +80,25 @@ class CompactCollectionTests(CollectionTests):
         await super().asyncSetUp()
         self.data.record_format = 'compact'
 
+    async def test_restart_retry_reads_terminal_result_from_compact_archive(self):
+        self.seed('collection_failed')
+        result = self.result()
+        history = self.record / self.data.history_name
+        recordio.write(history, {'data': result}, compact=True)
+        self.assertFalse(history.exists())
+        self.assertTrue(recordio.exists(history))
+        await self.store.close()
+        from backend.services.comfy_tasks import TaskStore
+        self.store = TaskStore(self.root / 'runtime', self.root)
+        with patch.object(self.store.client, 'download', side_effect=self.download) as download, \
+             patch.object(self.store.client, 'submit') as submit, patch.object(self.store, 'queue_notice'):
+            await self.store.retry_collection('task')
+            await self.store.workers['task']
+        self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
+        self.assertEqual(self.store.rows['task']['state']['prompt_id'], 'real-id')
+        self.assertEqual(download.call_count, 1)
+        submit.assert_not_called()
+
 
 class CompactVideoTests(TechnicalVideoTests):
     async def asyncSetUp(self):
