@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { get, spaceProjectPath } from './api';
@@ -7,6 +8,8 @@ import { Dialog, Document, FileTree, Preview, PreviewContext, Result } from './c
 import { EntryCard } from './components/EntryCard';
 import { PageHeader } from './components/PageHeader';
 import { PageCheckStatus } from './components/PageCheckStatus';
+import { HeaderControlsContext } from './components/AppShell';
+import { TabNav } from './components/TabNav';
 
 export function ProjectSpace() {
   const { spaceId = '' } = useParams();
@@ -30,14 +33,32 @@ export function ProjectSpace() {
 
 export function FilesProject() {
   const { spaceId = '', name = '' } = useParams();
+  const controlsRoot = useContext(HeaderControlsContext);
+  const [section, setSection] = useState('');
   const baseUrl = `/api/workspaces/${encodeURIComponent(spaceId)}/projects/${encodeURIComponent(name)}`;
   const [preview, setPreview] = useState<FileItem | null>(null);
   const query = useQuery({ queryKey: ['project-files', spaceId, name], queryFn: () => get<{ name: string; files: FileItem[] }>(baseUrl), refetchInterval: 5000 });
+  useEffect(() => { setSection(''); setPreview(null); }, [spaceId, name]);
+  const files = query.data?.files || [];
+  const directories = files.filter(item => item.kind === 'group');
+  const directory = directories.find(item => item.name === section);
+  const selected = section === '/' || directory ? section : '';
+  const items = selected === '/' ? files : directory ? directory.children || [] : files.filter(item => item.kind !== 'group');
+  const tabs = [{ value: '', label: '项目概况' },
+    ...directories.map(item => ({ value: item.name, label: item.name.replace(/^\d+[-_、.\s]+/, '') })),
+    { value: '/', label: '全部资料' }];
   return <PreviewContext.Provider value={setPreview}><div className="home">
     <PageHeader title={name} actions={<Link to={`/spaces/${spaceId}`}>返回项目空间</Link>} />
     <PageCheckStatus queries={[query]} />
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && <FileTree items={query.data.files} showStatus={false} />}
+    {query.data && <>
+      {controlsRoot && createPortal(<TabNav wide label="项目栏目" items={tabs} selected={selected}
+        onChange={value => { setSection(value); setPreview(null); }} />, controlsRoot)}
+      <section className="panel" key={selected} aria-label="项目资料">
+        <FileTree items={items} showStatus={false} />
+        {!items.length && <p className="muted">本栏目暂无资料。</p>}
+      </section>
+    </>}
     {preview && <Preview key={preview.key} project={`${spaceId}/${name}`} baseUrl={baseUrl} item={preview} revision={0} close={() => setPreview(null)} />}
   </div></PreviewContext.Provider>;
 }

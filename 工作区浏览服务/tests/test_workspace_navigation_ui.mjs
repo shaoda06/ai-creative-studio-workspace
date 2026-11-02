@@ -66,6 +66,7 @@ try {
   await page.getByRole('dialog').locator('img').waitFor();
   await page.getByRole('dialog').locator('img').evaluate(image => image.decode());
   await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('navigation', { name: '项目栏目', exact: true }).getByRole('button', { name: '项目概况', exact: true }).click();
   await page.getByRole('button', { name: '样片.webm', exact: true }).click();
   const video = page.getByRole('dialog').locator('video');
   await video.evaluate(element => element.play());
