@@ -4,7 +4,11 @@
 
 ## 工作区结构
 
-- [Nora资料区](<workspaces/Nora Workspace/AGENTS.md>)保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`；[Iris资料区](<workspaces/Iris Workspace/AGENTS.md>)保存商业订单，项目位于 `workspaces/Iris Workspace/projects/`。两个资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。
+- [Nora资料区](<workspaces/Nora Workspace/AGENTS.md>)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
+- [Iris资料区](<workspaces/Iris Workspace/AGENTS.md>)：保存商业订单，项目位于 `workspaces/Iris Workspace/projects/`。
+
+各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。
+
 - 每个项目使用独立目录，以清晰、稳定的名称或项目代号命名；不同项目的内容、素材和制作记录不得混放。项目集中保存自身从策划到制作迭代的资料，具体结构、局部规则和完成标准按对应业务及项目约定维护。
 - 总目录直属文件保留全局约定、说明与共用配置，不直接散放单个项目资料。业务与阶段规则、模板、脚本在总技能库维护，不复制到资料区形成另一套现行技能。
 - 新建项目和写入资料时使用所属资料区的实际路径。旧桌面目录及总层 `projects/` 仅作历史路径兼容，不作为另建项目实体、技能库或后台的入口。
