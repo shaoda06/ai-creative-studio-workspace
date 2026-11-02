@@ -1,4 +1,4 @@
 interface:
   display_name: "Nora 分段交付与完集收尾"
-  short_description: "连续短剧D11分段交付与完集收尾阶段，按正式顺序核对已采用视频、导演留档和进度，执行交付与复盘；按需调用共用剪映工具，不代替剪辑"
+  short_description: "连续短剧D11分段交付与完集收尾阶段，按正式顺序核对已采用视频、来源及进度，执行交付与复盘；按需调用共用剪映工具，不代替剪辑"
   default_prompt: "使用$nora-drama-handoff处理当前任务，先确定输入、授权和实际范围。"

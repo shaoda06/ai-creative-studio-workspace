@@ -1,12 +1,13 @@
 """Image tools run with explicit requests, without drama cards, EP paths or generation."""
 from pathlib import Path
+import json
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import unittest
 
 from tests import test_comfy_tasks as base
-from backend.services import result_registration, image_tasks
+from backend.services import result_registration, image_tasks, submission_plans
 from tests import test_image_closeout as image_fixture
 png = image_fixture.png
 
@@ -56,6 +57,41 @@ class ImageToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
         again = image_tasks.register(self.store, 'task', [], self.record / '结果收尾报告.json')
         self.assertEqual(again['adapter'], 'technical')
         self.assertEqual(target.read_bytes(), before)
+
+    async def test_technical_image_plan_prepares_and_reuses_group_without_business_builder(self):
+        _, api, uploads, node = assemble(prompt={'rewritten_prompt': '蓝色布料。', 'wh_ratio': '1:1'},
+                                        size=[32, 32], seed=17, mode='t2i', prefix='plain-plan')
+        plan = self.project / '执行附件/纯技术清单.json'
+        source = {'tasks': [{'task_type': 'image', 'title': '跨业务技术图片', 'workflow': api,
+            'record_dir': '执行附件/纯技术图片', 'uploads': uploads,
+            'outputs': [{'node_id': node, 'output_key': 'images', 'index': 0,
+                         'path': '生成结果/布料.png', 'response_name': '取回.json'}],
+            'image_plan': {'adapter': 'technical', 'images': [{'path': '生成结果/布料.png', 'width': 32, 'height': 32}]},
+            'authorization': '隔离模拟队列，不连接真实生成'}]}
+        plan.write_text(json.dumps(source, ensure_ascii=False))
+        payload = SimpleNamespace(project=self.project.name, plan_file=str(plan), thread_id=self.data.thread_id,
+                                  desktop=self.data.desktop, timeout=30, prepare_only=True, reprepare=False, start_paused=False)
+        with patch.object(submission_plans, 'build_drama_image', side_effect=AssertionError('no business builder')), \
+             patch.object(self.store.client.Client, 'json', side_effect=AssertionError('no remote')):
+            result = await submission_plans.execute(self.store, payload)
+            self.assertEqual(result['status'], 'prepared')
+            payload.prepare_only = False
+            first = await submission_plans.execute(self.store, payload)
+            again = await submission_plans.execute(self.store, payload)
+        self.assertEqual(first['status'], 'enqueued')
+        self.assertEqual(first['group_id'], again['group_id'])
+        self.assertTrue(again['reused'])
+        self.assertEqual(len(self.store.rows), 1)
+        self.assertEqual(next(iter(self.store.rows.values()))['input'].image_plan['adapter'], 'technical')
+        self.assertFalse((self.project / '03-人物资料').exists())
+        self.assertFalse((self.project / '09-剧集制作').exists())
+
+    def test_technical_plan_rejects_unknown_adapter_and_business_local_mode(self):
+        with patch.object(submission_plans, 'build_drama_image', side_effect=AssertionError('no business builder')):
+            with self.assertRaisesRegex(ValueError, '未登记的图片结果适配'):
+                submission_plans.build_image(self.project, None, {'image_plan': {'adapter': 'unknown'}}, None, None)
+            with self.assertRaisesRegex(ValueError, '本地尺寸处理'):
+                submission_plans.build_image(self.project, None, {'image_plan': {'adapter': 'technical', 'local_processing': { 'size': [32,32] }}}, None, None)
 
     def test_qwen_edit_binds_order_and_keeps_agent_text(self):
         files = [self.project / '参考A.png', self.project / '参考B.png']

@@ -15,11 +15,27 @@ from backend.services.prepared_documents import Documents, publish, read_journal
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-images/scripts"))
 from drama_image_plans import (SEEDS, SIZES, reference, choose_seed, generation_record,
-                               adoption_updates, build_image, image_workflow, remote_prefix)
+                               adoption_updates, build_image as build_drama_image, image_workflow, remote_prefix)
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-h3/scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-drama-production/scripts'))
 from h3_workflow import prepare_technical, widget, disconnect
 from drama_video_plans import build_video as build_drama_video
+
+
+def build_image(root, skill, spec, documents, now):
+    from backend.services.image_tasks import technical
+    if not technical(spec.get('image_plan')):
+        return build_drama_image(root, skill, spec, documents, now)
+    if spec['image_plan'].get('local_processing'):
+        raise ValueError('technical图片清单使用已装配远端API；本地尺寸处理直接使用共用图片工具')
+    return dict(project=str(root), task_type=spec['task_type'], title=spec['title'],
+                workflow=spec['workflow'], record_dir=str(project_file(root, spec['record_dir'])),
+                image_plan=spec['image_plan'], submission_plan=spec.get('submission_plan'),
+                uploads=spec.get('uploads', []), outputs=spec['outputs'],
+                attempt_name=spec.get('attempt_name', '提交尝试.json'),
+                request_name=spec.get('request_name', '请求.json'),
+                response_name=spec.get('response_name', '提交响应.json'),
+                history_name=spec.get('history_name', '执行结果.json'))
 
 
 def build_video(root, spec, documents):

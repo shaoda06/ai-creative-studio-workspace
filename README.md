@@ -27,7 +27,7 @@
 | 一级业务及其二级阶段 | 连续短剧D01–D12、运营六阶段；阶段内仅规则、模板及脚本，不再嵌套业务子技能 |
 | `.agents/skills/nora-social-operations/` | 运营一级路由及六个二级业务阶段，管理账号、个人页、封面、发布包、复盘和制作反馈 |
 | `sd-combat-engine/`、`sd-xuanhuan-engine/`、`sd-real-engine/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
-| 主技能内 `dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
+| 旧兼容目录内 `dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
 | `.agents/skills/krea2-style-library/` | 风格库使用与维护指引 |
 | `.agents/skills/nora-prompt-library/` | [提示词管理子技能](.agents/skills/nora-prompt-library/SKILL.md)，由Nora主控按需调用或独立使用，管理共用提示词两库 |
 | `共享提示词/` | 随公共仓库分发的提示词；网页新建默认保存到这里，一份提示词对应一个MD文件 |
@@ -47,7 +47,7 @@
 
 ### 本工作区技能与风格资源
 
-[Nora统一入口](.agents/skills/nora-video/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频与交接等其余范围沿现行入口接续；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
+[Nora统一入口](.agents/skills/nora-video/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频提示词、视频制作与交接同样由D09–D11维护；short-drama-develop保留旧引用兼容。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
 
 | 资源 | 来源与作者 |
 | --- | --- |

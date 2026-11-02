@@ -29,10 +29,10 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 镜头设计、P段与动作缺项回[分镜](../nora-drama-storyboard/SKILL.md)，剧情和原台词缺项回[写作](../nora-drama-write/SKILL.md)，资产设计或来源缺项回[资产](../nora-drama-assets/SKILL.md)。已确认的动作和法术设计按上表适用方法转写，不能以“不改剧情”为由省略法术视觉细化；细化边界按玄幻使用路径处理。不在转写时另编故事，也不默认重新加载打戏或山音全库。
 
-画风使用定位文件中已确认的适用视频短版及语言适配，缺少时回[定位](../short-drama-develop/references/项目定位与画风规范.md#项目画风展开示例验证与复用)补齐，不临时压缩长版。视觉方法按[视觉表达](../nora-drama-storyboard/references/视觉表达方法规范.md)相关章节读取；画面文字沿[共用边界](../nora-serial-drama/references/画面文字与字幕规范.md)。
+画风使用定位文件中已确认的适用视频短版及语言适配，缺少时回[定位](../nora-drama-positioning/references/项目定位与画风规范.md#项目画风展开示例验证与复用)补齐，不临时压缩长版。视觉方法按[视觉表达](../nora-drama-storyboard/references/视觉表达方法规范.md)相关章节读取；画面文字沿[共用边界](../nora-serial-drama/references/画面文字与字幕规范.md)。
 
 初稿或实质性修订完成后，直接按[文本交付前自检](../nora-drama-review/references/文本自检与订正规范.md#文本交付前的自检与订正)的第6步，合并本次内容核对与视听文本审查方法；订正受影响正文及中文对应，不另回审查技能入口或增加检查轮次。仅改错字、格式或记录时按该规则处理受影响范围。
 
-交付、状态与接续执行[提示词自检与执行授权](../nora-serial-drama/references/主控操作规范.md#提示词自检与执行授权)。仅写或核对提示词时在正文交付结束；获授权生成才交[D10视频制作](../nora-drama-production/SKILL.md)。正常结果通知不重新做内容审查；修订依据和授权边界按[返修归属](../nora-ai-short-drama/references/共用规则/制作返修与完整重做规范.md)。
+交付、状态与接续执行[提示词自检与执行授权](../nora-serial-drama/references/主控操作规范.md#提示词自检与执行授权)。仅写或核对提示词时在正文交付结束；获授权生成才交[D10视频制作](../nora-drama-production/SKILL.md)。正常结果通知不重新做内容审查；修订依据和授权边界按[返修归属](../nora-serial-drama/references/制作返修接续规范.md)。
 
 导演台的公共/本组正文、中文对应与资料映射按[业务接续](references/导演台正文与素材业务接续规范.md)落实；共用工具不读取短剧资料来补业务设定。

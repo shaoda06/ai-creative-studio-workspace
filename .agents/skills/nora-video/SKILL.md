@@ -29,8 +29,13 @@ description: Nora AI视频创作与制作统一入口，识别业务类型并路
 | H3模型提示词、时间线、缓存与导演包 | [H3工具](../nora-h3/SKILL.md) |
 | 视频RIFE/RTX装配及客观媒体信息 | [视频处理](../nora-video-processing/SKILL.md) |
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../nora-jianying/SKILL.md) |
+| Markdown与实际配图的带水印PDF | `pdf-delivery-export`，由Iris工作区提供；按登记空间的技能目录定位，业务批准留调用方 |
 | 浏览器任务页、标签组和窗口收尾 | [浏览器操作](../nora-browser-operations/SKILL.md) |
 | 视频读取、提示词库和风格库 | [视频读取](../video-study/SKILL.md)、[提示词管理](../nora-prompt-library/SKILL.md)、[风格库](../krea2-style-library/SKILL.md) |
+
+跨工作区业务按[登记空间定位](../nora-workspace-browser/references/浏览服务使用规范.md#共享工具真源定位)取得实际根目录，再读取该空间AGENTS、README及对应一级业务。已有项目或阶段明确时直接接续，不复制业务文件到提供端。
+
+共用工具的维护真源与服务代码提供端统一；资料子工作区可以保留客户端与旧入口，但不复制另一套现行规则。跨空间定位按[共用工具真源](../nora-workspace-browser/references/浏览服务使用规范.md#共享工具真源定位)执行；Iris提供的PDF从其本地登记工具读取。
 
 主入口只维护职责和路由。图种、内容、布局、规格、来源资格、采用及业务完成条件由业务阶段维护；工具文档维护模型和接口要求。Agent负责理解、创作与语义核对，脚本负责确定性装配、文件处理和执行。
 
