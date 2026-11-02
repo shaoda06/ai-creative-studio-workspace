@@ -23,7 +23,7 @@ try {
     const r=route.request(), path=new URL(r.url()).pathname;
     if(r.method()!=='GET')writes.push(path);
     if(path==='/api/workspaces') return route.fulfill({json:[{id:'nora',name:'Nora示例空间',view:'serial-drama',projects:[]}]});
-    if(path==='/api/comfy/tasks')return route.fulfill({json:{tasks:[running],local_tasks:rows,remote_nodes:[{url:'http://fixture-node',name:'隔离节点',connection:'connected',queue:[{prompt_id:'running-prompt',status:'running',queue_position:null}],running_count:1,queued_count:0}],local_counts:{'http://fixture-node':{queued:2,paused:0,history:0}},history_updated_at:{}}});
+    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[running],local_tasks:rows,remote_nodes:[{url:'http://fixture-node',name:'隔离节点',connection:'connected',queue:[{prompt_id:'running-prompt',status:'running',queue_position:null}],running_count:1,queued_count:0}],local_counts:{'http://fixture-node':{queued:2,paused:0,history:0}},history_updated_at:{}}});
     const match=path.match(/\/api\/comfy\/tasks\/(one|two|running)\/detail$/);
     if(match){
       const members=[...rows,running];

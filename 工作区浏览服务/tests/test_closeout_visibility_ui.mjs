@@ -42,7 +42,7 @@ try {
         status: 'completed', category: 'history', remote_url: 'http://fixture.invalid', enqueued_url: 'http://fixture.invalid',
         created_at: '2026-10-27T01:00:00Z', notification: 'acknowledged', collected: 1, expected: 1,
         closeout: { status: 'browser_pending', error: '模拟资料解析冲突' } };
-      if (url.pathname === '/api/comfy/history') return route.fulfill({ json: { items: [summary], total: 1, next_offset: null } });
+      if (url.pathname === '/api/task-monitor/history') return route.fulfill({ json: { items: [summary], total: 1, next_offset: null } });
       if (url.pathname === '/api/comfy/tasks/fixture/detail') return route.fulfill({ json: { summary, events: [], outputs: [], records: [], notification_batches: [], resolution_evidence: [], replacement_tasks: [] } });
       throw new Error('unexpected API: ' + url.pathname);
     });

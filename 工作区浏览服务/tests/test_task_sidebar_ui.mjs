@@ -16,18 +16,18 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
  for (const width of (process.argv.includes('--probe') ? [1362] : [1280, 1366, 1920])) {
   const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } }), errors = [], unexpected = [], writes = [];
-  let rows = Array.from({ length: 20 }, (_, i) => ({ queue: 'local', id: 'fixture-' + (i + 1), project: '示例项目', title: '隔离任务 ' + (i + 1), task_type: 'video-first-pass', status: 'local_queued', category: 'queued',
+  let rows = Array.from({ length: 20 }, (_, i) => ({ queue: 'local', api_prefix: '/api/workspaces/nora', workspace_name: 'Nora', id: 'fixture-' + (i + 1), project: '示例项目', title: '隔离任务 ' + (i + 1), task_type: 'video-first-pass', status: 'local_queued', category: 'queued',
     remote_url: 'http://fixture-node', created_at: '2026-10-27T00:00:00+08:00', source_session_name: '测试会话', can_transfer: true, transfer_targets: [{ url: 'http://fixture-backup', name: '备选节点' }] }));
   let failAction = false, failOrder = false, failReload = false, breakNextReload = false;
   let holdAction = false, releaseAction;
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error' && !m.text().includes('409') && !m.text().includes('503')) errors.push(m.text()); });
   await page.route('**/api/**', async route => {
-    const req = route.request(), url = new URL(req.url()), path = url.pathname;
+    const req = route.request(), url = new URL(req.url()), path = url.pathname.replace(/^\/api\/workspaces\/nora(?=\/)/, '/api');
     const body = req.method() !== 'GET' ? req.postDataJSON() : null;
-    if (req.method() !== 'GET') writes.push({ path, body });
+    if (req.method() !== 'GET') { assert.ok(url.pathname.startsWith('/api/workspaces/nora/'), 'Iris页面上的Nora任务操作必须发回Nora'); writes.push({ path, body }); }
     if (path === '/api/workspaces') return route.fulfill({ json: [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: [] }] });
-    if (path === '/api/comfy/tasks') {
+    if (path === '/api/task-monitor') {
       if (failReload) { failReload = false; return route.fulfill({ status: 503, json: { detail: '模拟刷新失败' } }); }
       const counts = node => ({ queued: rows.filter(t => t.remote_url === node && t.category === 'queued').length, paused: rows.filter(t => t.remote_url === node && t.category === 'paused').length, history: node === 'http://fixture-node' ? 1 : 0 });
       return route.fulfill({ json: { tasks: [], local_tasks: rows, remote_nodes: ['http://fixture-node','http://fixture-backup'].map((url,i) => ({ url, name: i ? '备选节点' : '默认节点', connection: 'connected', queue: [], running_count: 0, queued_count: 0, updated_at: '2026-10-27T00:00:00Z' })),
@@ -52,11 +52,11 @@ try {
       if (breakNextReload) { failReload = true; breakNextReload = false; }
       return route.fulfill({ json: { local_task_id: task.id, status: task.status } });
     }
-    if (path === '/api/comfy/history') return route.fulfill({ json: { items: [{ ...rows[0], category: 'history', status: 'completed', collected: 1, expected: 1 }], total: 1, next_offset: null } });
+    if (path === '/api/task-monitor/history') return route.fulfill({ json: { items: [{ ...rows[0], category: 'history', status: 'completed', collected: 1, expected: 1 }], total: 1, next_offset: null } });
     if (path.endsWith('/detail')) return route.fulfill({ status: 503, json: { detail: '模拟详情读取失败' } });
     unexpected.push(path); return route.fulfill({ status: 404, json: {} });
   });
-  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/task-sidebar.html`);
+  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/task-sidebar.html?space=commercial`);
   assert.equal(await page.title(), '任务侧栏隔离回归');
   const toggle = page.getByRole('button', { name: '展开任务进度', exact: true });
   await toggle.click();

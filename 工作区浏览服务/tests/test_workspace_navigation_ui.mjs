@@ -31,11 +31,10 @@ try {
     if (request.method() !== 'GET') { forbidden.push(path); return route.abort(); }
     if (path === '/api/service') return route.fulfill({ json: { version, ready: true } });
     if (path === '/api/workspaces') return route.fulfill({ json: spaces });
-    const task = /^(\/api(?:\/workspaces\/commercial)?)\/comfy\/tasks$/.exec(path);
-    if (task) {
-      const commercial = task[1].includes('commercial');
-      return route.fulfill({ json: { tasks: [], local_tasks: [{ id: commercial ? 'commercial-fixture' : 'nora-fixture', title: commercial ? '商业空间测试任务' : '短剧空间测试任务', project: '同名示例', task_type: 'image', status: 'local_queued', queue: 'local', category: 'queued', created_at: '2026-11-01T00:00:00Z', remote_url: 'http://fixture-node' }], remote_nodes: [{ url: 'http://fixture-node', name: '隔离节点', connection: 'connected', queue: [], running_count: 0, queued_count: 0, updated_at: '2026-11-01T00:00:00Z' }], local_counts: { 'http://fixture-node': { queued: 1, paused: 0, history: 0 } }, history_updated_at: {} } });
-    }
+    if (path === '/api/task-monitor') return route.fulfill({ json: {
+      tasks: [], local_tasks: spaces.map((space,index) => ({ id: space.id+'-fixture', title: index ? '商业空间测试任务' : '短剧空间测试任务', workspace_name: space.name, api_prefix: '/api/workspaces/'+space.id, project: '同名示例', task_type: 'image', status: 'local_queued', queue: 'local', category: 'queued', created_at: '2026-11-01T00:00:00Z', remote_url: 'http://fixture-node' })),
+      remote_nodes: [{ url: 'http://fixture-node', name: '隔离节点', connection: 'connected', queue: [], running_count: 0, queued_count: 0, updated_at: '2026-11-01T00:00:00Z' }],
+      local_counts: { 'http://fixture-node': { queued: 2, paused: 0, history: 0 } }, history_updated_at: {} } });
     if (path === projectBase) return route.fulfill({ json: { name: '同名示例', files: [
       { kind: 'file', name: 'README.md', key: 'README.md', url: projectBase + '/files/README.md' },
       { kind: 'group', name: '资产', children: [{ kind: 'file', name: '参考.png', key: '资产/参考.png', url: projectBase + '/files/' + encodeURIComponent('资产/参考.png') }] },
@@ -48,16 +47,13 @@ try {
   });
   await page.goto(origin + '/');
   await page.getByRole('heading', { name: '一级项目空间' }).waitFor();
-  assert.equal(await page.title(), 'Nora工作台');
+  assert.equal(await page.title(), 'AI创作工作台');
   await page.getByRole('link', { name: /商业空间示例.*业务项目/ }).waitFor();
   await page.screenshot({ path: `${out}/${width}-home.png` });
   assert.equal(await page.getByRole('link', { name: /资产管理/ }).count(), 1);
   await page.getByRole('button', { name: '展开任务进度', exact: true }).click();
   await page.getByText('短剧空间测试任务', { exact: true }).waitFor();
-  await page.getByRole('combobox', { name: '任务所属项目空间' }).click();
-  await page.getByRole('option', { name: '商业空间示例', exact: true }).click();
   await page.getByText('商业空间测试任务', { exact: true }).waitFor();
-  assert.equal(await page.getByText('短剧空间测试任务', { exact: true }).count(), 0);
   await page.getByRole('button', { name: '收起任务进度', exact: true }).click();
   await page.getByRole('link', { name: /商业空间示例.*业务项目/ }).click();
   await page.getByRole('heading', { name: '业务项目' }).waitFor();
@@ -79,7 +75,7 @@ try {
   await page.getByText('商业空间测试任务', { exact: true }).waitFor();
   await page.screenshot({ path: `${out}/${width}-project-tasks.png` });
   await page.getByRole('button', { name: '收起任务进度', exact: true }).click();
-  await page.getByRole('link', { name: 'Nora工作台', exact: true }).click();
+  await page.getByRole('link', { name: 'AI创作工作台', exact: true }).click();
   await page.getByRole('link', { name: /短剧空间示例.*业务项目/ }).click();
   const legacy = page.getByRole('link', { name: /同名示例/ }).filter({ hasText: '查看项目资料与素材' });
   assert.equal(await legacy.getAttribute('href'), '#/projects/' + encodeURIComponent('同名示例'));
@@ -87,8 +83,8 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(forbidden, []);
   assert.ok(requests.includes(projectBase + '/document'));
-  assert.ok(requests.includes('/api/workspaces/commercial/comfy/tasks'));
+  assert.ok(requests.includes('/api/task-monitor'));
   await page.close();
  }
- console.log('PASS: unified entry → space → project → document/image/video; task ownership switch; old project URLs; 1362 desktop; no writes, external requests, errors. Screenshots: ' + out);
+ console.log('PASS: unified entry → space → project → document/image/video; global task visibility across navigation; old project URLs; 1362 desktop; no writes, external requests, errors. Screenshots: ' + out);
 } catch (error) { console.error('Page:', activePage?.url(), 'Errors:', allErrors); if (activePage) { console.error((await activePage.locator('body').innerText()).slice(0, 2500)); await activePage.screenshot({path: out + '/failure.png'}); } throw error; } finally { await browser.close(); await server.close(); }

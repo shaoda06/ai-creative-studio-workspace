@@ -30,6 +30,7 @@ from backend.services.workflows import catalogue as workflow_catalogue
 from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
+from backend.services import task_monitor
 from backend.services import node_config
 from backend.services.prompts import WorkspacePromptLibrary
 from backend.routes.prompts import create_router as prompt_router
@@ -112,6 +113,19 @@ def workspace_reply(request: Request, value):
 @app.get('/api/comfy/tasks')
 async def comfy_tasks(request: Request, include_history: bool = True) -> dict[str, Any]:
     return task_store(request).public(include_history=include_history)
+
+
+@app.get('/api/task-monitor')
+async def global_task_monitor(request: Request):
+    return task_monitor.snapshot(request.app.state.workspaces)
+
+
+@app.get('/api/task-monitor/history')
+async def global_task_history(request: Request, q: str = '',
+                              result: Literal['all', 'completed', 'abnormal', 'cancelled', 'resolved'] = 'all',
+                              offset: Annotated[int, Query(ge=0)] = 0,
+                              limit: Annotated[int, Query(ge=1, le=100)] = 20):
+    return task_monitor.history(request.app.state.workspaces, q, result, offset, limit)
 
 
 @app.get('/api/comfy/config')

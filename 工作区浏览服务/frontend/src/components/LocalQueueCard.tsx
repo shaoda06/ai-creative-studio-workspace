@@ -14,6 +14,7 @@ export const statusLabels: Record<string, string> = { local_queued: '排队中',
 
 export interface LocalQueueTask {
   queue: 'local';
+  api_prefix?: string; workspace_name?: string;
   id: string; project: string; title: string; group_id?: string;
   task_type: keyof typeof taskTypeLabels;
   status: string; category?: keyof typeof localQueueStates;
@@ -93,7 +94,7 @@ export function LocalQueueCard({ task, position, onReorder, onAction, onTransfer
   const content = <>
     <div className="local-queue-card-top">
       <div className="local-queue-card-identity">
-        <span className="local-queue-card-source">本机提交</span>
+        <span className="local-queue-card-source">{task.workspace_name || '本机提交'}</span>
         <PointerTooltip text={task.project}><span className="local-queue-card-project" >{task.project}</span></PointerTooltip>
         <span className="local-queue-card-type">{taskTypeLabels[task.task_type]}</span>
       </div>

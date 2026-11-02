@@ -7,7 +7,7 @@ import.meta.glob('../src/**/*.css', { eager: true });
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 createRoot(document.getElementById('root')!).render(<QueryClientProvider client={client}><Notifications>
-  <div className="workspace-with-tasks"><TaskSidebar /><main><h1>侧栏隔离测试</h1><button>正文外部操作</button></main>
+  <div className="workspace-with-tasks"><TaskSidebar spaceId={new URLSearchParams(location.search).get('space') || 'nora'} /><main><h1>侧栏隔离测试</h1><button>正文外部操作</button></main>
     <footer className="site-footer"><button>侧栏外部操作</button></footer>
   </div>
 </Notifications></QueryClientProvider>);

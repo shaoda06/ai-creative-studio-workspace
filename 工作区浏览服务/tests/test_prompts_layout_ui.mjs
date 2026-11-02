@@ -43,7 +43,7 @@ try {
     else if (url.pathname === '/api/prompts/trash/document') data = recycled;
     else if (url.pathname === '/api/prompts/trash/restore') { recycled = null; data = doc; }
     else if (url.pathname === '/api/service') data = { version: release.version, ready: true };
-    else if (url.pathname === '/api/comfy/tasks') data = { tasks: [], remote_nodes: [], local_tasks: [], local_counts: {}, history_updated_at: {} };
+    else if (url.pathname === '/api/task-monitor') data = { tasks: [], remote_nodes: [], local_tasks: [], local_counts: {}, history_updated_at: {} };
     else { assert.equal(request.method(), 'GET'); data = []; }
     return route.fulfill({ json: data });
   });

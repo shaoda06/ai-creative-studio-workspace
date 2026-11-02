@@ -5,6 +5,7 @@ import './TaskCard.css';
 
 export interface LocalTask {
   source?: 'local';
+  api_prefix?: string; workspace_name?: string;
   id: string; project: string; title: string; task_type: keyof typeof taskTypeLabels;
   prompt_id: string | null;
   status: string; connection: string; node: string | null; remote_url: string;
@@ -51,7 +52,7 @@ export function TaskCard({ task, onDetails }: { task: Task; onDetails?: (id: str
   return <section className="comfy-task" data-source={external ? 'external' : 'local'}>
     <div className="comfy-task-top">
       <div className="comfy-task-identity">
-        <span className="comfy-task-source">{external ? '其他来源提交' : '本空间提交'}</span>
+        <span className="comfy-task-source">{external ? '其他来源提交' : task.workspace_name || '本空间提交'}</span>
         {task.source !== 'external' && <>
           <PointerTooltip text={task.project}><span className="comfy-task-project" >{task.project}</span></PointerTooltip>
           <span className="comfy-task-type">{taskTypeLabels[task.task_type]}</span>
@@ -79,7 +80,7 @@ export function TaskCard({ task, onDetails }: { task: Task; onDetails?: (id: str
         </div>
         <div className="comfy-task-session-row">
           <PointerTooltip text={task.source_session_name}><p className="comfy-task-session">来源会话：{task.source_session_name || '会话名称暂不可用'}</p></PointerTooltip>
-          {task.group_id && onDetails && <LinkButton aria-label={`查看${task.title}任务组详情`} onClick={() => onDetails(task.id)}>任务组详情 →</LinkButton>}
+          {onDetails && <LinkButton aria-label={`查看${task.title}${task.group_id ? '任务组' : ''}详情`} onClick={() => onDetails(task.id)}>{task.group_id ? '任务组详情' : '任务详情'} →</LinkButton>}
         </div>
       </div>
       <details className="comfy-task-details"><summary>任务详情</summary>
