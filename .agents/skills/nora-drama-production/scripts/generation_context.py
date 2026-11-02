@@ -91,6 +91,7 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
     file_bytes = {}
     file_states = {}
     source_files = set()
+    frozen_images = None
 
     def current_state(path):
         try:
@@ -160,6 +161,7 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
             raise ValueError('实际节点的公共提示词与时间线不一致')
 
         def references(group, reused):
+            nonlocal frozen_images
             result = {'common': [], 'segment': []}
             for field, file_field, label in (('refs', 'imageFile', 'Picture'), ('refVideos', 'videoFile', 'Video'), ('refAudios', 'audioFile', 'Audio')):
                 public = list(common.get(field, [])) if common_enabled else []
@@ -178,7 +180,23 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
                         slot = f"<{label} {item['index'] + 1}>"
                         prior = next((ref for ref in reused.get(scope, []) if ref['label'] == slot), None)
                         target = inside(prior['file']) if prior else record / '输入素材' / original.name
-                        result[scope].append({'file': snapshot(target, b'' if check_only else read_once(original)),
+                        if not check_only and not prior and not is_file(target) and original.suffix.lower() == '.png':
+                            # Reuse only execution inputs, never the mutable formal/candidate asset.
+                            if frozen_images is None:
+                                frozen_images = {}
+                                for candidate in sorted((project / '09-剧集制作').glob('*/其他资料/执行附件/**/输入素材/*')):
+                                    if candidate.suffix.lower() == '.png' and '历史版本' not in candidate.relative_to(project).parts:
+                                        candidate = inside(candidate)
+                                        if is_file(candidate):
+                                            frozen_images.setdefault(state_once(candidate).st_size, []).append(candidate)
+                            target = next((candidate for candidate in frozen_images.get(len(read_once(original)), [])
+                                           if (payloads[candidate] if candidate in payloads else read_once(candidate)) == read_once(original)), target)
+                        saved_file = snapshot(target, b'' if check_only else read_once(original))
+                        if frozen_images is not None and original.suffix.lower() == '.png':
+                            candidates = frozen_images.setdefault(len(read_once(original)), [])
+                            if target not in candidates:
+                                candidates.append(target)
+                        result[scope].append({'file': saved_file,
                                               'label': slot,
                                               'original_file': prior.get('original_file', original.relative_to(project).as_posix()) if prior else original.relative_to(project).as_posix()})
             return result
@@ -236,7 +254,8 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
             elif is_file(chinese):
                 prompts['chinese'] = chinese.relative_to(project).as_posix()
             script_file = snapshot(inside(reused['storyboard']['file']) if reused else record / '分镜脚本.md', b'' if check_only else read_once(storyboard))
-            refs = references(group, reused['references'] if reused else {})
+            recorded = next((item for item in mapping.get('generation_contexts', []) if item['identity'] == identity), {})
+            refs = references(group, reused['references'] if reused else recorded.get('references', {}))
             if not fixed_checked and reused and {scope: [item['label'] for item in refs[scope]] for scope in refs} != {scope: [item['label'] for item in reused['references'][scope]] for scope in refs}:
                 raise ValueError('复用资料的实际素材槽位与来源不一致')
             context.update(storyboard={'file': script_file, 'version': mapping['scene_storyboard_version'].rstrip('。')},
@@ -254,6 +273,11 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
             path.parent.mkdir(parents=True, exist_ok=True)
             with path_scope.io_file(path).open('xb') as stream:
                 stream.write(data)
+        if path.parent.name == '输入素材' and path.suffix.lower() == '.png':
+            frozen = path_scope.io_file(path)
+            mode = frozen.stat().st_mode
+            if mode & 0o222:
+                frozen.chmod(mode & ~0o222)
     if 'generation_contexts' not in mapping:
         mapping.update(generation_contexts=contexts,
                        generation_contexts_recorded_at=datetime.now().astimezone().isoformat(timespec='seconds'),

@@ -524,6 +524,67 @@ class GenerationContextTests(HttpTestCase):
         with self.assertRaisesRegex(ValueError, '不可覆盖'):
             writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
 
+    def test_new_round_automatically_reuses_identical_frozen_pngs(self):
+        root, workflow, mapping = self.automatic_task(selected=(0,))
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        old = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]
+        revised = root.with_name('EP001-C001-P001-R005-一采')
+        mapping['segments'][0].update(round='R005', local_execution_dir=str(revised))
+        self.write(str((revised / '输入映射.json').relative_to(self.project)), json.dumps(mapping))
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        saved = (revised / '输入映射.json').read_bytes()
+        current = json.loads(saved)['generation_contexts'][0]
+        self.assertEqual(current['references'], old['references'])
+        self.assertNotEqual(current['prompts'], old['prompts'])
+        self.assertNotEqual(current['storyboard'], old['storyboard'])
+        self.assertFalse((revised / '输入素材').exists())
+        # A later lexically earlier snapshot must not change this task's recorded association.
+        self.write(self.episode + '/其他资料/执行附件/AAA/输入素材/copy.png', '提交时公共原图')
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        self.assertEqual((revised / '输入映射.json').read_bytes(), saved)
+        self.assertEqual((self.project / current['references']['common'][0]['file']).stat().st_mode & 0o222, 0)
+        self.write('图片/公共.png', '正式图后来更新')
+        self.assertEqual((self.project / current['references']['common'][0]['file']).read_text(), '提交时公共原图')
+        with self.assertRaisesRegex(ValueError, '不可覆盖'):
+            writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+
+    def test_changed_png_gets_new_snapshot_while_unchanged_reference_is_shared(self):
+        root, workflow, mapping = self.automatic_task(selected=(0,))
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        old = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]
+        revised = root.with_name('EP001-C001-P001-R005-一采')
+        mapping['segments'][0].update(round='R005', local_execution_dir=str(revised))
+        # Same byte length is not proof of identical content.
+        self.write('图片/公共.png', '提交时公共新图')
+        self.write(str((revised / '输入映射.json').relative_to(self.project)), json.dumps(mapping))
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        current = json.loads((revised / '输入映射.json').read_text())['generation_contexts'][0]
+        self.assertNotEqual(current['references']['common'], old['references']['common'])
+        self.assertEqual(current['references']['segment'], old['references']['segment'])
+        self.assertEqual((revised / '输入素材/公共.png').read_text(), '提交时公共新图')
+        self.assertEqual((root / '输入素材/公共.png').read_text(), '提交时公共原图')
+
+    def test_auto_reuse_ignores_formal_assets_history_and_other_projects(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        self.write('03-人物资料/参考图/副本.png', '提交时公共原图')
+        self.write(self.episode + '/其他资料/历史版本/输入素材/旧副本.png', '提交时公共原图')
+        other = self.project.parent / '另一个项目/09-剧集制作/EP001/其他资料/执行附件/task/输入素材/公共.png'
+        other.parent.mkdir(parents=True)
+        other.write_text('提交时公共原图')
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        self.assertEqual((root / '输入素材/公共.png').read_text(), '提交时公共原图')
+
+    def test_identical_bytes_under_different_names_share_file_but_keep_slots_and_origins(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        self.write('图片/本组.png', '提交时公共原图')
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        refs = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]['references']
+        common, local = refs['common'][0], refs['segment'][0]
+        self.assertEqual(local['file'], common['file'])
+        self.assertEqual((common['label'], local['label']), ('<Picture 1>', '<Picture 2>'))
+        self.assertEqual((common['original_file'], local['original_file']), ('图片/公共.png', '图片/本组.png'))
+        self.assertFalse((root / '输入素材/本组.png').exists())
+
     def test_same_revision_retry_keeps_context_and_old_mapping(self):
         root, workflow, mapping = self.automatic_task(selected=(0,))
         writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
