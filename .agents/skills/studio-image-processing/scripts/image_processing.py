@@ -52,9 +52,11 @@ def assemble_rtx(source, *, prefix, remote_output=None, size=None):
     return canvas, Canvas(canvas).api(3), uploads, '3'
 
 
-def resize(source, destination, target, crop_anchor):
+def resize(source, destination, target, crop_anchor, *, project):
     """Save a new PNG using the requested dimensions; preserve source and actual geometry."""
     from PIL import Image, ImageOps, __version__
+    from io import BytesIO
+    from image_files import store_png
     source, destination = Path(source), Path(destination)
     if destination.exists():
         raise ValueError('本地处理输出已存在，不能覆盖：' + str(destination))
@@ -66,13 +68,14 @@ def resize(source, destination, target, crop_anchor):
         left = (width - crop_width) * crop_anchor[0]
         top = (height - crop_height) * crop_anchor[1]
         box = [left, top, left + crop_width, top + crop_height]
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with destination.open('xb') as stream:
-            if image.size == tuple(target):
-                stream.write(source.read_bytes())
-            else:
-                ImageOps.fit(image, tuple(target), method=Image.Resampling.LANCZOS,
-                             centering=tuple(crop_anchor)).save(stream, format='PNG')
+        if image.size == tuple(target):
+            raw = source.read_bytes()
+        else:
+            stream = BytesIO()
+            ImageOps.fit(image, tuple(target), method=Image.Resampling.LANCZOS,
+                         centering=tuple(crop_anchor)).save(stream, format='PNG')
+            raw = stream.getvalue()
+        store_png(project, destination, raw, source=source)
     return dict(tool='Pillow ' + __version__, source_size=[width, height], crop_box=box)
 
 

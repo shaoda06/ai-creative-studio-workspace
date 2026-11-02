@@ -5,12 +5,13 @@ from pathlib import Path
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("nora-drama-storyboard", "studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
+for _skill in ("nora-drama-storyboard", "studio-comfyui", "studio-h3", "studio-video-processing", "studio-image-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 import re
 import stat
 from project_paths import PreparationPaths
 from h3_prompt_checks import chinese_text, digest
+from image_files import store_png
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
 
@@ -269,15 +270,12 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
         # Fresh checkpoint: cached existence never authorizes overwriting a new file.
         if signature(current_state(path)) != signature(file_states[path]):
             raise ValueError('冻结资料在保存前发生变化，不可覆盖：' + str(path))
-        if file_states[path] is None:
+        if path.parent.name == '输入素材' and path.suffix.lower() == '.png':
+            store_png(project, path, data)
+        elif file_states[path] is None:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path_scope.io_file(path).open('xb') as stream:
                 stream.write(data)
-        if path.parent.name == '输入素材' and path.suffix.lower() == '.png':
-            frozen = path_scope.io_file(path)
-            mode = frozen.stat().st_mode
-            if mode & 0o222:
-                frozen.chmod(mode & ~0o222)
     if 'generation_contexts' not in mapping:
         mapping.update(generation_contexts=contexts,
                        generation_contexts_recorded_at=datetime.now().astimezone().isoformat(timespec='seconds'),

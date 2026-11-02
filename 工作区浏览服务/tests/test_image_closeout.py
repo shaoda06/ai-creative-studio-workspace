@@ -391,6 +391,8 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         out = self.setup_image()
         with patch.object(image, 'apply', side_effect=OSError('temporary write failure')), self.assertRaises(OSError):
             registration.register(self.store, 'task')
+        # Frozen PNG bytes cannot be edited in place; simulate an external path replacement.
+        out.unlink()
         out.write_bytes(png(5, 3))
         with self.assertRaisesRegex(ValueError, '证据发生变化'):
             registration.register(self.store, 'task')

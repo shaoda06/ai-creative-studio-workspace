@@ -16,7 +16,7 @@ sys.path.insert(0, str(SKILLS / 'studio-workspace-browser/scripts'))
 from document_fields import fields, link
 sys.path.insert(0, str(SKILLS / "studio-image-processing/scripts"))
 import image_files
-from image_files import inspect_remote
+from image_files import inspect_remote, store_png
 from image_processing import validate_processing
 
 def png(raw):
@@ -454,26 +454,8 @@ def apply_updates(root, report, report_file):
                 if not publication['archive']:
                     raise ValueError('正式文件已存在，缺少替换归档入口')
                 archive = project_file(root, publication['archive'])
-                archive.parent.mkdir(parents=True, exist_ok=True)
-                if archive.exists():
-                    if archive.read_bytes() != old:
-                        raise ValueError('归档入口已存在不同内容，不覆盖')
-                else:
-                    with archive.open('xb') as stream:
-                        stream.write(old)
-            formal.parent.mkdir(parents=True, exist_ok=True)
-            temporary = None
-            try:
-                with tempfile.NamedTemporaryFile(dir=formal.parent, delete=False) as stream:
-                    temporary = Path(stream.name)
-                    stream.write(raw)
-                current = formal.stat() if formal.exists() else None
-                if ([current.st_size, current.st_mtime_ns] if current else None) != publication['prior']:
-                    raise ValueError('正式文件并发变化，不覆盖')
-                temporary.replace(formal)
-            finally:
-                if temporary is not None:
-                    temporary.unlink(missing_ok=True)
+                store_png(root, archive, old, source=formal)
+            store_png(root, formal, raw, source=source, replace=True, prior=publication['prior'])
     for path, (before, after) in edits.items():
         if before == after:
             continue

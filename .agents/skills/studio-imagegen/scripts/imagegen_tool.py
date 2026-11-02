@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-image-processing/scripts'))
-from image_files import png
+from image_files import png, store_png
 
 EXECUTOR = {'model': 'gpt-6-luna', 'reasoning_effort': 'medium', 'fork_turns': 'none'}
 
@@ -27,16 +27,10 @@ def generation_call(prompt, references, result_store_key):
             'generatedImage(imagegenResult);\n')
 
 
-def preserve_original(source, destination):
-    """Copy the actual native PNG unchanged and return its measured facts."""
+def preserve_original(source, destination, *, project):
+    """Preserve the actual native PNG unchanged and return its measured facts."""
     source, destination = Path(source), Path(destination)
     raw = source.read_bytes()
     width, height = png(raw)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        if destination.read_bytes() != raw:
-            raise ValueError('候选文件已有不同内容，不覆盖')
-    else:
-        with destination.open('xb') as stream:
-            stream.write(raw)
+    store_png(project, destination, raw, source=source)
     return dict(width=width, height=height, bytes=len(raw), format='PNG', decoded=True)

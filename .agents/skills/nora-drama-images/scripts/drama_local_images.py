@@ -54,7 +54,7 @@ def complete(store, data):
         source = project_file(root, up['source'])
         candidate = next(iter(planned))
         target = (plan['images'][0]['width'], plan['images'][0]['height'])
-        measured = resize(source, candidate, target, processing['crop_anchor'])
+        measured = resize(source, candidate, target, processing['crop_anchor'], project=root)
         width, height = measured['source_size']
         box = measured['crop_box']
         raw = candidate.read_bytes()

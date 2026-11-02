@@ -134,7 +134,7 @@ def complete(project, manifest_file, result_file, projects, *, repair=None):
         source = Path(result['source']).resolve()
         # The executor supplies the tool's actual local output; no remote receipt is invented.
         candidate = project_file(root, job['candidate'])
-        facts = preserve_original(source, candidate)
+        facts = preserve_original(source, candidate, project=root)
         width, height = facts['width'], facts['height']
         raw = candidate.read_bytes()
         draft = project_file(root, job['draft'])

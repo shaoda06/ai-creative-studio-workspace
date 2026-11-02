@@ -43,6 +43,9 @@ class ImageToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.store.save('task', collected=1)
         self.request()
         self.output(target, png(32, 32))
+        from image_files import store_png
+        existing = self.project / '已有冻结图.png'
+        store_png(self.project, existing, png(32, 32))
         projects = SimpleNamespace(get=Mock(side_effect=AssertionError('no project parsing')))
         result = await result_registration.closeout_tasks(self.store, projects, ['task'])
         self.assertTrue(result['user_message_ready'], result)
@@ -50,6 +53,7 @@ class ImageToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state['status'], 'completed')
         self.assertEqual(state['browser']['status'], 'not_requested')
         self.assertNotIn('draft', state['display_outputs'][0])
+        self.assertTrue(target.samefile(existing))
         self.assertFalse((self.project / '03-人物资料').exists())
         self.assertFalse((self.project / '09-剧集制作').exists())
         projects.get.assert_not_called()
@@ -113,8 +117,8 @@ class ImageToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('tools.image_gen__imagegen', call)
         self.assertIn('referenced_image_paths', call)
         self.assertNotIn('prompt_id', call)
-        facts = preserve_original(source, destination)
+        facts = preserve_original(source, destination, project=self.project)
         self.assertEqual((facts['width'], facts['height']), (7, 3))
         self.assertEqual(destination.read_bytes(), raw)
         self.assertEqual(source.read_bytes(), raw)
-        self.assertEqual(preserve_original(source, destination), facts)
+        self.assertEqual(preserve_original(source, destination, project=self.project), facts)

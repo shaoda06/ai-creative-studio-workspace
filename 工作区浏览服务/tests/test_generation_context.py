@@ -524,6 +524,15 @@ class GenerationContextTests(HttpTestCase):
         with self.assertRaisesRegex(ValueError, '不可覆盖'):
             writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
 
+    def test_first_task_shares_existing_readonly_image_without_extra_png_storage(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        source = self.project / '图片/公共.png'
+        source.chmod(0o444)
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        frozen = root / '输入素材/公共.png'
+        self.assertTrue(source.samefile(frozen))
+        self.assertEqual(source.read_text(), '提交时公共原图')
+
     def test_new_round_automatically_reuses_identical_frozen_pngs(self):
         root, workflow, mapping = self.automatic_task(selected=(0,))
         writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
