@@ -17,6 +17,7 @@ class Workspace:
     view: str
     projects: ProjectFiles
     tasks: object = None
+    production_adapter: str | None = None
 
     @property
     def api(self):
@@ -40,7 +41,7 @@ class Workspaces:
                 raise ValueError('项目空间目录重复或缺少projects目录：' + identity)
             state = target / '工作区浏览服务/runtime'
             self.items[identity] = Workspace(identity, item['name'], target, state, 'files',
-                ProjectFiles(target / 'projects'))
+                ProjectFiles(target / 'projects'), production_adapter=item.get('production_adapter'))
 
     def get(self, identity):
         return self.items[identity]

@@ -14,50 +14,7 @@ Episode = Annotated[str, Field(pattern=r'^(?:EP[0-9]{3,}|片头|片尾)$')]
 Scene = Annotated[str, Field(pattern=r'^C[0-9]{3,}$')]
 
 
-class NoteInput(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    segment: Annotated[str, Field(pattern=r'^P[0-9]{3,}$')]
-    stage: Literal['一采', '二采', '后处理']
-    run: Annotated[str, Field(pattern=r'^R[0-9]{3,}$')]
-    text: Annotated[str, Field(max_length=20000)]
-    fileRevision: Annotated[str, Field(min_length=1, max_length=128)]
-    roundNumber: Annotated[int, Field(ge=1)] | None = None
-
-    def key(self) -> str:
-        video = f'{self.segment}/{self.stage}/{self.run}'
-        return f'round/{self.roundNumber}/{video}' if self.roundNumber is not None else video
-
-
-class RevisionNote(NoteInput):
-    updatedAt: str
-
-
-class OverallNote(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    number: Annotated[int, Field(ge=1)]
-    text: Annotated[str, Field(max_length=20000)]
-    updatedAt: str
-
-
-class NoteChange(NoteInput):
-    expectedText: Annotated[str, Field(max_length=20000)]
-
-
-class OverallChange(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    number: Annotated[int, Field(ge=1)]
-    text: Annotated[str, Field(max_length=20000)]
-    expectedText: Annotated[str, Field(max_length=20000)]
-
-
-class ExportChanges(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    notes: list[NoteChange]
-    rounds: list[OverallChange]
-
-
-class NotesChangedError(ValueError):
-    pass
+from backend.services.review_notes import (NoteInput, RevisionNote, OverallNote, NoteChange, OverallChange, ExportChanges, NotesChangedError)
 
 
 class SceneNotes(BaseModel):

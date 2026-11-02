@@ -33,7 +33,8 @@ function SegmentReferences({ context }: { context?: GenerationContext }) {
   </section>;
 }
 
-export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl }: {
+export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false }: {
+  readOnly?: boolean;
   scope: NoteScope; segment: string; roundNumber?: number;
   revision: number;
   items: VideoItem[]; selection: { stage: string; key: string }; onSelectionChange: (selection: { stage: string; key: string }) => void;
@@ -44,7 +45,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   cachedSources: Record<string, string>;
   retainSource: (source: string) => () => void;
 }) {
-  const positionKey = `segment/${scope.project}/${scope.episode}/${scope.scene}/${segment}`;
+  const positionKey = `segment/${scope.notesUrl || scope.project}/${scope.episode}/${scope.scene}/${segment}`;
   const [language, setLanguage] = useRefreshState(positionKey + '/language', 'zh');
   const [scriptMode, setScriptMode] = useRefreshState(positionKey + '/scriptMode', 'aligned');
   const [playback, setPlayback] = useState({ key: '', time: 0 });
@@ -63,9 +64,9 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     downloadUrl: product.url, previewNote: product.previewNote, reviewFileRevision: current.fileRevision,
     fileRevision: product.fileRevision + ':' + (product.previewRevision || '') } : current;
   const identity = current && `${scope.episode}-${scope.scene}-${segment}-${current.run}-${current.stage}`;
-  const detail = useQuery({ queryKey: ['generation-context', scope.project, identity, revision],
-    queryFn: () => get<GenerationContext>(`${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
-    placeholderData: (previous, query) => query?.queryKey[1] === scope.project && query.queryKey[2] === identity ? previous : undefined,
+  const detail = useQuery({ queryKey: ['generation-context', scope.notesUrl || scope.project, identity, revision],
+    queryFn: () => get<GenerationContext>(current?.contextUrl || `${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
+    placeholderData: (previous, query) => query?.queryKey[1] === (scope.notesUrl || scope.project) && query.queryKey[2] === identity ? previous : undefined,
     enabled: !!current && !current.context });
   const context = current?.context || (current ? detail.data : undefined);
   const awaitingGeneration = current && !current.url && !missingVideoState(current).unavailable
@@ -121,7 +122,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <SegmentReferences context={context} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
-          <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, { value: 'notes', label: '修改意见' }]} selected={tab} onChange={onTabChange} disabled={!current} />
+          <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current} />
           {editingNotes && <div className="segment-notes-export">{notesExportControl}</div>}
           {!editingNotes && <Original url={tab === 'script' ? (context?.scriptUrl || plannedScript?.url) : context?.prompts[language === 'zh' ? 'chineseUrl' : 'englishUrl']} label="查看原文件" />}
         </div>

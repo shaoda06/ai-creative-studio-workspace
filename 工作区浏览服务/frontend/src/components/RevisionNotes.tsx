@@ -11,13 +11,13 @@ import { candidateLabel } from './SegmentVideo';
 import { TabNav } from './TabNav';
 import { LinkButton } from './LinkButton';
 
-export interface NoteScope { project: string; episode: string; scene: string }
+export interface NoteScope { project: string; episode: string; scene: string; notesUrl?: string; label?: string }
 export type NoteShotTimeline = (passShot: (shot: string, start: number) => void, preserveFocus: (event: PointerEvent<HTMLButtonElement>) => void, disabled: boolean) => ReactNode;
 export function RevisionNoteEditor({ scope, segment, current, fileRevision, time, shot, renderShotTimeline, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; fileRevision: string; time: number; shot?: string; renderShotTimeline: NoteShotTimeline; roundNumber?: number }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [review, setReview] = useState<{ key: string; text: string } | null>(null);
   const notify = useNotify();
-  const data = useSceneNotes(scope.project, scope.episode, scope.scene);
+  const data = useSceneNotes(scope.project, scope.episode, scope.scene, true, scope.notesUrl);
   const identity = { roundNumber, segment, stage: current.stage, run: current.run };
   const key = noteKey(identity);
   const draft = data.drafts[key];
@@ -79,7 +79,7 @@ type ExportCombination = { key: string; scenes: Record<string, number>; text: st
 type ExportDraft = { notes: ExportNote[]; rounds: ExportOverall[]; legacyRounds: LegacyOverall[]; combination: ExportCombination | null; combinationHistory: CombinationSummary[]; number?: number; label: string; scope: NoteScope; url: string; episode: boolean };
 
 export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: string; videos: SegmentVideo[] }[], review: { stage: string; label?: string; number?: number; versions: ReviewVersions } | null, loadHistorySegments?: () => Promise<{ id: string; videos: SegmentVideo[] }[]>, episodeReview?: EpisodeReview) {
-  const data = useSceneNotes(scope?.project || '', scope?.episode || '', scope?.scene || '', !!scope);
+  const data = useSceneNotes(scope?.project || '', scope?.episode || '', scope?.scene || '', !!scope, scope?.notesUrl);
   const [draft, setDraft] = useState<ExportDraft | null>(null);
   const [mode, setMode] = useState<ExportMode>('round');
   const [confirmClose, setConfirmClose] = useState(false);
@@ -130,7 +130,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
         const notes = Object.values(saved.notes).filter(note => note.text.trim()).sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0) || order(a.segment) - order(b.segment) || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1))).map(note => {
           const video = exportSegments.find(item => item.id === note.segment)?.videos.find(item => item.stage === note.stage && item.run === note.run);
           const label = video ? candidateLabel(video.candidateNumber, video.approved) : '';
-          return { ...note, key: noteKey(note), title: `${note.roundNumber ? `第${note.roundNumber}轮` : '未标注轮次'} / ${note.segment} / ${note.stage} / ${note.run}${label ? ' / ' + label : ''}`, original: note.text };
+          return { ...note, current: !!scope.notesUrl && !!video && review?.versions[note.segment]?.key === video.key, key: noteKey(note), title: `${note.roundNumber ? `第${note.roundNumber}轮` : '未标注轮次'} / ${note.segment} / ${note.stage} / ${note.run}${label ? ' / ' + label : ''}`, original: note.text };
         });
         const rounds = Object.values(saved.rounds).map(item => ({ number: item.number, text: item.text, original: item.text }));
         if (review?.number && !rounds.some(item => item.number === review.number)) rounds.push({ number: review.number, text: '', original: '' });
@@ -141,10 +141,10 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
     } catch (error) { setExportError(String(error)); }
     finally { setExporting(false); }
   };
-  const visibleNotes = draft?.notes.filter(item => mode === 'history' || (draft.episode ? item.current : draft.number != null && item.roundNumber === draft.number)) || [];
+  const visibleNotes = draft?.notes.filter(item => mode === 'history' || (draft.episode || draft.scope.notesUrl ? item.current : draft.number != null && item.roundNumber === draft.number)) || [];
   const visibleRounds = draft?.rounds.filter(item => mode === 'history' || item.number === draft.number) || [];
   const overallLabel = draft?.episode ? '本轮汇总意见' : '整场总体意见';
-  const text = draft ? `${draft.scope.project} / ${draft.scope.episode}${draft.episode ? '' : ' / ' + draft.scope.scene} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
+  const text = draft ? `${draft.scope.project} / ${draft.scope.label || (draft.scope.episode + (draft.episode ? '' : ' / ' + draft.scope.scene))} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
     ...visibleNotes.filter(item => item.text.trim()).map(item => `【${item.title}】\n${shotOrderedText(item.text)}`),
     ...visibleRounds.filter(item => item.text.trim()).map(item => `【第${item.number}轮 · ${overallLabel}】\n${item.text}`),
     ...(draft.combination?.text.trim() ? [`【本轮汇总意见（${combinationLabel(draft.combination.scenes)}）】\n${draft.combination.text}`] : []),

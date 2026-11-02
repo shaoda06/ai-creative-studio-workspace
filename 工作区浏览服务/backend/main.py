@@ -31,6 +31,8 @@ from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
+from backend.services import production
+from backend.services.review_notes import ProjectReviewNotes, ReviewNotes
 from backend.services import node_config
 from backend.services.prompts import WorkspacePromptLibrary
 from backend.routes.prompts import create_router as prompt_router
@@ -51,6 +53,7 @@ WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', DEFAULT_WORKSPACE if DEFAULT_W
 WORKFLOWS = workflow_root()
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
+production_notes = ProjectReviewNotes()
 prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词库/隐私', PUBLIC_ROOT / '提示词库/公开')
 VERSION = json.loads((TOOL / 'frontend/package.json').read_text('utf-8'))['version']
 FRONTEND_RELEASE = TOOL / 'frontend/dist/release.json'
@@ -923,9 +926,76 @@ def workspace_projects(request: Request):
 def workspace_project(name: str, request: Request):
     space = request.state.workspace_space
     try:
-        return project_tree(space.projects, name, space.api)
+        value = project_tree(space.projects, name, space.api)
+        if space.production_adapter:
+            value['productionSection'] = production.adapter(space).production_section(space.projects.project(name))
+        return value
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production')
+def workspace_production(name: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        api = space.api + '/projects/' + quote(name, safe='')
+        return production.adapter(space).production_data(space.projects.project(name), api)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '视频制作资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production-notes')
+def workspace_production_notes(name: str, request: Request) -> ReviewNotes:
+    space = request.state.workspace_space
+    try:
+        return production_notes.read(production.adapter(space).notes_path(space.projects.project(name)))
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(503, '修改意见读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production-context')
+def workspace_production_context(name: str, source: str, identity: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        return production.adapter(space).legacy_context(space.projects.project(name), space.api + '/projects/' + quote(name, safe=''), source, identity)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(409, '历史生成资料读取失败：' + str(error)) from error
+
+
+def update_production_notes(name, request, changes):
+    if not local_write_request(request):
+        raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
+    space = request.state.workspace_space
+    try:
+        business = production.adapter(space)
+        project = space.projects.project(name, writable=True)
+        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''))
+        identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
+        if changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
+            raise ValueError('意见必须对应项目中已有的分段与候选版本')
+        return production_notes.save(business.notes_path(project), changes)
+    except (PermissionError, NotesChangedError, ValueError) as error:
+        raise HTTPException(409, str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except OSError as error:
+        raise HTTPException(503, '修改意见未保存：' + str(error)) from error
+
+
+@spaces_router.put('/projects/{name}/production-notes')
+def save_workspace_production_note(name: str, request: Request, value: NoteChange) -> RevisionNote:
+    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[])).notes[value.key()]
+
+
+@spaces_router.put('/projects/{name}/production-notes/export')
+def save_workspace_production_export(name: str, request: Request, value: ExportChanges) -> ReviewNotes:
+    return update_production_notes(name, request, value)
 
 
 @spaces_router.get('/projects/{name}/document')
