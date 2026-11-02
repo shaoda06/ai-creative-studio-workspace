@@ -505,6 +505,18 @@ class FinalizeTests(unittest.TestCase):
         self.assertEqual(NativeClient.calls, [])
         self.assertNotIn('### 定稿留档-', progress.read_text())
 
+    def test_failed_text_write_cleans_temporary_and_keeps_original(self):
+        target = self.root / '原始记录.md'
+        target.write_text('原始记录。')
+        real = tool.tempfile.NamedTemporaryFile(dir=self.root, delete=False, mode='w', encoding='utf-8')
+        temporary = Path(real.name)
+        with patch.object(tool.tempfile, 'NamedTemporaryFile', return_value=real), \
+             patch.object(real, 'write', side_effect=OSError('isolated disk failure')):
+            with self.assertRaises(OSError):
+                tool.replace_file(target, '新记录。')
+        self.assertFalse(temporary.exists())
+        self.assertEqual(target.read_text(), '原始记录。')
+
     def test_resuming_one_stage_does_not_require_other_optional_director_export(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         self.run_plan()

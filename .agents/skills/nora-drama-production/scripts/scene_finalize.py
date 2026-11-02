@@ -32,14 +32,16 @@ WIDGETS = ('steps', 'sampler', 'scheduler', 'cfg', 'shift_video', 'shift_audio',
 def replace_file(path, text):
     if path.exists() and path.read_text(encoding='utf-8-sig') == text:
         return
-    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n', dir=path.parent,
-                                     prefix='.' + path.name, delete=False) as out:
-        out.write(text)
-        temporary = Path(out.name)
+    temporary = None
     try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n', dir=path.parent,
+                                         prefix='.' + path.name, delete=False) as out:
+            temporary = Path(out.name)
+            out.write(text)
         os.replace(temporary, path)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def save_json(path, value):

@@ -260,12 +260,12 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_committed_group_recovers_after_journal_write_failure(self):
         self.write_plan(self.spec(), self.spec('CH002'))
-        write = plans.write_json
+        write = plans.write_journal
         def fail(path, value):
             if str(path).endswith('-装配结果.json') and value.get('accepted'):
                 raise OSError('journal temporarily unavailable')
             return write(path, value)
-        with patch.object(plans, 'write_json', side_effect=fail), self.assertRaises(OSError):
+        with patch.object(plans, 'write_journal', side_effect=fail), self.assertRaises(OSError):
             await plans.execute(self.store, self.payload)
         first = list(self.store.rows)
         self.assertEqual(len(first), 2)
@@ -448,7 +448,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError, '实际准备失败'):
                 await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        original = json.loads(journal_file.read_text())
+        original = plans.read_journal(journal_file)
         task['prompt']['rewritten_prompt'] += '\n衣装的银色刺绣清晰可见。'
         self.write_plan(task)
         with self.assertRaisesRegex(ValueError, '--reprepare'):
@@ -458,7 +458,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('no remote')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
-        saved = json.loads(journal_file.read_text())
+        saved = plans.read_journal(journal_file)
         self.assertEqual(saved['tasks'][0]['record_dir'], original['tasks'][0]['record_dir'])
         self.assertFalse(list(self.plan_file.parent.glob('*装配结果-准备归档-*.json')))
         self.assertEqual(len(saved['preparation_history']), 1)
@@ -485,7 +485,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.payload.prepare_only = True
         await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        original = json.loads(journal_file.read_text())
+        original = plans.read_journal(journal_file)
         self.assertNotIn('record_dir', original['source']['tasks'][0])
         self.data.record_dir = str(self.record.resolve())
         self.payload.reprepare = True
@@ -494,7 +494,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('no remote')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
-        saved = json.loads(journal_file.read_text())
+        saved = plans.read_journal(journal_file)
         self.assertEqual(saved['tasks'][0]['record_dir'], original['tasks'][0]['record_dir'])
         self.assertFalse(self.store.rows)
 
@@ -509,7 +509,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(self.spec())
         await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        journal = json.loads(journal_file.read_text())
+        journal = plans.read_journal(journal_file)
         journal['accepted'] = []
         journal_file.write_text(json.dumps(journal))
         self.payload.reprepare = self.payload.prepare_only = True
@@ -580,7 +580,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(self.spec())
         first = await plans.execute(self.store, self.payload)
         journal = self.plan_file.with_name('任务清单-装配结果.json')
-        saved = json.loads(journal.read_text())
+        saved = plans.read_journal(journal)
         saved['accepted'] = []
         journal.write_text(json.dumps(saved))
         with patch.object(self.store, 'prepare_only', side_effect=AssertionError('accepted task must not be rechecked')):
@@ -745,7 +745,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(images, 'apply_updates', side_effect=user_edit):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'failed')
-        journal = json.loads(self.plan_file.with_name(self.plan_file.stem + '-装配结果.json').read_text())
+        journal = plans.read_journal(self.plan_file.with_name(self.plan_file.stem + '-装配结果.json'))
         task = journal['tasks'][0]
         original = self.plan_file.read_bytes()
         expected = images.record_updates(task['image_plan'])

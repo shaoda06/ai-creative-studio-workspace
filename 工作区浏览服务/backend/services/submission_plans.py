@@ -10,9 +10,8 @@ from urllib.parse import unquote
 from project_paths import project_file
 from workflow_paths import workflow_file, workflow_root
 from backend.services.director_uploads import pairs
-from backend.services.execution_checks import write_json
 from backend.services import image_closeout as images
-from backend.services.prepared_documents import Documents, publish
+from backend.services.prepared_documents import Documents, publish, read_journal, write_journal
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-images/scripts"))
 from drama_image_plans import (SEEDS, SIZES, reference, choose_seed, generation_record,
@@ -63,7 +62,7 @@ async def execute(store, payload):
             raise ValueError('登记修复映射不能为空，不执行原任务清单')
         if payload.prepare_only or payload.reprepare or payload.start_paused:
             raise ValueError('登记修复不能与准备或暂停提交混用')
-        journal = json.loads(journal_file.read_text('utf-8-sig'))
+        journal = read_journal(journal_file)
         if journal['thread_id'] != payload.thread_id or journal['source'] != source:
             raise ValueError('登记修复须引用原来源及未变化的原清单')
         targets = {project_file(root, task['record_dir']): task for task in journal['tasks']}
@@ -83,7 +82,7 @@ async def execute(store, payload):
     documents = None
     preparation_history = []
     if journal_file.exists():
-        journal = json.loads(journal_file.read_text('utf-8-sig'))
+        journal = read_journal(journal_file)
         if journal['thread_id'] != payload.thread_id:
             raise ValueError('任务清单来源已改变，不能覆盖原装配记录')
         if payload.reprepare:
@@ -154,7 +153,7 @@ async def execute(store, payload):
                     update['old'], update['new'] = update['new'], revised
             journal['source'] = source
             journal['published'] = False
-            write_json(journal_file, journal)
+            write_journal(journal_file, journal)
         if len(journal.get('accepted', [])) == len(journal['tasks']):
             return submission_response(store, journal, reused=True)
     else:
@@ -167,8 +166,8 @@ async def execute(store, payload):
             task = build_image(root, SKILL, spec, documents, store.client.now()) if spec['task_type'].startswith('image') else build_video(root, spec, documents)
             tasks.append(task)
         journal = dict(source=source, thread_id=payload.thread_id, tasks=tasks, writes=documents.writes(),
-                       record_format='compact', preparation_history=preparation_history)
-        write_json(journal_file, journal)
+                       record_format='compact', journal_encoding='shared-writes-v1', preparation_history=preparation_history)
+        write_journal(journal_file, journal)
     if not payload.prepare_only and any(not entry.get('authorization') for entry in source['tasks']):
         raise ValueError('此清单仅准备，尚缺实际执行授权依据')
     local_flags = [bool(task.get('image_plan', {}).get('local_processing')) for task in journal['tasks']]
@@ -188,11 +187,11 @@ async def execute(store, payload):
             journal['group_id'] = group_id
         accepted.append(dict(title=data.title, task_type=data.task_type, local_task_id=result['local_task_id'],
                              status=result['status'], record_dir=data.record_dir))
-        write_json(journal_file, journal)
+        write_journal(journal_file, journal)
     if not journal.get('accepted') and not journal.get('published'):
         publish(root, journal['writes'])
         journal['published'] = True
-        write_json(journal_file, journal)
+        write_journal(journal_file, journal)
     prepared = []
     inputs = []
     for index, task in enumerate(journal['tasks']):
@@ -218,7 +217,7 @@ async def execute(store, payload):
         journal['accepted'] = [dict(title=data.title, task_type=data.task_type,
             local_task_id=item['local_task_id'], status=item['status'], record_dir=data.record_dir)
             for data, item in zip(inputs, result['tasks'])]
-        write_json(journal_file, journal)
+        write_journal(journal_file, journal)
         return submission_response(store, journal)
     # Only synchronous local processing and recovery of pre-group partial
     # submissions use this compatibility path. New background plans register above.
@@ -234,5 +233,5 @@ async def execute(store, payload):
         accepted.append(dict(title=data.title, task_type=data.task_type, local_task_id=result['local_task_id'],
                              status=result['status'], record_dir=data.record_dir,
                              **({'provider': 'local', 'report': result['report']} if result.get('provider') == 'local' else {})))
-        write_json(journal_file, journal)
+        write_journal(journal_file, journal)
     return submission_response(store, journal)

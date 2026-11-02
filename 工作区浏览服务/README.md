@@ -367,3 +367,5 @@ id使用小写字母、数字和连字符，目录必须有projects。默认Nora
 ### 生成期记录归并
 
 新空执行目录默认compact：技术条目保存在一份执行档案.json，提交尝试.json保留提交前独占占用。SQLite负责调度状态和事件；网页、恢复和离线工具读取同一条目，原逻辑JSON路径仍可预览或下载，物理文件只保留一份。旧独立凭据继续legacy，不改写历史。导演包仅按用户明确要求导出，不自动生成、不作为进入二采、后处理或完集的前置条件。具体留存与命令见[nora-workspace-browser精简留档](../.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md#执行附件精简留档)和[记录读取工具](../.agents/skills/nora-comfyui/references/固定脚本接口规范.md#聚合执行凭据读取与导出)。
+
+新装配记录使用[精简装配读取接口](../.agents/skills/nora-workspace-browser/references/固定脚本接口规范.md#精简装配记录读取)恢复完整tasks/writes；素材版本引用及过程文件留存按[共用留档边界](../.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md#输入复用与装配记录)执行。服务的准备/汇总读取需使用read_journal，不能直接把精简存储的writes当作完整文本。

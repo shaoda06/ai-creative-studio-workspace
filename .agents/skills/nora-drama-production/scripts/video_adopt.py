@@ -529,14 +529,16 @@ def adoption(args, *, plan=None):
                 original[path] = path.read_text(encoding='utf-8-sig')
         for path, value in texts.items():
             if value != original[path]:
-                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n', dir=path.parent,
-                                                 delete=False, prefix='.' + path.name + '-', suffix='.tmp') as output:
-                    output.write(value)
-                    temporary = Path(output.name)
+                temporary = None
                 try:
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n', dir=path.parent,
+                                                     delete=False, prefix='.' + path.name + '-', suffix='.tmp') as output:
+                        temporary = Path(output.name)
+                        output.write(value)
                     os.replace(temporary, path)
                 finally:
-                    temporary.unlink(missing_ok=True)
+                    if temporary is not None:
+                        temporary.unlink(missing_ok=True)
     return {'mode': 'apply' if args.apply else 'dry_run', 'items': results,
             'moves': [{'from': str(a), 'to': str(b)} for a, b in moves],
             'record_files': sorted(str(path) for path in texts if texts[path] != original[path]),

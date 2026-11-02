@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 
+from backend.services.prepared_documents import read_journal
 from backend.services.result_summary import outputs, summary, video_delivery
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
@@ -15,7 +16,7 @@ def submission_result(store, key):
     root = Path(data.project)
     path = project_file(root, data.submission_plan, recorded=True)
     source = json.loads(path.read_text('utf-8-sig'))
-    journal = json.loads(path.with_name(path.stem + '-装配结果.json').read_text('utf-8-sig'))
+    journal = read_journal(path.with_name(path.stem + '-装配结果.json'))
     if source != journal['source'] or journal['thread_id'] != data.thread_id:
         raise ValueError('原清单与装配来源或负责会话不一致')
     planned = journal['tasks']
