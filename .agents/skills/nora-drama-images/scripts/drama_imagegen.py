@@ -95,19 +95,12 @@ def prepare(project, request_file):
     if not marker or not re.search(r'^## 4\. 审阅区\s*$', text, re.M):
         raise ValueError('图片工作稿缺少固定讨论／审阅区')
     documents.put(draft, text[:marker.start()] + body.rstrip() + '\n\n' + text[marker.start():])
-    job = {'provider': 'imagegen', 'request': spec, 'manifest': manifest.relative_to(root).as_posix(),
+    job = {'provider': 'imagegen', 'record_format': 'compact', 'request': spec, 'manifest': manifest.relative_to(root).as_posix(),
         'executor': dict(EXECUTOR),
         'draft': draft.relative_to(root).as_posix(), 'kind': spec['kind'], 'generation': generation,
         'review': '审阅-' + generation + '-001', 'candidate': candidate.relative_to(root).as_posix(),
         'record': record.relative_to(root).as_posix(), 'report': (record / 'Imagegen结果报告.json').relative_to(root).as_posix(),
-        'prompt_file': (record / 'Imagegen实际提示词.txt').relative_to(root).as_posix(),
-        'generation_call_file': (record / 'Imagegen内置调用.js').relative_to(root).as_posix(),
         'result_store_key': 'imagegen:' + root.name + ':' + manifest.relative_to(root).as_posix()}
-    if documents.read(job['prompt_file']) is not None:
-        raise ValueError('Imagegen提示词附件已占用，不覆盖')
-    documents.put(job['prompt_file'], spec['prompt'])
-    call = generation_call(spec['prompt'], [ref['file'] for ref in refs], job['result_store_key'])
-    documents.put(job['generation_call_file'], call)
     documents.new_json(manifest, job)
     images.validate_record_updates(root, [spec['draft']], spec.get('record_updates', []),
         tokens=('{{outputs}}', '{{specs}}'), contents={draft: documents.read(draft)})

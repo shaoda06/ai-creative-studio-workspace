@@ -1,3 +1,4 @@
+import execution_records as recordio
 """Retrieve native H3 segments only from a completed task’s final report."""
 import argparse
 import asyncio
@@ -129,7 +130,7 @@ async def finish(store, key, result):
             if proof[-1] is not None and verified.get(str(receipt_path)) == proof:
                 pass
             elif receipt_exists:
-                receipt = store.client.strict_json(receipt_path.read_bytes())
+                receipt = recordio.read(receipt_path)
                 downloaded = receipt['data']
                 if (receipt['prompt_id'] != state['prompt_id'] or downloaded['remote'] != source
                         or project_paths.project_file(data.project, downloaded['path'], recorded=True) != candidate
@@ -139,8 +140,8 @@ async def finish(store, key, result):
                 downloaded = await asyncio.to_thread(store.client.download, store.client_for(data), argparse.Namespace(
                     filename=source['filename'], subfolder=source['subfolder'], type='output', output=str(candidate), sha256=None))
                 downloaded['path'] = store.record_paths(key).relative_file(downloaded['path'])
-                store.client.write_new(receipt_path, {'time': store.client.now(), 'prompt_id': state['prompt_id'],
-                                                     'identity': target['identity'], 'data': downloaded})
+                recordio.write(receipt_path, {'time': store.client.now(), 'prompt_id': state['prompt_id'],
+                                                     'identity': target['identity'], 'data': downloaded}, new=True, compact=data.record_format == 'compact')
                 proof = (state['prompt_id'], source, saved_files(receipt_path, candidate)[0])
                 fresh = True
             verified[str(receipt_path)] = proof

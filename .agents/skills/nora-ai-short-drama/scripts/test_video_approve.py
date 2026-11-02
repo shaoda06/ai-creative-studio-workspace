@@ -395,71 +395,51 @@ class ApprovalTests(unittest.TestCase):
                      'submission_plans': [str(submission)]}
         return item
 
-    def test_single_revision_recovers_other_sources_and_saves_next_pair_without_overwriting(self):
+    def test_single_revision_recovers_exact_other_sources_without_export(self):
         for stage, index in (('一采', 0), ('一采', 1), ('二采', 0), ('二采', 1)):
             with self.subTest(stage=stage, revised_part=index):
                 case = ApprovalTests()
                 case.setUp()
                 try:
                     originals = case.setup_stage(stage)
-                    first = case.run_plan()
-                    self.assertEqual(first['state'], 'completed', first)
-                    old = {Path(first['finalization'][key]): Path(first['finalization'][key]).read_bytes()
-                           for key in ('pack', 'canvas', 'record')}
+                    self.assertEqual(case.run_plan()['state'], 'completed')
+                    before = {p: p.read_bytes() for p in case.fixture.ep.rglob('*.mmxpack.zip')}
                     for revision in ('R002', 'R003'):
                         item = case.revision(originals[index], revision)
                         result = case.run_plan()
                         self.assertEqual(result['state'], 'completed', result)
                         expected = [source['identity'] for source in originals]
                         expected[index] = item['identity']
-                        self.assertEqual([s['identity'] for s in result['finalization']['sources']], expected)
-                        self.assertIn('-' + revision[1:] + '-导演包', result['finalization']['pack'])
-                        self.assertTrue(Path(result['finalization']['canvas']).is_file())
-                        with zipfile.ZipFile(result['finalization']['pack']) as archive:
-                            timeline = json.loads(archive.read('timeline.json'))
-                        prompts = ['P001 <Picture 1>', 'P002 <Picture 1>']
-                        prompts[index] = ('P001' if index == 0 else 'P002') + '修订 <Picture 1>'
-                        self.assertEqual([g['prompt'] for g in timeline['segments']], prompts)
-                        old.update({Path(result['finalization'][key]): Path(result['finalization'][key]).read_bytes()
-                                    for key in ('pack', 'canvas', 'record')})
-                        calls = len(NativeClient.calls)
+                        self.assertEqual([v['identity'] for v in result['sources']], expected)
+                        self.assertTrue(all(Path(v['selected_path']).is_file() for v in result['sources']))
+                        self.assertNotIn('finalization', result)
                         self.assertTrue(case.run_plan()['reused'])
-                        self.assertEqual(len(NativeClient.calls), calls)
-                        for path, content in old.items():
-                            self.assertEqual(path.read_bytes(), content)
+                        self.assertEqual(NativeClient.calls, [])
+                        self.assertEqual(before, {p: p.read_bytes() for p in case.fixture.ep.rglob('*.mmxpack.zip')})
                 finally:
                     case.doCleanups()
 
-    def test_missing_adopted_source_stops_without_exporting_or_overwriting_old_pair(self):
+    def test_missing_adopted_source_stops_without_export(self):
         originals = self.setup_stage('一采')
-        first = self.run_plan()
-        old_pair = {Path(first['finalization'][key]): Path(first['finalization'][key]).read_bytes()
-                    for key in ('pack', 'canvas')}
+        self.assertEqual(self.run_plan()['state'], 'completed')
         self.revision(originals[1])
         Path(originals[0]['mapping']).unlink()
-        calls = list(NativeClient.calls)
         result = self.run_plan()
         self.assertEqual(result['state'], 'needs_attention', result)
-        self.assertEqual(result['phase'], 'finalization')
-        self.assertEqual(NativeClient.calls, calls)
-        for path, content in old_pair.items():
-            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual(result['phase'], 'sources')
+        self.assertEqual(NativeClient.calls, [])
 
-    def test_revision_browser_recovery_keeps_assigned_edition_and_never_exports_again(self):
+    def test_revision_browser_recovery_keeps_exact_sources_without_export(self):
         originals = self.setup_stage('一采')
         self.run_plan()
         self.revision(originals[1])
         failed = self.run_plan(browser_error='模拟网页失败')
         self.assertEqual(failed['state'], 'browser_pending', failed)
-        pair = {Path(failed['finalization'][key]): Path(failed['finalization'][key]).read_bytes()
-                for key in ('pack', 'canvas')}
-        calls = len(NativeClient.calls)
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed', result)
-        self.assertEqual(result['finalization']['pack'], failed['finalization']['pack'])
-        self.assertEqual(len(NativeClient.calls), calls)
-        for path, content in pair.items():
-            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual(result['sources'], failed['sources'])
+        self.assertEqual(result['stage'], '一采')
+        self.assertEqual(NativeClient.calls, [])
 
     def test_last_partial_generation_approval_recovers_previous_adopted_source(self):
         self.setup_stage('一采')
@@ -476,14 +456,15 @@ class ApprovalTests(unittest.TestCase):
         self.plan = {'identities': ids[1:], 'submission_plans': [str(second_list)], 'approval_text': '第二段也批准。'}
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed', result)
-        self.assertEqual([s['identity'] for s in result['finalization']['sources']], ids)
+        self.assertEqual([s['identity'] for s in result['sources']], ids)
 
-    def test_explicit_new_finalization_edition_is_forwarded(self):
+    def test_old_edition_field_does_not_trigger_export(self):
         self.setup_stage(stage='一采',parts=('P001',))
         self.plan['edition']='002'
         result=self.run_plan()
         self.assertEqual(result['state'],'completed',result)
-        self.assertEqual(len(list(self.fixture.ep.rglob('*一采定稿-002-导演包.mmxpack.zip'))),1)
+        self.assertFalse(list(self.fixture.ep.rglob('*一采定稿-002-导演包.mmxpack.zip')))
+        self.assertEqual(NativeClient.calls, [])
 
     def test_whole_postprocess_approval_finishes_episode_and_repeat_never_exports_again(self):
         items = self.setup_stage(parts=tuple(f'P{i:03d}' for i in range(1, 13)))
@@ -525,7 +506,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(self.run_plan()['state'], 'completed')
         self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
 
-    def test_postprocess_ignores_legacy_director_source_and_keeps_generation_archives_required(self):
+    def test_postprocess_completion_does_not_require_optional_director_archive(self):
         self.setup_stage()
         self.plan['source_finalization'] = '不存在的旧二采定稿请求.json'
         result = self.run_plan()
@@ -536,7 +517,7 @@ class ApprovalTests(unittest.TestCase):
         archive = next((self.fixture.ep / '06-阶段采用视频/02-二采').rglob('*.mmxpack.zip'))
         archive.unlink()
         missing = tool.episode_missing(self.root, 'EP001')
-        self.assertTrue(any('二采缺少当前版本定稿留档' in item for item in missing))
+        self.assertEqual(missing, [])
         self.assertFalse(any('后处理缺少' in item for item in missing))
 
     def test_partial_approval_does_not_approve_other_file_or_export(self):
@@ -581,16 +562,16 @@ class ApprovalTests(unittest.TestCase):
         self.assertIsNone(tool.selected(self.root, 'EP001-C001-P001', '后处理'))
         self.assertEqual(NativeClient.calls, [])
 
-    def test_finalization_failure_keeps_adoption_and_does_not_finish_episode(self):
+    def test_unavailable_exporter_does_not_block_first_pass_adoption(self):
         self.setup_stage('一采')
         NativeClient.corrupt = True
-        self.assertEqual(self.run_plan()['state'], 'needs_attention')
-        report = tool.adopt.load(self.request.with_name('批准收尾请求-结果.json'))
-        self.assertEqual(report['phase'], 'finalization')
-        self.assertEqual(report['state'], 'needs_attention')
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertFalse(result['episode_completed'])
         self.assertEqual(tool.selected(self.root, 'EP001-C001-P001', '一采'), self.plan['identities'][0])
         self.assertNotIn('| 已完成 |', (self.root / '项目进度.md').read_text())
-        self.assertEqual(self.browser_calls, [])
+        self.assertEqual(NativeClient.calls, [])
+        self.assertTrue(self.browser_calls)
 
     def test_last_partial_approval_finalizes_existing_approved_combination(self):
         self.setup_stage()
@@ -733,8 +714,9 @@ class ApprovalTests(unittest.TestCase):
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed')
         self.assertFalse(result['episode_completed'])
-        self.assertEqual(len(result['finalization']['batches']), 2)
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 2)
+        self.assertEqual(tool.adopt.load(source), origin)
+        self.assertEqual(len(result['sources']), 2)
+        self.assertEqual(NativeClient.calls, [])
 
     def test_cli_returns_compact_result_and_saves_full_report(self):
         self.setup_stage()
@@ -756,7 +738,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['state'], 'completed')
         self.assertFalse(result['episode_completed'])
         self.assertIn('| 进行中 |', (self.root / '项目进度.md').read_text())
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 1)
+        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
 
 
 if __name__ == '__main__':

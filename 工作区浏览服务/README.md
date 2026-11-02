@@ -362,3 +362,8 @@ Agent按[同轮次后处理产物](../.agents/skills/nora-ai-short-drama/referen
 id使用小写字母、数字和连字符，目录必须有projects。默认Nora空间继续使用原工作区；登记空间保留其工作区浏览服务/runtime下的任务数据库，统一进程启动对应TaskStore并更新任务客户端配置，不复制或重编号任务。业务阶段不得另建服务或监控器；接管前停止旧服务，防止两个进程处理同一任务库。服务启动后更新各空间的task-service.json：url是统一地址，api_prefix为`/api/workspaces/{id}`空间路由，token只供本机Agent使用。
 
 /api/workspaces公开登记名称、视图和项目索引；/api/workspaces/{id}/projects提供该空间目录与文件，/api/workspaces/{id}/comfy及/internal/comfy复用同一套任务处理和认证。未登记空间返回404，凭据不得跨空间使用。公共资产、提示词、工作流和风格库仍在工作区首页独立访问。实际资料路径与运行配置均排除在分发之外。
+
+
+### 生成期记录归并
+
+新空执行目录默认compact：技术条目保存在一份执行档案.json，提交尝试.json保留提交前独占占用。SQLite负责调度状态和事件；网页、恢复和离线工具读取同一条目，原逻辑JSON路径仍可预览或下载，物理文件只保留一份。旧独立凭据继续legacy，不改写历史。导演包仅按用户明确要求导出，不自动生成、不作为进入二采、后处理或完集的前置条件。具体留存与命令见[nora-workspace-browser精简留档](../.agents/skills/nora-workspace-browser/references/ComfyUI-任务监控规范.md#执行附件精简留档)和[记录读取工具](../.agents/skills/nora-comfyui/references/固定脚本接口规范.md#聚合执行凭据读取与导出)。

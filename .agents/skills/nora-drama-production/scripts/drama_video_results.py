@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import execution_records as recordio
 import re
 import tempfile
 from urllib.parse import quote, unquote
@@ -31,7 +32,7 @@ def register(store, key):
         raise ValueError('只有全部成果取回的任务可以登记待审')
     root, record = Path(data.project), Path(data.record_dir)
     report_file = record / REPORT
-    previous = json.loads(report_file.read_text('utf-8')) if report_file.exists() else {}
+    previous = recordio.read(report_file) if recordio.exists(report_file) else {}
     if previous and (previous.get('task_id') != key or previous.get('prompt_id') != state['prompt_id']):
         raise ValueError('收尾报告不属于本次执行，不覆盖')
     for name, info in previous.get('probes', {}).items():
@@ -57,7 +58,7 @@ def register(store, key):
         ep, scene, part, revision, stage = (output['review'][name] for name in ('episode', 'scene', 'part', 'revision', 'stage'))
         receipt = project_file(root, output['receipt'], recorded=True)
         # Downloads already established technical identity. No rehash or remote query.
-        if not candidate.is_file() or not receipt.is_file():
+        if not candidate.is_file() or not recordio.exists(receipt):
             raise ValueError('成果或取回凭据缺失：' + identity)
         metadata = None
         if data.video_plan is not None:
@@ -165,7 +166,7 @@ def apply_record_updates(store, key, updates, episodes, report=None):
     root = Path(store.rows[key]['input'].project)
     report_file = Path(store.rows[key]['input'].record_dir) / REPORT
     if report is None:
-        report = json.loads(report_file.read_text('utf-8'))
+        report = recordio.read(report_file)
     journal = report.get('record_updates', {})
     if not updates:
         if journal.get('status') != 'applying':

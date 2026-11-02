@@ -309,21 +309,26 @@ class NativeImageTests(unittest.TestCase):
                     self.request = self.request.with_name('剧集请求.json')
                     self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
                 job = call('prepare', '--request', str(self.request))
-                self.assertTrue((self.project / job['generation_call_file']).is_file())
+                self.assertIn('await', job['generation_call'])
+                self.assertNotIn('generation_call_file', job)
+                self.assertNotIn('prompt_file', job)
                 self.assertTrue(job['result_store_key'].startswith('imagegen:'))
                 result = subprocess.run(job['complete_command'] + ['--source', str(self.source)], text=True, capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 report = json.loads(result.stdout)
                 self.assertTrue(report['user_message_ready'])
                 self.assertEqual(call('report', '--manifest', job['manifest']), report)
+                actual = self.project / 'actual-prompt.txt'
+                actual.write_text(self.spec['prompt'])
                 self.assertEqual(call('complete', '--manifest', job['manifest'], '--source', str(self.source),
-                    '--actual-prompt-file', str(self.project / job['prompt_file'])), report)
+                    '--actual-prompt-file', str(actual)), report)
 
-    def test_cli_default_prompt_path_still_rejects_changed_text(self):
+    def test_cli_explicit_actual_prompt_still_rejects_changed_text(self):
         self.prepare()
-        (self.project / self.job['prompt_file']).write_text('被改过的正文')
+        actual = self.project / 'actual-prompt.txt'
+        actual.write_text('被改过的正文')
         result = subprocess.run([sys.executable, '-B', str(native.SKILL / 'scripts/imagegen_results.py'),
-            'complete', '--project', str(self.project), '--manifest', self.job['manifest'], '--source', str(self.source)],
+            'complete', '--project', str(self.project), '--manifest', self.job['manifest'], '--source', str(self.source), '--actual-prompt-file', str(actual)],
             text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('实际提示词与交接不符', result.stderr)
@@ -339,7 +344,8 @@ class NativeImageTests(unittest.TestCase):
                 user_reference=True, basis='用户指定的独立测试输入'))
         self.request.write_text(json.dumps(self.spec, ensure_ascii=False))
         self.prepare()
-        source = (self.project / self.job['generation_call_file']).read_text()
+        source = native.generation_call(self.spec['prompt'],
+            [str(self.project / ref['file']) for ref in self.spec['references']], self.job['result_store_key'])
         expected = dict(prompt=self.spec['prompt'], referenced_image_paths=[
             str(self.project / ref['file']) for ref in self.spec['references']])
         # Imagegen returns image_url/output_hint, not MCP content blocks.

@@ -20,7 +20,9 @@ import urllib.request
 import uuid
 import zipfile
 from concurrent.futures import Future
+from functools import partial
 from threading import Lock
+import execution_records as records
 
 CHUNK = 1024 * 1024
 QUEUE_READS = {}
@@ -42,18 +44,7 @@ def encoded(value):
 
 
 def strict_json(raw):
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError("Duplicate JSON key: " + key)
-            result[key] = value
-        return result
-
-    def invalid(value):
-        raise ValueError("Non-finite JSON value: " + value)
-
-    return json.loads(raw, object_pairs_hook=pairs, parse_constant=invalid)
+    return records.strict_json(raw)
 
 
 def write_new(path, value):
@@ -225,7 +216,8 @@ def submit(client, args, workflow=None, client_id=None):
         if len(set(names)) != 3:
             raise ClientError("path_collision", "Submission evidence filenames must be distinct")
     marker, request_file, response_file = [record / n for n in names]
-    if any(os.path.lexists(p) for p in (marker, request_file, response_file)):
+    write_evidence = partial(records.write, new=True, compact=True) if getattr(args, 'record_format', 'legacy') == 'compact' else write_new
+    if os.path.lexists(marker) or any(records.exists(p) for p in (request_file, response_file)):
         raise ClientError("submission_guard", "Existing submission evidence; reconcile, never resubmit here",
                           record_dir=str(record), submission_state="not_sent")
     # O_EXCL also arbitrates concurrent submit calls sharing this record directory.
@@ -233,7 +225,7 @@ def submit(client, args, workflow=None, client_id=None):
         write_new(marker, {"time": now(), "url": client.url, "client_id": payload["client_id"],
                            "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
                            "state": "reserved_do_not_resubmit"})
-        write_new(request_file, payload)
+        write_evidence(request_file, payload)
     except FileExistsError as exc:
         raise ClientError("submission_guard", "Submission evidence reserved by another call; no request sent",
                           record_dir=str(record), submission_state="not_sent") from exc
@@ -246,12 +238,12 @@ def submit(client, args, workflow=None, client_id=None):
         details = exc.details if isinstance(exc, ClientError) else {}
         state = "rejected" if details.get("http_status") in (400, 401, 403, 404, 422) else "unknown"
         failure = {"time": now(), "submission_state": state, "error": str(exc), **details}
-        write_new(response_file, failure)
+        write_evidence(response_file, failure)
         raise ClientError("submission_" + state, "Do not automatically retry POST; inspect saved evidence",
                           record_dir=str(record), client_id=payload["client_id"], **failure) from exc
     # Save raw response before any further validation or reporting.
     try:
-        write_new(response_file, result)
+        write_evidence(response_file, result)
     except OSError as exc:
         raise ClientError("submission_response_save_failed", "Response received but could not be saved; do not resubmit",
                           record_dir=str(record), client_id=payload["client_id"], response=result) from exc

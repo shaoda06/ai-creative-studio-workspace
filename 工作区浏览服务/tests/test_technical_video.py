@@ -10,6 +10,8 @@ from backend.services import comfy_tasks as tasks, execution_checks, result_regi
 from tests import test_comfy_tasks as base
 
 
+import execution_records as recordio
+
 class TechnicalVideoTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.TaskTests.asyncSetUp
     asyncTearDown = base.TaskTests.asyncTearDown
@@ -52,7 +54,7 @@ class TechnicalVideoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(submit.call_count, 1)
             key = accepted['monitor_id']
             self.assertEqual(self.store.rows[key]['state']['prompt_id'], 'technical-id')
-        report = json.loads((self.record/'执行检查报告.json').read_text())
+        report = recordio.read(self.record/'执行检查报告.json')
         self.assertNotIn('scene_composition', report['prepared_input'])
         self.assertNotIn('content_checks', report)
 

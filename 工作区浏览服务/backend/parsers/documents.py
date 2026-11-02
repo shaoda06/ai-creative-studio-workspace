@@ -1,6 +1,7 @@
 """Common document rendering without project directory or business-flow rules."""
 import codecs
 import hashlib
+import execution_records as recordio
 import html
 import posixpath
 from pathlib import Path
@@ -31,6 +32,10 @@ STATUS_FIELDS = {"状态", "当前状态", "确认状态", "画风确认状态",
 
 
 def plain_text_preview(path):
+    if not path.is_file() and recordio.exists(path):
+        data = recordio.text(path).encode('utf-8')
+        notice = '仅截取前256 KiB供预览；完整内容请打开原文件。' if len(data) > TEXT_PREVIEW_LIMIT else ''
+        return {'text': codecs.getincrementaldecoder('utf-8')().decode(data[:TEXT_PREVIEW_LIMIT], final=len(data) <= TEXT_PREVIEW_LIMIT), 'notice': notice}, hashlib.sha256(data).hexdigest()
     digest, prefix, total = hashlib.sha256(), bytearray(), 0
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(65536), b""):

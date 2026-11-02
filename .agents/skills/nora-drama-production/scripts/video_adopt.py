@@ -26,6 +26,8 @@ IDENTITY = re.compile(r'((?:EP\d{3}|片头|片尾))-(C\d{3})-(P\d{3})-(R\d{3})-(
 STAGES = {'一采': '01-一采', '二采': '02-二采', '后处理': '03-后处理'}
 
 
+import execution_records as recordio
+
 def local_path(root, value):
     return project_file(root, value, recorded=True)
 
@@ -35,7 +37,7 @@ def link(base, path):
 
 
 def load(path):
-    return client.strict_json(path.read_bytes())
+    return recordio.read(path)
 
 
 def execution_metadata(root, mapping_path, mapped):
@@ -43,7 +45,7 @@ def execution_metadata(root, mapping_path, mapped):
     if mapped.get('prompt_id') or mapped.get('local_edit') is not None:
         return mapped
     state_path = mapping_path.parent / '后台任务状态.json'
-    if not state_path.is_file():
+    if not recordio.exists(state_path):
         raise ValueError(f'请指定实际执行的输入映射，不用父级旧请求代替：{mapping_path}')
     state = load(state_path)
     response = load(mapping_path.parent / '提交响应.json')

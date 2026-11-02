@@ -1,5 +1,6 @@
 """Read proven drama output identities without inferring approval from filenames."""
 import json
+import execution_records as recordio
 from pathlib import Path
 
 def prepared_identities(store, key):
@@ -10,7 +11,7 @@ def prepared_identities(store, key):
         record = Path(data.record_dir)
         identities = set()
         try:
-            report = json.loads((record / '执行检查报告.json').read_text('utf-8-sig'))
+            report = recordio.read(record / '执行检查报告.json')
         except FileNotFoundError:
             # Legacy registrations can lack preparation reports. Fill only this missing link.
             if not row['state'].get('preparation_required'):

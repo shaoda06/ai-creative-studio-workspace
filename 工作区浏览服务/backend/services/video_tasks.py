@@ -1,6 +1,7 @@
 """Explicit technical video adapter; no serial-drama documents or adoption."""
 import json
 from pathlib import Path
+import execution_records as recordio
 from project_paths import project_file
 
 
@@ -21,8 +22,8 @@ def register(store, key, outputs, report_file):
     data, state = store.rows[key]['input'], store.rows[key]['state']
     if data.video_plan.get('metadata') != 'ffprobe':
         raise ValueError('视频技术任务须使用ffprobe媒体核对')
-    if report_file.exists():
-        report = json.loads(report_file.read_text('utf-8-sig'))
+    if recordio.exists(report_file):
+        report = recordio.read(report_file)
         if report['task_id'] != key or report['prompt_id'] != state['prompt_id']:
             raise ValueError('视频技术报告不属于原任务')
         for item in report['items']:
@@ -36,7 +37,7 @@ def register(store, key, outputs, report_file):
     for output in outputs:
         path = project_file(data.project, output['path'])
         receipt = project_file(data.project, output['receipt'])
-        if not receipt.is_file():
+        if not recordio.exists(receipt):
             raise FileNotFoundError(receipt)
         items.append(dict(identity=output.get('identity') or path.name, path=path.relative_to(Path(data.project)).as_posix(),
                           receipt=receipt.relative_to(Path(data.project)).as_posix(),

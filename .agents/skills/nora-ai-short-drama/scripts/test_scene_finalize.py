@@ -505,7 +505,7 @@ class FinalizeTests(unittest.TestCase):
         self.assertEqual(NativeClient.calls, [])
         self.assertNotIn('### 定稿留档-', progress.read_text())
 
-    def test_resuming_one_stage_keeps_another_approved_stage_missing_finalization_visible(self):
+    def test_resuming_one_stage_does_not_require_other_optional_director_export(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         self.run_plan()
         for part in ('P001', 'P002'):
@@ -513,8 +513,8 @@ class FinalizeTests(unittest.TestCase):
         self.run_plan()
         cells = tool.project_progress.phase_row((self.root / '项目进度.md').read_text(), 'EP001')[1]
         self.assertEqual(cells[2], '进行中')
-        self.assertIn('EP001-C001二采', cells[4])
-        self.assertIn('补齐', cells[5])
+        self.assertEqual(cells[4], '- 无')
+        self.assertNotIn('二采定稿', cells[5])
         self.assertNotIn('后处理', cells[4])
 
     def test_published_pack_without_receipt_recovers_and_tampering_is_reported(self):

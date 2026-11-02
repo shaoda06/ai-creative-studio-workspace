@@ -3,6 +3,7 @@ import asyncio
 from copy import deepcopy
 import json
 from pathlib import Path
+import execution_records as recordio
 from urllib.parse import quote
 from backend.services.comfy_tasks import paths
 
@@ -41,7 +42,7 @@ async def task_detail(store, key):
         project_route = '/api/projects/' + quote(Path(data.project).name, safe='') + '/files/'
         for value in resolution['evidence_files']:
             path = paths.project_file(data.project, value)
-            evidence.append({'name': path.name, 'url': project_route + quote(value, safe='/') if path.is_file() else None})
+            evidence.append({'name': path.name, 'url': project_route + quote(value, safe='/') if recordio.exists(path) else None})
         for identity in resolution['replacement_task_ids']:
             target = store.rows.get(identity)
             replacements.append({'id': identity, 'title': target['state']['title'] if target else identity,
@@ -61,8 +62,8 @@ def task_files(data, state, events):
         path = Path(value).resolve()
         if not path.is_relative_to(project) or any(part.startswith('.') for part in path.relative_to(project).parts):
             return {'available': False, 'bytes': None, 'url': None}
-        available = path.is_file()
-        return {'available': available, 'bytes': path.stat().st_size if available else None,
+        available = recordio.exists(path) and recordio.backing_file(path).resolve().is_relative_to(project)
+        return {'available': available, 'bytes': (path.stat().st_size if path.is_file() else len(recordio.text(path).encode('utf-8'))) if available else None,
                 'url': '/api/projects/' + quote(project.name, safe='') + '/files/'
                        + quote(path.relative_to(project).as_posix(), safe='/') if available else None}
 
@@ -98,6 +99,9 @@ def task_files(data, state, events):
                         'downloaded_at': latest['time'] if latest and latest['result'] == 'success' else None,
                         'error': error})
     records = []
+    archive = Path(data.record_dir) / recordio.ARCHIVE
+    if archive.is_file():
+        records.append({'name': '完整执行档案', **file_info(archive)})
     for label, name in (('任务摘要', '后台任务状态.json'), ('完整过程记录', '后台过程记录.json'),
                         ('结果收尾报告', '结果收尾报告.json'),
                         ('准备检查报告', '执行检查报告.json'),

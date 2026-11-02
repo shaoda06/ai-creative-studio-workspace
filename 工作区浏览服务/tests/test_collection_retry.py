@@ -18,6 +18,8 @@ from backend.services.task_details import task_detail
 from tests import test_comfy_tasks as base
 
 
+import execution_records as recordio
+
 class CollectionTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.TaskTests.asyncSetUp
     asyncTearDown = base.TaskTests.asyncTearDown
@@ -63,7 +65,7 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
             self.assertAlmostEqual(actual, expected, delta=.3)
         state = self.store.rows['task']['state']
         self.assertEqual((state['status'], state['collection_attempt'], state['collection_auto_retry']), ('completed', 4, 3))
-        events = json.loads((self.record / '后台过程记录.json').read_text('utf8'))
+        events = recordio.read(self.record / '后台过程记录.json')
         self.assertEqual([event['delay_seconds'] for event in events if event['result'] == 'scheduled'], [10, 30, 60])
         self.assertEqual([event['failures'][0]['http_status'] for event in events if event['result'] == 'attempt_failed'], [503] * 3)
 
@@ -212,7 +214,7 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
             await self.store.finish_collection('task', result)
         self.assertEqual(counts, {'seg_0000.mp4': 1, 'seg_0001.mp4': 2})
         self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
-        events = json.loads((self.record / '后台过程记录.json').read_text('utf8'))
+        events = recordio.read(self.record / '后台过程记录.json')
         successes = [event for event in events if event['stage'] == 'download' and event['result'] == 'success']
         self.assertEqual(len(successes), 2)
 

@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import execution_records as recordio
 import re
 import tempfile
 from urllib.parse import unquote
@@ -22,7 +23,7 @@ def png(raw):
     return image_files.png(raw)
 from project_paths import project_file
 import project_progress
-from prepared_documents import write_json
+from execution_records import write as write_json
 
 
 TEMPLATES = {'人物': '人物参考图工作稿模板.md', '场景': '场景参考图工作稿模板.md',
@@ -91,7 +92,7 @@ def with_record_updates(plan, updates):
 
 def repair_record_updates(root, drafts, current, repair, report_file, *, identity=None):
     """Repair only exact record edits; retain immutable task/approval evidence and an audit copy."""
-    previous = json.loads(report_file.read_text('utf-8-sig')) if report_file.exists() else None
+    previous = recordio.read(report_file) if recordio.exists(report_file) else None
     if previous and identity and any(previous.get(name) != value for name, value in identity.items()):
         raise ValueError('登记修复报告不属于原任务或成果，不覆盖')
     if previous and previous.get('record_repair') == repair:
@@ -121,12 +122,12 @@ def repair_record_updates(root, drafts, current, repair, report_file, *, identit
                    'record_repair': repair, 'registration_updates': repair['updates']}
     index = 1
     archive = report_file.with_name(report_file.stem + f'-登记修复前-{index:03d}.json')
-    while archive.exists():
+    while recordio.exists(archive):
         index += 1
         archive = report_file.with_name(report_file.stem + f'-登记修复前-{index:03d}.json')
     write_json(archive, {'report': previous, 'record_updates': current, 'repair': repair})
     if previous:
-        if json.loads(report_file.read_text('utf-8-sig')) != previous:
+        if recordio.read(report_file) != previous:
             raise ValueError('收尾报告并发变化，不覆盖')
         write_json(report_file, revised)
     return repair['updates']
@@ -282,7 +283,7 @@ def register(store, key, outputs, report_file):
         data = data.model_copy(update={'image_plan': state['image_closeout_plan']})
     if 'image_registration_updates' in state:
         data = data.model_copy(update={'image_plan': with_record_updates(data.image_plan, state['image_registration_updates'])})
-    previous = json.loads(report_file.read_text('utf-8')) if report_file.exists() else None
+    previous = recordio.read(report_file) if recordio.exists(report_file) else None
     if previous:
         if previous['task_id'] != key or previous['prompt_id'] != state['prompt_id']:
             raise ValueError('图片收尾报告不属于本次执行')
@@ -390,8 +391,8 @@ def register(store, key, outputs, report_file):
     report = {'task_id': key, 'prompt_id': state['prompt_id'], 'status': 'registering', 'recorded_at': stamp,
               'items': inspected, 'updates': updates, 'checks': []}
     for path in checked:
-        current = path.stat()
-        report['checks'].append({'path': path.relative_to(root).as_posix(), 'stamp': [current.st_size, current.st_mtime_ns]})
+        current = recordio.stamp(path)
+        report['checks'].append({'path': path.relative_to(root).as_posix(), 'stamp': list(current)})
     if up:
         formal = project_file(root, up['formal'])
         prior = formal.stat() if formal.exists() else None

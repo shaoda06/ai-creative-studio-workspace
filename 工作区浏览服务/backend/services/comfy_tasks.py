@@ -8,6 +8,7 @@ import json
 import logging
 import os
 from pathlib import Path, PureWindowsPath
+from functools import partial
 import secrets
 import shutil
 import sqlite3
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama'
 sys.path.insert(0, str(SKILL.parent / 'nora-comfyui/scripts'))
 import project_paths as paths
+import execution_records as recordio
 import comfyui_config as config
 client = config.client
 context_spec = importlib.util.spec_from_file_location('nora_generation_context', SKILL.parent / 'nora-drama-production/scripts/generation_context.py')
@@ -57,6 +59,7 @@ class DesktopConnection(BaseModel):
 
 
 class TaskInput(BaseModel):
+    record_format: Literal['compact', 'legacy'] = 'compact'
     project: str
     title: str
     task_type: Literal['image', 'image-upscale', 'video-first-pass', 'video-second-pass', 'video-postprocess']
@@ -100,7 +103,9 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         self.groups_init()
         self.rows = {}
         for key, payload, state in self.db.execute('SELECT id, payload, state FROM tasks'):
-            data = TaskInput.model_validate_json(payload)
+            saved = json.loads(payload)
+            saved.setdefault('record_format', 'legacy')
+            data = TaskInput.model_validate(saved)
             self.resolve_input(data, recorded=True)
             self.rows[key] = {'input': data, 'state': json.loads(state)}
             self.rows[key]['state'] = self.record_paths(key).convert(self.rows[key]['state'])
@@ -241,6 +246,12 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                 resolved[value] = str(paths.project_file(project, value, recorded=recorded))
             return resolved[value]
         data.record_dir = local(data.record_dir)
+        if (not recorded and 'record_format' not in data.model_fields_set
+                and not (Path(data.record_dir) / recordio.ARCHIVE).exists()
+                and any((Path(data.record_dir) / name).is_file() for name in
+                        (data.attempt_name, data.request_name, data.response_name, data.history_name,
+                         '执行检查报告.json', '后台任务状态.json', '后台过程记录.json'))):
+            data.record_format = 'legacy'
         if data.submission_plan:
             data.submission_plan = local(data.submission_plan)
         for target in [*data.outputs, *(data.segment_plan.targets if data.segment_plan else [])]:
@@ -292,7 +303,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         if client.Client(data.url, data.timeout).url != configured[0]:
             raise ValueError('新任务只允许提交到工作区主节点')
         record = Path(data.record_dir)
-        if any((record / name).exists() for name in ('后台任务状态.json', '后台过程记录.json')):
+        if any(recordio.exists(record / name) for name in ('后台任务状态.json', '后台过程记录.json')):
             raise client.ClientError('registration_guard', '执行目录已有后台登记记录；请核对原任务')
         if data.image_plan is not None:
             from backend.services.image_tasks import validate_names
@@ -312,6 +323,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             if row.get('_repreparing'):
                 raise ValueError('任务正在重新准备，请等待准备结束后再操作')
             old = row['input']
+            data.record_format = old.record_format
             if (row['state']['status'] not in LOCAL or row['state'].get('prompt_id')
                     or old.thread_id != data.thread_id or old.desktop.caller_thread != data.desktop.caller_thread
                     or old.task_type != data.task_type or old.url != data.url
@@ -322,7 +334,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                         *(item.response_name for item in old.outputs)]
             if old.segment_plan:
                 evidence.extend(item.response_name for item in old.segment_plan.targets)
-            if any((record / name).exists() for name in evidence):
+            if any(recordio.exists(record / name) for name in evidence):
                 raise ValueError('已有提交或成果证据，不允许修改原执行资料')
         try:
             if existing is not None:
@@ -383,7 +395,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         result_names = [data.history_name, *(item.response_name for item in data.outputs)]
         if data.segment_plan:
             result_names.extend(item.response_name for item in data.segment_plan.targets)
-        if any((record / name).exists() for name in result_names):
+        if any(recordio.exists(record / name) for name in result_names):
             error = client.ClientError('execution_guard', '已有终态或取回凭据；请核对原执行，不发送新任务', submission_state='not_sent')
             if state['status'] in ('local_queued', 'paused', 'preparing', 'submitting'):
                 self.save(key, status='paused', phase='submit', failure_stage='submit', error=str(error), error_details=error.details)
@@ -443,8 +455,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                 continue
             if not state.get('prompt_id'):
                 response = Path(row['input'].record_dir) / row['input'].response_name
-                if response.is_file():
-                    result = client.strict_json(response.read_bytes())
+                if recordio.exists(response):
+                    result = recordio.read(response)
                     if result.get('prompt_id'):
                         self.save(key, prompt_id=result['prompt_id'], status='queued')
                 if not state.get('prompt_id'):
@@ -502,7 +514,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         data, state = row['input'], row['state']
         history = Path(data.record_dir) / data.history_name
         try:
-            saved = client.strict_json(history.read_bytes())['data'] if history.is_file() else None
+            saved = recordio.read(history)['data'] if recordio.exists(history) else None
             if saved is not None and not isinstance(saved, dict):
                 raise ValueError('终态凭据必须包含结果对象')
         except (OSError, client.ClientError, ValueError, KeyError, TypeError) as error:
@@ -527,7 +539,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                     break
         if remote_state in ('success', 'failed'):
             if not history.exists():
-                client.write_new(history, {'time': client.now(), 'data': result})
+                recordio.write(history, {'time': client.now(), 'data': result}, new=True, compact=data.record_format == 'compact')
             self.record(key, 'execution', remote_state, evidence=str(history))
             if background_collection:
                 if remote_state == 'success':
@@ -596,6 +608,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
 
     async def collect(self, key, result):
         data, state = self.rows[key]['input'], self.rows[key]['state']
+        write_receipt = partial(recordio.write, new=True, compact=True) if data.record_format == 'compact' else client.write_new
         if not data.outputs:
             raise ValueError('生成成功但没有配置成果取回映射')
         problems = []
@@ -626,7 +639,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                 if proof[1] is not None and verified.get(str(response)) == proof:
                     pass
                 elif receipt_exists:
-                    previous = client.strict_json(response.read_bytes())['data']
+                    previous = (recordio.read(response) if data.record_format == 'compact' else client.strict_json(response.read_bytes()))['data']
                     if (previous['remote'] != {name: identity[name] for name in ('filename', 'subfolder', 'type')}
                             or paths.project_file(data.project, previous['path'], recorded=True) != Path(output.path)
                             or proof[1] is None or proof[1][1][0] != previous['bytes']):
@@ -636,7 +649,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                         argparse.Namespace(filename=identity['filename'], subfolder=identity['subfolder'],
                                            type=identity['type'], output=output.path, sha256=None))
                     downloaded['path'] = self.record_paths(key).relative_file(downloaded['path'])
-                    client.write_new(response, {'time': client.now(), 'data': downloaded})
+                    write_receipt(response, {'time': client.now(), 'data': downloaded})
                     proof = (identity, saved_files(response, Path(output.path))[0])
                     fresh = True
                 verified[str(response)] = proof

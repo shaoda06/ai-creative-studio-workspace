@@ -8,6 +8,7 @@ import zlib
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'nora-comfyui/scripts'))
 from project_paths import project_file
+import execution_records as recordio
 
 def png(raw):
     """Validate PNG chunks, CRCs, compression, scanline sizes and filter bytes without viewing."""
@@ -65,12 +66,12 @@ def inspect_remote(data, state, outputs, planned):
     """Check actual requests, upload bindings and PNG receipts, without business documents."""
     root = Path(data.project)
     request_path = Path(data.record_dir) / data.request_name
-    request = json.loads(request_path.read_text('utf-8-sig'))
+    request = recordio.read(request_path)
     accepted = deepcopy(data.workflow)
     upload_receipts = {}
     for binding in data.uploads:
         receipt_path = Path(data.record_dir) / binding['response-name']
-        receipt = upload_receipts[receipt_path] = json.loads(receipt_path.read_text('utf-8-sig'))['data']
+        receipt = upload_receipts[receipt_path] = recordio.read(receipt_path)['data']
         accepted[binding['node']]['inputs'][binding['input']] = receipt['input_path']
     if request['prompt'] != accepted or request['client_id'] != state['client_id']:
         raise ValueError('图片实际请求与已接受任务不符')
@@ -85,7 +86,7 @@ def inspect_remote(data, state, outputs, planned):
             raise ValueError('图片实际尺寸不符：' + item['path'])
         receipt = project_file(root, item['receipt'], recorded=True)
         checked.extend((candidate, receipt))
-        proof = json.loads(receipt.read_text('utf-8-sig'))['data']
+        proof = recordio.read(receipt)['data']
         remote = {name: item['remote'][name] for name in ('filename', 'subfolder', 'type')}
         if (proof['bytes'] != len(raw) or proof['sha256'] != hashlib.sha256(raw).hexdigest() or proof['remote'] != remote
                 or project_file(root, proof['path'], recorded=True) != candidate):

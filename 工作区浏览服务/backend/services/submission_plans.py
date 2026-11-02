@@ -3,6 +3,7 @@ from copy import deepcopy
 import asyncio
 import json
 from pathlib import Path
+import execution_records as recordio
 import re
 from urllib.parse import unquote
 
@@ -80,6 +81,7 @@ async def execute(store, payload):
         return dict(status='completed', tasks=results, next_action='end-turn')
     journal = None
     documents = None
+    preparation_history = []
     if journal_file.exists():
         journal = json.loads(journal_file.read_text('utf-8-sig'))
         if journal['thread_id'] != payload.thread_id:
@@ -91,18 +93,42 @@ async def execute(store, payload):
                     if 'record_dir' in task):
                 raise ValueError('任务已登记，不能重装原清单；请使用原任务ID接续')
             documents = Documents(root, journal['writes'])
-            archive = deepcopy(journal)
-            archive['preparation_reports'] = []
-            for task in journal['tasks']:
-                report = project_file(root, task['record_dir']) / '执行检查报告.json'
-                if report.exists():
-                    archive['preparation_reports'].append(dict(record_dir=task['record_dir'],
-                        report=json.loads(report.read_text('utf-8-sig'))))
-            index = 1
-            while journal_file.with_name(f'{journal_file.stem}-准备归档-{index:03d}.json').exists():
-                index += 1
-            with journal_file.with_name(f'{journal_file.stem}-准备归档-{index:03d}.json').open('x', encoding='utf-8') as stream:
-                json.dump(archive, stream, ensure_ascii=False, indent=2)
+            if journal.get('record_format') == 'compact':
+                preparation_history = list(journal.get('preparation_history', []))
+                reports = []
+                for task in journal['tasks']:
+                    report = project_file(root, task['record_dir']) / '执行检查报告.json'
+                    if recordio.exists(report):
+                        checked = recordio.read(report)
+                        reports.append(dict(record_dir=task['record_dir'],
+                            report={key: value for key, value in checked.items() if key != 'prepared_input'}))
+                changes = []
+                def changed(before, after, path):
+                    if before == after:
+                        return
+                    if isinstance(before, dict) and isinstance(after, dict) and before.keys() == after.keys():
+                        for key in before:
+                            changed(before[key], after[key], path + [key])
+                    elif isinstance(before, list) and isinstance(after, list) and len(before) == len(after):
+                        for index, (old, new) in enumerate(zip(before, after)):
+                            changed(old, new, path + [index])
+                    else:
+                        changes.append(dict(path=path, before=before, after=after))
+                changed(journal['source'], source, [])
+                preparation_history.append(dict(time=store.client.now(), source_changes=changes, reports=reports))
+            else:
+                archive = deepcopy(journal)
+                archive['preparation_reports'] = []
+                for task in journal['tasks']:
+                    report = project_file(root, task['record_dir']) / '执行检查报告.json'
+                    if recordio.exists(report):
+                        archive['preparation_reports'].append(dict(record_dir=task['record_dir'],
+                            report=recordio.read(report)))
+                index = 1
+                while journal_file.with_name(f'{journal_file.stem}-准备归档-{index:03d}.json').exists():
+                    index += 1
+                with journal_file.with_name(f'{journal_file.stem}-准备归档-{index:03d}.json').open('x', encoding='utf-8') as stream:
+                    json.dump(archive, stream, ensure_ascii=False, indent=2)
             journal = None
     elif payload.reprepare:
         raise ValueError('没有原装配记录，请先按常规入口准备')
@@ -140,7 +166,8 @@ async def execute(store, payload):
             spec = {**entry, 'authorization': entry.get('authorization', '仅准备，尚未执行授权'), 'submission_plan': str(plan_file)}
             task = build_image(root, SKILL, spec, documents, store.client.now()) if spec['task_type'].startswith('image') else build_video(root, spec, documents)
             tasks.append(task)
-        journal = dict(source=source, thread_id=payload.thread_id, tasks=tasks, writes=documents.writes())
+        journal = dict(source=source, thread_id=payload.thread_id, tasks=tasks, writes=documents.writes(),
+                       record_format='compact', preparation_history=preparation_history)
         write_json(journal_file, journal)
     if not payload.prepare_only and any(not entry.get('authorization') for entry in source['tasks']):
         raise ValueError('此清单仅准备，尚缺实际执行授权依据')

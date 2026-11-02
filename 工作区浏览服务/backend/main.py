@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from backend.parsers import project as parser
 from backend.parsers import documents
 from backend.services.projects import ProjectStore
+import execution_records as recordio
 from backend.services.workspaces import Workspaces, project_tree, scope_links
 from project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
@@ -629,8 +630,12 @@ def project_file_response(projects, name, path, request, v=None, download=False)
         target = projects.file(name, path, v)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
-    response = FileResponse(target, filename=target.name if download else None,
-                            media_type='application/octet-stream' if download else None)
+    if not target.is_file():
+        response = Response(recordio.text(target), media_type='application/json',
+            headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote(target.name, safe='')} if download else {})
+    else:
+        response = FileResponse(target, filename=target.name if download else None,
+                                media_type='application/octet-stream' if download else None)
     if not download:
         # Project documents may contain scripts. Keep previews interactive without
         # granting them the workbench origin or access to its management APIs.

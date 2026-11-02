@@ -91,6 +91,15 @@ class PostprocessPlanTests(unittest.TestCase):
         self.assertEqual(len(list(self.root.rglob('内容画布.workflow.json'))), 1)
         self.assertFalse((self.root / 'plan.json').exists())
 
+    def test_current_approval_sources_work_without_director_package(self):
+        self.report = {'state': 'completed', 'stage': '二采', 'sources': self.report['finalization']['sources']}
+        self.put('approved.json', self.report)
+        self.build()
+        plan = json.loads((self.root / 'plan.json').read_text())
+        self.assertEqual([t['mapping']['source_video'] for t in plan['tasks']],
+                         [source['selected_path'] for source in self.report['sources']])
+        self.assertFalse(list(self.root.rglob('*.mmxpack.zip')))
+
     def test_unfinished_approval_is_rejected(self):
         self.report['state'] = 'needs_attention'
         self.put('approved.json', self.report)
@@ -109,7 +118,7 @@ class PostprocessPlanTests(unittest.TestCase):
         self.assertTrue(all(t['mapping']['approval_basis'] == 'approved.json' for t in plan['tasks']))
         batches[1]['stage'] = '一采'
         self.put('approved.json', self.report)
-        with self.assertRaisesRegex(ValueError, '尚未完成'):
+        with self.assertRaisesRegex(ValueError, '不是二采'):
             self.build('rejected.json')
         self.assertFalse((self.root / 'rejected.json').exists())
 

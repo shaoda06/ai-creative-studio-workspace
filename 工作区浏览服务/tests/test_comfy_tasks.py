@@ -30,7 +30,8 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.store = t.TaskStore(self.root / 'runtime', self.root)
         self.store.queue_notifications = False
         self.session_name_reader = self.enterContext(patch.object(t, 'read_thread_name', AsyncMock(return_value='制作会话')))
-        self.data = t.TaskInput(project=str(self.project), title='测试图', task_type='image',
+        # Existing fixtures verify legacy files remain unchanged.
+        self.data = t.TaskInput(record_format='legacy', project=str(self.project), title='测试图', task_type='image',
             url='http://comfy.invalid:8188', workflow={'1': {'class_type': 'SaveImage', 'inputs': {'seed': 9223372036854775807}}},
             record_dir=str(self.record), attempt_name='提交尝试.json', request_name='请求.json', response_name='提交响应.json',
             outputs=[dict(node_id='1', output_key='images', index=0, path=str(self.project / '候选/result.png'), response_name='取回响应.json')],

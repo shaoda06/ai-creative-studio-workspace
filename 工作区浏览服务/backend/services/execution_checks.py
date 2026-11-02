@@ -23,7 +23,15 @@ def check_existing_video_identity(data, mapping):
         return check_drama_identity(data, mapping)
 
 
-from prepared_documents import write_json
+from prepared_documents import write_json as write_document_json
+import execution_records as recordio
+
+
+def write_json(path, value):
+    if (Path(path).parent / recordio.ARCHIVE).is_file() and Path(path).name in (REPORT, '结果收尾报告.json'):
+        recordio.write(path, value, compact=True)
+    else:
+        write_document_json(path, value)
 
 def read_mapping(data):
     from backend.services.video_tasks import technical
@@ -39,6 +47,8 @@ REPORT = '执行检查报告.json'
 
 def basis(store, data, mapping=None):
     payload = store.portable_input(data)
+    if data.record_format == 'legacy':
+        payload.pop('record_format', None)
     for name in ('image_plan', 'video_plan'):
         if payload.get(name) is None:
             payload.pop(name, None)  # Existing reports have no newer media associations.
@@ -74,9 +84,9 @@ def sources(data, extra=(), mapping=None, *, observed=None, composition=None):
 
 def read_report(data):
     path = Path(data.record_dir) / REPORT
-    if not path.exists():
+    if not recordio.exists(path):
         return None
-    report = json.loads(path.read_text('utf-8'))
+    report = recordio.read(path)
     if not isinstance(report, dict) or 'prepared_input' not in report:
         raise ValueError('执行检查报告位置已有其他资料；不覆盖，请核对目录')
     return report
@@ -169,6 +179,8 @@ def fixed_input_checks(store, data):
         client.remote_path(name, filename=True)
     if len(names) != len(set(names)):
         raise ValueError('证据文件名不能重复')
+    if recordio.ARCHIVE in names:
+        raise ValueError('证据文件名不能占用执行档案.json')
     if '执行检查报告.json' in names:
         raise ValueError('证据文件名不能占用执行检查报告.json')
     for folder in {item['subfolder'] for item in data.uploads}:
@@ -263,6 +275,8 @@ def needs_content_review(data):
 
 
 def prepare_report(store, data, *, at_execution=False, previous=...):
+    if data.record_format == 'compact':
+        recordio.initialize(data.record_dir)
     """Fixed checks, including legacy execution fallback; never uploads or submits generation."""
     if previous is ...:
         previous = read_report(data)

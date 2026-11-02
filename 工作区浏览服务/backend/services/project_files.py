@@ -1,5 +1,6 @@
 """Common project discovery and file boundaries, without business parsing."""
 from pathlib import Path
+import execution_records as recordio
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-workspace-browser/scripts'))
 from workspace_project_index import read_index
@@ -33,6 +34,8 @@ class ProjectFiles:
     def file(self, name, relative, revision=None):
         root = self.project(name)
         path = (root / relative).resolve()
-        if not path.is_relative_to(root) or any(part.startswith('.') for part in Path(relative).parts) or not path.is_file():
+        if not path.is_relative_to(root) or any(part.startswith('.') for part in Path(relative).parts):
+            raise FileNotFoundError('文件不存在或不在项目内')
+        if not path.is_file() and (not (path.parent / recordio.ARCHIVE).resolve().is_relative_to(root) or not recordio.exists(path)):
             raise FileNotFoundError('文件不存在或不在项目内')
         return path

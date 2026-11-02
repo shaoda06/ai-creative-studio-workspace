@@ -1,4 +1,5 @@
 from pathlib import Path
+import execution_records as recordio
 from backend.services.project_files import ProjectFiles
 import logging
 import json
@@ -249,6 +250,6 @@ class ProjectStore(ProjectFiles):
                     if revision == str(stat.st_mtime_ns) + '-' + str(stat.st_size):
                         return archive
             raise FileNotFoundError('该视频文件版本不可用，请加载新文件')
-        if not path.is_file():
+        if not path.is_file() and (not (path.parent / recordio.ARCHIVE).resolve().is_relative_to(root) or not recordio.exists(path)):
             raise FileNotFoundError('文件不存在或不在项目内')
         return path

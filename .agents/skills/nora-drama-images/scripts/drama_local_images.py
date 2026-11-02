@@ -1,6 +1,7 @@
 """Local size adaptation for approved images; never uploads or submits a ComfyUI job."""
 import json
 from pathlib import Path
+import execution_records as recordio
 import re
 
 import sys
@@ -13,8 +14,10 @@ from backend.services.result_registration import verify_image_entries
 
 
 def prepare(store, data):
+    if data.record_format == 'compact':
+        recordio.initialize(data.record_dir)
     # Existing results resume their journal; placeholder source rows may already be applied.
-    images.validate_plan(data, check_records=not (Path(data.record_dir) / '结果收尾报告.json').exists())
+    images.validate_plan(data, check_records=not recordio.exists(Path(data.record_dir) / '结果收尾报告.json'))
     plan, root = data.image_plan, Path(data.project)
     source = project_file(root, plan['upscale']['source'])
     report = dict(ok=True, new_task_ready=True, checked_at=store.client.now(),
@@ -23,7 +26,7 @@ def prepare(store, data):
     if previous and (previous['prepared_input'] != report['prepared_input'] or previous['sources'] != report['sources']):
         raise ValueError('本地处理准备资料已变化；请重新准备，不能沿用原处理计划')
     formal = project_file(root, plan['upscale']['formal'])
-    if formal.exists() and not plan['upscale'].get('archive') and not (Path(data.record_dir) / '结果收尾报告.json').exists():
+    if formal.exists() and not plan['upscale'].get('archive') and not recordio.exists(Path(data.record_dir) / '结果收尾报告.json'):
         raise ValueError('正式文件已存在，缺少替换归档入口')
     checks.write_report(data, report)
     return dict(prepared=True, report=checks.REPORT)
@@ -32,7 +35,7 @@ def prepare(store, data):
 def repair(store, data, request):
     root, plan = Path(data.project), data.image_plan
     report_file = Path(data.record_dir) / '结果收尾报告.json'
-    report = json.loads(report_file.read_text('utf-8-sig'))
+    report = recordio.read(report_file)
     if report.get('provider') != 'local':
         raise ValueError('没有可接续的本地图片结果')
     current = report.get('registration_updates', images.record_updates(plan))
@@ -43,7 +46,7 @@ def repair(store, data, request):
 def complete(store, data):
     root, record, plan = Path(data.project), Path(data.record_dir), data.image_plan
     report_file = record / '结果收尾报告.json'
-    previous = json.loads(report_file.read_text('utf-8')) if report_file.exists() else None
+    previous = recordio.read(report_file) if recordio.exists(report_file) else None
     if previous is None:
         checks.check_prepared(store, data)
         draft, original, planned = images.validate_plan(data)
@@ -61,7 +64,7 @@ def complete(store, data):
                      source=up['source'], source_size=[width, height], crop_box=box,
                      crop_anchor=processing['crop_anchor'], path=plan['images'][0]['path'], size=list(target),
                      bytes=len(raw), format='PNG', decoded=True, recorded_at=store.client.now())
-        checks.write_json(receipt, proof)
+        recordio.write(receipt, proof, compact=data.record_format == 'compact')
         evidence = images.link(draft, receipt, '本地处理凭据')
         specs = f'{target[0]}×{target[1]}、PNG、{len(raw)}字节、可解码；数量1'
         formal = project_file(root, up['formal'])

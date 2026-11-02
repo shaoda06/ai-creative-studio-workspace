@@ -12,6 +12,8 @@ from tests.test_image_closeout import png
 from tests import test_image_closeout as image_tests
 
 
+import execution_records as recordio
+
 class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
     request = image_tests.ImageCloseoutTests.request
     output = image_tests.ImageCloseoutTests.output
@@ -458,8 +460,12 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['status'], 'prepared')
         saved = json.loads(journal_file.read_text())
         self.assertEqual(saved['tasks'][0]['record_dir'], original['tasks'][0]['record_dir'])
-        archive = json.loads(self.plan_file.with_name('任务清单-装配结果-准备归档-001.json').read_text())
-        self.assertEqual(archive['source'], original['source'])
+        self.assertFalse(list(self.plan_file.parent.glob('*装配结果-准备归档-*.json')))
+        self.assertEqual(len(saved['preparation_history']), 1)
+        self.assertEqual(saved['preparation_history'][0]['reports'], [])
+        changes = saved['preparation_history'][0]['source_changes']
+        self.assertEqual(changes[0]['before'], original['source']['tasks'][0]['prompt']['rewritten_prompt'])
+        self.assertIn('银色刺绣', changes[0]['after'])
         draft = (self.project/task['draft']).read_text()
         self.assertIn('银色刺绣', draft)
         self.assertNotIn('### 生成记录-002', draft)
@@ -512,7 +518,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.store.rows), 1)
         self.assertFalse(list(self.plan_file.parent.glob('*准备归档*')))
 
-    async def test_reprepare_build_failure_preserves_original_and_archives_report(self):
+    async def test_reprepare_build_failure_preserves_original_without_full_snapshot(self):
         task = self.spec()
         self.write_plan(task)
         self.payload.prepare_only = True
@@ -520,7 +526,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
         original = journal_file.read_bytes()
         record = Path(json.loads(original)['tasks'][0]['record_dir'])
-        report = json.loads((record/'执行检查报告.json').read_text())
+        report = recordio.read((record/'执行检查报告.json'))
         draft = (self.project/task['draft']).read_bytes()
         task['prompt']['rewritten_prompt'] += '\n银色刺绣。'
         self.write_plan(task)
@@ -530,8 +536,8 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 await plans.execute(self.store, self.payload)
         self.assertEqual(journal_file.read_bytes(), original)
         self.assertEqual((self.project/task['draft']).read_bytes(), draft)
-        archive = json.loads(self.plan_file.with_name('任务清单-装配结果-准备归档-001.json').read_text())
-        self.assertEqual(archive['preparation_reports'][0]['report'], report)
+        self.assertFalse(list(self.plan_file.parent.glob('*装配结果-准备归档-*.json')))
+        self.assertEqual(recordio.read(record/'执行检查报告.json'), report)
         self.assertFalse(self.store.rows)
         result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
@@ -648,7 +654,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.store, 'enqueue', side_effect=AssertionError('local must not enqueue')), \
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('local must not contact remote')):
             result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
         self.assertEqual(result['tasks'][0]['provider'], 'local')
         self.assertIsNone(result['tasks'][0]['local_task_id'])
         with Image.open(formal) as output:
@@ -686,8 +692,9 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(formal.exists())
         self.payload.prepare_only = False
         await plans.execute(self.store, self.payload)
-        receipt = next(self.project.rglob('*规格处理-001-处理结果.json'))
-        proof = json.loads(receipt.read_text())
+        archive = next(self.project.rglob('执行档案.json'))
+        receipt = next(name for name in json.loads(archive.read_text())['records'] if name.endswith('规格处理-001-处理结果.json'))
+        proof = recordio.read(archive.parent / receipt)
         self.assertEqual(proof['crop_anchor'], [0.5, 0])
         self.assertEqual(proof['crop_box'], [0.0, 0.0, 4.0, 2.0])
 
@@ -720,7 +727,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(formal.exists())
         with patch('PIL.ImageOps.fit', side_effect=AssertionError('do not process again')):
             result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
 
     async def test_local_record_repair_resumes_without_processing_or_queueing(self):
         from copy import deepcopy
@@ -753,7 +760,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(self.store, 'enqueue', side_effect=AssertionError('no queue')):
             for _ in range(2):
                 result = await plans.execute(self.store, self.payload)
-                self.assertEqual(result['status'], 'completed')
+                self.assertEqual(result['status'], 'completed', result)
         self.assertTrue(formal.exists())
         self.assertIn('已正式保存（用户备注）', progress.read_text())
         self.assertEqual(self.plan_file.read_bytes(), original)
@@ -789,7 +796,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         spec['archive'] = '03-人物资料/其他资料/历史版本/服装-归档.png'
         self.write_plan(spec)
         result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
         self.assertEqual((self.project / spec['archive']).read_bytes(), b'previous formal')
         self.assertNotEqual(formal.read_bytes(), b'previous formal')
 

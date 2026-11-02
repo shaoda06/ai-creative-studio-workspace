@@ -2,11 +2,13 @@
 import argparse
 import asyncio
 from copy import deepcopy
+from functools import partial
 import json
 import hashlib
 from pathlib import Path
 import time
 import uuid
+import execution_records as recordio
 from websockets.exceptions import WebSocketException
 
 LOCAL = ('local_queued', 'paused')
@@ -41,6 +43,7 @@ class LocalQueue:
         self.db.execute('INSERT INTO task_events(task_id, event) VALUES (?, ?)',
                         (key, json.dumps(event, ensure_ascii=False)))
         self.db.commit()
+        row['_archive_event_dirty'] = True
         self.write_records(key)
         self.publish()
 
@@ -48,6 +51,20 @@ class LocalQueue:
         row = self.rows[key]
         directory = Path(row['input'].record_dir)
         directory.mkdir(parents=True, exist_ok=True)
+        if row['input'].record_format == 'compact':
+            # Live progress stays in SQLite. Keep a portable terminal snapshot;
+            # do not rewrite a project archive for every sampler update.
+            if not row.pop('_archive_event_dirty', False) and row['state']['status'] not in TERMINAL and row['state']['status'] != 'collecting':
+                return
+            converter = self.record_paths(key)
+            events = [json.loads(value) for value, in self.db.execute(
+                'SELECT event FROM task_events WHERE task_id=? ORDER BY id', (key,))]
+            summary = {**{name: value for name, value in converter.convert(row['state'], relative=True).items()
+                          if name not in ('client_id', 'notices', 'segment_monitor')},
+                       'record_dir': converter.relative_file(directory), 'remote_url': row['input'].url,
+                       'outputs': self.portable_input(row['input'])['outputs']}
+            recordio.write_entries(directory, {'后台过程记录.json': events, '后台任务状态.json': summary})
+            return
         prepared = self.completion_input(key)
         if prepared:
             history = directory / '后台过程记录.json'
@@ -87,6 +104,7 @@ class LocalQueue:
                          if row['input'].record_dir == data.record_dir), None)
         if existing is not None:
             row = self.rows[existing]
+            data.record_format = row['input'].record_format
             self.check_duplicate(existing, data)
             row['input'].desktop = data.desktop
             if data.source_session_name:
@@ -264,6 +282,7 @@ class LocalQueue:
                     raise ValueError('准备资料已变化：' + path + '；请返回准备阶段')
             await self.check_target_cache(key, prepared['workflow'])
             return prepared['workflow']
+        write_receipt = partial(recordio.write, new=True, compact=True) if data.record_format == 'compact' else self.client.write_new
         uploaded_materials = {}
         upload_cache = {}
         saved_uploads = {}
@@ -295,8 +314,8 @@ class LocalQueue:
             receipt = Path(data.record_dir) / item['response-name']
             upload_key = (remote_url, source, item['subfolder'])
             upload_bindings.append((item, source, receipt, upload_key))
-            if receipt.exists():
-                evidence = self.client.strict_json(receipt.read_bytes())
+            if recordio.exists(receipt):
+                evidence = recordio.read(receipt)
                 if evidence.get('url') != remote_url or evidence.get('ok') is not True:
                     raise ValueError('已有上传凭据不完整，需核对后恢复')
                 uploaded = checked_source(source, evidence.get('data'))
@@ -308,7 +327,7 @@ class LocalQueue:
                 uploaded = saved_uploads[receipt]
             elif upload_key in upload_cache:
                 uploaded, original_receipt = upload_cache[upload_key]
-                self.client.write_new(receipt, {'ok': True, 'url': remote_url, 'time': self.client.now(),
+                write_receipt(receipt, {'ok': True, 'url': remote_url, 'time': self.client.now(),
                                                 'data': uploaded, 'reused_from': original_receipt.name})
                 self.record(key, 'upload', 'reused', file=str(source), remote=uploaded,
                             receipt=str(receipt), reused_from=str(original_receipt))
@@ -317,7 +336,7 @@ class LocalQueue:
                 stamp = source_stamps[source]
                 uploaded = await asyncio.to_thread(self.client.upload, self.client_for(data),
                                                    argparse.Namespace(file=str(source), subfolder=item['subfolder']), source=source)
-                self.client.write_new(receipt, {'ok': True, 'url': self.client_for(data).url,
+                write_receipt(receipt, {'ok': True, 'url': self.client_for(data).url,
                                                'time': self.client.now(), 'data': uploaded})
                 self.record(key, 'upload', 'success', file=str(source), remote=uploaded)
                 current = source.stat()

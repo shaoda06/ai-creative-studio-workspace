@@ -60,32 +60,12 @@ def selected(root, part, stage):
 
 
 def episode_missing(root, episode):
-    """Check current approved identities against their actual finalization records."""
-    missing, records = [], {}
+    """Completion requires adopted stage outputs; director exports are optional."""
+    missing = []
     for scene, part in indexed_parts(root, episode):
-        draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-        text = draft.read_text('utf-8-sig')
         for stage in adopt.STAGES:
-            identity = selected(root, part, stage)
-            if identity is None:
+            if selected(root, part, stage) is None:
                 missing.append(part + ' ' + stage + '未采用')
-                continue
-            if stage not in FINALIZATION_STAGES:
-                continue
-            headings = re.findall(r'^### (定稿留档-' + re.escape(scene + '-' + stage) + r'[^\n]*)$', text, re.M)
-            covered = False
-            for heading in headings:
-                a, b = adopt.section(text, heading)
-                for reference in re.findall(r'\[留档记录\]\(([^)]+)\)', text[a:b]):
-                    path = adopt.local_path(root, draft.parent / unquote(reference))
-                    if path not in records:
-                        records[path] = adopt.load(path)
-                    record = records[path]
-                    if (record['state'] == 'completed' and identity in {s['identity'] for s in record['sources']}
-                            and all(adopt.local_path(root, record[k]).is_file() for k in ('pack', 'canvas'))):
-                        covered = True
-            if not covered:
-                missing.append(identity + '缺少当前版本定稿留档')
     return missing
 
 

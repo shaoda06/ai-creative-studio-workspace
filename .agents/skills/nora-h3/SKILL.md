@@ -9,7 +9,7 @@ description: 共用MiniMax H3模型工具，维护实际模式提示词格式、
 
 - 参数与API结构：[参数与基准](references/参数与基准规范.md)。配置选择、授权和业务默认由调用方维护，工具不因剧情标签自动改配置。
 - 素材、时间线、缓存和输出：[导演台节点](references/ComfyUI-MiniMaxH3导演台节点使用规范.md)，只读取本次模式及操作章节。
-- 原生包格式、导出和导入：[导演包](references/ComfyUI-MiniMaxH3导演包制作规范.md)。导入、导出与实际生成分别授权和记录。
+- 按用户明确要求进行的原生包格式、导出和导入：[导演包](references/ComfyUI-MiniMaxH3导演包制作规范.md)。导入、导出与实际生成分别授权和记录。
 - 机械格式检查：scripts/h3_prompt_format.py；明确无缓存新输入的帧数装配：scripts/h3_timing.py。
 - 画布转换与明确素材装配：scripts/h3_workflow.py；原生报告解释：scripts/h3_results.py；素材容量检查：scripts/h3_inputs.py；包内容技术核对：scripts/h3_pack.py。
 

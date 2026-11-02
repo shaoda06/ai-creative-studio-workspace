@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""一次落实明确的视频批准、阶段留档、业务进度及网页核对；不生成媒体。"""
+"""一次落实明确的视频批准、业务进度及网页核对；导演包另按需导出；不生成媒体。"""
 import argparse
 import json
 from pathlib import Path
@@ -115,7 +115,7 @@ def update_business(root, episode, scene, stage, summary, identities, finalized,
     status = (episode + '分段制作与交付已完成。' if complete else
               scene + '的' + stage + '已采用' + str(len(identities)) + '段；'
               + (('本场后处理采用已齐备。' if finalized else '本场后处理采用尚未齐备。') if stage == '后处理' else
-                 ('本场该阶段定稿留档完成。' if finalized else '本场该阶段定稿尚未完成。')))
+                 ('本场该阶段采用已齐备，导演包仅按用户明确要求导出。' if finalized else '本场该阶段采用尚未齐备。')))
     if retrospective['status'] == 'completed':
         status += '完集复盘与经验归并已完成。'
     elif complete:
@@ -225,7 +225,7 @@ def approve(args):
                                     if stage == '后处理' and isinstance(deliveries, dict) else {})}
                                 for i in items],
                          summary=str(summary), record_updates=record_updates(root, episode, summary))
-    result = {'state': 'ready', 'phase': 'adoption', 'identities': ids, 'timings_seconds': {}, 'episode_completed': False}
+    result = {'stage': stage, 'state': 'ready', 'phase': 'adoption', 'identities': ids, 'timings_seconds': {}, 'episode_completed': False}
     report = request_path.with_name(request_path.stem + '-结果.json')
     if args.apply:
         result['report_file'] = str(report)
@@ -269,8 +269,9 @@ def approve(args):
     try:
         if args.apply and previous.get('local_completed'):
             result.update({k: previous[k] for k in ('adoption', 'episode_completed', 'episode_missing')})
-            if 'finalization' in previous:
-                result['finalization'] = previous['finalization']
+            for key in ('finalization', 'sources'):
+                if key in previous:
+                    result[key] = previous[key]
             result.update(phase='browser', local_completed=True)
             result['browser'] = browser_sync(root, episode, stage, ids, result['episode_completed'], args.timeout)
             result['state'] = 'completed' if all(selected(root, p, stage) for p in expected) else 'adopted_partial'
@@ -281,23 +282,15 @@ def approve(args):
             return result
         chosen = [selected(root, p, stage) for p in expected]
         ready = all(chosen)
-        result['phase'] = 'business_records'
-        update_business(root, episode, scene, stage, summary, [i for i in chosen if i], False, False)
         if ready and stage in final.FINALIZATION_STAGES:
-            result['phase'] = 'finalization'
-            chosen_items = [dict(available[i]) if i in available else adopted_source(root, i, stage) for i in chosen]
-            final_plan = {'episode': episode, 'scene': scene_number, 'stage': stage, 'items': chosen_items, 'summary': str(summary)}
-            if plan.get('source_finalization'):
-                origin = adopt.load(adopt.local_path(root, plan['source_finalization']))
-                for key in ('configuration_batches', 'configuration_batch_authorization'):
-                    if key in origin:
-                        final_plan[key] = origin[key]
-            for key in ('configuration_batches', 'configuration_batch_authorization', 'edition'):
-                if key in plan:
-                    final_plan[key] = plan[key]
-            began = time.monotonic()
-            result['finalization'] = final.finalize(args, plan=final_plan)
-            result['timings_seconds']['finalization'] = round(time.monotonic() - began, 3)
+            result['phase'] = 'sources'
+            result['sources'] = [dict(available[i]) if i in available else adopted_source(root, i, stage) for i in chosen]
+            for source in result['sources']:
+                for key in ('mapping', 'receipt', 'api', 'canvas'):
+                    adopt.load(adopt.local_path(root, source[key]))
+                part = source['identity'].rsplit('-', 2)[0]
+                source['selected_path'] = str(adopt.selected_output(root, root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md'),
+                    (root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')).read_text('utf-8-sig'), part, stage)['path'])
         result['phase'] = 'business_records'
         missing = episode_missing(root, episode) if stage == '后处理' and ready else []
         complete = stage == '后处理' and ready and not missing
@@ -323,7 +316,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, help='项目根目录；不扫描其他项目')
     parser.add_argument('--plan', required=True, help='项目内批准收尾请求；只填批准身份、用户原话及原提交清单')
-    parser.add_argument('--apply', action='store_true', help='一次采用、齐备后定稿、进度更新及网页核对；默认只读预览')
+    parser.add_argument('--apply', action='store_true', help='一次采用、进度更新及网页核对；不自动导出导演包；默认只读预览')
     parser.add_argument('--timeout', type=float, default=30, help='导出和网页请求超时秒数；无生成、无自动重新导出')
     args = parser.parse_args()
     try:
