@@ -4,6 +4,7 @@
 /.codex/
 /comfyui-config.json
 /提示词管理/
+/提示词库/隐私/
 
 # 已独立安装、由上游按需获取的技能，不随本模板重复分发。
 /.agents/skills/h3-prompt-writing/
@@ -40,11 +41,11 @@
 /工作区浏览服务/frontend/*.tsbuildinfo
 /工作区浏览服务/runtime/
 
-# 共享提示词允许使用与其他目录同名的分类；仅正文纳入共享。
-!/共享提示词/**/
-!/共享提示词/**/*.md
-/共享提示词/.trash/
-/共享提示词/**/.prompt-*.tmp
+# 公开提示词允许使用与其他目录同名的分类；隐私、回收站和临时写入不入库。
+!/提示词库/公开/**/
+!/提示词库/公开/**/*.md
+/提示词库/公开/.trash/
+/提示词库/公开/**/.prompt-*.tmp
 
 # One total workspace; real data, nested Iris repository and legacy path alias stay local.
 /projects

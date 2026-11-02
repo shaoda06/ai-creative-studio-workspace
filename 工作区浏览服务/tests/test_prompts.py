@@ -14,7 +14,7 @@ class PromptFiles(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / '提示词管理'
+        self.root = Path(self.temp.name) / '提示词库/隐私'
         self.lib = PromptLibrary(self.root)
 
     def create(self, title='人物', body='第一行\n\n**第二行**\n', category=''):
@@ -53,7 +53,7 @@ class PromptFiles(unittest.TestCase):
         self.assertIn('人物/古装/移动.md', [p['path'] for p in self.lib.snapshot()['prompts']])
 
     def test_external_uppercase_extension(self):
-        self.root.mkdir()
+        self.root.mkdir(parents=True)
         (self.root / '外部.MD').write_text('原文', encoding='utf-8')
         doc = self.lib.read('外部.MD')
         saved = self.lib.save('', doc['title'], '改写', doc['path'], doc['revision'])
@@ -140,7 +140,7 @@ class PromptFiles(unittest.TestCase):
         self.assertEqual([p.name for p in self.root.iterdir()], ['人物.md'])
 
     def test_create_race(self):
-        self.root.mkdir()
+        self.root.mkdir(parents=True)
         from os import link
         def raced_link(source, target):
             Path(target).write_text('外部抢先创建')
@@ -156,8 +156,8 @@ class WorkspacePrompts(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.local = self.root / '提示词管理'
-        self.shared = self.root / '共享提示词'
+        self.local = self.root / '提示词库/隐私'
+        self.shared = self.root / '提示词库/公开'
         self.lib = WorkspacePromptLibrary(self.local, self.shared)
 
     def test_existing_local_default_shared_and_merged_search(self):
@@ -268,6 +268,7 @@ class WorkspacePrompts(unittest.TestCase):
         (self.root / '.gitignore').write_text(ignore.read_text())
         shared = self.lib.save('', '公开', '公开正文')
         local = self.lib.save('', '私有', '私有正文', local_only=True)
+        self.lib.save('', '保留隐私', '不得进入Git', local_only=True)
         discarded = self.lib.save('', '回收', '删除正文')
         self.lib.discard(discarded['path'], discarded['revision'])
         self.lib.discard(local['path'], local['revision'])
@@ -275,14 +276,14 @@ class WorkspacePrompts(unittest.TestCase):
         self.lib.save('历史版本', '共享分类', '同名分类不受技能归档忽略规则影响')
         git('add', '.')
         tracked = git('-c', 'core.quotePath=false', 'ls-files')
-        self.assertIn('共享提示词/公开.md', tracked)
-        self.assertIn('共享提示词/历史版本/共享分类.md', tracked)
-        self.assertNotIn('提示词管理/', tracked)
+        self.assertIn('提示词库/公开/公开.md', tracked)
+        self.assertIn('提示词库/公开/历史版本/共享分类.md', tracked)
+        self.assertNotIn('提示词库/隐私/', tracked)
         self.assertNotIn('.trash/', tracked)
         self.lib.save('', '公开', shared['body'], shared['path'], shared['revision'], True)
-        self.assertIn('共享提示词/公开.md', git('-c', 'core.quotePath=false', 'ls-files', '--deleted'))
+        self.assertIn('提示词库/公开/公开.md', git('-c', 'core.quotePath=false', 'ls-files', '--deleted'))
         git('add', '-A')
-        self.assertNotIn('共享提示词/公开.md', git('-c', 'core.quotePath=false', 'ls-files'))
+        self.assertNotIn('提示词库/公开/公开.md', git('-c', 'core.quotePath=false', 'ls-files'))
 
 
 class PromptHttp(HttpTestCase):
@@ -292,7 +293,7 @@ class PromptHttp(HttpTestCase):
         self.addCleanup(self.temp.cleanup)
         from backend.main import queue_write
         self.app = FastAPI()
-        self.app.include_router(create_router(WorkspacePromptLibrary(Path(self.temp.name) / '提示词管理', Path(self.temp.name) / '共享提示词'), queue_write))
+        self.app.include_router(create_router(WorkspacePromptLibrary(Path(self.temp.name) / '提示词库/隐私', Path(self.temp.name) / '提示词库/公开'), queue_write))
         self.client = TestClient(self.app, base_url='http://127.0.0.1:8782')
         self.headers = {'origin': 'http://127.0.0.1:8782'}
 

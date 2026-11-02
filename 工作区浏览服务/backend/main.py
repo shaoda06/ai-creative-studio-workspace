@@ -48,7 +48,7 @@ WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', DEFAULT_WORKSPACE if DEFAULT_W
 WORKFLOWS = workflow_root(PUBLIC_ROOT / '.agents/skills/nora-ai-short-drama')
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
-prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词管理', PUBLIC_ROOT / '共享提示词')
+prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词库/隐私', PUBLIC_ROOT / '提示词库/公开')
 VERSION = json.loads((TOOL / 'frontend/package.json').read_text('utf-8'))['version']
 FRONTEND_RELEASE = TOOL / 'frontend/dist/release.json'
 store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/project-cache', version=VERSION)
