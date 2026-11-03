@@ -8,18 +8,24 @@ import http.client
 import io
 import json
 from pathlib import Path
+from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 import urllib.error
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from PIL import Image
+from backend.routes.project_resources import create_router
 from backend.services import comfy_tasks as t
 from backend.services.collection_retry import failure
+from backend.services.project_files import ProjectFiles
 from backend.services.task_details import task_detail
 from tests import test_comfy_tasks as base
 
 
 import execution_records as recordio
+import media_files
 
 class CollectionTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.TaskTests.asyncSetUp
@@ -167,6 +173,64 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
             receipt = recordio.read(self.record / output.response_name)['data']
             self.assertEqual(receipt['remote']['filename'], f'{index}.png')
             self.assertEqual(self.project / receipt['path'], Path(output.path))
+
+    async def test_upload_overlaps_background_collection_without_extra_media_data(self):
+        t.resourceio.initialize(self.project, managed=True)
+        self.data = t.TaskInput.model_validate(t.resourceio.route_task(self.project, self.data.model_dump()))
+        self.seed('collecting')
+        target = Path(self.data.outputs[0].path)
+        app = FastAPI()
+        app.include_router(create_router(lambda request: ProjectFiles(self.project.parent), lambda: None))
+        http = TestClient(app)
+        png = io.BytesIO()
+        Image.new('RGB', (8, 8), 'red').save(png, format='PNG')
+        raw = png.getvalue()
+        copying, collecting, release = Event(), Event(), Event()
+        original_copy = media_files.shutil.copyfile
+        original_finish = t.resourceio.finish
+
+        def copy(source, destination):
+            copying.set()
+            if not release.wait(timeout=8):
+                raise TimeoutError('upload did not resume')
+            return original_copy(source, destination)
+
+        def finish(project, path, **options):
+            if Path(path) == target:
+                collecting.set()
+            return original_finish(project, path, **options)
+
+        def download(remote, args):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+            return {'path': str(target), 'bytes': len(raw),
+                    'remote': {key: getattr(args, key) for key in ('filename', 'subfolder', 'type')}}
+
+        url = '/api/projects/' + self.project.name + '/resources'
+        with patch.object(media_files.shutil, 'copyfile', side_effect=copy), \
+             patch.object(t.resourceio, 'finish', side_effect=finish), patch.object(t.client, 'download', side_effect=download):
+            upload = asyncio.create_task(asyncio.to_thread(http.post, url, files={'file': ('上传.png', raw)}))
+            try:
+                self.assertTrue(await asyncio.to_thread(copying.wait, 5))
+                collect = asyncio.create_task(self.store.collect('task', self.result()))
+                self.assertTrue(await asyncio.to_thread(collecting.wait, 5))
+            finally:
+                release.set()
+            response, problems = await asyncio.gather(upload, collect)
+
+        self.assertEqual(problems, [])
+        self.assertEqual(response.status_code, 200, response.text)
+        imported = response.json()
+        uploaded = self.project / imported['file']
+        self.assertNotEqual(uploaded, target)
+        self.assertTrue(uploaded.samefile(target))
+        version = t.resourceio.reference(self.project, target)
+        self.assertNotEqual(t.resourceio.label(version), t.resourceio.label(imported))
+        self.assertEqual(version['producer'], '执行附件/任务001')
+        self.assertEqual(t.resourceio.reference(self.project, uploaded)['origin'], 'user_upload')
+        receipt = recordio.read(self.record / self.data.outputs[0].response_name)['data']
+        self.assertEqual((self.project / receipt['path'], receipt['remote']['filename']), (target, '0.png'))
+        self.assertEqual(uploaded.read_bytes(), raw)
 
     async def test_429_uses_retry_after_and_malformed_header_requires_attention(self):
         self.seed('collecting')

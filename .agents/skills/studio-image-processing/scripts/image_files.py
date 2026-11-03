@@ -76,8 +76,7 @@ def store_png(project, destination, raw, *, source=None, replace=False, prior=No
             ref = resources.reserve(project, destination, key='保存/' + resources.relative(project, destination),
                                     family=resources.family_key(destination), parent=parent, origin=origin)
             destination = resources.local(project, ref['file'])
-        store_media(project, destination, raw, source=source, replace=replace, prior=prior)
-        resources.finish(project, destination)
+        resources.finish(project, destination, raw=raw, source=source, replace=replace, prior=prior)
     else:
         store_media(project, destination, raw, source=source, replace=replace, prior=prior)
     return destination

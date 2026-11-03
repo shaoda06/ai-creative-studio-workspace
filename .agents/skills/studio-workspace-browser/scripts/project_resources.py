@@ -1,5 +1,5 @@
 """Project-owned media families, immutable versions and exact file references."""
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 from fractions import Fraction
@@ -251,33 +251,45 @@ def facts(path):
     return result
 
 
-def finish(project, value, *, info=None, share=False):
+def finish(project, value, *, info=None, source=None, raw=None, replace=False, prior=None, source_range=None):
+    """Publish and record a reserved version under the same lock for every writer."""
+    from media_files import store_media
     ref = reference(project, value)
     if ref is None:
         return None
     path = local(project, ref['file'])
     metadata = path.parent / '版本信息.json'
-    details = info if info is not None else facts(path)
-    # Serialize result publication so concurrent downloads see the first read-only peer.
-    with index_lock(project) if share else nullcontext():
-        if metadata.exists():
-            previous = json.loads(metadata.read_text('utf-8'))
+    source = Path(project).resolve() / source if source is not None else None
+    incoming = source is not None or raw is not None
+    with index_lock(project) as index:
+        if incoming:
+            store_media(index.parent, path, raw, source=source, replace=replace, prior=prior)
+        details = info if info is not None else facts(path)
+        previous = json.loads(metadata.read_text('utf-8')) if metadata.exists() else None
+        if previous is None:
+            if not incoming:
+                store_media(index.parent, path, source=path)
+            version = {**ref, 'registered_at': now(), 'facts': details}
+        else:
             if previous['facts']['bytes'] != path.stat().st_size:
                 raise ValueError('资源版本的文件发生变化：' + label(ref))
-            return ref
-        if share:
-            from media_files import store_media
-            store_media(index_path(project).parent, path, source=path)
-        else:
-            path.chmod(path.stat().st_mode & ~0o222)
-        write_json(metadata, {**ref, 'registered_at': now(), 'facts': details})
+            version = previous
+        if source_range is not None:
+            if not ref['parent']:
+                raise ValueError('处理区间须同时指明实际来源版本')
+            start, duration = source_range
+            interval = {'start_seconds': start, 'duration_seconds': duration}
+            if 'source_range' in version and version['source_range'] != interval:
+                raise ValueError('重试的来源区间与已有记录不同')
+            version = {**version, 'source_range': interval}
+        if version != previous:
+            write_json(metadata, version)
     return ref
 
 
 def register(project, source, *, resource_id=None, name=None, origin='user_upload', producer=None,
              parent=None, key=None, output=None, family=None, info=None, source_range=None):
     """Import once; a new independent upload is not inferred from its filename."""
-    from media_files import store_media
     project, source = Path(project).resolve(), Path(source).resolve()
     if source_range is not None and (parent is None or source_range[0] < 0 or source_range[1] <= 0):
         raise ValueError('处理区间须指明实际来源版本，且起点非负、长度为正')
@@ -285,23 +297,7 @@ def register(project, source, *, resource_id=None, name=None, origin='user_uploa
     family = family or ('导入/' + uuid4().hex if resource_id is None else None)
     ref = reserve(project, output, key=key or '导入/' + uuid4().hex, resource_id=resource_id,
                   family=family, origin=origin, producer=producer, parent=parent, name=name, alias=False)
-    destination = local(project, ref['file'])
-    store_media(project, destination, source=source)
-    finish(project, destination, info=info)
-    if source_range is not None:
-        if not ref['parent']:
-            raise ValueError('处理区间须同时指明实际来源版本')
-        start, duration = source_range
-        if start < 0 or duration <= 0:
-            raise ValueError('处理起点须非负，长度须为正数')
-        metadata = destination.parent / '版本信息.json'
-        data = json.loads(metadata.read_text('utf-8'))
-        recorded = {'start_seconds': start, 'duration_seconds': duration}
-        if 'source_range' in data and data['source_range'] != recorded:
-            raise ValueError('重试的来源区间与已有记录不同')
-        data['source_range'] = recorded
-        write_json(metadata, data)
-    return ref
+    return finish(project, ref['file'], info=info, source=source, source_range=source_range)
 
 
 def catalog(project, resource_id=None):

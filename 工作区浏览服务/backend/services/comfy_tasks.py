@@ -667,7 +667,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                     fresh = True
                 managed = resourceio.enabled(data.project)
                 if managed:
-                    await asyncio.to_thread(resourceio.finish, data.project, output.path, share=True)
+                    await asyncio.to_thread(resourceio.finish, data.project, output.path)
                 if managed or fresh:
                     # Linking identical data can change the output's modification time.
                     proof = (identity, saved_files(response, Path(output.path))[0])

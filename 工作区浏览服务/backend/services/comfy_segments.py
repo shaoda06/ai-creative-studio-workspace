@@ -150,7 +150,7 @@ async def finish(store, key, result):
             import project_resources as resourceio
             managed = resourceio.enabled(data.project)
             if managed:
-                await asyncio.to_thread(resourceio.finish, data.project, candidate, share=True)
+                await asyncio.to_thread(resourceio.finish, data.project, candidate)
             if managed or fresh:
                 proof = (state['prompt_id'], source, saved_files(receipt_path, candidate)[0])
             verified[str(receipt_path)] = proof

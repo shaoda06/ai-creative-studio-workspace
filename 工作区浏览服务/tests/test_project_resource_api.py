@@ -1,8 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from io import BytesIO
 import json
 from pathlib import Path
 import tempfile
+from threading import Barrier, local
 import unittest
+from unittest.mock import patch
 from urllib.parse import quote
 import wave
 
@@ -11,6 +15,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from backend.routes.project_resources import create_router
 from backend.services.project_files import ProjectFiles
+import media_files
 import project_resources as resources
 
 
@@ -53,6 +58,48 @@ class ProjectResourceApiTests(unittest.TestCase):
         self.assertEqual(listing['total'], 1)
         self.assertEqual(listing['items'][0]['version_count'], 2)
         self.assertEqual((self.project / one['file']).read_bytes(), self.png('red'))
+
+    def test_concurrent_uploads_keep_distinct_versions_and_share_readonly_data(self):
+        resources.initialize(self.project, managed=True)
+        original_lock = resources.index_lock
+        original_copy = media_files.shutil.copyfile
+        held = local()
+        arriving = Barrier(2)
+        raw = self.png('red')
+
+        @contextmanager
+        def tracked_lock(project):
+            with original_lock(project) as index:
+                held.project = Path(project)
+                try:
+                    yield index
+                finally:
+                    del held.project
+
+        def copy(source, target):
+            self.assertEqual(getattr(held, 'project', None), self.project)
+            return original_copy(source, target)
+
+        def upload(key):
+            arriving.wait(timeout=5)
+            return self.client.post(self.url, files={'file': (key + '.png', raw)}, data={'upload_key': key})
+
+        with patch.object(resources, 'index_lock', tracked_lock), \
+             patch.object(media_files.shutil, 'copyfile', side_effect=copy) as copied, \
+             ThreadPoolExecutor(max_workers=2) as workers:
+            responses = list(workers.map(upload, ('first', 'second')))
+        self.assertEqual([response.status_code for response in responses], [200, 200])
+        copied.assert_called_once()
+        first, second = [response.json() for response in responses]
+        self.assertNotEqual(first['resource_id'], second['resource_id'])
+        self.assertNotEqual(first['file'], second['file'])
+        self.assertTrue((self.project / first['file']).samefile(self.project / second['file']))
+        for ref in (first, second):
+            version = self.client.get(self.url + '/' + ref['resource_id']).json()['versions'][0]
+            self.assertEqual((version['file'], version['version'], version['origin']),
+                             (ref['file'], ref['version'], 'user_upload'))
+            self.assertEqual((self.project / ref['file']).read_bytes(), raw)
+            self.assertEqual((self.project / ref['file']).stat().st_mode & 0o222, 0)
 
     def test_audio_upload_has_real_duration_and_no_invented_generation(self):
         stream = BytesIO()

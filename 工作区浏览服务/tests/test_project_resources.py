@@ -89,7 +89,7 @@ class ProjectResourcesTests(unittest.TestCase):
             path.write_bytes(data)
 
         def finish(path):
-            return resources.finish(self.project, path, info={'bytes': 5}, share=True)
+            return resources.finish(self.project, path, info={'bytes': 5})
 
         with ThreadPoolExecutor(max_workers=3) as workers:
             self.assertEqual(list(workers.map(finish, paths)), refs)
