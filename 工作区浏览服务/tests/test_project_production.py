@@ -88,6 +88,21 @@ class ProjectProductionTests(HttpTestCase):
         self.journal.write_text(json.dumps({'tasks': [self.task], 'accepted': []}))
         self.assertEqual(self.client.get(self.api + '/production').json()['segments'], [])
 
+    def test_archived_nora_source_remains_read_only(self):
+        self.journal.unlink()
+        archive = self.project / '归档/Nora原项目'
+        (archive / '09-剧集制作/EP001').mkdir(parents=True)
+        video = {'key': '片段.mp4', 'url': '片段.mp4', 'stage': '后处理', 'run': 'R001', 'candidateNumber': 1}
+        data = {'catalogues': {'09-剧集制作': {'children': [{'segments': {'C001': [{'id': 'P001', 'videos': [video]}]}}]}}}
+        with patch('backend.parsers.project.build_data', return_value=data) as build:
+            response = self.client.get(self.api + '/production')
+        self.assertEqual(response.status_code, 200, response.text)
+        build.assert_called_once()
+        self.assertEqual(build.call_args.args[0], archive.resolve())
+        result = response.json()
+        self.assertTrue(result['batches'][0]['readOnly'])
+        self.assertEqual(result['segments'][0]['videos'][0]['key'], '归档/Nora原项目/片段.mp4')
+
     def test_shared_review_storage_keeps_dialogue_edits(self):
         edit = {'shot': 'SH001', 'index': 0, 'speaker': '讲解人', 'original': '原句', 'replacement': '新句'}
         value = self.note | {'dialogueEdits': [edit], 'expectedDialogueEdits': []}

@@ -30,7 +30,8 @@ try{
    const folder=(name,files)=>({kind:'group',name,key:name,children:files.map(file=>doc(name+'/'+file))});
    if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',files:[
      doc('README.md'),doc('项目状态.md'),folder('01-客户资料',['需求原件.md']),folder('02-参考分析',['制作简报.md']),
-     folder('04-分镜声音',['导演表.md']),folder('05-资产',['资产清单.md']),folder('06-视频生产',['生产任务.md']),folder('07-交接',['交接说明.md']),
+     folder('04-分镜声音',['导演表.md']),folder('05-资产',['资产清单.md']),folder('06-视频生产',['生产任务.md']),
+     folder('07-返修交接',['交接说明.md']),folder('08-完单复盘',['项目复盘.md']),folder('99-综合资料',['项目实验.md']),
    ]}});
    if(path===base+'/document'){
     const html=u.searchParams.get('path')==='项目状态.md'
@@ -79,8 +80,10 @@ try{
   await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
   await page.getByRole('button',{name:'交接说明.md',exact:true}).waitFor();
+  await page.getByRole('button',{name:'项目复盘.md',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'全部资料',exact:true}).click();
   await page.getByText('01-客户资料',{exact:true}).waitFor();
+  await page.getByText('99-综合资料',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   assert.equal(await page.locator('.segment-video video').count(),0);

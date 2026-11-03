@@ -105,8 +105,8 @@ def production_data(project, api):
 
 
 def legacy_sources(project):
-    history = project / '历史制作资料'
-    return sorted(path for path in history.glob('*') if path.is_dir() and (path / '09-剧集制作').is_dir())
+    return sorted(path for folder in ('归档', '历史制作资料') for path in (project / folder).glob('*')
+                  if path.is_dir() and (path / '09-剧集制作').is_dir())
 
 
 def legacy_links(value, prefix):
