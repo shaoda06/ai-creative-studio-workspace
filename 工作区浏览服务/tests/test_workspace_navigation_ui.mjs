@@ -47,7 +47,7 @@ try {
   });
   await page.goto(origin + '/');
   await page.getByRole('heading', { name: '一级项目空间' }).waitFor();
-  assert.equal(await page.title(), 'AI创作工作台');
+  assert.equal(await page.title(), 'AI创作台');
   await page.getByRole('link', { name: /商业空间示例.*业务项目/ }).waitFor();
   await page.screenshot({ path: `${out}/${width}-home.png` });
   assert.equal(await page.getByRole('link', { name: /资产管理/ }).count(), 1);
@@ -76,7 +76,7 @@ try {
   await page.getByText('商业空间测试任务', { exact: true }).waitFor();
   await page.screenshot({ path: `${out}/${width}-project-tasks.png` });
   await page.getByRole('button', { name: '收起任务进度', exact: true }).click();
-  await page.getByRole('link', { name: 'AI创作工作台', exact: true }).click();
+  await page.getByRole('link', { name: 'AI创作台', exact: true }).click();
   await page.getByRole('link', { name: /短剧空间示例.*业务项目/ }).click();
   const legacy = page.getByRole('link', { name: /同名示例/ }).filter({ hasText: '查看项目资料与素材' });
   assert.equal(await legacy.getAttribute('href'), '#/projects/' + encodeURIComponent('同名示例'));
