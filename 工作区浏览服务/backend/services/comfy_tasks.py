@@ -664,10 +664,13 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                                            type=identity['type'], output=output.path, sha256=None))
                     downloaded['path'] = self.record_paths(key).relative_file(downloaded['path'])
                     write_receipt(response, {'time': client.now(), 'data': downloaded})
-                    proof = (identity, saved_files(response, Path(output.path))[0])
                     fresh = True
-                if resourceio.enabled(data.project):
-                    await asyncio.to_thread(resourceio.finish, data.project, output.path)
+                managed = resourceio.enabled(data.project)
+                if managed:
+                    await asyncio.to_thread(resourceio.finish, data.project, output.path, share=True)
+                if managed or fresh:
+                    # Linking identical data can change the output's modification time.
+                    proof = (identity, saved_files(response, Path(output.path))[0])
                 verified[str(response)] = proof
                 collected += 1
                 saved_outputs.append(output.path)

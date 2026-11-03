@@ -80,6 +80,26 @@ class ProjectResourcesTests(unittest.TestCase):
         self.assertEqual(reserve(3), refs[3])
         self.assertEqual(resources.catalog(self.project), [])
 
+    def test_parallel_finishes_share_only_byte_identical_outputs(self):
+        refs = [resources.reserve(self.project, f'候选/结果{index}.png', key=f'task/{index}',
+                                  family='图片/同一目标', producer=f'执行附件/{index}') for index in range(3)]
+        paths = [self.project / ref['file'] for ref in refs]
+        for path, data in zip(paths, (b'first', b'first', b'other')):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+
+        def finish(path):
+            return resources.finish(self.project, path, info={'bytes': 5}, share=True)
+
+        with ThreadPoolExecutor(max_workers=3) as workers:
+            self.assertEqual(list(workers.map(finish, paths)), refs)
+        self.assertTrue(paths[0].samefile(paths[1]))
+        self.assertFalse(paths[0].samefile(paths[2]))
+        self.assertEqual([path.read_bytes() for path in paths], [b'first', b'first', b'other'])
+        self.assertTrue(all(not path.stat().st_mode & 0o222 for path in paths))
+        versions = resources.catalog(self.project)[0]['versions']
+        self.assertEqual([item['producer'] for item in versions], [ref['producer'] for ref in refs])
+
     def test_reference_audio_is_an_import_and_extraction_can_link_to_other_media(self):
         source = self.root / '参考原声.wav'
         with wave.open(str(source), 'wb') as audio:

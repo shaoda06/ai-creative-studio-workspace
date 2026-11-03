@@ -17,7 +17,9 @@ def store_media(project, destination, raw=None, *, source=None, replace=False, p
     source = Path(source).resolve() if source is not None and Path(source).is_absolute() else (project / source).resolve() if source is not None else None
     size = len(raw) if raw is not None else source.stat().st_size
     def equal(path):
-        return path.read_bytes() == raw if raw is not None else filecmp.cmp(path, source, shallow=False)
+        if raw is not None:
+            return path.read_bytes() == raw
+        return path == source or filecmp.cmp(path, source, shallow=False)
     before = destination.stat() if destination.exists() else None
     same = before is not None and before.st_size == size and equal(destination)
     if before is not None and not same and (destination.parent / '版本信息.json').is_file():

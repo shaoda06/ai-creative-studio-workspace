@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 import urllib.error
 
+from PIL import Image
 from backend.services import comfy_tasks as t
 from backend.services.collection_retry import failure
 from backend.services.task_details import task_detail
@@ -127,6 +128,45 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
         state = self.store.rows['task']['state']
         self.assertEqual((state['status'], state['collected']), ('completed', 2))
         self.assertEqual(state['ended_at'], '2026-10-10T22:00:00+08:00')
+
+    async def test_managed_outputs_keep_distinct_versions_and_receipts_on_retry(self):
+        t.resourceio.initialize(self.project, managed=True)
+        first = self.data.outputs[0]
+        first.resource_key = '图片/同一候选目标'
+        self.data.outputs.append(first.model_copy(update={'index': 1,
+            'path': str(self.project / '候选/second.png'), 'response_name': 'second.json'}))
+        self.data = t.TaskInput.model_validate(t.resourceio.route_task(self.project, self.data.model_dump()))
+        self.seed('collecting')
+        self.store.save('task', expected=2)
+        png = io.BytesIO()
+        Image.new('RGB', (8, 8), 'red').save(png, format='PNG')
+        calls = []
+
+        def download(remote, args):
+            calls.append((args.filename, args.output))
+            if args.filename == '1.png' and len(calls) == 2:
+                raise TimeoutError('retry the same output')
+            target = Path(args.output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(png.getvalue())
+            return {'path': str(target), 'bytes': target.stat().st_size,
+                    'remote': {key: getattr(args, key) for key in ('filename', 'subfolder', 'type')}}
+
+        result = self.result(2)
+        with patch.object(t.client, 'download', download), patch.object(t.asyncio, 'sleep', AsyncMock()):
+            await self.store.finish_collection('task', result)
+            self.assertEqual(await self.store.collect('task', result), [])
+        self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
+        first, second = self.data.outputs
+        self.assertEqual(calls, [('0.png', first.path), ('1.png', second.path), ('1.png', second.path)])
+        self.assertEqual((first.resource_id, first.version, second.resource_id, second.version),
+                         (first.resource_id, 'V001', first.resource_id, 'V002'))
+        self.assertTrue(Path(first.path).samefile(second.path))
+        self.assertEqual(len(t.resourceio.read_index(self.project)['files']), 2)
+        for index, output in enumerate((first, second)):
+            receipt = recordio.read(self.record / output.response_name)['data']
+            self.assertEqual(receipt['remote']['filename'], f'{index}.png')
+            self.assertEqual(self.project / receipt['path'], Path(output.path))
 
     async def test_429_uses_retry_after_and_malformed_header_requires_attention(self):
         self.seed('collecting')

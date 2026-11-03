@@ -88,10 +88,15 @@ class TechnicalVideoTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_native_collect_failure_restart_and_retry_keep_original_task(self):
         self.configure()
-        source = self.project/'技术输入.mp4'
+        source = self.root/'技术输入.mp4'
         subprocess.run([shutil.which('ffmpeg'), '-v', 'error', '-f', 'lavfi', '-i', 'color=s=64x48:r=24:d=1',
                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(source)], check=True)
         media = source.read_bytes()
+        tasks.resourceio.initialize(self.project, managed=True)
+        prior = tasks.resourceio.register(self.project, source, origin='generated', key='first')
+        self.data.segment_plan.targets[0].resource_id = prior['resource_id']
+        self.data = tasks.TaskInput.model_validate(tasks.resourceio.route_task(self.project, self.data.model_dump()))
+        target = self.data.segment_plan.targets[0]
         self.store.rows['technical'] = {'input': self.data, 'state': dict(id='technical', project=self.project.name,
             title=self.data.title, task_type=self.data.task_type, status='completed', prompt_id='original-id',
             collected=0, expected=1, created_at=tasks.client.now())}
@@ -107,6 +112,7 @@ class TechnicalVideoTests(unittest.IsolatedAsyncioTestCase):
         self.store.queue_notifications = False
         def download(remote, args):
             path = Path(args.output)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(media)
             return dict(path=str(path), bytes=len(media), sha256=None,
                         remote={name: getattr(args, name) for name in ('filename', 'subfolder', 'type')})
@@ -116,6 +122,12 @@ class TechnicalVideoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await tasks.segments.finish(self.store, 'technical', terminal), [])
             self.assertEqual(collect.call_count, 1)
         self.assertEqual(self.store.rows['technical']['state']['prompt_id'], 'original-id')
+        self.assertEqual(target.version, 'V002')
+        self.assertTrue(Path(target.path).samefile(self.project / prior['file']))
+        self.assertEqual(len(tasks.resourceio.read_index(self.project)['files']), 2)
+        receipt = recordio.read(self.record / target.response_name)
+        self.assertEqual(receipt['prompt_id'], 'original-id')
+        self.assertEqual(self.project / receipt['data']['path'], Path(target.path))
         with patch.object(self.store, 'refresh_reports'), patch.object(self.store, 'wake_group'):
             result = await result_registration.closeout_tasks(self.store, None, ['technical'])
         self.assertTrue(result['user_message_ready'])

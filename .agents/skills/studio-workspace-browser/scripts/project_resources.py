@@ -1,5 +1,5 @@
 """Project-owned media families, immutable versions and exact file references."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from datetime import datetime
 from fractions import Fraction
@@ -91,7 +91,7 @@ def initialize(project, *, managed=False):
 
 
 @contextmanager
-def edit_index(project):
+def index_lock(project):
     path = initialize(project)
     with path.with_suffix('.lock').open('a+b') as lock:
         if sys.platform == 'win32':
@@ -105,16 +105,22 @@ def edit_index(project):
             import fcntl
             fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            data = deepcopy(read_index(project))
-            yield data
-            write_json(path, data)
-            _CACHE.pop(path, None)
+            yield path
         finally:
             if sys.platform == 'win32':
                 lock.seek(0)
                 msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+@contextmanager
+def edit_index(project):
+    with index_lock(project) as path:
+        data = deepcopy(read_index(project))
+        yield data
+        write_json(path, data)
+        _CACHE.pop(path, None)
 
 
 def media_kind(value):
@@ -245,20 +251,26 @@ def facts(path):
     return result
 
 
-def finish(project, value, *, info=None):
+def finish(project, value, *, info=None, share=False):
     ref = reference(project, value)
     if ref is None:
         return None
     path = local(project, ref['file'])
     metadata = path.parent / '版本信息.json'
     details = info if info is not None else facts(path)
-    if metadata.exists():
-        previous = json.loads(metadata.read_text('utf-8'))
-        if previous['facts']['bytes'] != path.stat().st_size:
-            raise ValueError('资源版本的文件发生变化：' + label(ref))
-        return ref
-    path.chmod(path.stat().st_mode & ~0o222)
-    write_json(metadata, {**ref, 'registered_at': now(), 'facts': details})
+    # Serialize result publication so concurrent downloads see the first read-only peer.
+    with index_lock(project) if share else nullcontext():
+        if metadata.exists():
+            previous = json.loads(metadata.read_text('utf-8'))
+            if previous['facts']['bytes'] != path.stat().st_size:
+                raise ValueError('资源版本的文件发生变化：' + label(ref))
+            return ref
+        if share:
+            from media_files import store_media
+            store_media(index_path(project).parent, path, source=path)
+        else:
+            path.chmod(path.stat().st_mode & ~0o222)
+        write_json(metadata, {**ref, 'registered_at': now(), 'facts': details})
     return ref
 
 
