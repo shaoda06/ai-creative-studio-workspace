@@ -74,7 +74,7 @@ export function EpisodeProduction({ project, items, statistics, selected, onSele
       return { id, number, segments: current.segments?.[id] || [], versions: round?.segments || [] };
     }),
   } : undefined;
-  const episodeNotesExport = useRevisionNotesExport(current && selectedScene ? { project, episode: current.name, scene: selectedScene } : null, [], null, undefined, episodeReview);
+  const episodeNotesExport = useRevisionNotesExport(current && selectedScene ? { project, episode: current.name, episodeTitle: current.title, scene: selectedScene } : null, [], null, undefined, episodeReview);
   const directorScenes = scenes.map(id => {
     const rounds = current?.sceneRounds?.[id] || [];
     const selectedRound = episodeRound?.number ?? (id === selectedScene ? roundNumberForScene(id)

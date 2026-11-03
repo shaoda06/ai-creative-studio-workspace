@@ -10,8 +10,9 @@ import { CopyButton } from './CopyButton';
 import { candidateLabel } from './SegmentVideo';
 import { TabNav } from './TabNav';
 import { LinkButton } from './LinkButton';
+import { revisionNotesMarkdown } from '../revisionNotesMarkdown';
 
-export interface NoteScope { project: string; episode: string; scene: string; notesUrl?: string; label?: string }
+export interface NoteScope { project: string; episode: string; scene: string; episodeTitle?: string; notesUrl?: string; label?: string }
 export type NoteShotTimeline = (passShot: (shot: string, start: number) => void, preserveFocus: (event: PointerEvent<HTMLButtonElement>) => void, disabled: boolean) => ReactNode;
 export function RevisionNoteEditor({ scope, segment, current, dialogues, fileRevision, time, shot, renderShotTimeline, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; dialogues?: DialogueLine[]; fileRevision: string; time: number; shot?: string; renderShotTimeline: NoteShotTimeline; roundNumber?: number }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -163,7 +164,9 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
   const visibleNotes = draft?.notes.filter(item => mode === 'history' || (draft.episode || draft.scope.notesUrl ? item.current : draft.number != null && item.roundNumber === draft.number)) || [];
   const visibleRounds = draft?.rounds.filter(item => mode === 'history' || item.number === draft.number) || [];
   const overallLabel = draft?.episode ? '本轮汇总意见' : '整场总体意见';
-  const text = draft ? `${draft.scope.project} / ${draft.scope.label || (draft.scope.episode + (draft.episode ? '' : ' / ' + draft.scope.scene))} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
+  const text = draft?.episode ? revisionNotesMarkdown({ project: draft.scope.project, episode: draft.scope.episode, episodeTitle: draft.scope.episodeTitle,
+    number: draft.number, history: mode === 'history', notes: visibleNotes.map(note => ({ ...note, scene: note.scene! })), rounds: visibleRounds,
+    combination: draft.combination, combinationHistory: draft.combinationHistory, legacyRounds: draft.legacyRounds }) : draft ? `${draft.scope.project} / ${draft.scope.label || (draft.scope.episode + ' / ' + draft.scope.scene)} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
     ...visibleNotes.filter(hasNoteContent).map(item => `【${item.title}】\n${[dialogueEditsText(item.dialogueEdits), shotOrderedText(item.text)].filter(Boolean).join('\n\n')}`),
     ...visibleRounds.filter(item => item.text.trim()).map(item => `【第${item.number}轮 · ${overallLabel}】\n${item.text}`),
     ...(draft.combination?.text.trim() ? [`【本轮汇总意见（${combinationLabel(draft.combination.scenes)}）】\n${draft.combination.text}`] : []),
@@ -190,29 +193,35 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
     } catch (error) { setMessage(`未保存：${error instanceof Error ? error.message : String(error)}`); }
     finally { setSaving(false); }
   };
+  const renderExportNote = (item: ExportNote, grouped = false) => <section className="revision-export-note" key={item.key}>
+    {grouped ? <h3>分段 {item.segment}</h3> : <strong>{item.title}</strong>}
+    {grouped && item.dialogueEdits?.length ? <h4>台词修改</h4> : null}
+    {item.dialogueEdits?.length ? <p className="revision-dialogue-summary">{dialogueEditsText(item.dialogueEdits)}</p> : null}
+    {grouped && <h4>普通修改意见</h4>}<textarea aria-label={`${item.title} 修改意见`} maxLength={20000} readOnly={draft!.episode && !item.editable} value={item.text} onChange={event => { setDraft({ ...draft!, notes: draft!.notes.map(note => note.key === item.key ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} />
+  </section>;
   return { control: <><button disabled={!data.loaded || exporting} onClick={() => { void exportNotes(); }}>{exporting ? '正在读取意见…' : '导出修改意见'}</button>
     {exportError && <FloatingMessage tone="error">导出资料读取失败：{exportError}<button onClick={() => { void exportNotes(); }}>重试</button></FloatingMessage>}
     {data.error && <FloatingMessage tone="error">修改意见读取失败：{data.error}<button onClick={() => { void loadNotes(data.url); }}>重试</button></FloatingMessage>}</>,
     dialog: draft !== null && <Dialog title={`${draft.scope.episode}${draft.episode ? ' · ' + draft.label : ' · ' + draft.scope.scene} 导出修改意见`} close={close} headerActions={confirmClose ? <div className="revision-export-close-actions"><button autoFocus onClick={() => setConfirmClose(false)}>继续编辑</button><button className="revision-export-discard" onClick={() => { setDraft(null); setConfirmClose(false); }}>放弃修改并关闭</button></div> : undefined}>
-      <p className="muted">这是打开时读取的意见快照。修改后需保存才能写回项目；复制只放入剪贴板，请粘贴到制作会话交给 Agent。</p>
+      <p className="muted">这是打开时读取的意见快照。修改后需保存才能写回项目；{draft.episode ? '复制为按场次、分段组织的 Markdown，请粘贴到制作会话交给 Agent。' : '复制只放入剪贴板，请粘贴到制作会话交给 Agent。'}</p>
       <TabNav compact label="意见导出范围" items={[{ value: 'round', label: draft.episode && !draft.number ? '当前组合意见' : '本轮意见' }, { value: 'history', label: '全部历史意见' }]} selected={mode} onChange={value => { setMode(value as ExportMode); setConfirmClose(false); }} />
       {confirmClose && <p className="notice" role="alert">尚有未保存的修改。放弃修改并关闭后，这些修改不会保留。</p>}
       <div className="revision-export-structured">
         <fieldset disabled={saving} className="revision-export-fields">
-          {visibleNotes.map(item => <section className="revision-export-note" key={item.key}>
-            <label><strong>{item.title}</strong><textarea aria-label={`${item.title} 修改意见`} maxLength={20000} readOnly={draft.episode && !item.editable} value={item.text} onChange={event => { setDraft({ ...draft, notes: draft.notes.map(note => note.key === item.key ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} /></label>
-            {item.dialogueEdits?.length ? <p className="revision-dialogue-summary">{dialogueEditsText(item.dialogueEdits)}</p> : null}
-          </section>)}
+          {draft.episode && mode === 'round' ? [...new Set(visibleNotes.map(item => item.scene))].map(scene => <section className="revision-export-scene" key={scene}>
+            <h2>场次 {scene}{draft.combination ? ` · 第${draft.combination.scenes[scene!]}轮` : ''}</h2>{visibleNotes.filter(item => item.scene === scene).map(item => renderExportNote(item, true))}
+          </section>) : visibleNotes.map(item => renderExportNote(item))}
           {!visibleNotes.length && <p className="muted">{mode === 'round' ? '当前范围暂无分段意见。' : '暂无分段意见。'}</p>}
           <section className="revision-export-overall" aria-label={overallLabel}>
-            {visibleRounds.map(item => <label key={item.number}><strong>第{item.number}轮 · {overallLabel}</strong><textarea aria-label={`第${item.number}轮 ${overallLabel}`} placeholder={draft.episode ? '填写整集本轮共用的意见…' : '填写整场共用的意见…'} maxLength={20000} value={item.text} onChange={event => { setDraft({ ...draft, rounds: draft.rounds.map(note => note.number === item.number ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} /></label>)}
-            {draft.combination && <label><strong>本轮汇总意见</strong><textarea aria-label="本轮汇总意见" placeholder="填写整集本轮共用的意见…" maxLength={20000} value={draft.combination.text} onChange={event => { setDraft({ ...draft, combination: { ...draft.combination!, text: event.target.value } }); setConfirmClose(false); setMessage(''); }} /></label>}
+            {draft.episode && mode === 'round' && <h2>本轮汇总意见</h2>}
+            {visibleRounds.map(item => <label key={item.number}>{(!draft.episode || mode === 'history') && <strong>第{item.number}轮 · {overallLabel}</strong>}<textarea aria-label={`第${item.number}轮 ${overallLabel}`} placeholder={draft.episode ? '填写整集本轮共用的意见…' : '填写整场共用的意见…'} maxLength={20000} value={item.text} onChange={event => { setDraft({ ...draft, rounds: draft.rounds.map(note => note.number === item.number ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} /></label>)}
+            {draft.combination && <label><textarea aria-label="本轮汇总意见" placeholder="填写整集本轮共用的意见…" maxLength={20000} value={draft.combination.text} onChange={event => { setDraft({ ...draft, combination: { ...draft.combination!, text: event.target.value } }); setConfirmClose(false); setMessage(''); }} /></label>}
             {!visibleRounds.length && !draft.combination && <p className="muted">{draft.episode ? '请先选择各场已登记的修改轮次，再填写整集汇总意见。' : mode === 'round' ? '整场总体意见按已登记的场次轮次保存；请先选择本场次的修改轮次。' : '暂无按轮次保存的整场总体意见。'}</p>}
           </section>
           {mode === 'history' && draft.combinationHistory.map(item => <section className="revision-export-legacy" key={combinationKey(item.scenes)}><strong>整集汇总意见（{combinationLabel(item.scenes)}）</strong><textarea aria-label={`整集汇总意见（${combinationLabel(item.scenes)}）`} readOnly value={item.text} /></section>)}
           {mode === 'history' && draft.legacyRounds.map(item => <section className="revision-export-legacy" key={`${item.scene}/${item.number}`}><strong>{item.scene} / 第{item.number}轮 · 整场总体意见（历史）</strong><textarea aria-label={`${item.scene} 第${item.number}轮 整场总体意见（历史只读）`} readOnly value={item.text} /></section>)}
         </fieldset>
-        <footer className="revision-export-save"><button disabled={!changed || saving} onClick={() => { void save(); }}>{saving ? '保存中…' : '保存'}</button><button disabled={!changed || saving} onClick={() => { setDraft({ ...draft, notes: draft.notes.map(item => ({ ...item, text: item.original })), rounds: draft.rounds.map(item => ({ ...item, text: item.original })), combination: draft.combination ? { ...draft.combination, text: draft.combination.original } : null }); setConfirmClose(false); setMessage(''); }}>还原</button><div className="revision-export-toolbar"><CopyButton label="复制" text={(changed ? '【未保存草稿：以下内容尚未全部写回项目意见文件】\n\n' : '') + text} successMessage={changed ? '已复制；有未保存的修改' : '已复制'} /></div><span role="status" className="muted">{changed ? '有未保存的修改' : ''}</span>{message && <FloatingMessage tone="error">{message}</FloatingMessage>}</footer>
+        <footer className="revision-export-save"><button disabled={!changed || saving} onClick={() => { void save(); }}>{saving ? '保存中…' : '保存'}</button><button disabled={!changed || saving} onClick={() => { setDraft({ ...draft, notes: draft.notes.map(item => ({ ...item, text: item.original })), rounds: draft.rounds.map(item => ({ ...item, text: item.original })), combination: draft.combination ? { ...draft.combination, text: draft.combination.original } : null }); setConfirmClose(false); setMessage(''); }}>还原</button><div className="revision-export-toolbar"><CopyButton label="复制" text={(changed ? (draft.episode ? '> **未保存草稿**：以下内容尚未全部写回项目意见文件。\n\n' : '【未保存草稿：以下内容尚未全部写回项目意见文件】\n\n') : '') + text} successMessage={changed ? '已复制；有未保存的修改' : '已复制'} /></div><span role="status" className="muted">{changed ? '有未保存的修改' : ''}</span>{message && <FloatingMessage tone="error">{message}</FloatingMessage>}</footer>
       </div>
     </Dialog> };
 }
