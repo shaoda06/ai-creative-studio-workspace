@@ -1,5 +1,7 @@
 """Read project cover index and image records without inferring approval from files."""
 from math import gcd
+from urllib.parse import quote
+import project_resources as resources
 import re
 import struct
 from urllib.parse import unquote, urlsplit
@@ -15,7 +17,9 @@ def build_covers(project, read):
     from backend.parsers.project import field, markdown_links, status_markup, table_records
 
     def image(link):
-        path = (project / link['key']).resolve()
+        if not (project / link['key']).resolve().is_relative_to(project):
+            raise ValueError('封面路径越出项目：' + link['key'])
+        path = resources.resolve_file(project, link['key'])
         if not path.is_relative_to(project):
             raise ValueError('封面路径越出项目：' + link['key'])
         if not path.is_file():
@@ -26,7 +30,8 @@ def build_covers(project, read):
             raise ValueError('封面不是完整的PNG图片：' + link['key'])
         width, height = struct.unpack('>II', header[16:24])
         divisor = gcd(width, height)
-        return dict(link, width=width, height=height, ratio=f'{width // divisor}:{height // divisor}')
+        key = path.relative_to(project).as_posix()
+        return dict(link, key=key, url=quote(key, safe='/-._~'), width=width, height=height, ratio=f'{width // divisor}:{height // divisor}')
 
     def linked(text, source):
         links = markdown_links(text, source)
@@ -124,7 +129,7 @@ def build_covers(project, read):
         formal = image(processing) if processing else None
         review = linked(field(body, '审阅记录入口'), RECORD)
         for link in links:
-            if not link['key'].startswith(DIRECTORY + '/') or not link['key'].lower().endswith('.png'):
+            if not (link['key'].startswith(DIRECTORY + '/') or resources.reference(project, link['key'])) or not link['key'].lower().endswith('.png'):
                 continue
             media = image(link)
             if not media:

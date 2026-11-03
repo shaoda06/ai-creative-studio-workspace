@@ -712,7 +712,9 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(spec)
         self.payload.prepare_only = True
         await plans.execute(self.store, self.payload)
-        source.write_bytes(source.read_bytes())
+        changed = source.with_name('外部替换.png')
+        changed.write_bytes(source.read_bytes())
+        changed.replace(source)
         self.payload.prepare_only = False
         with self.assertRaisesRegex(ValueError, '准备资料已变化'):
             await plans.execute(self.store, self.payload)

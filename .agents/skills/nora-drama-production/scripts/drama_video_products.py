@@ -1,6 +1,7 @@
 """Read explicit deliverables for one postprocessing revision."""
 import json
 import sys
+import project_resources as resources
 from pathlib import Path
 from urllib.parse import quote
 
@@ -24,7 +25,7 @@ def load_products(project, identity, read):
         if not isinstance(key, str) or not key or Path(key).is_absolute():
             raise ValueError(f'{manifest}：文件路径必须相对于项目根目录')
         key = key.replace('\\', '/')
-        path = (project / key).resolve()
+        path = resources.resolve_file(project, key)
         if not path.is_relative_to(project.resolve()) or not path.is_file():
             raise ValueError(f'{manifest}：产物文件不存在或越出项目：{key}')
         stat = path.stat()

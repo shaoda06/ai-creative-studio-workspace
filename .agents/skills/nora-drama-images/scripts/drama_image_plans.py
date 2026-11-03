@@ -12,6 +12,7 @@ for folder in ['studio-qwen-image', 'studio-image-processing']:
 from qwen_image_workflow import assemble as assemble_qwen, execution_facts
 from image_processing import assemble_rtx
 from project_paths import project_file
+import project_resources as resourceio
 from backend.services import image_closeout as images
 
 SEEDS = {'人物上半身正面肖像图': '人物上半身正面肖像', '人物多视角参考图': '人物六视图',
@@ -259,9 +260,14 @@ def build_image(root, skill, spec, documents, now):
         width, height = spec.get('size', SIZES.get(spec['image_type'], (None, None)))
         if not width or not height or width % 32 or height % 32:
             raise ValueError('明确图片尺寸须为有效32倍数；其他类型请在size指定既定尺寸')
-        if not spec.get('formal') and spec['image_type'] != '画风样例':
+        if not spec.get('formal') and not spec.get('resource_id') and spec['image_type'] != '画风样例':
             raise ValueError('新图片任务须填写formal正式图片路径，再确定候选名称')
         stem = project_file(root, spec['formal']).stem if spec.get('formal') else '项目基本定位-画风验证'
+        declared = resourceio.reference(root, spec['formal']) if spec.get('formal') else None
+        if declared:
+            stem = declared['family_key'].split('/', 1)[-1]
+        elif spec.get('resource_id'):
+            stem = resourceio.catalog(root, spec['resource_id'])[0]['family_key'].split('/', 1)[-1]
         board = re.fullmatch(r'(.+-手绘导演分镜表)-第([0-9]{2,})页', stem)
         pattern = (re.escape(board[1]) + r'-v([0-9]{2,})-第' + board[2] + r'页\.png') if board else re.escape(stem) + r'-候选-v([0-9]{2,})\.png'
         versions = []
@@ -278,7 +284,16 @@ def build_image(root, skill, spec, documents, now):
                     review='审阅-' + generation + '-001', images=[dict(path=candidate.relative_to(root).as_posix(), width=width, height=height)])
     if spec.get('formal'):
         plan['formal'] = project_file(root, spec['formal']).relative_to(root).as_posix()
+    if spec.get('resource_id'):
+        plan['resource_id'] = spec['resource_id']
+    if spec.get('base_file'):
+        plan['base_file'] = project_file(root, spec['base_file']).relative_to(root.resolve()).as_posix()
     plan['image_type'] = spec['image_type'] if 'image_type' in spec else images.value(images.section(text, generation)[0], '图片类型')
+    if resourceio.enabled(root):
+        routed = resourceio.route_task(root, {'task_type': spec['task_type'], 'record_dir': str(record),
+            'image_plan': plan, 'outputs': [{'path': str(candidate)}], 'uploads': []})
+        candidate = Path(routed['outputs'][0]['path'])
+        plan = routed['image_plan']
     images.validate_names(root, plan, required=True)
     if candidate.exists():
         raise ValueError('候选文件已存在，不能覆盖：' + str(candidate))

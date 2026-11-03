@@ -4,6 +4,7 @@ import execution_records as recordio
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-workspace-browser/scripts'))
 from workspace_project_index import read_index
+from project_resources import resolve_file
 
 
 ARCHIVE_MARKER = '.archived'
@@ -36,6 +37,7 @@ class ProjectFiles:
         path = (root / relative).resolve()
         if not path.is_relative_to(root) or any(part.startswith('.') for part in Path(relative).parts):
             raise FileNotFoundError('文件不存在或不在项目内')
+        path = resolve_file(root, path)
         if not path.is_file() and (not (path.parent / recordio.ARCHIVE).resolve().is_relative_to(root) or not recordio.exists(path)):
             raise FileNotFoundError('文件不存在或不在项目内')
         return path

@@ -306,6 +306,11 @@ def adoption(args, *, plan=None):
         if local_edit is not None and (local_path(root, receipt['path']) != source or local_path(root, output['path']) != source):
             raise ValueError('本地修改的输出凭据与批准文件不一致')
         target = local_path(root, extra.parent / '06-阶段采用视频' / STAGES[stage] / f'{scene}-场次' / filename)
+        import project_resources as resourceio
+        if resourceio.enabled(root):
+            if resourceio.reference(root, source) is None:
+                raise ValueError('采用视频须先登记为项目资源版本')
+            target = source
         data = read_text(draft)
         start, end, row = selected_row(data, stage)
         if target.exists():
@@ -334,6 +339,8 @@ def adoption(args, *, plan=None):
                 for output_row in product['rows']:
                     old = local_path(root, output_row['file'])
                     new = process_target.parent / old.name
+                    if resourceio.enabled(root):
+                        new = old
                     if old == source:
                         new = process_target
                     if old != new:
@@ -388,9 +395,12 @@ def adoption(args, *, plan=None):
             relocated_old = {}
             for old_path in previous_paths:
                 previous = local_path(root, extra / '候选视频' / old_path.name)
-                if not old_path.is_file() or previous.exists():
+                if resourceio.enabled(root):
+                    previous = old_path
+                if not old_path.is_file() or (previous != old_path and previous.exists()):
                     raise ValueError(f'旧采用文件缺失或退回候选时冲突：{old_path}')
-                moves.append((old_path, previous))
+                if previous != old_path:
+                    moves.append((old_path, previous))
                 relocated_old[old_path] = previous
                 data = data.replace('](' + link(draft, old_path) + ')', '](' + link(draft, previous) + ')')
             if previous_product:

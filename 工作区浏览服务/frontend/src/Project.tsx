@@ -29,6 +29,7 @@ import { AudioPreviewButton, useAudioPreview } from './components/AudioPreviewBu
 import { ReferenceLibrary } from './components/ReferenceLibrary';
 import { CoverLibrary } from './components/CoverLibrary';
 import { AccountLibrary } from './components/AccountLibrary';
+import { ResourceLibrary } from './components/ResourceLibrary';
 
 type AssetSelection = { id: string; name: string };
 type AssetNavigation = { asset: AssetSelection | null; onAssetChange: (asset: AssetSelection | null) => void };
@@ -72,7 +73,10 @@ function ProjectPage({ name }: { name: string }) {
   const production = useQuery<RecordData>({ queryKey: ['section', name, section, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/sections/${encodeURIComponent(section)}`), enabled: false, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const episodeItem = production.data?.children?.find((item: FileItem) => item.name === episode);
   const episodeTitle = episodeItem?.title || (episode === '片头' || episode === '片尾' ? '全剧通用' : '题名未记录');
-  const overview = useQuery({ queryKey: ['overview', name, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/overview`), enabled: !!status.data, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
+  const overview = useQuery<RecordData>({ queryKey: ['overview', name, revision], queryFn: async () => {
+    const value = await get<RecordData>(`${projectUrl(name)}/overview`);
+    return { ...value, directories: [...value.directories.filter((item: RecordData) => item.name !== '资源'), { name: '资源', label: '项目资源' }] };
+  }, enabled: !!status.data, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const releaseCount = section === '98-成片交付' && production.data?.key === '98-成片交付' ? releaseVideos(production.data.children).length : null;
   const sectionTitle = (overview.data?.directories.find((dir: RecordData) => dir.name === section)?.label || section.replace(/^\d+-/, '')) + (releaseCount === null ? '' : `（${releaseCount}）`);
   const episodeDetail = useQuery<FileItem>({ queryKey: ['episode', name, episode, revision], queryFn: () => get<FileItem>(`${projectUrl(name)}/episodes/${episode}`), enabled: false });
@@ -106,7 +110,8 @@ function ProjectPage({ name }: { name: string }) {
   </PreviewContext.Provider></BreadcrumbActionsContext.Provider></BreadcrumbSelectorContext.Provider>;
 }
 function SectionPane({ project, section, revision, active, episode, onEpisodeChange, asset, onAssetChange }: { project: string; section: string; revision: number; active: boolean; episode: string | null; onEpisodeChange: (episode: string | null) => void } & AssetNavigation) {
-  const query = useQuery({ queryKey: ['section', project, section, revision], queryFn: () => get<RecordData>(`${projectUrl(project)}/sections/${encodeURIComponent(section)}`), enabled: active, placeholderData: previous => previous });
+  const query = useQuery({ queryKey: ['section', project, section, revision], queryFn: () => get<RecordData>(`${projectUrl(project)}/sections/${encodeURIComponent(section)}`), enabled: active && section !== '资源', placeholderData: previous => previous });
+  if (section === '资源') return <section className="panel" hidden={!active}><ResourceLibrary project={project} active={active} /></section>;
   return <section className="panel" hidden={!active}><Result page loading={active && query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (section !== '09-剧集制作' || active) && <Section value={query.data} project={project} section={section} revision={revision} active={active} asset={asset} onAssetChange={onAssetChange} episode={episode} onEpisodeChange={onEpisodeChange} />}</section>;
 }
 function Section({ value, project, section, revision, active, episode, onEpisodeChange, asset, onAssetChange }: { value: RecordData; project: string; section: string; revision: number; active: boolean; episode: string | null; onEpisodeChange: (episode: string | null) => void } & AssetNavigation) {

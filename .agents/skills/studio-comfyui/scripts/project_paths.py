@@ -1,5 +1,7 @@
 """Project-relative file identities; legacy evidence is read without rewriting it."""
 from pathlib import Path, PureWindowsPath
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-workspace-browser/scripts'))
 
 
 def project_file(project, value, *, recorded=False):
@@ -27,7 +29,8 @@ def _project_file(project, value, *, recorded=False):
     relative = path.relative_to(project)
     if not recorded and relative.parts and relative.parts[0].casefold() in ('projects', project.name.casefold()):
         raise ValueError('文件路径必须相对项目根目录，不得重复 projects/项目名 或项目名：' + str(value))
-    return path
+    from project_resources import resolve_file
+    return resolve_file(project, path)
 
 
 def relative_file(project, value, *, recorded=False):

@@ -105,6 +105,9 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
             return None
         raise ValueError('新任务必须先通过准备检查；请使用--prepare-only完成准备，不会在开工时补查')
     expected, actual = report['prepared_input'].copy(), basis(store, data)
+    import project_resources as resources
+    if resources.enabled(data.project):
+        expected = recorded_paths(data.project, expected, relative=True)
     if not require_content_review and 'content_review' not in expected.get('mapping', {}):
         actual.get('mapping', {}).pop('content_review', None)
     if 'title' not in expected:  # Reports made before title became a preparation field.
@@ -132,7 +135,7 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
             current = _file_stamp(path, observed)
         except FileNotFoundError:
             raise ValueError('准备资料已变化：' + name + '；请返回准备阶段') from None
-        if list(current) != stamp:
+        if list(current) != stamp and not resources.matches_recorded_stamp(data.project, name, stamp):
             raise ValueError('准备资料已变化：' + name + '；请返回准备阶段')
     if business_video(data) and 'context_sources' not in report:
         if not legacy:

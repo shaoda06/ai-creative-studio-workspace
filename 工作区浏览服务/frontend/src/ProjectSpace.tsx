@@ -11,6 +11,7 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 import { ProjectProduction } from './components/ProjectProduction';
+import { ResourceLibrary } from './components/ResourceLibrary';
 
 export function ProjectSpace() {
   const { spaceId = '' } = useParams();
@@ -43,10 +44,11 @@ export function FilesProject() {
   const files = query.data?.files || [];
   const directories = files.filter(item => item.kind === 'group');
   const directory = directories.find(item => item.name === section);
-  const selected = section === '/' || directory ? section : '';
+  const selected = section === '/' || section === '资源' || directory ? section : '';
   const items = selected === '/' ? files : directory ? directory.children || [] : files.filter(item => item.kind !== 'group');
   const tabs = [{ value: '', label: '项目概况' },
-    ...directories.map(item => ({ value: item.name, label: item.name === query.data?.productionSection ? '视频制作' : item.name.replace(/^\d+[-_、.\s]+/, '') })),
+    ...directories.filter(item => item.name !== '资源').map(item => ({ value: item.name, label: item.name === query.data?.productionSection ? '视频制作' : item.name.replace(/^\d+[-_、.\s]+/, '') })),
+    { value: '资源', label: '项目资源' },
     { value: '/', label: '全部资料' }];
   return <PreviewContext.Provider value={setPreview}><div className="home">
     <PageHeader title={name} actions={<Link to={`/spaces/${spaceId}`}>返回项目空间</Link>} />
@@ -57,7 +59,7 @@ export function FilesProject() {
         onChange={value => { setSection(value); setPreview(null); }} />, controlsRoot)}
       {selected === query.data.productionSection && <ProjectProduction key={baseUrl} project={name} baseUrl={baseUrl} />}
       <section className="panel" key={selected} aria-label="项目资料">
-        {selected === query.data.productionSection ? <details><summary>制作资料</summary><FileTree items={items} showStatus={false} /></details> : <>
+        {selected === '资源' ? <ResourceLibrary key={baseUrl} project={name} baseUrl={baseUrl} /> : selected === query.data.productionSection ? <details><summary>制作资料</summary><FileTree items={items} showStatus={false} /></details> : <>
         <FileTree items={items} showStatus={false} />
         {!items.length && <p className="muted">本栏目暂无资料。</p>}
         </>}

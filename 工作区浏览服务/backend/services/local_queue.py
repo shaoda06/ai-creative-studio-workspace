@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 import uuid
 import execution_records as recordio
+import project_resources as resourceio
 from websockets.exceptions import WebSocketException
 
 LOCAL = ('local_queued', 'paused')
@@ -51,6 +52,14 @@ class LocalQueue:
         row = self.rows[key]
         directory = Path(row['input'].record_dir)
         directory.mkdir(parents=True, exist_ok=True)
+        if row.get('_resource_association_input') is not row['input'] and resourceio.enabled(row['input'].project):
+            payload = self.portable_input(row['input'])
+            refs = {'inputs': resourceio.refs_in(row['input'].project, payload['uploads']),
+                    'outputs': resourceio.refs_in(row['input'].project, [payload['outputs'], payload.get('segment_plan')])}
+            association = directory / '资源关联.json'
+            if not recordio.exists(association) or recordio.read(association) != refs:
+                recordio.write(association, refs, compact=False if association.is_file() else row['input'].record_format == 'compact')
+            row['_resource_association_input'] = row['input']
         if row['input'].record_format == 'compact':
             # Live progress stays in SQLite. Keep a portable terminal snapshot;
             # do not rewrite a project archive for every sampler update.

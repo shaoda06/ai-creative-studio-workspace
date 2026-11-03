@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from backend.parsers.project import field, markdown
+import project_resources as resources
 
 
 def segment_body(text, segment):
@@ -68,6 +69,9 @@ def resolve_context(identity, contexts, project, read, read_plain, previews, tra
             raise ValueError("生成资料越出项目：" + key)
         if dependencies is not None:
             dependencies.add(key)
+        path = resources.resolve_file(project, path)
+        if dependencies is not None:
+            dependencies.add(path.relative_to(project).as_posix())
         return path if path.is_file() else None
 
     storyboard = context.get("storyboard")
@@ -120,7 +124,7 @@ def resolve_context(identity, contexts, project, read, read_plain, previews, tra
                 raise ValueError("该次参考素材类型无法识别：" + item["file"])
             material = {"name": Path(item["file"]).name, "label": item["label"], "kind": kind}
             if path:
-                material["url"] = quote(item["file"], safe="/-._~")
+                material["url"] = quote(path.relative_to(project).as_posix(), safe="/-._~")
             else:
                 material["missing"] = True
                 result["issues"].append("该次输入原素材缺失：" + material["name"])

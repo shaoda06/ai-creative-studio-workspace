@@ -8,6 +8,7 @@ import re
 import stat
 import threading
 import time
+import project_resources as resourceio
 
 from backend.parsers.project import SourceChangedError, build_data, live_task_record, live_revision_notes, FORMAL_SECTIONS
 from backend.parsers.generation import load_context
@@ -15,7 +16,7 @@ from backend.parsers.generation import load_context
 logger = logging.getLogger(__name__)
 
 # Increment only when the parsed project data or interpretation becomes incompatible.
-CACHE_SCHEMA = 25
+CACHE_SCHEMA = 27
 
 class ProjectStore(ProjectFiles):
     """Parse on demand; keep the last complete result while a change is read."""
@@ -103,6 +104,7 @@ class ProjectStore(ProjectFiles):
         number = episode[1]
         prefix = '09-剧集制作/' + number + '/'
         dependencies = {'项目进度.md', '00-项目定位/项目基本定位.md', '06-分集大纲/分集索引.md',
+                        '资源/资源索引.json',
                         '06-分集大纲/' + number + '-分集大纲.md', *data.get('sources', {}), *data.get('dependencies', [])}
         return {key: value for key, value in snapshot.items() if key.startswith(prefix) or key in dependencies}
 
@@ -263,19 +265,34 @@ class ProjectStore(ProjectFiles):
         path = (root / relative).resolve()
         if not path.is_relative_to(root) or any(p.startswith('.') for p in Path(relative).parts):
             raise FileNotFoundError('文件不存在或不在项目内')
+        requested = path.relative_to(root).as_posix()
+        path = resourceio.resolve_file(root, path)
         identity = re.fullmatch(r'((?:EP\d{3,}|片头|片尾))-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', path.stem)
         if revision and identity:
             if path.is_file():
                 stat = path.stat()
                 if revision == str(stat.st_mtime_ns) + '-' + str(stat.st_size):
                     return path
+                index = resourceio.read_index(root)
+                stamp = index.get('alias_stamps', {}).get(requested) if index else None
+                if stamp and revision == f"{stamp['mtime_ns']}-{stamp['bytes']}" and resourceio.matches_recorded_stamp(root, requested, [stamp['bytes'], stamp['mtime_ns']]):
+                    return path
             history = root / '09-剧集制作' / identity[1] / '其他资料/历史版本'
-            for archive in [*history.glob(path.stem + '-运行中取回-*' + path.suffix),
-                            *history.glob(path.stem + '-替换前-*' + path.suffix)]:
-                if archive.is_file() and archive.resolve().is_relative_to(root):
-                    stat = archive.stat()
+            archives = [*history.glob(path.stem + '-运行中取回-*' + path.suffix),
+                        *history.glob(path.stem + '-替换前-*' + path.suffix)]
+            index = resourceio.read_index(root)
+            if index:
+                archives += [root / key for key in index['aliases'] if Path(key).parent == history.relative_to(root)
+                             and Path(key).suffix == path.suffix and any(Path(key).stem.startswith(path.stem + marker) for marker in ('-运行中取回-', '-替换前-'))]
+            for archive in archives:
+                actual = resourceio.resolve_file(root, archive)
+                if actual.is_file() and actual.is_relative_to(root):
+                    stat = actual.stat()
                     if revision == str(stat.st_mtime_ns) + '-' + str(stat.st_size):
-                        return archive
+                        return actual
+                    stamp = index.get('alias_stamps', {}).get(archive.relative_to(root).as_posix()) if index else None
+                    if stamp and revision == f"{stamp['mtime_ns']}-{stamp['bytes']}" and resourceio.matches_recorded_stamp(root, archive, [stamp['bytes'], stamp['mtime_ns']]):
+                        return actual
             raise FileNotFoundError('该视频文件版本不可用，请加载新文件')
         if not path.is_file() and (not (path.parent / recordio.ARCHIVE).resolve().is_relative_to(root) or not recordio.exists(path)):
             raise FileNotFoundError('文件不存在或不在项目内')

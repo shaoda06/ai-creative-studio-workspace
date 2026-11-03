@@ -75,8 +75,8 @@ def resize(source, destination, target, crop_anchor, *, project):
             ImageOps.fit(image, tuple(target), method=Image.Resampling.LANCZOS,
                          centering=tuple(crop_anchor)).save(stream, format='PNG')
             raw = stream.getvalue()
-        store_png(project, destination, raw, source=source)
-    return dict(tool='Pillow ' + __version__, source_size=[width, height], crop_box=box)
+        destination = store_png(project, destination, raw, source=source, origin='process')
+    return dict(path=str(destination), tool='Pillow ' + __version__, source_size=[width, height], crop_box=box)
 
 
 def validate_processing(data, source, source_size, target, local):

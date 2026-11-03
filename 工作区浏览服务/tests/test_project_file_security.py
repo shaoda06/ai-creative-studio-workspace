@@ -10,6 +10,30 @@ from tests.http_case import HttpTestCase
 
 
 class ProjectFileSecurityTests(HttpTestCase):
+    def test_migrated_media_alias_and_old_video_revision_still_return_exact_bytes(self):
+        import os
+        import migrate_project_resources as migration
+        source = self.project / '候选/EP001-C001-P001-R001-一采.mp4'
+        source.parent.mkdir(); source.write_bytes(b'current-video')
+        peer = self.project / 'A-副本/EP001-C001-P001-R001-一采.mp4'
+        peer.parent.mkdir();peer.write_bytes(source.read_bytes())
+        os.utime(peer, ns=(source.stat().st_atime_ns, source.stat().st_mtime_ns + 1000000000))
+        old = self.project / '09-剧集制作/EP001/其他资料/历史版本/EP001-C001-P001-R001-一采-替换前-20261101-120000.mp4'
+        old.parent.mkdir(parents=True);old.write_bytes(b'old-video')
+        current_revision = f'{source.stat().st_mtime_ns}-{source.stat().st_size}'
+        old_revision = f'{old.stat().st_mtime_ns}-{old.stat().st_size}'
+        image = self.project / '输入素材/图片.png';image.parent.mkdir();image.write_bytes(b'legacy-png-bytes')
+        audit = self.root / 'audit'
+        migration.stage(self.project, audit);migration.finalize(self.project, audit)
+        self.assertFalse(source.exists());self.assertFalse(old.exists());self.assertFalse(image.exists())
+        response = self.client.get('/api/projects/预览示例/files/输入素材/图片.png')
+        self.assertEqual(response.status_code, 200);self.assertEqual(response.content,b'legacy-png-bytes')
+        url = '/api/projects/预览示例/files/候选/EP001-C001-P001-R001-一采.mp4'
+        response = self.client.get(url,params={'v':current_revision})
+        self.assertEqual(response.status_code,200);self.assertEqual(response.content,b'current-video')
+        response = self.client.get(url,params={'v':old_revision})
+        self.assertEqual(response.status_code,200);self.assertEqual(response.content,b'old-video')
+
     def setUp(self):
         super().setUp()
         temporary = tempfile.TemporaryDirectory()

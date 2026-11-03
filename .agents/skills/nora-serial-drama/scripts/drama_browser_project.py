@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from urllib.parse import quote, unquote, urlsplit
 from backend.parsers.video_products import load_products
+import project_resources as resources
 
 from backend.parsers.documents import (plain_text_preview, status_markup, field_markup, safe_link, inline, cells, phase_list, slug, STATUS_COLORS, STATUS_FIELDS, TEXT_PREVIEW_LIMIT, INLINE_PATTERN)
 from backend.parsers.documents import markdown as render_markdown
@@ -273,15 +274,33 @@ def formal_record_url(version, record, record_key):
     return url + "#" + quote(matches[0]) if len(numbers) == len(matches) == 1 else url
 
 
+_document_links = markdown_links
+
+
 def build_data(project, *, web_episode_navigation=False, load_scope=None, episode_id=None, episode_mode='full'):
     documents, sources, texts = {}, {}, {}
     text_previews = {}
     resolved_paths = {}
     warnings = []
+    resource_index = resources.read_index(project)
+    legacy_locations = {}
+    for old, actual in resource_index['aliases'].items() if resource_index else ():
+        legacy_locations.setdefault(actual, []).append(old)
+
+    def markdown_links(text, source):
+        links = _document_links(text, source)
+        if resource_index is not None:
+            for link in links:
+                actual = resource_index['aliases'].get(link['key'], link['key'])
+                if actual != link['key']:
+                    parsed = urlsplit(link['url'])
+                    link.update(logicalKey=link['key'], key=actual,
+                                url=quote(actual, safe='/-._~') + ('?' + parsed.query if parsed.query else '') + ('#' + parsed.fragment if parsed.fragment else ''))
+        return links
 
     def resolved_path(relative):
         if relative not in resolved_paths:
-            resolved_paths[relative] = (project / relative).resolve()
+            resolved_paths[relative] = resources.resolve_file(project, relative)
         return resolved_paths[relative]
 
     def read(relative, *, preview=None):
@@ -398,6 +417,10 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         return prompts
 
     def file_entry(path, *, metadata_only=False):
+        if not path.resolve().is_relative_to(project):
+            return None
+        original = path.relative_to(project).as_posix()
+        path = resources.resolve_file(project, path)
         if not path.is_file():
             return None
         key = path.relative_to(project).as_posix()
@@ -409,6 +432,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 ".flac": "audio", ".mp4": "video", ".webm": "video", ".mov": "video"
                 }.get(path.suffix.lower(), "file")
         item = {"kind": kind, "name": path.name, "key": key, "url": quote(key, safe="/-._~")}
+        if original != key:
+            item['logicalKey'] = original
         if metadata_only:
             return item
         if kind == "document":
@@ -424,7 +449,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         elif kind == "text":
             read_plain(key, defer=load_scope is not None)
         elif kind == "video":
-            prompts = video_prompts(key)
+            prompts = video_prompts(original)
             if prompts is not None:
                 item["prompts"] = prompts
         return item
@@ -495,15 +520,28 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
     index_rows = table_records(index_text, ("人物编号", "姓名", "人物定位", "资料卡入口"))
     people = []
 
-    def local_media(link, required_parent):
+    def local_media(link, required_parent, *, exact_parent=False):
         key = link["key"]
-        path = project / key
+        if not (project / key).resolve().is_relative_to(project):
+            return None
+        path = resources.resolve_file(project, key)
+        ref = resources.reference(project, path)
+        if ref and ref['origin'] == 'legacy':
+            parents = (required_parent,) if isinstance(required_parent, str) else required_parent
+            locations = [old for old in legacy_locations.get(ref['file'], [])
+                         if any(Path(old).parent == Path(parent) if exact_parent else old.startswith(parent + '/') for parent in parents)]
+            if isinstance(required_parent, str) and required_parent.endswith('/参考图'):
+                locations = [old for old in locations if not any(part in (*GROUPS, *LEGACY_GROUPS) for part in Path(old).parts)]
+            if not locations:
+                return None
         if (Path(key).suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp")
-                or not path.is_file() or not any(path.resolve().is_relative_to((project / parent).resolve())
+                or not path.is_file() or not (resources.reference(project, path) or any(path.resolve().is_relative_to((project / parent).resolve())
                            for parent in ((required_parent,) if isinstance(required_parent, str) else required_parent))
+                )
                 or not path.resolve().is_relative_to(project)):
             return None
-        return dict(link)
+        actual = path.relative_to(project).as_posix()
+        return dict(link, key=actual, url=quote(actual, safe="/-._~"))
 
     def review_section(review, heading):
         text = read(review["key"], preview=False) or ""
@@ -540,7 +578,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             decision = field(section, '决定')
             outputs = '\n'.join(field(section, name) for name in (
                 '对应具体输出', '被审具体输出文件及R编号／版本', '具体输出', '被审具体输出', '采用文件'))
-            exact_output = re.search(r'(?<![\w.-])' + re.escape(video_name) + r'(?![\w.-])', outputs)
+            exact_output = re.search(r'(?<![\w.-])' + re.escape(video_name) + r'(?![\w.-])', unquote(outputs))
             return bool(exact_output and re.match(r'^(?:批准采用(?:$|[。；，\s])|通过并采用(?:$|[。；，\s]|本轮|P\d))', decision))
         # Old execution-only approvals remain readable; new records link their review.
         return bool(re.match(r'^批准采用(?:$|[。；，\s])', field(body, '用户决定')))
@@ -582,10 +620,11 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     elif re.match(r"^(CH|SC|PR)\d{3,}-", Path(formal_key).name):
                         saved = markdown_links(field(scope, "正式保存位置") + "\n" + field(scope, "正式文件入口"), review["key"])
                         documented_save = any(link["key"] == formal_key for link in saved)
+                        formal_stem = re.sub(r"-(?:草稿|候选)-v\d+(?:\.\d+)*(?:-(?:超分|规格处理)-\d+)?$", "", Path(formal_key).stem)
                         files = [link["key"] for link in candidate_links
-                                 if documented_save or re.sub(r"-(?:草稿|候选)-v\d+(?:\.\d+)*(?:-超分-\d+)?$", "", Path(link["key"]).stem) == Path(formal_key).stem]
+                                 if documented_save or link['key'] == formal_key or re.sub(r"-(?:草稿|候选)-v\d+(?:\.\d+)*(?:-(?:超分|规格处理)-\d+)?$", "", Path(link["key"]).stem) == formal_stem]
                         if (version := re.search(r"v\d+(?:\.\d+)*", adopted_version, re.I)) and any(re.search(r"-(?:草稿|候选)-v\d", Path(key).stem) for key in files):
-                            files = [key for key in files if re.search(r"-(?:草稿|候选)-" + re.escape(version[0]) + r"(?:-超分-\d+)?$", Path(key).stem, re.I)]
+                            files = [key for key in files if re.search(r"-(?:草稿|候选)-" + re.escape(version[0]) + r"(?:-(?:超分|规格处理)-\d+)?$", Path(key).stem, re.I)]
                         matched = matched and bool(files)
                     bound = True
             section = review_section(review, "5. 采用与后续影响")
@@ -610,11 +649,14 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         folder = project / folder_key
         known = {Path(a["media"]["key"]) for a in registered if a["media"]}
         assets = []
-        if not folder.is_dir():
-            return assets
-        for path in sorted(folder.iterdir()):
+        index = resources.read_index(project)
+        aliases = [project / key for key in (index['aliases'] if index else {}) if Path(key).parent == folder_key]
+        paths = sorted(set((list(folder.iterdir()) if folder.is_dir() else []) + aliases))
+        for path in paths:
             key = path.relative_to(project).as_posix()
-            if path.name.startswith(".") or Path(key) in known:
+            if path.name.startswith(".") or not path.resolve().is_relative_to(project):
+                continue
+            if Path(resources.relative(project, resources.resolve_file(project, key))) in known:
                 continue
             media = local_media({"key": key, "url": quote(key, safe="/-._~"), "name": path.name}, str(folder_key))
             if not media:
@@ -725,7 +767,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         voice_field = re.search(r"^- 说话声音参考音频（可选）：(.*?)(?=^- \S|^## |\Z)",
                                 texts.get(card_key, ""), re.M | re.S)
         voice = next((media for link in markdown_links(voice_field[1], card_key)
-                      if link["key"].startswith("07-参考音频/正式素材/")
+                      if (link["key"].startswith("07-参考音频/正式素材/") or resources.reference(project, link['key']))
                       and (media := file_entry(project / link["key"])) and media["kind"] == "audio"), None) if voice_field else None
         people.append({"id": number, "name": row["姓名"], "role": row["人物定位"],
                        "stages": [name for name in stage_names if any(a["stage"] == name for a in formal)],
@@ -761,9 +803,9 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                                    ("状态名", "正式文件", "采用的候选版本", "审阅记录"))
         for entry in rows_formal:
             links = markdown_links(entry["正式文件"], record_key)
-            media = next((m for link in links if (m := local_media(link, formal_folder))), None)
+            media = next((m for link in links if (m := local_media(link, formal_folder, exact_parent=True))), None)
             # Never promote candidates or history through a malformed registry link.
-            if media and Path(media["key"]).parent != Path(formal_folder):
+            if media and not resources.reference(project, media['key']) and Path(media["key"]).parent != Path(formal_folder):
                 media = None
             reviews = markdown_links(entry["审阅记录"], record_key)
             record_url = formal_record_url(entry["采用的候选版本"], record, record_key)
@@ -832,15 +874,17 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         registry = table_records(section.group(1) if section else "", ("正式文件", "最初制作场次", "场景状态与适用条件", "采用的候选版本", "审阅记录"))
         for entry in registry:
             links = markdown_links(entry["正式文件"], record_key)
-            media = next((m for link in links if (m := local_media(link, formal_folder))), None)
-            if media and (Path(media["key"]).parent != Path(formal_folder)):
+            media = next((m for link in links if (m := local_media(link, formal_folder, exact_parent=True))), None)
+            if media and not resources.reference(project, media['key']) and (Path(media["key"]).parent != Path(formal_folder)):
                 media = None
             reviews = markdown_links(entry["审阅记录"], record_key)
             record_url = formal_record_url(entry["采用的候选版本"], record, record_key)
             review_data = asset_review_metadata(reviews, record_url, formal_key=links[0]["key"] if links else "", adopted_version=entry["采用的候选版本"])
             scope = entry["场景状态与适用条件"]
             # Formal views may precede episode planning; retain explicit SC/V identity.
-            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-(?:(?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?|V\d{3,})-场景参考图\.(?:png|jpg|jpeg|webp)", Path(links[0]["key"]).name))
+            binding = resources.reference(project, links[0]['key']) if links else None
+            business_name = binding['family_key'].split('/', 1)[-1] + Path(links[0]['key']).suffix if binding else Path(links[0]['key']).name if links else ''
+            is_environment = bool(links and re.fullmatch(re.escape(number) + r"-(?:(?:EP\d{3,}|片头|片尾)-C\d{3,}(?:-V\d{3,})?|V\d{3,})-场景参考图\.(?:png|jpg|jpeg|webp)", business_name))
             if re.search(r"仅.*(?:空间|布局|结构)|不是实际|仅供.*结构|结构辅助", scope):
                 is_environment = False
             asset = {"scene": True, "type": "场次环境图" if is_environment else "辅助／既有参考图",
@@ -913,23 +957,25 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     not (relative == load_scope + '/' + episode_id or relative.startswith(load_scope + '/' + episode_id + '/')))):
             return []
         folder = project / relative
-        if not folder.is_dir() or not folder.resolve().is_relative_to(project):
+        if not folder.resolve().is_relative_to(project):
             return []
+        index = resources.read_index(project)
+        aliases = [project / key for key in (index['aliases'] if index else {})
+                   if key.startswith(relative + '/')]
+        paths = sorted(set((list(folder.rglob('*')) if folder.is_dir() else []) + aliases))
         if episode_mode != 'full' and relative == '09-剧集制作/' + episode_id:
             # Playback needs video identities and mapping locations, not the
             # historical file tree or every candidate's rendered inputs.
             result = []
-            for path in folder.rglob('*'):
+            for path in paths:
                 if any(p.startswith('.') for p in path.relative_to(folder).parts):
                     continue
                 video = path.suffix.lower() in ('.mp4', '.webm', '.mov')
                 mapping = path.name == '输入映射.json' and '执行附件' in path.parts
-                if (video or mapping) and path.is_file():
-                    key = path.relative_to(project).as_posix()
-                    result.append({'kind': 'video' if video else 'text', 'name': path.name,
-                                   'key': key, 'url': quote(key, safe='/-._~')})
+                if (video or mapping) and (item := file_entry(path, metadata_only=True)):
+                    result.append(item)
             return result
-        return [item for path in sorted(folder.rglob("*"))
+        return [item for path in paths
                 if not any(p.startswith(".") for p in path.relative_to(folder).parts)
                 and not live_revision_notes(path.relative_to(project))
                 and (item := file_entry(path))]
@@ -938,7 +984,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
         node = {"kind": "group", "name": name, "key": root, "children": []}
         branches = {root: node}
         for item in items:
-            parts = Path(item["key"]).relative_to(root).parts
+            parts = Path(item.get('logicalKey', item["key"])).relative_to(root).parts
             parent = node
             for i, part in enumerate(parts[:-1], 1):
                 key = Path(root).joinpath(*parts[:i]).as_posix()
@@ -1061,7 +1107,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
             if not re.fullmatch(prefix + r"\d{3,}", row["编号"]):
                 continue
             key = next((l["key"] for l in markdown_links(row["文件入口"], index_key)
-                        if l["key"].startswith(root + "/")), None)
+                        if l["key"].startswith(root + "/") or resources.reference(project, l['key'])), None)
             item = file_entry(project / key) if key else None
             if item and item["kind"] != media_kind:
                 item = None
@@ -1330,7 +1376,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                                 for product in products_for(adopted['R编号'], adopted['处理阶段'])):
                             continue
                         if video_adoption_approved(adopted, record, record_key, name):
-                            approved_keys.add(link['key'])
+                            approved_keys.add(resources.relative(project, resources.resolve_file(project, link['key'])))
                         else:
                             warnings.append(f'{name}：当前选定记录的批准依据缺失、不匹配或尚未批准，请核对对应审阅记录。')
                 for item in episode_videos.get(number, []):
@@ -1344,7 +1390,7 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                                episode_root + "/其他资料/阶段采用视频/" + stage_folder + "/" + identity[1] + "-场次",
                                episode_root + "/06-生成结果/" + stage_folder + "/" + identity[1] + "-场次",
                                legacy_root + "/候选", legacy_root + "/选定")
-                    if Path(item["key"]).parent.as_posix() in folders:
+                    if Path(item.get('logicalKey', item["key"])).parent.as_posix() in folders and not any(v['key'] == item['key'] for v in videos):
                         if not resolved_path(item['key']).is_relative_to(project):
                             raise ValueError('Refusing source outside project: ' + item['key'])
                         stat = (project / item["key"]).stat()

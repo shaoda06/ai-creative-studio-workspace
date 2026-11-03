@@ -38,6 +38,7 @@ from backend.services.prompts import WorkspacePromptLibrary
 from backend.routes.prompts import create_router as prompt_router
 from backend.services.assets import AssetLibrary
 from backend.routes.assets import create_router as asset_router
+from backend.routes.project_resources import create_router as resource_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -268,6 +269,7 @@ def queue_write(request: Request):
 
 app.include_router(prompt_router(prompt_library, queue_write))
 app.include_router(asset_router(AssetLibrary(PUBLIC_ROOT / '综合资料/资产管理'), queue_write))
+app.include_router(resource_router(lambda request: store, queue_write))
 
 
 def agent_request(request: Request):
@@ -1038,6 +1040,8 @@ def workspace_file(name: str, path: str, request: Request, v: str | None = None,
     return project_file_response(request.state.workspace_space.projects, name, path, request, v, download)
 
 
+spaces_router.include_router(resource_router(lambda request: request.state.workspace_space.projects, queue_write,
+                                            prefix='/projects/{name}/resources'))
 app.include_router(spaces_router)
 
 

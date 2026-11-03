@@ -24,3 +24,5 @@
 ## 建档职责
 
 新订单由Agent根据已知需求填写模板；编号、名称、范围及项目专用约定由Agent依实际资料确定，不能由脚本推定。按目录规范写入README并建立项目状态入口，后续阶段维护自己资料并更新唯一项目状态。项目已有README时按授权合并，不能用空模板覆盖。
+
+项目建档时以实际订单根目录调用`studio-workspace-browser/scripts/project_resources.py --project <实际项目> init`建立资源索引。项目README连接[项目资源与版本管理](../../studio-workspace-browser/references/项目资源与版本管理.md)并说明原业务目录保留索引、工作稿与执行记录，媒体版本归`资源/`；已有项目先按明确授权迁移，不以建档命令直接启用未迁移旧流程。

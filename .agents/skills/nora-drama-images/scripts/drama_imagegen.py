@@ -23,6 +23,7 @@ def now():
 
 
 def prepare(project, request_file):
+    import project_resources as resourceio
     root = Path(project).resolve()
     request_file = project_file(root, request_file)
     spec = json.loads(request_file.read_text('utf-8-sig'))
@@ -32,8 +33,9 @@ def prepare(project, request_file):
         if job['request'] != spec:
             raise ValueError('原Imagegen请求已变化；新生成须另存请求，不覆盖已有交接')
         return job
-    images.validate_names(root, dict(kind=spec['kind'], image_type=spec['image_type'], formal=spec.get('formal'),
-        draft=spec['draft'], images=[dict(path=spec['output'])]), required=True)
+    if not resourceio.enabled(root):
+        images.validate_names(root, dict(kind=spec['kind'], image_type=spec['image_type'], formal=spec.get('formal'),
+            draft=spec['draft'], images=[dict(path=spec['output'])]), required=True)
     if spec['kind'] not in images.TEMPLATES or not spec['prompt'].strip() or not spec['authorization'].strip():
         raise ValueError('Imagegen需要既定图片类型、完整提示词和实际授权')
     if not re.fullmatch(r'[1-9]\d*:[1-9]\d*', spec['ratio']):
@@ -59,6 +61,14 @@ def prepare(project, request_file):
     prefix = spec['object'] + '-' + generation
     record = project_file(root, spec.get('record_dir', str(draft.parent.parent / '执行附件' / prefix)))
     candidate = project_file(root, spec['output'])
+    binding = None
+    if resourceio.enabled(root):
+        declared = resourceio.reference(root, spec['formal']) if spec.get('formal') else None
+        binding = resourceio.reserve(root, spec['output'], key=record.relative_to(root).as_posix() + '/' + Path(spec['output']).name,
+            resource_id=spec.get('resource_id') or (declared['resource_id'] if declared else None),
+            family=resourceio.family_key(spec['formal']) if spec.get('formal') else None, parent=spec.get('base_file'),
+            producer=record.relative_to(root).as_posix(), origin='generated')
+        candidate = root / binding['file']
     if candidate.exists():
         raise ValueError('计划候选已存在，不覆盖：' + spec['output'])
     body = images.section(template, '生成记录-001')[0].replace('生成记录-001', generation, 1)
@@ -108,6 +118,8 @@ def prepare(project, request_file):
         'review': '审阅-' + generation + '-001', 'candidate': candidate.relative_to(root).as_posix(),
         'record': record.relative_to(root).as_posix(), 'report': (record / 'Imagegen结果报告.json').relative_to(root).as_posix(),
         'result_store_key': 'imagegen:' + root.name + ':' + manifest.relative_to(root).as_posix()}
+    if binding:
+        job['resource_id'], job['resource_version'] = binding['resource_id'], binding['version']
     documents.new_json(manifest, job)
     images.validate_record_updates(root, [spec['draft']], spec.get('record_updates', []),
         tokens=('{{outputs}}', '{{specs}}'), contents={draft: documents.read(draft)})
@@ -118,7 +130,7 @@ def prepare(project, request_file):
 def complete(project, manifest_file, result_file, projects, *, repair=None):
     root = Path(project).resolve()
     job = json.loads(project_file(root, manifest_file).read_text('utf-8-sig'))
-    images.validate_names(root, dict(kind=job['kind'], image_type=job['request'].get('image_type'), formal=job['request'].get('formal'),
+    images.validate_names(root, dict(kind=job['kind'], image_type=job['request'].get('image_type'), formal=job['request'].get('formal'), resource_id=job.get('resource_id'),
         draft=job['draft'], images=[dict(path=job['candidate'])]))
     result_file = project_file(root, result_file)
     result = json.loads(result_file.read_text('utf-8-sig'))

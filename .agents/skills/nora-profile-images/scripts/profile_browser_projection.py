@@ -2,6 +2,8 @@
 from pathlib import Path
 import re
 from urllib.parse import unquote, urlsplit
+from urllib.parse import quote
+import project_resources as resources
 
 from PIL import Image
 
@@ -21,12 +23,14 @@ def build_accounts(project, read):
         if not media_links:
             continue
         media = media_links[0]
+        if not (project / media['key']).resolve().is_relative_to(project):
+            raise ValueError('账号图片路径越出项目：' + media['key'])
         formal_directory = {'头像': '头像', '背景图': '背景图', '主页背景图': '背景图'}.get(row['用途'])
         parts = Path(media['key']).parts
-        if formal_directory is None or len(parts) != 4 or parts[:3] != (*Path(DIRECTORY).parts, formal_directory):
+        if formal_directory is None or (not resources.reference(project, media['key']) and (len(parts) != 4 or parts[:3] != (*Path(DIRECTORY).parts, formal_directory))):
             issues.append(name + '：正式目录与用途不符，请核对索引。')
             continue
-        path = (project / media['key']).resolve()
+        path = resources.resolve_file(project, media['key'])
         if not path.is_relative_to(project):
             raise ValueError('账号图片路径越出项目：' + media['key'])
         reviews = markdown_links(row['采用依据'], INDEX)
@@ -47,7 +51,7 @@ def build_accounts(project, read):
         version = re.search(r'v\d+(?:\.\d+)*', row['采用版本'])
         selected = bool(version and any(version[0] in re.findall(r'v\d+(?:\.\d+)*', Path(link['key']).name)
                                        for link in candidates))
-        documented = bool(reviews and any(link['key'] == media['key'] for link in markdown_links(block, reviews[0]['key'])))
+        documented = bool(reviews and any(resources.resolve_file(project, link['key']) == path for link in markdown_links(block, reviews[0]['key'])))
         approved = confirmation.startswith('批准采用') and selected and documented and not disposed
         if not approved:
             issues.append(name + '：采用记录或候选版本待核对。')
@@ -58,7 +62,7 @@ def build_accounts(project, read):
         with Image.open(path) as image:
             width, height = image.size
         items.append(dict(name=name, platform=row['平台／账号代号'], purpose=row['用途'],
-                          version=row['采用版本'], media=dict(media, kind='image', name=name,
+                          version=row['采用版本'], media=dict(media, key=path.relative_to(project).as_posix(), url=quote(path.relative_to(project).as_posix(), safe='/-._~'), kind='image', name=name,
                           width=width, height=height), statusHtml=status_markup('已采用', INDEX)))
     return dict(kind='accounts', key=DIRECTORY, name='账号资料', items=items, issues=issues,
                 index=dict(kind='document', name='账号视觉索引', key=INDEX, url=INDEX) if index else None)

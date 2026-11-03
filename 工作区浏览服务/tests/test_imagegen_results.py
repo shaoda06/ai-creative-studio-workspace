@@ -14,6 +14,19 @@ from backend.services.projects import ProjectStore
 
 
 class NativeImageTests(unittest.TestCase):
+    def test_managed_native_output_is_one_version_and_visible_without_stage_copy(self):
+        import project_resources as resources
+        resources.initialize(self.project, managed=True)
+        self.prepare()
+        result = native.complete(self.project, self.job['manifest'], self.result, self.projects)
+        self.assertTrue(result['user_message_ready'])
+        ref = resources.reference(self.project, self.job['candidate'])
+        self.assertEqual(ref['version'], 'V001')
+        self.assertTrue(self.job['candidate'].startswith('资源/图片/'))
+        self.assertFalse((self.project / self.spec['output']).exists())
+        self.assertEqual(len(resources.catalog(self.project)), 1)
+        self.assertEqual(self.projects.section(self.project.name, '03-人物资料')['people'][0]['pendingCount'], 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name).resolve()
@@ -56,7 +69,7 @@ class NativeImageTests(unittest.TestCase):
         self.assertIn('- 用户采用状态：待确认', text)
         self.assertIn('- 结论：待确认', text)
         self.assertNotIn('- 结论：批准采用', text)
-        self.assertIn('非ComfyUI任务', text)
+        self.assertIn('Codex内置Imagegen', text)
         self.assertEqual(self.projects.section(self.project.name, '03-人物资料')['people'][0]['pendingCount'], 1)
         self.assertFalse(list(self.project.rglob('*.api.json')))
         self.assertFalse(list(self.project.rglob('后台任务状态.json')))

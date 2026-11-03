@@ -14,6 +14,10 @@ class SegmentTarget(BaseModel):
     index: int = Field(ge=0)
     path: str
     response_name: str
+    resource_id: str | None = None
+    version: str | None = None
+    resource_key: str | None = None
+    base_file: str | None = None
 
 
 class SegmentPlan(BaseModel):
@@ -144,6 +148,9 @@ async def finish(store, key, result):
                                                      'identity': target['identity'], 'data': downloaded}, new=True, compact=data.record_format == 'compact')
                 proof = (state['prompt_id'], source, saved_files(receipt_path, candidate)[0])
                 fresh = True
+            import project_resources as resourceio
+            if resourceio.enabled(data.project):
+                await asyncio.to_thread(resourceio.finish, data.project, candidate)
             verified[str(receipt_path)] = proof
             item.update(remote=source, path=str(candidate), receipt=str(receipt_path), bytes=proof[-1][1][0], check='已取回', error=None)
             collected += 1

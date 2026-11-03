@@ -19,7 +19,7 @@ PROJECT_DIRECTORIES = (
 GENERAL_DIRECTORIES = (
     "其他资料", "其他资料/跨阶段资料", "其他资料/原稿",
     "其他资料/待分类资料", "其他资料/实验资料", "其他资料/工作稿",
-    "其他资料/工作稿/素材", "其他资料/历史版本", "其他资料/执行附件",
+    "其他资料/历史版本", "其他资料/执行附件",
 )
 EPISODE_DIRECTORIES = (
     "01-制作前检查", "02-剧集剧本", "03-分镜脚本",
@@ -101,6 +101,11 @@ def initialize(project, episode=None, *, cover=False, intro=False, outro=False):
         if result['readme_created']:
             with readme.open('x', encoding='utf-8') as handle:
                 handle.write(project_readme(project))
+            import project_resources
+            resource_directory = project / '资源'
+            resource_exists = resource_directory.is_dir()
+            result['resource_index'] = str(project_resources.initialize(project, managed=True))
+            result['existing' if resource_exists else 'created'].append('资源')
         added = register_project(project)
         result["project_index"] = str(project.parent / INDEX_NAME)
         result["index_added"] = added

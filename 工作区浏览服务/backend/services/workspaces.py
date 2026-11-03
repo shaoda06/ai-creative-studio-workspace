@@ -82,7 +82,7 @@ def project_tree(projects, name, api):
                 continue
             key = path.relative_to(root).as_posix()
             if path.is_dir():
-                result.append({'kind': 'group', 'name': path.name, 'key': key, 'children': read(path)})
+                result.append({'kind': 'group', 'name': path.name, 'key': key, 'children': [] if key == '资源' else read(path)})
             elif path.is_file():
                 item = {'kind': 'file', 'name': path.name, 'key': key,
                         'url': prefix + quote(key, safe='/')}

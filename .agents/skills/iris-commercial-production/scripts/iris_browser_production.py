@@ -6,6 +6,7 @@ import re
 from urllib.parse import quote, urlsplit
 
 import execution_records as records
+import project_resources as resources
 from prepared_documents import read_journal
 from h3_browser_context import empty_context, request_context
 
@@ -24,7 +25,7 @@ def local_key(project, value, old_root=None):
     target = (project / path).resolve()
     if not target.is_relative_to(project.resolve()) or any(part.startswith('.') for part in path.parts):
         raise ValueError('制作资料越出项目：' + str(value))
-    return target.relative_to(project.resolve()).as_posix()
+    return resources.resolve_file(project, target).relative_to(project.resolve()).as_posix()
 
 
 def file_url(api, key):

@@ -217,7 +217,8 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
         if len(links) != 1 or len(reviews) != 1:
             raise ValueError('当前采用入口／人工审核依据不唯一：' + part)
         selected = adopt.local_path(root, draft.parent / links[0])
-        if not selected.is_relative_to(ep / '06-阶段采用视频' / adopt.STAGES[stage] / f'{scene}-场次'):
+        import project_resources as resources
+        if not resources.reference(root, selected) and not selected.is_relative_to(ep / '06-阶段采用视频' / adopt.STAGES[stage] / f'{scene}-场次'):
             raise ValueError('当前采用文件未归位对应阶段定稿目录：' + part)
         review = next(iter(reviews))
         if not adopt.approved_row(text, selected.name + f' [审核](#{review})', selected.name):

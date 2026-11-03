@@ -65,9 +65,22 @@ def png(raw):
 
 
 
-def store_png(project, destination, raw, *, source=None, replace=False, prior=None):
+def store_png(project, destination, raw, *, source=None, replace=False, prior=None, origin='import'):
     """Keep the PNG API while all immutable media use the same storage implementation."""
-    return store_media(project, destination, raw, source=source, replace=replace, prior=prior)
+    import project_resources as resources
+    destination = project_file(project, destination)
+    if resources.enabled(project):
+        ref = resources.reference(project, destination)
+        if ref is None:
+            parent = source if source is not None and Path(source).resolve().is_relative_to(Path(project).resolve()) else None
+            ref = resources.reserve(project, destination, key='保存/' + resources.relative(project, destination),
+                                    family=resources.family_key(destination), parent=parent, origin=origin)
+            destination = resources.local(project, ref['file'])
+        store_media(project, destination, raw, source=source, replace=replace, prior=prior)
+        resources.finish(project, destination)
+    else:
+        store_media(project, destination, raw, source=source, replace=replace, prior=prior)
+    return destination
 
 
 
@@ -113,11 +126,23 @@ if __name__ == '__main__':
     parser.add_argument('--source', required=True, type=Path, help='实际PNG源文件；外部来源只读入，不与其他项目硬链接')
     parser.add_argument('--output', required=True, help='相对项目的输出路径；相同字节复用，不覆盖不同内容')
     parser.add_argument('--archive', help='替换不同正式图片时必填的项目内旧图归档路径；先归档再原子替换')
+    parser.add_argument('--resource-id', help='同一制作目标的新版本填写原资源编号')
+    parser.add_argument('--key', help='同一次保存的稳定身份，重试复用')
+    parser.add_argument('--parent', help='本次修改实际使用的来源文件，须为项目资源版本')
     args = parser.parse_args()
+    import project_resources as resources
     target = project_file(args.project, args.output)
     source = args.source if args.source.is_absolute() else project_file(args.project, args.source)
     raw = source.read_bytes()
     width, height = png(raw)
+    if resources.enabled(args.project):
+        if args.archive:
+            parser.error('资源版本不覆盖旧图，不使用--archive；新修订填写--resource-id')
+        ref = resources.register(args.project, source, resource_id=args.resource_id, key=args.key,
+                                 parent=args.parent, output=target, origin='import')
+        print(json.dumps(dict(path=ref['file'], resource_id=ref['resource_id'], version=ref['version'],
+                              width=width, height=height, bytes=len(raw), format='PNG', decoded=True), ensure_ascii=False))
+        sys.exit(0)
     old = target.read_bytes() if target.exists() else None
     stamp = target.stat() if target.exists() else None
     if old is not None and old != raw:

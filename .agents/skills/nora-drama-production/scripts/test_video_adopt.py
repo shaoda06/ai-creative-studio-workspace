@@ -13,6 +13,25 @@ import video_adopt as tool
 
 
 class AdoptionTests(unittest.TestCase):
+    def test_managed_adoption_pins_version_without_moving_or_copying_media(self):
+        import project_resources as resources
+        from media_files import store_media
+        item, draft, source, legacy_target = self.item()
+        resources.initialize(self.root, managed=True)
+        ref = resources.reserve(self.root, source, key='actual-output', family='视频/EP001-C001-P001')
+        canonical = self.root / ref['file']
+        store_media(self.root, canonical, source=source)
+        resources.finish(self.root, canonical, info={'bytes': source.stat().st_size})
+        source.unlink()
+        self.run_plan()
+        self.assertTrue(canonical.is_file())
+        self.assertFalse(source.exists())
+        self.assertFalse(legacy_target.exists())
+        self.assertIn(ref['file'].replace('资源/', '../../../..' + '/资源/'), draft.read_text())
+        self.assertEqual(len(resources.catalog(self.root)[0]['versions']), 1)
+        self.run_plan()
+        self.assertEqual(len(resources.catalog(self.root)[0]['versions']), 1)
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

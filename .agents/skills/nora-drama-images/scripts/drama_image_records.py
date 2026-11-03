@@ -154,6 +154,14 @@ def value(text, name):
 
 def validate_names(root, plan, *, required=False):
     """Bind new candidate destinations to their declared formal image identity."""
+    import project_resources as resourceio
+    bindings = [resourceio.reference(root, item['path']) for item in plan['images']]
+    if plan.get('resource_id') or bindings and all(bindings):
+        for item in plan['images']:
+            ref = resourceio.reference(root, item['path'])
+            if ref is None or ref['resource_id'] != item.get('resource_id', plan.get('resource_id', ref['resource_id'])):
+                raise ValueError('图片候选未绑定声明的资源与版本')
+        return
     up = plan.get('upscale')
     formal_name = plan.get('formal') or (up.get('formal') if up and required else None)
     if formal_name is None:
@@ -236,7 +244,7 @@ def validate_plan(data, *, check_records=True):
         source_size = png(source.read_bytes())
         validate_processing(data, source, source_size, target, local)
         formal = project_file(root, up['formal'])
-        if formal == source or formal in planned or formal.is_relative_to(Path(data.record_dir)):
+        if not plan.get('resource_id') and (formal == source or formal in planned or formal.is_relative_to(Path(data.record_dir))):
             raise ValueError('超分正式文件必须与审批原图、候选及执行附件分开')
         if up.get('archive') and project_file(root, up['archive']) in (formal, source, *planned):
             raise ValueError('归档入口不得指向正式文件、审批原图或候选')
@@ -290,7 +298,8 @@ def register(store, key, outputs, report_file):
             raise ValueError('图片收尾报告不属于本次执行')
         for proof in previous['checks']:
             current = project_file(data.project, proof['path']).stat()
-            if [current.st_size, current.st_mtime_ns] != proof['stamp']:
+            import project_resources as resourceio
+            if [current.st_size, current.st_mtime_ns] != proof['stamp'] and not resourceio.matches_recorded_stamp(data.project, proof['path'], proof['stamp']):
                 raise ValueError('图片收尾已核验证据发生变化：' + proof['path'])
         if previous.get('approval'):
             proof = previous['approval']

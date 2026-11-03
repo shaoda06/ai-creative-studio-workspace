@@ -1,5 +1,7 @@
 """Shared immutable media storage, scoped to one project or isolated test."""
 import os
+import filecmp
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -7,13 +9,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scr
 from project_paths import project_file
 
 
-def store_media(project, destination, raw, *, source=None, replace=False, prior=None):
+def store_media(project, destination, raw=None, *, source=None, replace=False, prior=None):
     """Preserve immutable media bytes within one project or isolated test; shared files are read-only, updates replace paths."""
     project = Path(project).resolve()
     destination = project_file(project, destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    source = Path(source).resolve() if source is not None and Path(source).is_absolute() else (project / source).resolve() if source is not None else None
+    size = len(raw) if raw is not None else source.stat().st_size
+    def equal(path):
+        return path.read_bytes() == raw if raw is not None else filecmp.cmp(path, source, shallow=False)
     before = destination.stat() if destination.exists() else None
-    same = before is not None and destination.read_bytes() == raw
+    same = before is not None and before.st_size == size and equal(destination)
+    if before is not None and not same and (destination.parent / '版本信息.json').is_file():
+        raise ValueError('资源版本不可覆盖：' + str(destination))
     if before is not None and not same and not replace:
         raise ValueError('媒体已有不同内容，不覆盖：' + str(destination))
     reuse = None
@@ -21,7 +29,7 @@ def store_media(project, destination, raw, *, source=None, replace=False, prior=
         source = Path(source)
         source = (source if source.is_absolute() else project / source).resolve()
         if (source != destination and source.is_relative_to(project)
-                and source.stat().st_dev == destination.parent.stat().st_dev and source.read_bytes() == raw):
+                and source.stat().st_dev == destination.parent.stat().st_dev and equal(source)):
             reuse = source
     if reuse is None:
         for folder, dirs, names in os.walk(project, followlinks=False):
@@ -33,8 +41,8 @@ def store_media(project, destination, raw, *, source=None, replace=False, prior=
                 if candidate.suffix.lower() != destination.suffix.lower() or candidate == destination or candidate.is_symlink():
                     continue
                 state = candidate.stat()
-                if (not state.st_mode & 0o222 and state.st_size == len(raw)
-                        and state.st_dev == destination.parent.stat().st_dev and candidate.read_bytes() == raw):
+                if (not state.st_mode & 0o222 and state.st_size == size
+                        and state.st_dev == destination.parent.stat().st_dev and equal(candidate)):
                     reuse = candidate
                     break
             if reuse is not None:
@@ -49,7 +57,10 @@ def store_media(project, destination, raw, *, source=None, replace=False, prior=
         if reuse is not None:
             os.link(reuse, pending)
         else:
-            pending.write_bytes(raw)
+            if raw is None:
+                shutil.copyfile(source, pending)
+            else:
+                pending.write_bytes(raw)
             pending.chmod(pending.stat().st_mode & ~0o222)
         try:
             expected = prior if replace and not same else ([before.st_size, before.st_mtime_ns] if before else None)

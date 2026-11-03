@@ -32,5 +32,5 @@ def preserve_original(source, destination, *, project):
     source, destination = Path(source), Path(destination)
     raw = source.read_bytes()
     width, height = png(raw)
-    store_png(project, destination, raw, source=source)
-    return dict(width=width, height=height, bytes=len(raw), format='PNG', decoded=True)
+    destination = store_png(project, destination, raw, source=source, origin='generated')
+    return dict(path=str(destination), width=width, height=height, bytes=len(raw), format='PNG', decoded=True)

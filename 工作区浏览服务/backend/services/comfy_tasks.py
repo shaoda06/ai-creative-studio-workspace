@@ -35,6 +35,7 @@ SKILL = Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3'
 sys.path.insert(0, str(SKILL.parent / 'studio-comfyui/scripts'))
 import project_paths as paths
 import execution_records as recordio
+import project_resources as resourceio
 import comfyui_config as config
 client = config.client
 context_spec = importlib.util.spec_from_file_location('nora_generation_context', SKILL.parent / 'nora-drama-production/scripts/generation_context.py')
@@ -48,6 +49,10 @@ class OutputTarget(BaseModel):
     index: int = Field(ge=0)
     path: str
     response_name: str
+    resource_id: str | None = None
+    version: str | None = None
+    base_file: str | None = None
+    resource_key: str | None = None
 
 
 class DesktopConnection(BaseModel):
@@ -240,6 +245,12 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         if not recorded and (project / ARCHIVE_MARKER).is_file():
             raise ValueError('项目已迁移或归档，不能在旧入口提交新任务')
         data.project = str(project)
+        if not recorded and resourceio.enabled(project):
+            routed = resourceio.route_task(project, data.model_dump())
+            data.outputs = [OutputTarget.model_validate(item) for item in routed['outputs']]
+            if data.segment_plan:
+                data.segment_plan = segments.SegmentPlan.model_validate(routed['segment_plan'])
+            data.image_plan, data.uploads = routed['image_plan'], routed['uploads']
         resolved = {}
         def local(value):
             if value not in resolved:
@@ -292,6 +303,9 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         payload['record_dir'] = relative(data.record_dir)
         for target in [*payload['outputs'], *((payload['segment_plan'] or {}).get('targets', []))]:
             target['path'] = relative(target['path'])
+            for field in ('resource_id', 'version', 'base_file', 'resource_key'):
+                if target[field] is None:
+                    target.pop(field)
         for upload in payload['uploads']:
             if isinstance(upload.get('file'), str):
                 upload['file'] = relative(upload['file'])
@@ -652,6 +666,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                     write_receipt(response, {'time': client.now(), 'data': downloaded})
                     proof = (identity, saved_files(response, Path(output.path))[0])
                     fresh = True
+                if resourceio.enabled(data.project):
+                    await asyncio.to_thread(resourceio.finish, data.project, output.path)
                 verified[str(response)] = proof
                 collected += 1
                 saved_outputs.append(output.path)

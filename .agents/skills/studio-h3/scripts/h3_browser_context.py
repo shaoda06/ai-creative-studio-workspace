@@ -3,6 +3,7 @@ import html
 import json
 from pathlib import Path
 import re
+import project_resources as resources
 
 
 def empty_context(issue):
@@ -11,6 +12,7 @@ def empty_context(issue):
 
 
 def request_context(project, task, index, request, api, sources, bindings, *, resolve_key, file_link):
+    source_checks = {resolve_key(project, key, task['project']): (key, stamp) for key, stamp in sources.items()}
     workflow = request['prompt']
     director = next(((node, value['inputs']) for node, value in workflow.items()
                      if value['class_type'] == 'MiniMaxH3Director'), None)
@@ -43,7 +45,7 @@ def request_context(project, task, index, request, api, sources, bindings, *, re
         for field in slot:
             reference = reference[field]
         key = resolve_key(project, upload['file'], task['project'])
-        bindings[(slot[-1], reference)] = (key, sources.get(key))
+        bindings[(slot[-1], reference)] = (key, source_checks.get(key))
     for group_name, values in (('common', common), ('segment', group)):
         refs = [(field, item) for field, collection in (('imageFile', 'refs'), ('videoFile', 'refVideos'), ('audioFile', 'refAudios'))
                 for item in values.get(collection, [])]
@@ -60,7 +62,7 @@ def request_context(project, task, index, request, api, sources, bindings, *, re
             material = {'name': Path(key or remote).name, 'kind': kind, 'label': label}
             if key and (project / key).is_file():
                 info = (project / key).stat()
-                if checked is not None and checked != [info.st_size, info.st_mtime_ns]:
+                if checked is not None and checked[1] != [info.st_size, info.st_mtime_ns] and not resources.matches_recorded_stamp(project, checked[0], checked[1]):
                     material['missing'] = True
                     result['issues'].append('参考原文件已在执行后变化，未将当前文件冒充当次输入：' + key)
                 else:

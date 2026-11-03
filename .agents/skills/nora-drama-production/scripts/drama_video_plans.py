@@ -71,7 +71,7 @@ def build_video(root, spec, documents):
         for index in mapping['selected_indices']:
             entry = mapping['segments'][index]
             identity = f"{entry['segment']}-{entry['round']}-{stage}"
-            targets.append(dict(index=index, path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name=f'最终取回-{index:03d}.json'))
+            targets.append(dict(index=index, path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name=f'最终取回-{index:03d}.json', resource_key='视频/' + entry['segment']))
         segment_plan = dict(director_node=director, report_node=str(spec['report_node']), output_root=spec['output_root'], targets=targets)
     if spec['task_type'] == 'video-postprocess' and not outputs:
         savers = [key for key,node in api.items() if node['class_type']=='VHS_VideoCombine' and node['inputs'].get('format')=='video/h264-mp4']
@@ -80,7 +80,7 @@ def build_video(root, spec, documents):
         entry = mapping['segments'][mapping['selected_indices'][0]]
         identity = entry['segment']+'-'+entry['round']+'-后处理'
         outputs = [dict(node_id=savers[0], output_key='gifs', index=0,
-            path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name='最终取回-000.json')]
+            path=f"09-剧集制作/{identity.split('-')[0]}/其他资料/候选视频/{identity}.mp4", response_name='最终取回-000.json', resource_key='视频/' + entry['segment'])]
     uploads = reference_bindings(api,
         [{**item, 'file': str(project_file(root, item['file']))} for item in spec.get('references', [])],
         record.name, spec.get('uploads', []))

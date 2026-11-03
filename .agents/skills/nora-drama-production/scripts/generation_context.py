@@ -12,6 +12,7 @@ import stat
 from project_paths import PreparationPaths
 from h3_prompt_checks import chinese_text, digest
 from image_files import store_png
+import project_resources as resourceio
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
 
@@ -180,6 +181,14 @@ def prepare_generation_context(project, record, workflow, task_type, uploaded_ma
                         source_files.add(original)
                         slot = f"<{label} {item['index'] + 1}>"
                         prior = next((ref for ref in reused.get(scope, []) if ref['label'] == slot), None)
+                        if resourceio.enabled(project):
+                            ref = resourceio.reference(project, original)
+                            if ref is None and not check_only:
+                                ref = resourceio.register(project, original, key='输入/' + original.relative_to(project).as_posix(), origin='import')
+                            result[scope].append({'file': ref['file'] if ref else original.relative_to(project).as_posix(),
+                                                  'resource': {key: ref[key] for key in ('resource_id', 'version')} if ref else None,
+                                                  'label': slot, 'original_file': original.relative_to(project).as_posix()})
+                            continue
                         target = inside(prior['file']) if prior else record / '输入素材' / original.name
                         if not check_only and not prior and not is_file(target) and original.suffix.lower() == '.png':
                             # Reuse only execution inputs, never the mutable formal/candidate asset.

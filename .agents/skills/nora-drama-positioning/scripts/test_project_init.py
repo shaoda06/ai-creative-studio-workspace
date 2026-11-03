@@ -41,14 +41,14 @@ class ProjectInitializationTests(unittest.TestCase):
         self.assertEqual({path.name for path in self.project.iterdir()}, {
             "00-项目定位", "01-主旨与简介", "02-故事大纲", "03-人物资料",
             "04-场景资料", "05-道具资料", "06-分集大纲", "07-参考音频",
-            "08-参考视频", "09-剧集制作", "98-成片交付", "99-综合资料", "README.md"})
+            "08-参考视频", "09-剧集制作", "98-成片交付", "99-综合资料", "README.md", "资源"})
         general = self.project / "99-综合资料/其他资料"
-        self.assertTrue((general / "工作稿/素材").is_dir())
+        self.assertFalse((general / "工作稿/素材").exists())
         self.assertEqual({p.name for p in general.iterdir()}, {
             "跨阶段资料", "原稿", "待分类资料", "实验资料", "工作稿", "历史版本", "执行附件"})
         self.assertFalse(list((self.project / "09-剧集制作").iterdir()))
         self.assertEqual(list((self.project / "98-成片交付").iterdir()), [])
-        self.assertEqual([p.relative_to(self.project).as_posix() for p in self.project.rglob('*') if p.is_file()], ['README.md'])
+        self.assertEqual(sorted(p.relative_to(self.project).as_posix() for p in self.project.rglob('*') if p.is_file()), ['README.md', '资源/资源索引.json'])
         self.assertTrue(report['readme_created'])
         readme = (self.project / 'README.md').read_text()
         self.assertEqual([line for line in readme.splitlines() if line.startswith('## ')], [
@@ -89,7 +89,9 @@ class ProjectInitializationTests(unittest.TestCase):
                             "04-专用素材", "05-视频提示词"})
                 self.assertTrue((project / "98-成片交付").is_dir())
                 self.assertEqual(list((project / "98-成片交付").iterdir()), [])
-                self.assertEqual([p.relative_to(project).as_posix() for p in project.rglob('*') if p.is_file()], ['README.md'])
+                self.assertEqual(sorted(p.relative_to(project).as_posix() for p in project.rglob('*') if p.is_file()), ['README.md', '资源/资源索引.json'])
+                self.assertTrue(json.loads((project / '资源/资源索引.json').read_text())['managed'])
+                self.assertFalse((project / '99-综合资料/其他资料/工作稿/素材').exists())
                 self.assertFalse((project / "09-剧集制作/EP001").exists())
                 self.assertEqual(initialize(project, **selections)["created"], [])
 
