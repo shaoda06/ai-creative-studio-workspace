@@ -54,7 +54,7 @@ try {
     await body.getByText('甲项目的主旨与简介正文', { exact: true }).waitFor();
     const switchProject = async name => {
       await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
-      await page.getByRole('option', { name: new RegExp(`示例空间 / ${name}$`) }).click();
+      await page.getByRole('option', { name, exact: true }).click();
     };
     await switchProject('乙项目');
     try { await body.getByText('乙项目的项目定位正文', { exact: true }).waitFor({ timeout: 4000 }); }

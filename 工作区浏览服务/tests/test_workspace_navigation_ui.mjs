@@ -17,7 +17,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 let activePage;
 const allErrors = [];
 const spaces = [{ id: 'nora', name: '短剧空间示例', view: 'serial-drama', projects: [{ id: '同名示例', name: '同名示例' }] },
-  { id: 'commercial', name: '商业空间示例', view: 'files', projects: [{ id: '同名示例', name: '同名示例' }] }];
+  { id: 'commercial', name: '商业空间示例', view: 'files', projects: [{ id: '同名示例', name: '同名示例' }, { id: 'Iris独有项目', name: 'Iris独有项目' }] }];
 const projectBase = '/api/workspaces/commercial/projects/' + encodeURIComponent('同名示例');
 try {
  for (const width of [1362]) {
@@ -35,6 +35,7 @@ try {
       tasks: [], local_tasks: spaces.map((space,index) => ({ id: space.id+'-fixture', title: index ? '商业空间测试任务' : '短剧空间测试任务', workspace_name: space.name, api_prefix: '/api/workspaces/'+space.id, project: '同名示例', task_type: 'image', status: 'local_queued', queue: 'local', category: 'queued', created_at: '2026-11-01T00:00:00Z', remote_url: 'http://fixture-node' })),
       remote_nodes: [{ url: 'http://fixture-node', name: '隔离节点', connection: 'connected', queue: [], running_count: 0, queued_count: 0, updated_at: '2026-11-01T00:00:00Z' }],
       local_counts: { 'http://fixture-node': { queued: 2, paused: 0, history: 0 } }, history_updated_at: {} } });
+    if (path === '/api/workspaces/commercial/projects/' + encodeURIComponent('Iris独有项目')) return route.fulfill({ json: { name: 'Iris独有项目', files: [] } });
     if (path === projectBase) return route.fulfill({ json: { name: '同名示例', files: [
       { kind: 'file', name: 'README.md', key: 'README.md', url: projectBase + '/files/README.md' },
       { kind: 'group', name: '资产', children: [{ kind: 'file', name: '参考.png', key: '资产/参考.png', url: projectBase + '/files/' + encodeURIComponent('资产/参考.png') }] },
@@ -57,7 +58,20 @@ try {
   await page.getByRole('button', { name: '收起任务进度', exact: true }).click();
   await page.getByRole('link', { name: /商业空间示例.*业务项目/ }).click();
   await page.getByRole('heading', { name: '业务项目' }).waitFor();
+  await page.getByRole('combobox', { name: '切换工作区', exact: true }).click();
+  assert.deepEqual((await page.getByRole('option').allTextContents()).map(text => text.replace(/当前$/, '')), ['短剧空间示例', '商业空间示例']);
+  await page.getByRole('option', { name: '短剧空间示例', exact: true }).click();
+  await page.getByRole('heading', { name: '短剧空间示例', exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '切换工作区', exact: true }).click();
+  await page.getByRole('option', { name: '商业空间示例', exact: true }).click();
   await page.getByRole('link', { name: /同名示例/ }).filter({ hasText: '查看项目资料与素材' }).click();
+  await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
+  assert.deepEqual((await page.getByRole('option').allTextContents()).map(text => text.replace(/当前$/, '')), ['同名示例', 'Iris独有项目']);
+  assert.equal(await page.getByRole('option').filter({ hasText: '同名示例' }).getAttribute('aria-selected'), 'true');
+  await page.getByRole('option', { name: 'Iris独有项目', exact: true }).click();
+  await page.getByRole('heading', { name: 'Iris独有项目', exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
+  await page.getByRole('option', { name: '同名示例', exact: true }).click();
   await page.getByRole('button', { name: 'README.md', exact: true }).click();
   await page.getByRole('dialog').getByRole('heading', { name: '商业资料隔离正文' }).waitFor();
   await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
