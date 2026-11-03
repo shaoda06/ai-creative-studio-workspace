@@ -21,11 +21,24 @@ try{
   await page.route('**/api/**',route=>{
    const req=route.request(),u=new URL(req.url()),path=decodeURIComponent(u.pathname);
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
-   if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'files',projects:[{id:'隔离样片',name:'隔离样片'}]}]});
+   if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[{id:'隔离样片',name:'隔离样片'}]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
+   if(path==='/api/workspaces/commercial/projects/未制作样片')return route.fulfill({json:{name:'未制作样片',files:[]}});
    const historical=path.startsWith('/api/workspaces/commercial/projects/历史样片');
    const base='/api/workspaces/commercial/projects/'+(historical?'历史样片':'隔离样片');
-   if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',files:[{kind:'group',name:'06-视频生产',key:'06-视频生产',children:[]}]}});
+   const doc=(key)=>({kind:'file',name:key.split('/').at(-1),key,url:base+'/files/'+key});
+   const folder=(name,files)=>({kind:'group',name,key:name,children:files.map(file=>doc(name+'/'+file))});
+   if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',files:[
+     doc('README.md'),doc('项目状态.md'),folder('01-客户资料',['需求原件.md']),folder('02-参考分析',['制作简报.md']),
+     folder('04-分镜声音',['导演表.md']),folder('05-资产',['资产清单.md']),folder('06-视频生产',['生产任务.md']),folder('07-交接',['交接说明.md']),
+   ]}});
+   if(path===base+'/document'){
+    const html=u.searchParams.get('path')==='项目状态.md'
+      ? historical?'<h1>状态</h1><ul><li>更新：测试</li><li>状态：已交付并归档</li></ul>':'<h1>状态</h1><p>项目：隔离样片\n当前阶段与下一步：等待用户审阅。</p>'
+      : '<h1>隔离资料正文</h1>';
+    return route.fulfill({json:{html}});
+   }
+   if(path===base+'/resources')return route.fulfill({json:{items:[],total:0,page_size:20}});
    if(path===base+'/production'){
     const segments=['P001','P002'].map((id,i)=>({id,duration:3,scriptHtml:'',videos:['一采','二采','后处理'].flatMap((stage,j)=>[1,2].map(n=>({key:`${id}/${stage}/R00${n}.webm`,url:base+`/files/${id}-${j}-${n}.webm`,run:`R00${n}`,stage,approved:false,adoptionKnown:false,candidateNumber:n,fileRevision:`fixture-${i}-${j}-${n}`,deliveryStatus:'已取回',taskStatus:'completed',taskStateUrl:'',checkedAt:'',context:{scriptHtml:`<h4>${id}-SH001</h4><p>${id}实际镜头</p>`,shots:[{id:`${id}-SH001`,duration:3,html:`<h4>${id}-SH001</h4><p>${id}实际镜头</p>`}],prompts:{english:`summary:\n${id} actual R00${n}`,chinese:`${id}同版中文R00${n}`},references:{common:[],segment:[{kind:'image',name:'fixture.png',label:'Picture 1',url:base+'/files/fixture.png'}]},issues:[]}})))}));
     if(historical){for(const item of segments){item.label=item.id;item.id='EP001-C001-'+item.id;for(const video of item.videos){delete video.context;video.contextUrl=base+'/production-context?source=history&identity='+item.id}}}
@@ -47,7 +60,32 @@ try{
   });
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
   await page.goto(origin+'/#/spaces/commercial/projects/隔离样片');
-  await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
+  const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
+  await page.getByText('等待用户审阅。',{exact:true}).waitFor();
+  await page.screenshot({path:`${out}/${width}-overview.png`});
+  assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','项目资源','全部资料']);
+  await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
+  await page.getByRole('button',{name:'需求原件.md',exact:true}).waitFor();
+  await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
+  await page.getByRole('dialog').getByRole('heading',{name:'隔离资料正文',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
+  await page.getByText('本项目暂无创意与音画资料。',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
+  await page.getByRole('button',{name:'导演表.md',exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'资产准备',exact:true}).click();
+  await page.getByRole('button',{name:'资产清单.md',exact:true}).waitFor();
+  await page.getByRole('button',{name:'查看项目资源',exact:true}).click();
+  await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
+  await page.getByRole('button',{name:'交接说明.md',exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'全部资料',exact:true}).click();
+  await page.getByText('01-客户资料',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+  await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
+  assert.equal(await page.locator('.segment-video video').count(),0);
+  await page.screenshot({path:`${out}/${width}-batches.png`});
+  await page.getByRole('button',{name:/R002-隔离后处理/}).click();
   await page.getByRole('combobox',{name:'生产批次',exact:true}).waitFor();
   await page.locator('.segment-video video').waitFor();
   await page.waitForFunction(()=>document.querySelector('.segment-video video')?.readyState>=2);
@@ -76,10 +114,18 @@ try{
   await page.getByRole('combobox',{name:'生产批次',exact:true}).click();await page.getByRole('option',{name:'R001-隔离一采',exact:true}).click();
   await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
   await page.getByRole('dialog').getByText('隔离P001一采意见',{exact:false}).first().waitFor();await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+  await page.getByRole('button',{name:'返回批次列表',exact:true}).click();
+  await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
+  await page.getByText('已交付并归档',{exact:true}).waitFor();
   await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
+  await page.getByRole('button',{name:/R002-隔离后处理.*历史只读/}).click();
   await page.locator('.segment-script-content').getByText('历史分镜快照',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'修改意见',exact:true}).count(),0);
+  await page.goto(origin+'/#/spaces/commercial/projects/未制作样片');
+  await page.getByText('暂无项目状态记录。',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+  await page.getByText('本项目暂无视频制作资料。',{exact:true}).waitFor();
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.ok(writes.every(path=>path.endsWith('/production-notes')));
   console.log(JSON.stringify({width,passed:true,reviewWrites:writes.length}));await page.close();
  }

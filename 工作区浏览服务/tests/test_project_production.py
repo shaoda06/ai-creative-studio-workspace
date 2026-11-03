@@ -25,7 +25,10 @@ class ProjectProductionTests(HttpTestCase):
             (root / 'projects/同名项目').mkdir(parents=True)
         runtime = self.root / 'runtime'
         runtime.mkdir()
-        (runtime / 'workspaces.json').write_text(json.dumps([{'id': 'commercial', 'name': 'Iris', 'path': str(self.other)}]))
+        (runtime / 'workspaces.json').write_text(json.dumps([{
+            'id': 'commercial', 'name': 'Iris', 'path': str(self.other), 'view': 'iris-commercial',
+            'production_adapter': 'iris-commercial-production',
+        }]))
         self.spaces = Workspaces(self.primary, runtime, ProjectStore(self.primary / 'projects'), 'test')
         override = patch.object(main.app.state, 'workspaces', self.spaces, create=True)
         override.start()
@@ -33,7 +36,6 @@ class ProjectProductionTests(HttpTestCase):
         self.client = TestClient(main.app, base_url='http://localhost:8782', client=('127.0.0.1', 50000), headers={'Origin': 'http://localhost:8782'})
         self.addCleanup(self.client.close)
         self.api = '/api/workspaces/commercial'
-        self.spaces.get('commercial').production_adapter = 'iris-commercial-production'
         self.project = self.other / 'projects/同名项目'
         self.directory = self.project / '06-视频生产/执行记录/R001-一采'
         self.directory.mkdir(parents=True)
@@ -68,6 +70,7 @@ class ProjectProductionTests(HttpTestCase):
         self.assertIn('Actual shot.', video['context']['prompts']['english'])
         self.assertEqual(video['context']['shots'][0]['duration'], 3)
         self.assertEqual(self.client.get(self.api).json()['productionSection'], '06-视频生产')
+        self.assertEqual([space['view'] for space in self.client.get('/api/workspaces').json()], ['serial-drama', 'iris-commercial'])
         self.assertFalse((self.project / '09-剧集制作').exists())
         self.assertFalse((self.project / '06-视频生产/视频修改意见.json').exists())
 

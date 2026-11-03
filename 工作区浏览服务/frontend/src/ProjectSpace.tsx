@@ -12,6 +12,7 @@ import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
+import { IrisProject } from './IrisProject';
 
 export function ProjectSpace() {
   const { spaceId = '' } = useParams();
@@ -39,6 +40,8 @@ export function FilesProject() {
   const [section, setSection] = useState('');
   const baseUrl = `/api/workspaces/${encodeURIComponent(spaceId)}/projects/${encodeURIComponent(name)}`;
   const [preview, setPreview] = useState<FileItem | null>(null);
+  const workspaces = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
+  const iris = workspaces.data?.find(space => space.id === spaceId)?.view === 'iris-commercial';
   const query = useQuery({ queryKey: ['project-files', spaceId, name], queryFn: () => get<{ name: string; files: FileItem[]; productionSection?: string }>(baseUrl), refetchInterval: 5000 });
   useEffect(() => { setSection(''); setPreview(null); }, [spaceId, name]);
   const files = query.data?.files || [];
@@ -54,7 +57,9 @@ export function FilesProject() {
     <PageHeader title={name} actions={<Link to={`/spaces/${spaceId}`}>返回项目空间</Link>} />
     <PageCheckStatus queries={[query]} />
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && <>
+    {query.data && !workspaces.data && <Result page loading={workspaces.isPending} error={workspaces.error} retry={workspaces.refetch} retrying={workspaces.isFetching} />}
+    {query.data && workspaces.data && (iris ? <IrisProject key={baseUrl} name={name} baseUrl={baseUrl}
+      files={files} productionSection={query.data.productionSection} clearPreview={() => setPreview(null)} /> : <>
       {controlsRoot && createPortal(<TabNav wide label="项目栏目" items={tabs} selected={selected}
         onChange={value => { setSection(value); setPreview(null); }} />, controlsRoot)}
       {selected === query.data.productionSection && <ProjectProduction key={baseUrl} project={name} baseUrl={baseUrl} />}
@@ -64,7 +69,7 @@ export function FilesProject() {
         {!items.length && <p className="muted">本栏目暂无资料。</p>}
         </>}
       </section>
-    </>}
+    </>)}
     {preview && <Preview key={preview.key} project={`${spaceId}/${name}`} baseUrl={baseUrl} item={preview} revision={0} close={() => setPreview(null)} />}
   </div></PreviewContext.Provider>;
 }

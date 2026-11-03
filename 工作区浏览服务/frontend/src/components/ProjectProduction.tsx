@@ -15,18 +15,30 @@ type Segments = NonNullable<FileItem['segments']>[string];
 type Batch = { id: string; name: string; url: string; readOnly?: boolean; segments: { id: string; stage: string; key: string }[] };
 type Production = { segments: Segments; batches: Batch[]; issues: string[] };
 
-export function ProjectProduction({ project, baseUrl }: { project: string; baseUrl: string }) {
+export function ProjectProduction({ project, baseUrl, batchIndex = false }: { project: string; baseUrl: string; batchIndex?: boolean }) {
   const query = useQuery({ queryKey: ['production', baseUrl], queryFn: () => get<Production>(baseUrl + '/production'), refetchInterval: 5000 });
   const [requested, setBatch] = useRefreshState(baseUrl + '/production/batch', '');
-  const batch = query.data?.batches.find(item => item.id === requested) || query.data?.batches.at(-1);
+  const batch = query.data?.batches.find(item => item.id === requested) || (batchIndex ? undefined : query.data?.batches.at(-1));
   return <>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && <>
       <MessagePanel label="制作记录说明" messages={query.data.issues.map(issue => ({ id: issue, content: issue }))} />
       {batch ? <>
-        <TabSelect label="生产批次" selected={batch.id} onChange={setBatch} items={query.data.batches.map(item => ({ value: item.id, label: item.name }))} />
+        <div className={batchIndex ? 'iris-batch-toolbar' : undefined}>
+          {batchIndex && <button type="button" onClick={() => setBatch('')}>返回批次列表</button>}
+          <TabSelect label="生产批次" selected={batch.id} onChange={setBatch} items={query.data.batches.map(item => ({ value: item.id, label: item.name }))} />
+        </div>
         <BatchProduction key={baseUrl} project={project} baseUrl={baseUrl} batch={batch} allSegments={query.data.segments} />
-      </> : <p className="muted">尚无已提交的生产批次。制作资料仍可在下方查看。</p>}
+      </> : batchIndex ? <section className="panel iris-production-index" aria-label="生产批次列表">
+        <h2>生产批次</h2>
+        {query.data.batches.length ? <>
+          <p className="muted">选一个批次，按段查看候选视频、分镜和审阅资料。</p>
+          <div className="iris-batch-list">{[...query.data.batches].reverse().map(item => <button type="button" key={item.id} onClick={() => setBatch(item.id)}>
+            <strong>{item.name}</strong>
+            <span>{new Set(item.segments.map(segment => segment.id)).size}段 · {[...new Set(item.segments.map(segment => segment.stage))].join('、')}{item.readOnly && ' · 历史只读'}</span>
+          </button>)}</div>
+        </> : <p className="muted">尚无已提交的生产批次。</p>}
+      </section> : <p className="muted">尚无已提交的生产批次。制作资料仍可在下方查看。</p>}
     </>}
   </>;
 }
