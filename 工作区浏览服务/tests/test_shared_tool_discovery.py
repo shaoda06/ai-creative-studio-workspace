@@ -17,11 +17,16 @@ class SharedToolDiscoveryTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.workspace = Path(temporary.name) / 'Iris 测试工作区'
-        self.runtime = self.workspace / '工作区浏览服务/runtime'
+        self.runtime = Path(temporary.name) / '工作区浏览服务/runtime/workspaces/iris'
         self.runtime.mkdir(parents=True)
         self.config = self.runtime / 'task-service.json'
         self.config.write_text(json.dumps({'url': 'http://provider.invalid:8782',
-            'api_prefix': '/api/workspaces/commercial', 'token': 'private-token-not-for-output'}))
+            'workspace': str(self.workspace), 'api_prefix': '/api/workspaces/commercial', 'token': 'private-token-not-for-output'}))
+        primary = self.runtime.parent / 'nora/task-service.json'
+        primary.parent.mkdir()
+        primary.write_text(json.dumps({'url': 'http://provider.invalid:8782', 'workspace': str(self.workspace.parent)}))
+        (self.runtime.parent.parent / 'workspaces.json').write_text(json.dumps([
+            {'id': 'commercial', 'runtime_id': 'iris', 'path': str(self.workspace)}]))
         self.metadata = {'workspace': str(self.workspace), 'tool': str(Path(temporary.name) / '共享提供端/工作区浏览服务'),
                          'ready': True, 'version': 'test-version'}
         self.calls = []
@@ -48,16 +53,16 @@ class SharedToolDiscoveryTests(unittest.TestCase):
              contextlib.redirect_stdout(output):
             browser_http.main()
         data = json.loads(output.getvalue())
-        self.assertEqual(Path(data['workspace_skills']), self.workspace / '.agents/skills')
+        self.assertEqual(Path(data['workspace_skills']), Path(self.metadata['tool']).parent / '.agents/skills')
         self.assertEqual(Path(data['provider_skills']), Path(self.metadata['tool']).parent / '.agents/skills')
-        self.assertNotEqual(data['workspace_skills'], data['provider_skills'])
+        self.assertEqual(data['workspace_skills'], data['provider_skills'])
         self.assertNotIn('private-token-not-for-output', output.getvalue())
         self.assertEqual(self.config.read_bytes(), before)
         self.assertEqual(list(self.runtime.iterdir()), [self.config])
         self.assertEqual(len(self.calls), 1)
 
     def test_primary_workspace_uses_unscoped_api(self):
-        self.config.write_text(json.dumps({'url': 'http://provider.invalid:8782', 'token': 'private'}))
+        self.config.write_text(json.dumps({'url': 'http://provider.invalid:8782', 'token': 'private', 'workspace': str(self.workspace)}))
         with patch.object(browser_http.urllib.request, 'build_opener', return_value=self.opener()):
             browser_http.open_service(self.workspace, 3, with_metadata=True)
         self.assertEqual(self.calls, [('http://provider.invalid:8782/api/service', 3)])

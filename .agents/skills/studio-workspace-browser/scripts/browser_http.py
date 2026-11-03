@@ -3,13 +3,13 @@ import json
 from pathlib import Path
 import sys
 import urllib.request
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
-from comfyui_client import strict_json
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from workspace_connection import read_connection
 
 
 def open_service(workspace, timeout, *, with_metadata=False):
     workspace = Path(workspace).resolve()
-    config = strict_json((workspace / '工作区浏览服务/runtime/task-service.json').read_bytes())
+    config = read_connection(workspace)
     base = config['url'].rstrip('/')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -26,7 +26,7 @@ def open_service(workspace, timeout, *, with_metadata=False):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='只读定位本空间及统一服务的工具真源，不输出token或执行任务')
-    parser.add_argument('--workspace', required=True, type=Path, help='含工作区浏览服务/runtime/task-service.json的实际工作区根目录')
+    parser.add_argument('--workspace', required=True, type=Path, help='已登记到统一后台的实际资料工作区根目录')
     parser.add_argument('--timeout', type=float, default=30, help='每次元数据GET的阻塞超时秒数，默认30')
     args = parser.parse_args()
     _, _, metadata = open_service(args.workspace, args.timeout, with_metadata=True)

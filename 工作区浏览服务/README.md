@@ -135,7 +135,7 @@ pnpm --dir frontend build
 
 本服务默认从所在目录定位工作区，不依赖盘符、用户名、项目名称或Codex安装位置。GitHub仅同步共用代码、规则、模板和风格库；真实`projects/`、`综合资料/`、`.venv`、`frontend/node_modules`、`frontend/dist`、`runtime`及工作区根目录的`comfyui-config.json`按根目录.gitignore排除。另一台设备拉取仓库后，先按“安装与构建”安装本机依赖及构建前端，再在`projects/`放入自己的项目；没有ComfyUI配置时仍可浏览项目，生成任务复用[工作区服务配置](../.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)及本机Codex连接。后台读取实际资料工作区根目录的配置，独立开发目录共用资料时同样共用此文件；HTTP与WebSocket认证均从该文件加载；仅同源节点编辑管理接口返回凭据，普通节点及任务接口不返回凭据。
 
-整份工作区换位置前停止浏览服务，完整复制真实项目、执行附件、素材和`runtime/comfy-tasks.sqlite`，核对复制结果后再启动新位置的服务；不让两份后台同时处理同一队列。虚拟环境须在新位置重新创建并安装requirements.txt；Node、FFmpeg及Codex属于本机环境，按README配置，不把另一台设备的可执行文件路径作为通用配置。若有runtime/service.json或NORA_WORKSPACE覆盖默认目录，需要改为本机实际资料目录；没有覆盖时不用填写工作区路径。项目缓存绑定旧根目录，迁移后自动重建。
+整份工作区换位置前停止浏览服务，完整复制真实项目、执行附件、素材和`runtime/workspaces/`内各空间的任务库和本机登记，核对复制结果后再启动新位置的服务；不让两份后台同时处理同一队列。虚拟环境须在新位置重新创建并安装requirements.txt；Node、FFmpeg及Codex属于本机环境，按README配置，不把另一台设备的可执行文件路径作为通用配置。若有runtime/service.json或NORA_WORKSPACE覆盖默认目录，需要改为本机实际资料目录；没有覆盖时不用填写工作区路径。项目缓存绑定旧根目录，迁移后自动重建。
 
 新入队的上传file、成果path和分段目标path以项目根目录解析，后台持久化项目名及项目内相对路径；执行时才解析为本机绝对路径。旧任务数据库及项目内旧凭据、输入映射中的`.../projects/项目名/...`路径在读取时对应到当前项目。重试仍核对真实远端文件、字节数和原下载凭据，不重生成、不覆盖成果；原始请求、响应、过程记录和通知正文不批量改写。Codex原会话工作目录和项目登记需要在Codex中另行接续，不由浏览服务修改。按[官方项目说明](https://learn.chatgpt.com/docs/projects?surface=app)，在项目菜单选择“Edit project”，添加新文件夹并设为“Make primary”，之后新会话从新目录开始；仅移动磁盘文件不会自动更新项目登记。
 
@@ -362,10 +362,10 @@ Agent按[同轮次后处理产物](../.agents/skills/nora-drama-production/refer
 服务代码目录的runtime/workspaces.json保存本机登记，不提交Git。例如：
 
 ```json
-[{"id":"commercial","name":"商业视频制作","path":"/本机商业资料目录"}]
+[{"id":"commercial","runtime_id":"iris","name":"Iris商业视频制作","path":"/本机商业资料目录"}]
 ```
 
-id使用小写字母、数字和连字符，目录必须有projects。默认Nora空间使用其资料根；登记空间保留其工作区浏览服务/runtime下的任务数据库，统一进程启动对应TaskStore并更新任务客户端配置，不复制或重编号任务。业务阶段不得另建服务或监控器；接管前停止旧服务，防止两个进程处理同一任务库。服务启动后更新各空间的task-service.json：url是统一地址，api_prefix为`/api/workspaces/{id}`空间路由，token只供本机Agent使用。
+id使用小写字母、数字和连字符，目录必须有projects。所有任务库与客户端连接集中于总服务runtime/workspaces/{运行标识}/，默认标识为id，runtime_id仅用于显式保留已有API标识的场景。Nora使用nora，Iris保留commercial API并使用iris运行目录。统一进程启动各TaskStore并自动建立缺失的数据库、更新连接配置；不复制或重编号任务，不在资料区创建服务目录。新增空间、备份恢复及退役见[运行资料维护规范](../.agents/skills/studio-workspace-browser/references/任务运行资料维护规范.md)。
 
 /api/workspaces公开登记名称、视图和项目索引；/api/workspaces/{id}/projects提供该空间目录与文件，/api/workspaces/{id}/comfy及/internal/comfy复用同一套任务处理和认证。未登记空间返回404，凭据不得跨空间使用。公共资产、提示词、工作流和风格库仍在工作区首页独立访问。实际资料路径与运行配置均排除在分发之外。
 

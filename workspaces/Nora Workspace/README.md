@@ -15,7 +15,7 @@
 
 - `projects/`保存独立项目；各项目的阶段目录按所属业务及项目约定维护。
 - `综合资料/`用于Nora跨项目资料，按实际需要建立。
-- `comfyui-config.json`属于Nora资料空间；`工作区浏览服务/runtime/`只保存空间连接和任务资料，不是另一套后台。
+- `comfyui-config.json`属于Nora资料空间；任务库及连接配置集中于总后台的`runtime/workspaces/nora/`，按[运行资料维护规范](../../.agents/skills/studio-workspace-browser/references/任务运行资料维护规范.md)管理，资料区不另建服务目录。
 - 技能、规则、模板和共用工具统一位于总目录`.agents/skills/`，公共浏览服务在总层运行。
 
 ## 项目索引入口

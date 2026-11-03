@@ -62,10 +62,15 @@ store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/pro
 async def lifespan(app):
     clear_downloads()
     prompt_library.initialize()
-    tasks = TaskStore(TOOL / 'runtime', WORKSPACE)
+    spaces = app.state.workspaces = Workspaces(WORKSPACE, TOOL / 'runtime', store, VERSION)
+    old_databases = [TOOL / 'runtime/comfy-tasks.sqlite',
+                     *(space.root / '工作区浏览服务/runtime/comfy-tasks.sqlite' for space in spaces.items.values())]
+    for database in old_databases:
+        if database.is_file():
+            raise RuntimeError('旧任务库尚未迁移，停止启动以免显示空任务历史：' + str(database))
+    tasks = TaskStore(spaces.get('nora').runtime, WORKSPACE)
     tasks.projects = store
     app.state.comfy_tasks = tasks
-    spaces = app.state.workspaces = Workspaces(WORKSPACE, TOOL / 'runtime', store, VERSION)
     spaces.get('nora').tasks = tasks
     for space in list(spaces.items.values())[1:]:
         space.tasks = TaskStore(space.runtime, space.root)
@@ -73,19 +78,16 @@ async def lifespan(app):
     config_path = TOOL / 'runtime/service.json'
     config = json.loads(config_path.read_text('utf-8-sig')) if config_path.is_file() else {}
     port = int(os.environ.get('NORA_SERVICE_PORT', config.get('port', 8782)))
-    (TOOL / 'runtime/task-service.json').write_text(
-        json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
-    if WORKSPACE != PUBLIC_ROOT:
-        connection = WORKSPACE / '工作区浏览服务/runtime/task-service.json'
-        connection.parent.mkdir(parents=True, exist_ok=True)
-        connection.write_text(json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
-        connection.chmod(0o600)
+    connection = spaces.get('nora').runtime / 'task-service.json'
+    connection.write_text(json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token,
+                                      'workspace': str(WORKSPACE)}), encoding='utf-8')
+    connection.chmod(0o600)
     await tasks.start()
     await tasks.remote_queues.start()
     for space in list(spaces.items.values())[1:]:
         (space.runtime / 'task-service.json').write_text(json.dumps({
             'url': f'http://127.0.0.1:{port}', 'api_prefix': space.api,
-            'token': space.tasks.token}), encoding='utf-8')
+            'token': space.tasks.token, 'workspace': str(space.root)}), encoding='utf-8')
         (space.runtime / 'task-service.json').chmod(0o600)
         await space.tasks.start()
         await space.tasks.remote_queues.start()

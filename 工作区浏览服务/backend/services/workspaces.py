@@ -29,7 +29,8 @@ class Workspace:
 
 class Workspaces:
     def __init__(self, root, runtime, projects, version):
-        self.items = {'nora': Workspace('nora', 'Nora视频创作', root, runtime, 'serial-drama', projects)}
+        runtime = Path(runtime).resolve()
+        self.items = {'nora': Workspace('nora', 'Nora视频创作', root, runtime / 'workspaces/nora', 'serial-drama', projects)}
         path = runtime / 'workspaces.json'
         registered = json.loads(path.read_text('utf-8')) if path.is_file() else []
         for item in registered:
@@ -39,7 +40,12 @@ class Workspaces:
                 raise ValueError('项目空间ID无效或重复：' + identity)
             if target in [space.root for space in self.items.values()] or not (target / 'projects').is_dir():
                 raise ValueError('项目空间目录重复或缺少projects目录：' + identity)
-            state = target / '工作区浏览服务/runtime'
+            runtime_id = item.get('runtime_id', identity)
+            if not re.fullmatch(r'[a-z][a-z0-9-]*', runtime_id):
+                raise ValueError('运行资料标识无效：' + runtime_id)
+            state = runtime / 'workspaces' / runtime_id
+            if state in [space.runtime for space in self.items.values()]:
+                raise ValueError('运行资料目录重复：' + runtime_id)
             self.items[identity] = Workspace(identity, item['name'], target, state, 'files',
                 ProjectFiles(target / 'projects'), production_adapter=item.get('production_adapter'))
 

@@ -50,14 +50,16 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         self.cli.parent.mkdir(parents=True)
         shutil.copyfile(source, self.cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', self.cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', self.cli.with_name('execution_records.py'))
 
     async def asyncTearDown(self):
         await base.TaskTests.asyncTearDown(self)
 
     def cli_config(self, url):
-        path = self.root / '工作区浏览服务/runtime/task-service.json'
+        path = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({'url': url, 'token': self.store.token}), 'utf8')
+        path.write_text(json.dumps({'url': url, 'token': self.store.token, 'workspace': str(self.root)}), 'utf8')
 
     async def agent(self, *args):
         process = await asyncio.create_subprocess_exec(sys.executable, '-X', 'utf8', str(self.cli), *args,

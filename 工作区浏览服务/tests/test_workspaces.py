@@ -87,7 +87,7 @@ class WorkspaceTests(HttpTestCase):
     def test_task_handlers_select_the_owning_store(self):
         self.assertEqual(self.client.get('/api/comfy/tasks').json()['tasks'], [{'id': 'nora'}])
         self.assertEqual(self.client.get(self.api + '/comfy/tasks').json()['tasks'], [{'id': 'commercial'}])
-        self.assertEqual(self.spaces.get('commercial').runtime, (self.other / '工作区浏览服务/runtime').resolve())
+        self.assertEqual(self.spaces.get('commercial').runtime, (self.primary / '工作区浏览服务/runtime/workspaces/commercial').resolve())
 
     def test_internal_credentials_cannot_cross_spaces(self):
         url = self.api + '/internal/comfy/groups/original-group'
@@ -118,10 +118,15 @@ class WorkspaceClientTests(HttpTestCase):
             script.parent.mkdir(parents=True)
             script.touch()
             other = root / 'workspaces/Iris Workspace'
+            runtime = root / '工作区浏览服务/runtime'
+            (runtime / 'workspaces.json').parent.mkdir(parents=True)
+            (runtime / 'workspaces.json').write_text(json.dumps([
+                {'id': 'commercial', 'runtime_id': 'iris', 'path': str(other)}]))
             for owner, folder, prefix in [('nora', root, '/api'), ('commercial', other, '/api/workspaces/commercial')]:
-                config = folder / '工作区浏览服务/runtime/task-service.json'
+                config = runtime / 'workspaces' / ('iris' if owner == 'commercial' else 'nora') / 'task-service.json'
                 config.parent.mkdir(parents=True)
-                config.write_text(json.dumps({'url': 'http://fixture.invalid', 'token': owner, 'api_prefix': prefix}))
+                config.write_text(json.dumps({'url': 'http://fixture.invalid', 'token': owner,
+                    'api_prefix': prefix, 'workspace': str(folder)}))
 
             def reply(request, timeout):
                 owner = 'commercial' if '/api/workspaces/commercial/' in request.full_url else 'nora'

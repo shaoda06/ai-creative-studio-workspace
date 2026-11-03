@@ -3,17 +3,16 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import urllib.error
 import urllib.request
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from workspace_connection import read_connection
 
 
 def connection(args):
     project = Path(args.project).resolve()
-    service = next((folder / '工作区浏览服务' for folder in project.parents
-                    if (folder / '工作区浏览服务/runtime/task-service.json').is_file()), None)
-    if service is None:
-        raise FileNotFoundError('项目所在工作区没有运行中的任务服务，请按浏览工具运行说明处理')
-    config = json.loads((service / 'runtime/task-service.json').read_text('utf-8'))
+    config = read_connection(project.parent.parent)
     # Use genuine caller context inherited from Desktop, never a fabricated caller.
     caller = os.environ.get('CODEX_THREAD_ID')
     pipe = os.environ.get('CODEX_APP_TOOLS_PIPE_PATH')
@@ -76,8 +75,7 @@ def local_post(config, route, payload, timeout):
 
 
 def service_call(route, payload=None, *, workspace=None):
-    service = (Path(workspace).resolve() if workspace is not None else Path(__file__).resolve().parents[4]) / '工作区浏览服务'
-    config = json.loads((service / 'runtime/task-service.json').read_text('utf-8'))
+    config = read_connection(Path(workspace).resolve() if workspace is not None else Path(__file__).resolve().parents[4])
     request = urllib.request.Request(config['url'] + config.get('api_prefix', '/api') + '/internal/comfy/' + route,
         data=json.dumps(payload, ensure_ascii=False).encode('utf-8') if payload is not None else None,
         headers={'Content-Type': 'application/json', 'x-nora-task-token': config['token']})

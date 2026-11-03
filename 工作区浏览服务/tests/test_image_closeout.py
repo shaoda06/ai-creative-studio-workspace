@@ -49,12 +49,14 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
         shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         repair_file = self.record / '登记修复请求.json'
         repair_file.write_text(json.dumps({'task': repair}, ensure_ascii=False))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True)
-            config.write_text(json.dumps(dict(url=url, token=self.store.token)))
+            config.write_text(json.dumps(dict(url=url, token=self.store.token, workspace=str(self.root))))
             with patch.object(registration, 'batch_tasks', return_value=(['task'], None)), \
                     patch.object(main, 'store', self.store.projects):
                 process = await asyncio.create_subprocess_exec(sys.executable, '-B', str(cli),
@@ -625,10 +627,12 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
         shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_text(json.dumps({'url': url, 'token': self.store.token}))
+            config.write_text(json.dumps({'url': url, 'token': self.store.token, 'workspace': str(self.root)}))
             with patch.object(registration, 'register', side_effect=AssertionError('report must not register')), patch.object(image, 'png', side_effect=AssertionError('report must not decode')):
                 reports = []
                 for extra in ([], ['--details']):

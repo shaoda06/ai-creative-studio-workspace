@@ -589,8 +589,8 @@ class ApprovalTests(unittest.TestCase):
     def test_browser_verification_uses_existing_endpoints_and_exact_scene_revision(self):
         self.setup_stage()
         workspace = self.root.parent.parent
-        config = workspace / '工作区浏览服务/runtime/task-service.json'
-        self.fixture.put(config, {'url': 'http://browser.invalid'})
+        config = workspace / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
+        self.fixture.put(config, {'url': 'http://browser.invalid', 'workspace': str(workspace)})
         catalogue = {'children': [{'name': 'EP001', 'productionComplete': True}]}
         playback = {'segments': {'C001': [{'id': 'P001', 'videos': [
             {'stage': '后处理', 'run': 'R001', 'approved': True}]}]}}
@@ -638,7 +638,7 @@ class ApprovalTests(unittest.TestCase):
 
     def test_browser_verification_encodes_opening_and_ending_paths(self):
         workspace = self.root.parent.parent
-        self.fixture.put(workspace / '工作区浏览服务/runtime/task-service.json', {'url': 'http://browser.invalid'})
+        self.fixture.put(workspace / '工作区浏览服务/runtime/workspaces/nora/task-service.json', {'url': 'http://browser.invalid', 'workspace': str(workspace)})
         progress = (self.root / '项目进度.md').read_text()
         for episode in ('片头', '片尾'):
             with self.subTest(episode=episode):
@@ -672,7 +672,7 @@ class ApprovalTests(unittest.TestCase):
 
     def test_browser_checking_timeout_and_idle_error_do_not_read_episode(self):
         workspace = self.root.parent.parent
-        self.fixture.put(workspace / '工作区浏览服务/runtime/task-service.json', {'url': 'http://browser.invalid'})
+        self.fixture.put(workspace / '工作区浏览服务/runtime/workspaces/nora/task-service.json', {'url': 'http://browser.invalid', 'workspace': str(workspace)})
         for status, expected_error, message in [
             ({'updating': False, 'checking': True, 'error': None}, TimeoutError, '浏览入口仍在同步'),
             ({'updating': False, 'checking': False, 'error': '读取失败'}, ValueError, '读取失败'),

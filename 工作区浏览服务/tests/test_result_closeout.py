@@ -468,10 +468,12 @@ class CloseoutTests(unittest.IsolatedAsyncioTestCase):
         cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
         shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True)
-            config.write_text(json.dumps({'url':url,'token':self.store.token}), 'utf-8')
+            config.write_text(json.dumps({'url':url,'token':self.store.token,'workspace':str(self.root)}), 'utf-8')
             with patch.object(main, 'store', self.projects), patch.object(t.client,'submit') as submit, \
                     patch.object(t.client,'status') as remote, patch.object(t.client,'download') as download:
                 for action in ('ack','register-results'):
