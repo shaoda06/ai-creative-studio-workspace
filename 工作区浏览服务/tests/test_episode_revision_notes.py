@@ -60,6 +60,23 @@ class EpisodeRevisionNotesTests(HttpTestCase):
         self.assertEqual(response.json(), {'episode': 'EP001', 'rounds': {}, 'scenes': {}, 'combinations': {}})
         self.assertFalse((self.project / '09-剧集制作/EP001/其他资料').exists())
 
+    def test_dialogue_only_round_notes_export_preserve_and_conflict(self):
+        self.shared_rounds()
+        edit = {'shot': 'EP001-C001-SH001', 'index': 0, 'speaker': '男主（画外）', 'original': '走吧。', 'replacement': '赶紧走。'}
+        value = self.value | {'roundNumber': 3, 'text': '', 'dialogueEdits': [edit], 'expectedDialogueEdits': []}
+        self.assertEqual(self.put(value).status_code, 200)
+        self.assertEqual(self.client.get(self.episode_url).json()['scenes']['C001']['notes']['round/3/P001/一采/R001']['dialogueEdits'], [edit])
+        self.assertEqual(self.put(value | {'roundNumber': 4}).status_code, 200)
+        stale = value | {'scene': 'C001'}
+        self.assertEqual(self.export(notes=[stale]).status_code, 409)
+        changed = value | {'scene': 'C001', 'text': '导出时补充意见', 'expectedDialogueEdits': [edit]}
+        self.assertEqual(self.export(notes=[changed]).status_code, 200)
+        # The scene-export compatibility route also preserves new fields for old clients.
+        old = {key: value for key, value in changed.items() if key not in ('scene', 'dialogueEdits', 'expectedDialogueEdits')}
+        old.update(text='旧页面意见', expectedText='导出时补充意见')
+        self.assertEqual(self.put({'notes': [old], 'rounds': []}, self.url + '/export').status_code, 200)
+        self.assertEqual(self.client.get(self.url).json()['notes']['round/3/P001/一采/R001']['dialogueEdits'], [edit])
+
     def test_episode_round_edit_and_clear_require_current_original(self):
         self.shared_rounds()
         original = self.value | {'roundNumber': 3}

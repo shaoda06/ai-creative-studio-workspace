@@ -70,6 +70,38 @@ class GenerationContextTests(HttpTestCase):
     def videos(self):
         return build_data(self.project, web_episode_navigation=True)['catalogues']['09-剧集制作']['children'][0]['segments']['C001'][0]['videos']
 
+    def test_dialogues_come_from_candidate_snapshot_and_keep_each_speaker(self):
+        context, _, _ = self.add_run('R001')
+        frozen = self.project / context['storyboard']['file']
+        frozen.write_text(frozen.read_text().replace('**景别**',
+            '**台词**：女主：还没好？\n男主（画外现场对白）：烫。\n女主：我来。\n**音效**：无\n**景别**'))
+        lines = self.videos()[0]['context']['dialogues']
+        self.assertEqual(lines, [
+            {'shot': 'EP001-SH001', 'index': 0, 'speaker': '女主', 'original': '还没好？'},
+            {'shot': 'EP001-SH001', 'index': 1, 'speaker': '男主（画外现场对白）', 'original': '烫。'},
+            {'shot': 'EP001-SH001', 'index': 2, 'speaker': '女主', 'original': '我来。'},
+        ])
+        self.assertNotIn('最新版不应出现', str(lines))
+        frozen.write_text(frozen.read_text().replace('女主：还没好？\n男主（画外现场对白）：烫。\n女主：我来。', '无'))
+        self.assertEqual(self.videos()[0]['context']['dialogues'], [])
+
+    def test_pre_dialogue_persistent_context_cache_is_rebuilt(self):
+        context, _, _ = self.add_run('R001')
+        frozen = self.project / context['storyboard']['file']
+        frozen.write_text(frozen.read_text().replace('**景别**', '**台词**：女主：走吧。\n**景别**'))
+        cache_dir = Path(self.temp.name) / 'cache'
+        url = '/api/projects/示例项目/episodes/EP001/contexts/' + context['identity']
+        with patch.object(main, 'store', ProjectStore(self.project.parent, cache_directory=cache_dir)), TestClient(main.app) as client:
+            self.assertEqual(client.get(url).status_code, 200)
+        cache = cache_dir / ('示例项目/09-剧集制作--EP001--context--' + context['identity'] + '.json')
+        saved = json.loads(cache.read_text())
+        saved['schema'] = 24
+        saved['data']['context'].pop('dialogues')
+        cache.write_text(json.dumps(saved, ensure_ascii=False))
+        with patch.object(main, 'store', ProjectStore(self.project.parent, cache_directory=cache_dir)), TestClient(main.app) as client:
+            value = client.get(url).json()
+        self.assertEqual(value.get('dialogues'), [{'shot': 'EP001-SH001', 'index': 0, 'speaker': '女主', 'original': '走吧。'}])
+
     def test_playback_and_lazy_context_keep_every_recorded_version(self):
         first, _, missing = self.add_run('R001')
         self.add_run('R003', '二采', first['identity'])

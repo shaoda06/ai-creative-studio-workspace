@@ -17,6 +17,10 @@ const video = (scene, run, stage = '一采') => ({ key: `${scene}-${stage}-${run
     { id: `EP001-${scene}-SH001`, duration: 0.3, html: '<p>第一镜</p>' },
     { id: `EP001-${scene}-SH002`, duration: 0.6, html: '<p>第二镜</p>' },
     { id: `EP001-${scene}-SH003`, duration: 1.1, html: '<p>第三镜</p>' },
+  ] : [], dialogues: scene === 'C001' ? [
+    { shot: `EP001-${scene}-SH002`, index: 0, speaker: '女主', original: run === 'R002' ? '还吃！快走啊！' : '快走！' },
+    { shot: `EP001-${scene}-SH002`, index: 1, speaker: '男主（画外）', original: '刚泡好的，别浪费啊。' },
+    { shot: `EP001-${scene}-SH003`, index: 0, speaker: '女主', original: '这句保留。' },
   ] : [], prompts: {}, references: { common: [], segment: [] }, issues: [] } });
 const doc = title => ({ kind: 'document', name: title, key: title + '.md', version: 'v01', doc: { title, html: `<p>${title}</p>` } });
 const round = (scene, number) => ({ number, episodeRound: true, created_at: '2026-10-26T00:00:00+08:00', script: doc('剧本'), storyboard: doc(scene), issues: [],
@@ -109,6 +113,42 @@ try {
   await page.screenshot({ path: path.join(screenshots, `scene-dots-${width}.png`) });
   const contentTab = name => page.locator('.segment-script [aria-label="分段文字内容"] button').filter({ hasText: new RegExp('^' + name + '$') });
   const pendingNote = 'C001切场前的待保存意见';
+  const firstLine = page.getByRole('textbox', { name: 'SH002 女主 第1句 新台词', exact: true });
+  const secondLine = page.getByRole('textbox', { name: 'SH002 男主（画外） 第2句 新台词', exact: true });
+  assert.equal(await page.locator('.revision-dialogue').count(), 3, '逐句列出，多人同镜和无修改的原句都保留');
+  assert.equal(await firstLine.inputValue(), '');
+  await firstLine.fill('先把面放下！\n跟我走！');
+  await secondLine.fill('再等我一下。');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 2);
+  await secondLine.fill('');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 1, '留空只移除本句修改');
+  await secondLine.fill('再等我一下。');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  await page.reload();
+  await page.getByRole('button', { name: '剧集制作', exact: true }).click();
+  await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
+  await page.getByRole('button', { name: '修改意见', exact: true }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '刷新从保存记录恢复新台词');
+  const version = page.getByRole('combobox', { name: '版本切换', exact: true });
+  await version.click(); await page.getByRole('option', { name: /^候选一/ }).click();
+  assert.equal(await firstLine.inputValue(), '', '另一候选的新台词独立');
+  assert.ok((await page.locator('.revision-dialogue').first().textContent()).includes('快走！'));
+  await version.click(); await page.getByRole('option', { name: /^候选二/ }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！');
+  await page.getByRole('button', { name: '宽屏显示', exact: true }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '宽屏保留输入');
+  await firstLine.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(screenshots, `dialogue-wide-${width}.png`) });
+  await page.getByRole('button', { name: '恢复布局', exact: true }).click();
+  await firstLine.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(screenshots, `dialogue-${width}.png`) });
+  await page.getByRole('textbox', { name: '修改意见', exact: true }).fill('');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  await page.getByRole('button', { name: '导出修改意见', exact: true }).click();
+  assert.ok((await page.getByRole('dialog').textContent()).includes('新台词：先把面放下！'), '只有新台词没有普通意见，也能导出');
+  await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   const flushed = page.waitForResponse(response => response.url().endsWith('/revision-notes/EP001/C001') && response.request().method() === 'PUT');
   await page.getByRole('textbox', { name: '修改意见', exact: true }).fill(pendingNote);
   await scene('C002').click();
@@ -119,6 +159,8 @@ try {
   assert.equal(await page.getByRole('textbox', { name: '修改意见', exact: true }).inputValue(), '00.00.0秒，SH001：C002第一段', '不得把上场意见带到本场');
   await scene('C001').click();
   assert.equal(await page.getByRole('textbox', { name: '修改意见', exact: true }).inputValue(), pendingNote);
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '切场回来保留新台词');
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 2, '普通意见保存不会清掉新台词');
   await contentTab('提示词').click(); await scene('C002').click();
   assert.equal(await contentTab('提示词').getAttribute('aria-current'), 'page', '手动切场保持提示词');
   await contentTab('分镜脚本').click(); await scene('C001').click();
@@ -163,6 +205,7 @@ try {
   assert.ok(copied.indexOf('SH004') < copied.indexOf('C002 / 第9轮 / P001'));
   assert.ok(!copied.includes('旧轮意见不可带入') && !copied.includes('组合外版本不可带入'));
   assert.ok(copied.includes('本轮汇总意见') && copied.includes('整集节奏自然，不要字幕'));
+  assert.ok(copied.includes('原台词：还吃！快走啊！') && copied.includes('新台词：先把面放下！\n跟我走！'), '导出包含逐句原台词和新台词');
   await summary.fill('未保存的复制内容');
   await copy.click();
   assert.ok((await page.evaluate(() => window.__copied)).startsWith('【未保存草稿：'));
@@ -193,6 +236,7 @@ try {
   await page.getByRole('button', { name: /^分段 P001，/ }).click();
   await page.getByRole('button', { name: '修改意见', exact: true }).click();
   const editor = page.getByRole('textbox', { name: '修改意见', exact: true });
+  assert.equal(await firstLine.inputValue(), '', '同一候选在不同轮次的台词意见不串用');
   const pass = page.getByRole('button', { name: 'SH003 本镜通过', exact: true });
   assert.equal(await page.getByRole('button', { name: /SH\d+ 本镜通过/ }).count(), 3);
   for (const cell of await page.locator('.shot-timeline-cell').all()) {

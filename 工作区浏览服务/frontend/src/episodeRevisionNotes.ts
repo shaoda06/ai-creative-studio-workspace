@@ -1,6 +1,6 @@
 import type { SegmentVideo } from './api';
 import type { NoteInput, OverallNote, SavedSceneNotes } from './revisionNotes';
-import { noteKey } from './revisionNotes';
+import { hasNoteContent, noteKey } from './revisionNotes';
 import { candidateLabel } from './components/SegmentVideo';
 
 export interface EpisodeReview {
@@ -22,7 +22,7 @@ export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeRevi
     const selected = review.scenes.find(item => item.id === scene);
     const ids = selected?.versions.map(item => item.id) || selected?.segments.map(item => item.id) || [];
     const order = (id: string) => { const index = ids.indexOf(id); return index < 0 ? ids.length + Number(id.slice(1)) : index; };
-    return Object.values(saved.scenes[scene]?.notes || {}).filter(note => note.text.trim())
+    return Object.values(saved.scenes[scene]?.notes || {}).filter(hasNoteContent)
       .sort((a, b) => order(a.segment) - order(b.segment) || (a.roundNumber ?? 0) - (b.roundNumber ?? 0)
         || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1)))
       .map(note => {

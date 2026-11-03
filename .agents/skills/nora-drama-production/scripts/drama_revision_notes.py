@@ -88,9 +88,9 @@ class RevisionNotes:
             if value.roundNumber is not None:
                 rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
             old = data.notes.get(value.key())
-            if (old.text if old else '') != value.expectedText:
+            if not value.matches(old):
                 raise NotesChangedError('分段意见已在其他页面更新，请保留本页文字，核对最新意见后再保存。')
-            note = RevisionNote(**value.model_dump(exclude={'expectedText'}), updatedAt=datetime.now().astimezone().isoformat(timespec='seconds'))
+            note = RevisionNote(**value.saved_fields(old), updatedAt=datetime.now().astimezone().isoformat(timespec='seconds'))
             data.notes[value.key()] = note
             self.write(project, episode, scene, data)
             return note
@@ -103,7 +103,7 @@ class RevisionNotes:
                 if value.roundNumber is not None:
                     rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
                 old = data.notes.get(value.key())
-                if (old.text if old else '') != value.expectedText:
+                if not value.matches(old):
                     raise NotesChangedError('分段意见已在其他位置更新，请保留当前输入，重新读取后核对。')
             for value in changes.rounds:
                 rounds.referenced_round(project, f'{episode}-{scene}', value.number)
@@ -113,7 +113,7 @@ class RevisionNotes:
             updated = datetime.now().astimezone().isoformat(timespec='seconds')
             for value in changes.notes:
                 key = value.key()
-                fields = value.model_dump(exclude={'expectedText'})
+                fields = value.saved_fields(data.notes.get(key))
                 if key in data.notes:
                     fields['fileRevision'] = data.notes[key].fileRevision
                 data.notes[key] = RevisionNote(**fields, updatedAt=updated)

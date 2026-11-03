@@ -120,9 +120,9 @@ class EpisodeRevisionNotes:
             rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
             saved = self.read_file(project, episode)
             old = self.read_scene(project, episode, scene).notes.get(value.key())
-            if (old.text if old else '') != value.expectedText:
+            if not value.matches(old):
                 raise NotesChangedError('分段意见已在其他页面更新，请保留本页文字，核对最新意见后再保存。')
-            note = RevisionNote(**value.model_dump(exclude={'expectedText'}), updatedAt=datetime.now().astimezone().isoformat(timespec='seconds'))
+            note = RevisionNote(**value.saved_fields(old), updatedAt=datetime.now().astimezone().isoformat(timespec='seconds'))
             saved.notes.setdefault(scene, {})[value.key()] = note
             self.write(project, episode, saved)
             return note
@@ -139,7 +139,7 @@ class EpisodeRevisionNotes:
                 rounds.referenced_round(project, f'{episode}-{value.scene}', value.roundNumber)
                 old = data.scenes.get(value.scene)
                 note = old.notes.get(value.key()) if old else None
-                if (note.text if note else '') != value.expectedText:
+                if not value.matches(note):
                     raise NotesChangedError(f'{value.scene}分段意见已在其他位置更新，请保留当前输入，重新读取后核对。')
             for value in changes.rounds:
                 if value.number not in registered:
@@ -158,7 +158,7 @@ class EpisodeRevisionNotes:
             for value in changes.notes:
                 old = data.scenes.get(value.scene)
                 note = old.notes.get(value.key()) if old else None
-                fields = value.model_dump(exclude={'scene', 'expectedText'})
+                fields = value.saved_fields(note)
                 if note:
                     fields['fileRevision'] = note.fileRevision
                 saved.notes.setdefault(value.scene, {})[value.key()] = RevisionNote(**fields, updatedAt=updated)
@@ -179,7 +179,7 @@ class EpisodeRevisionNotes:
                 if changes.rounds or any(item.roundNumber not in registered for item in changes.notes):
                     raise ValueError('请分别保存整集轮次意见与场次历史意见，不将两种文件混为一次保存')
                 self.save(project, episode, EpisodeExportChanges(
-                    notes=[SceneNoteChange(scene=scene, **item.model_dump()) for item in changes.notes], rounds=[]))
+                    notes=[SceneNoteChange(scene=scene, **item.model_dump(exclude_unset=True)) for item in changes.notes], rounds=[]))
                 return self.read_scene(project, episode, scene)
             return self.notes.save_export(project, episode, scene, changes)
 

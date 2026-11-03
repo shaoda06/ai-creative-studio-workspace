@@ -5,7 +5,9 @@ export async function get<T>(path: string): Promise<T> {
 }
 export const projectUrl = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
 export const styleUrl = (path: string) => `/api/krea2/files/${path.split('/').map(encodeURIComponent).join('/')}`;
+export interface DialogueLine { shot: string; index: number; speaker: string; original: string }
 export interface GenerationContext {
+  dialogues?: DialogueLine[];
   scriptHtml: string; scriptUrl?: string; source?: string; issues: string[];
   shots: { id: string; duration: number | null; html: string }[];
   prompts: { english: string; chinese: string; englishUrl?: string; chineseUrl?: string };

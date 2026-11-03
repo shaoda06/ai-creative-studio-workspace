@@ -30,8 +30,25 @@ def segment_body(text, segment):
     return "".join(shots)
 
 
+def shot_dialogues(text, shot):
+    block = re.search(r'^\*\*台词\*\*[：:][ \t]*(.*?)(?=^\*\*[^\n]+\*\*[：:]|^---[ \t]*$|\Z)', text, re.M | re.S)
+    lines = []
+    for line in block[1].splitlines() if block else []:
+        line = line.strip()
+        if not line or line in ('无', '无。'):
+            continue
+        spoken = re.match(r'^([^：:\n]+)[：:][ \t]*(.+)$', line)
+        if spoken:
+            lines.append({'shot': shot, 'index': len(lines), 'speaker': spoken[1].strip(), 'original': spoken[2].strip()})
+        elif lines:
+            lines[-1]['original'] += '\n' + line
+        else:
+            lines.append({'shot': shot, 'index': 0, 'speaker': '', 'original': line})
+    return lines
+
+
 def resolve_context(identity, contexts, project, read, read_plain, previews, trail=(), dependencies=None):
-    empty = {"scriptHtml": "", "shots": [], "prompts": {"english": "", "chinese": ""},
+    empty = {"scriptHtml": "", "shots": [], "dialogues": [], "prompts": {"english": "", "chinese": ""},
              "references": {"common": [], "segment": []}, "issues": []}
     if identity not in contexts:
         return dict(empty, issues=["该次生成的资料关联尚未记录。"])
@@ -67,6 +84,7 @@ def resolve_context(identity, contexts, project, read, read_plain, previews, tra
                 seconds = float(duration[1]) if duration else 0
                 result["shots"].append({"id": shot[1], "duration": seconds if seconds > 0 else None,
                                         "html": markdown(shot[0], storyboard["file"])})
+                result["dialogues"].extend(shot_dialogues(shot[0], shot[1]))
             if any(shot["duration"] is None for shot in result["shots"]):
                 result["issues"].append("该次分镜存在缺失或无效的镜头时长，无法跟视频对齐。")
             if not body:

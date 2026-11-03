@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent, ReactNode } from 'react';
-import { get, projectUrl, type SegmentVideo } from '../api';
+import { get, projectUrl, type DialogueLine, type SegmentVideo } from '../api';
 import { combinationKey, combinationLabel, episodeExportNotes, shotOrderedText, type CombinationSummary, type EpisodeReview, type SavedEpisodeNotes } from '../episodeRevisionNotes';
 import { Dialog } from '../components';
-import { editNote, loadNotes, noteKey, prepareNotesExport, saveNote, saveReviewedNote, saveNotesExport, sceneNotesUrl, useSceneNotes } from '../revisionNotes';
-import type { NoteInput } from '../revisionNotes';
+import { dialogueEditsText, editNote, hasNoteContent, loadNotes, noteKey, prepareNotesExport, saveNote, saveReviewedNote, saveNotesExport, sceneNotesUrl, useSceneNotes } from '../revisionNotes';
+import type { DialogueEdit, NoteInput } from '../revisionNotes';
 import { FloatingMessage, useNotify } from './Notifications';
 import { CopyButton } from './CopyButton';
 import { candidateLabel } from './SegmentVideo';
@@ -13,9 +13,9 @@ import { LinkButton } from './LinkButton';
 
 export interface NoteScope { project: string; episode: string; scene: string; notesUrl?: string; label?: string }
 export type NoteShotTimeline = (passShot: (shot: string, start: number) => void, preserveFocus: (event: PointerEvent<HTMLButtonElement>) => void, disabled: boolean) => ReactNode;
-export function RevisionNoteEditor({ scope, segment, current, fileRevision, time, shot, renderShotTimeline, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; fileRevision: string; time: number; shot?: string; renderShotTimeline: NoteShotTimeline; roundNumber?: number }) {
+export function RevisionNoteEditor({ scope, segment, current, dialogues, fileRevision, time, shot, renderShotTimeline, roundNumber }: { scope: NoteScope; segment: string; current: SegmentVideo; dialogues?: DialogueLine[]; fileRevision: string; time: number; shot?: string; renderShotTimeline: NoteShotTimeline; roundNumber?: number }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const [review, setReview] = useState<{ key: string; text: string } | null>(null);
+  const [review, setReview] = useState<{ key: string; text: string; dialogueEdits: DialogueEdit[] } | null>(null);
   const notify = useNotify();
   const data = useSceneNotes(scope.project, scope.episode, scope.scene, true, scope.notesUrl);
   const identity = { roundNumber, segment, stage: current.stage, run: current.run };
@@ -23,12 +23,15 @@ export function RevisionNoteEditor({ scope, segment, current, fileRevision, time
   const draft = data.drafts[key];
   const note = data.notes[key];
   const text = draft?.value.text ?? note?.text ?? '';
+  const dialogueEdits = draft?.value.dialogueEdits ?? note?.dialogueEdits ?? [];
+  const lines = [...(dialogues ?? []), ...dialogueEdits.filter(edit => !dialogues?.some(line => line.shot === edit.shot && line.index === edit.index))];
+  const edit = (changes: Partial<Pick<NoteInput, 'text' | 'dialogueEdits'>>) => editNote(data.url, { ...identity, text, dialogueEdits, fileRevision, ...changes });
   useEffect(() => () => { void saveNote(data.url, key); }, [data.url, key]);
   const status = draft ? { waiting: '等待保存', saving: '保存中…', saved: '已保存', error: '未保存' }[draft.status] : note ? '已保存' : '尚未填写';
   const statusKind = data.error ? 'error' : data.loading ? 'loading' : draft?.status ?? (note ? 'saved' : 'empty');
   const reviewConflict = async () => {
     const saved = await loadNotes(data.url, true);
-    if (saved) setReview({ key, text: saved.notes[key]?.text ?? '' });
+    if (saved) setReview({ key, text: saved.notes[key]?.text ?? '', dialogueEdits: saved.notes[key]?.dialogueEdits ?? [] });
     else notify('最新意见读取失败或仍在读取，请稍后重新核对。', 'error');
   };
   const insertTime = (passedShot?: { id: string; start: number }) => {
@@ -43,7 +46,7 @@ export function RevisionNoteEditor({ scope, segment, current, fileRevision, time
     const inserted = (before && !before.endsWith('\n') ? '\n' : '') + timestamp;
     const value = before + inserted + text.slice(end);
     if (value.length > editor.maxLength) { notify('文字已达上限，无法插入时间。'); return; }
-    editNote(data.url, { ...identity, text: value, fileRevision });
+    edit({ text: value });
     requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(start + inserted.length, start + inserted.length);
@@ -52,20 +55,36 @@ export function RevisionNoteEditor({ scope, segment, current, fileRevision, time
   const preserveFocus = (event: PointerEvent<HTMLButtonElement>) => { if (document.activeElement === textarea.current) event.preventDefault(); };
   return <div className="revision-note-editor">
     {renderShotTimeline((id, start) => insertTime({ id, start }), preserveFocus, !data.loaded || !current.url)}
+    {lines.length > 0 && <div className="revision-dialogues" aria-label="台词修改">
+      {lines.map(line => {
+        const label = `${line.shot.match(/SH\d+$/)?.[0] || line.shot} ${line.speaker || '未标注说话人'} 第${line.index + 1}句`;
+        return <label className="revision-dialogue" key={`${line.shot}/${line.index}`}>
+          <span><span className="muted">{line.shot.match(/SH\d+$/)?.[0] || line.shot} · </span><strong>{line.speaker || '原台词'}</strong>：{line.original}</span>
+          <textarea aria-label={`${label} 新台词`} placeholder="输入新台词，留空表示不修改" rows={2} maxLength={20000} disabled={!data.loaded}
+            value={dialogueEdits.find(item => item.shot === line.shot && item.index === line.index)?.replacement ?? ''}
+            onChange={event => {
+              const replacement = event.target.value;
+              const others = dialogueEdits.filter(item => item.shot !== line.shot || item.index !== line.index);
+              edit({ dialogueEdits: replacement.trim() ? [...others, { shot: line.shot, index: line.index, speaker: line.speaker, original: line.original, replacement }].sort((a, b) => a.shot.localeCompare(b.shot) || a.index - b.index) : others });
+            }} onBlur={() => { void saveNote(data.url, key); }} />
+        </label>;
+      })}
+    </div>}
     <div className="revision-note-heading">
-      <div className="revision-note-label"><LinkButton disabled={!data.loaded || !current.url} onPointerDown={event => { if (document.activeElement === textarea.current) event.preventDefault(); }} onClick={() => insertTime()}>插入时间</LinkButton><LinkButton disabled={!data.loaded || !text} onClick={() => editNote(data.url, { ...identity, text: '', fileRevision })}>清空</LinkButton></div>
+      <div className="revision-note-label"><LinkButton disabled={!data.loaded || !current.url} onPointerDown={event => { if (document.activeElement === textarea.current) event.preventDefault(); }} onClick={() => insertTime()}>插入时间</LinkButton><LinkButton disabled={!data.loaded || !text} onClick={() => edit({ text: '' })}>清空</LinkButton></div>
       <div className="revision-note-status" role="status"><span className="revision-note-state" data-state={statusKind}>{data.error ? '读取失败' : data.loading ? '正在读取…' : status}</span>{note && <span className="muted">更新于 {new Date(note.updatedAt).toLocaleString('zh-CN')}</span>}</div>
     </div>
     <textarea ref={textarea} id="revision-note-text" aria-label="修改意见" placeholder="填写修改意见..." maxLength={20000} disabled={!data.loaded} value={text}
-      onChange={event => editNote(data.url, { ...identity, text: event.target.value, fileRevision })} onBlur={() => { void saveNote(data.url, key); }} />
+      onChange={event => edit({ text: event.target.value })} onBlur={() => { void saveNote(data.url, key); }} />
 
     {draft?.error && <FloatingMessage tone="error">{draft.error}{draft.conflict ? <button disabled={data.loading} onClick={() => { void reviewConflict(); }}>核对最新意见</button> : <button onClick={() => { void saveNote(data.url, key); }}>重试保存</button>}</FloatingMessage>}
     {note && note.fileRevision !== fileRevision && <p className="muted">该意见记录于此版本更新前。</p>}
     {review?.key === key && draft?.conflict && <Dialog title="核对修改意见" close={() => setReview(null)}>
       <p>其他页面已更新这条意见。本页文字仍保留；请对照后整理，再保存。</p>
-      <label>项目中最新意见<textarea aria-label="项目中最新意见" readOnly value={review.text} /></label>
-      <label>本页待保存意见<textarea aria-label="本页待保存意见" maxLength={20000} value={text} onChange={event => editNote(data.url, { ...identity, text: event.target.value, fileRevision })} /></label>
-      <button onClick={() => { void saveReviewedNote(data.url, key, review.text); setReview(null); }}>保存核对后的本页意见</button>
+      <label>项目中最新意见<textarea aria-label="项目中最新意见" readOnly value={[dialogueEditsText(review.dialogueEdits), review.text].filter(Boolean).join('\n\n')} /></label>
+      {dialogueEdits.length > 0 && <label>本页待保存台词<textarea aria-label="本页待保存台词" readOnly value={dialogueEditsText(dialogueEdits)} /></label>}
+      <label>本页待保存意见<textarea aria-label="本页待保存意见" maxLength={20000} value={text} onChange={event => edit({ text: event.target.value })} /></label>
+      <button onClick={() => { void saveReviewedNote(data.url, key, review.text, review.dialogueEdits); setReview(null); }}>保存核对后的本页意见</button>
     </Dialog>}
   </div>;
 }
@@ -127,7 +146,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
         const [saved, exportSegments] = await Promise.all([prepareNotesExport(data.url), loadHistorySegments ? loadHistorySegments() : Promise.resolve(segments)]);
         const ids = exportSegments.map(segment => segment.id);
         const order = (id: string) => { const index = ids.indexOf(id); return index < 0 ? ids.length + Number(id.slice(1)) : index; };
-        const notes = Object.values(saved.notes).filter(note => note.text.trim()).sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0) || order(a.segment) - order(b.segment) || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1))).map(note => {
+        const notes = Object.values(saved.notes).filter(hasNoteContent).sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0) || order(a.segment) - order(b.segment) || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1))).map(note => {
           const video = exportSegments.find(item => item.id === note.segment)?.videos.find(item => item.stage === note.stage && item.run === note.run);
           const label = video ? candidateLabel(video.candidateNumber, video.approved) : '';
           return { ...note, current: !!scope.notesUrl && !!video && review?.versions[note.segment]?.key === video.key, key: noteKey(note), title: `${note.roundNumber ? `第${note.roundNumber}轮` : '未标注轮次'} / ${note.segment} / ${note.stage} / ${note.run}${label ? ' / ' + label : ''}`, original: note.text };
@@ -145,7 +164,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
   const visibleRounds = draft?.rounds.filter(item => mode === 'history' || item.number === draft.number) || [];
   const overallLabel = draft?.episode ? '本轮汇总意见' : '整场总体意见';
   const text = draft ? `${draft.scope.project} / ${draft.scope.label || (draft.scope.episode + (draft.episode ? '' : ' / ' + draft.scope.scene))} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
-    ...visibleNotes.filter(item => item.text.trim()).map(item => `【${item.title}】\n${shotOrderedText(item.text)}`),
+    ...visibleNotes.filter(hasNoteContent).map(item => `【${item.title}】\n${[dialogueEditsText(item.dialogueEdits), shotOrderedText(item.text)].filter(Boolean).join('\n\n')}`),
     ...visibleRounds.filter(item => item.text.trim()).map(item => `【第${item.number}轮 · ${overallLabel}】\n${item.text}`),
     ...(draft.combination?.text.trim() ? [`【本轮汇总意见（${combinationLabel(draft.combination.scenes)}）】\n${draft.combination.text}`] : []),
     ...(mode === 'history' ? draft.combinationHistory.map(item => `【整集汇总意见（${combinationLabel(item.scenes)}）】\n${item.text}`) : []),
@@ -155,7 +174,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
     const opened = draft!;
     setSaving(true); setConfirmClose(false); setMessage('');
     try {
-      const notes = opened.notes.filter(item => item.text !== item.original).map(({ roundNumber, segment, stage, run, text, fileRevision, original, scene }) => ({ roundNumber, segment, stage, run, text, fileRevision, expectedText: original, ...(opened.episode ? { scene } : {}) }));
+      const notes = opened.notes.filter(item => item.text !== item.original).map(({ roundNumber, segment, stage, run, text, fileRevision, original, scene, dialogueEdits = [] }) => ({ roundNumber, segment, stage, run, text, fileRevision, dialogueEdits, expectedDialogueEdits: dialogueEdits, expectedText: original, ...(opened.episode ? { scene } : {}) }));
       const rounds = opened.rounds.filter(item => item.text !== item.original).map(({ number, text, original }) => ({ number, text, expectedText: original }));
       if (opened.episode) {
         const combination = opened.combination && opened.combination.text !== opened.combination.original ? { scenes: opened.combination.scenes, text: opened.combination.text, expectedText: opened.combination.original } : undefined;
@@ -182,6 +201,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
         <fieldset disabled={saving} className="revision-export-fields">
           {visibleNotes.map(item => <section className="revision-export-note" key={item.key}>
             <label><strong>{item.title}</strong><textarea aria-label={`${item.title} 修改意见`} maxLength={20000} readOnly={draft.episode && !item.editable} value={item.text} onChange={event => { setDraft({ ...draft, notes: draft.notes.map(note => note.key === item.key ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} /></label>
+            {item.dialogueEdits?.length ? <p className="revision-dialogue-summary">{dialogueEditsText(item.dialogueEdits)}</p> : null}
           </section>)}
           {!visibleNotes.length && <p className="muted">{mode === 'round' ? '当前范围暂无分段意见。' : '暂无分段意见。'}</p>}
           <section className="revision-export-overall" aria-label={overallLabel}>

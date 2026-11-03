@@ -85,6 +85,18 @@ class ProjectProductionTests(HttpTestCase):
         self.journal.write_text(json.dumps({'tasks': [self.task], 'accepted': []}))
         self.assertEqual(self.client.get(self.api + '/production').json()['segments'], [])
 
+    def test_shared_review_storage_keeps_dialogue_edits(self):
+        edit = {'shot': 'SH001', 'index': 0, 'speaker': '讲解人', 'original': '原句', 'replacement': '新句'}
+        value = self.note | {'dialogueEdits': [edit], 'expectedDialogueEdits': []}
+        result = self.client.put(self.api + '/production-notes', json=value)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['dialogueEdits'], [edit])
+        self.assertEqual(self.client.put(self.api + '/production-notes', json=value).status_code, 409)
+        old_client = self.note | {'text': '保留台词修改', 'expectedText': self.note['text']}
+        result = self.client.put(self.api + '/production-notes/export', json={'notes': [old_client], 'rounds': []})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['notes']['P001/一采/R001']['dialogueEdits'], [edit])
+
     def test_notes_are_scoped_persistent_and_conflict_safe(self):
         self.assertEqual(self.client.get(self.api + '/production-notes').json(), {'notes': {}, 'rounds': {}})
         response = self.client.put(self.api + '/production-notes', json=self.note)

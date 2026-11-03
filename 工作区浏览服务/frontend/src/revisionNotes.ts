@@ -1,11 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { get, projectUrl } from './api';
+import { get, projectUrl, type DialogueLine } from './api';
 
-export interface NoteInput { roundNumber?: number | null; segment: string; stage: string; run: string; text: string; fileRevision: string }
+export interface DialogueEdit extends DialogueLine { replacement: string }
+export interface NoteInput { roundNumber?: number | null; segment: string; stage: string; run: string; text: string; fileRevision: string; dialogueEdits?: DialogueEdit[] }
 export interface RevisionNote extends NoteInput { updatedAt: string }
 export interface OverallNote { number: number; text: string; updatedAt: string }
 export interface SavedSceneNotes { notes: Record<string, RevisionNote>; rounds: Record<string, OverallNote> }
-interface Draft { value: NoteInput; expectedText: string; status: 'waiting' | 'saving' | 'saved' | 'error'; error?: string; conflict?: boolean }
+interface Draft { value: NoteInput; expectedText: string; expectedDialogueEdits: DialogueEdit[]; status: 'waiting' | 'saving' | 'saved' | 'error'; error?: string; conflict?: boolean }
 interface SceneState extends SavedSceneNotes { drafts: Record<string, Draft>; loaded: boolean; loading: boolean; error: string }
 const scenes = new Map<string, SceneState>();
 const listeners = new Set<() => void>();
@@ -13,6 +14,9 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const saving = new Set<string>();
 export const noteKey = (value: Pick<NoteInput, 'segment' | 'stage' | 'run' | 'roundNumber'>) => `${value.roundNumber != null ? `round/${value.roundNumber}/` : ''}${value.segment}/${value.stage}/${value.run}`;
 export const sceneNotesUrl = (project: string, episode: string, scene: string) => `${projectUrl(project)}/revision-notes/${episode}/${scene}`;
+export const hasNoteContent = (note: Pick<NoteInput, 'text' | 'dialogueEdits'>) => !!note.text.trim() || !!note.dialogueEdits?.some(item => item.replacement.trim());
+export const dialogueEditsText = (edits: DialogueEdit[] = []) => edits.filter(item => item.replacement.trim()).map(item =>
+  `【${item.shot.match(/SH\d+$/)?.[0] || item.shot} · ${item.speaker || '未标注说话人'} · 第${item.index + 1}句】\n原台词：${item.original}\n新台词：${item.replacement}`).join('\n\n');
 function state(url: string): SceneState {
   if (!scenes.has(url)) scenes.set(url, { notes: {}, rounds: {}, drafts: {}, loaded: false, loading: false, error: '' });
   return scenes.get(url)!;
@@ -42,7 +46,7 @@ export async function prepareNotesExport(url: string) {
   if (!data) throw new Error(state(url).error || '意见正在读取，请稍后重试。');
   return data;
 }
-export async function saveNotesExport(url: string, changes: { notes: (NoteInput & { expectedText: string })[]; rounds: { number: number; text: string; expectedText: string }[] }) {
+export async function saveNotesExport(url: string, changes: { notes: (NoteInput & { expectedText: string; expectedDialogueEdits?: DialogueEdit[] })[]; rounds: { number: number; text: string; expectedText: string }[] }) {
   const response = await fetch(url + '/export', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
   if (!response.ok) {
     const error = await response.json();
@@ -64,12 +68,13 @@ export function editNote(url: string, value: NoteInput) {
   const current = state(url);
   const previous = current.drafts[key];
   const expectedText = previous && previous.status !== 'saved' ? previous.expectedText : current.notes[key]?.text ?? '';
-  publish(url, { ...current, drafts: { ...current.drafts, [key]: { value, expectedText, status: previous?.conflict ? 'error' : 'waiting', conflict: previous?.conflict, error: previous?.conflict ? previous.error : undefined } } });
+  const expectedDialogueEdits = previous && previous.status !== 'saved' ? previous.expectedDialogueEdits : current.notes[key]?.dialogueEdits ?? [];
+  publish(url, { ...current, drafts: { ...current.drafts, [key]: { value, expectedText, expectedDialogueEdits, status: previous?.conflict ? 'error' : 'waiting', conflict: previous?.conflict, error: previous?.conflict ? previous.error : undefined } } });
   if (!previous?.conflict) timers.set(timerKey, setTimeout(() => { void saveNote(url, key); }, 1000));
 }
-export async function saveReviewedNote(url: string, key: string, expectedText: string) {
+export async function saveReviewedNote(url: string, key: string, expectedText: string, expectedDialogueEdits: DialogueEdit[] = []) {
   const current = state(url);
-  publish(url, { ...current, drafts: { ...current.drafts, [key]: { ...current.drafts[key], expectedText, status: 'waiting', conflict: false, error: undefined } } });
+  publish(url, { ...current, drafts: { ...current.drafts, [key]: { ...current.drafts[key], expectedText, expectedDialogueEdits, status: 'waiting', conflict: false, error: undefined } } });
   await saveNote(url, key);
 }
 export async function saveNote(url: string, key: string) {
@@ -85,7 +90,7 @@ export async function saveNote(url: string, key: string) {
   let succeeded = false;
   let conflict = false;
   try {
-    const response = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...value, expectedText: draft.expectedText }) });
+    const response = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...value, expectedText: draft.expectedText, expectedDialogueEdits: draft.expectedDialogueEdits }) });
     if (!response.ok) {
       conflict = response.status === 409;
       const error = await response.json();
@@ -94,7 +99,7 @@ export async function saveNote(url: string, key: string) {
     const note: RevisionNote = await response.json();
     const latest = state(url);
     const unchanged = latest.drafts[key].value === value;
-    publish(url, { ...latest, notes: { ...latest.notes, [key]: note }, drafts: { ...latest.drafts, [key]: { value: latest.drafts[key].value, expectedText: note.text, status: unchanged ? 'saved' : 'waiting' } } });
+    publish(url, { ...latest, notes: { ...latest.notes, [key]: note }, drafts: { ...latest.drafts, [key]: { value: latest.drafts[key].value, expectedText: note.text, expectedDialogueEdits: note.dialogueEdits ?? [], status: unchanged ? 'saved' : 'waiting' } } });
     succeeded = true;
   } catch (error) {
     const latest = state(url);
