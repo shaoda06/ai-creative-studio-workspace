@@ -15,6 +15,27 @@ spec.loader.exec_module(launcher)
 
 
 class LauncherIdentityTests(unittest.TestCase):
+    def test_worker_configures_logging_and_prunes_cache_before_serving(self):
+        import uvicorn
+        from backend.services.projects import ProjectStore
+        events = []
+        config = MagicMock()
+        config.configure.side_effect = lambda runtime: events.append('logging')
+        cache = MagicMock()
+        cache.prune_cache.side_effect = lambda: events.append('cache')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'RUNTIME', root / 'runtime'), \
+                    patch.object(launcher.os, 'chdir'), patch.object(launcher.sys, 'path', list(sys.path)), \
+                    patch.dict(launcher.os.environ), patch.dict(sys.modules, {'service_logging': config}), \
+                    patch('backend.services.projects.ProjectStore', return_value=cache) as store, \
+                    patch.object(uvicorn, 'run', side_effect=lambda *a, **k: events.append('serve')) as run:
+                launcher.serve()
+                self.assertEqual(events, ['logging', 'cache', 'serve'])
+                config.configure.assert_called_once_with(root / 'runtime')
+                store.assert_called_once_with(launcher.WORKSPACE / 'projects', cache_directory=root / 'runtime/project-cache')
+                run.assert_called_once_with('backend.main:app', host='0.0.0.0', port=launcher.PORT, log_config=None)
+
     def probe(self, payload, tool, workspace):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = json.dumps(payload).encode()

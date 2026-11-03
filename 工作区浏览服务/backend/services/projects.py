@@ -29,6 +29,33 @@ class ProjectStore(ProjectFiles):
         self.entries = {}
         self.lock = threading.Lock()
 
+    def prune_cache(self):
+        """Retire managed caches that this store can no longer load, once at startup."""
+        if self.cache_directory is None:
+            return {'files': 0, 'bytes': 0}
+        removed = {'files': 0, 'bytes': 0}
+        for path in sorted(self.cache_directory.rglob('*.json')):
+            with path.open(encoding='utf-8') as stream:
+                header = stream.read(4096)
+            workspace = re.search(r'"workspace"\s*:\s*("(?:\\.|[^"\\])*")', header)
+            schema = re.search(r'"schema"\s*:\s*(\d+)', header)
+            if workspace is None:
+                logger.warning('未识别的缓存头，保留供检查：%s', path)
+                continue
+            relative = path.relative_to(self.cache_directory)
+            name = relative.stem if len(relative.parts) == 1 else relative.parts[0]
+            if (json.loads(workspace[1]) != str(self.root) or schema is None
+                    or int(schema[1]) != CACHE_SCHEMA or not (self.root / name).is_dir()):
+                size = path.stat().st_size
+                path.unlink()
+                removed['files'] += 1
+                removed['bytes'] += size
+        for path in sorted(self.cache_directory.rglob('*'), reverse=True):
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+        logger.info('失效项目缓存清理：%s', removed)
+        return removed
+
 
 
     def snapshot(self, path: Path):

@@ -139,7 +139,7 @@ class ImageStorageTests(unittest.TestCase):
 
         def changed(first, second):
             link(first, second)
-            if Path(second).name == 'image.png':
+            if Path(second).name == 'media.png':
                 target.write_bytes(self.new)
 
         for platform in ('darwin', 'win32'):
@@ -150,7 +150,7 @@ class ImageStorageTests(unittest.TestCase):
                 store_png(self.project, target, self.raw, source=source)
             self.assertEqual(target.read_bytes(), self.new)
             self.assertEqual(source.stat().st_mode & 0o222, 0)
-            self.assertFalse(list(self.project.glob('.png-save-*')))
+            self.assertFalse(list(self.project.glob('.media-save-*')))
 
     def test_cli_preserves_previous_formal_before_replacing(self):
         formal, source, archive = [self.project / name for name in ('正式.png', '新原图.png', '旧正式.png')]
