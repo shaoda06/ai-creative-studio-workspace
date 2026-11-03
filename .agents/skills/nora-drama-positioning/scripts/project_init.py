@@ -1,6 +1,7 @@
-"""Create project or episode directories and register projects in the shared index."""
+"""Create project/episode directories, a project README and the shared index entry."""
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -24,6 +25,28 @@ EPISODE_DIRECTORIES = (
     "01-制作前检查", "02-剧集剧本", "03-分镜脚本",
     "04-专用素材", "05-视频提示词",
 )
+
+
+def project_readme(project):
+    template = Path(__file__).resolve().parents[1] / 'templates/项目README模板.md'
+    skills = Path(__file__).resolve().parents[2]
+    business = Path(os.path.relpath(skills / 'nora-serial-drama/SKILL.md', project)).as_posix()
+    area = project.parent.parent / 'README.md'
+    owner = '[所属工作区说明](../../README.md)' if area.is_file() else '所属工作区README（先确认实际资料区）'
+    progress = '[项目进度](项目进度.md)' if (project / '项目进度.md').is_file() else '唯一进度文件计划位置：`项目进度.md`（尚未建立）。'
+    values = {
+        '项目名称': project.name,
+        '项目说明': f'Nora创作项目，按实际定位明确类型与范围。业务入口：[连续短剧]({business})。',
+        '项目专用约定': '暂无独立补充；项目例外按用户确认后填写，不复制业务通用规则。',
+        '资料入口': '项目目录已建立；定位、索引和制作正文尚未建立时不预填。保存实际资料后在此补充入口。',
+        '状态入口': progress,
+        '接续要求': f'先读{owner}和本文件，再读项目进度及本次对象，按当前阶段接续；不因建档提交生成。',
+        '历史说明': '暂无。',
+    }
+    text = template.read_text(encoding='utf-8')
+    for key, value in values.items():
+        text = text.replace('{{' + key + '}}', value)
+    return text
 
 
 def initialize(project, episode=None, *, cover=False, intro=False, outro=False):
@@ -71,6 +94,13 @@ def initialize(project, episode=None, *, cover=False, intro=False, outro=False):
             path.mkdir(parents=True, exist_ok=True)
             result["created"].append(item)
     if episode is None:
+        readme = project_file(project, 'README.md')
+        if readme.exists() and not readme.is_file():
+            raise FileExistsError('README位置不是文件，未覆盖：' + str(readme))
+        result['readme_created'] = not readme.exists()
+        if result['readme_created']:
+            with readme.open('x', encoding='utf-8') as handle:
+                handle.write(project_readme(project))
         added = register_project(project)
         result["project_index"] = str(project.parent / INDEX_NAME)
         result["index_added"] = added
@@ -78,7 +108,7 @@ def initialize(project, episode=None, *, cover=False, intro=False, outro=False):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="由Agent初始化项目或单集目录；项目模式同时追加项目总索引，不生成创作正文或连接网页服务。")
+    parser = argparse.ArgumentParser(description="由Agent初始化项目或单集目录；项目模式生成未覆盖已有文件的README入口并追加总索引，不生成创作正文或连接网页服务。")
     parser.add_argument("--project", required=True,
                         help="项目根目录，例如projects/剧名；相对路径从当前工作目录解析，支持绝对路径。")
     parser.add_argument("--episode",

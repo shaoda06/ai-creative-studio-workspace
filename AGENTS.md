@@ -4,10 +4,12 @@
 
 ## 工作区结构
 
-- [Nora资料区](<workspaces/Nora Workspace/AGENTS.md>)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
-- [Iris资料区](<workspaces/Iris Workspace/AGENTS.md>)：保存商业订单，项目位于 `workspaces/Iris Workspace/projects/`。
+- [Nora资料区](<workspaces/Nora Workspace/README.md>)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
+- [Iris资料区](<workspaces/Iris Workspace/README.md>)：保存商业订单，项目位于 `workspaces/Iris Workspace/projects/`。
 
 各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。
+
+一级子工作区的命名、基础结构和README按[工作区层规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)维护；具体项目结构和README由对应业务及建档阶段维护，不混用两层规范或模板。
 
 - 每个项目使用独立目录，以清晰、稳定的名称或项目代号命名；不同项目的内容、素材和制作记录不得混放。项目集中保存自身从策划到制作迭代的资料，具体结构、局部规则和完成标准按对应业务及项目约定维护。
 - 总目录直属文件保留全局约定、说明与共用配置，不直接散放单个项目资料。业务与阶段规则、模板、脚本在总技能库维护，不复制到资料区形成另一套现行技能。
@@ -21,7 +23,7 @@
 
 ## 项目规则读取与适用
 
-- 处理Nora或Iris资料区中的具体项目时，先明确所属资料区和项目根目录，读取资料区已有的 `AGENTS.md`、`README.md`及项目已有的同名文件，再按当前任务读取进度、状态或相关资料；目标目录沿途还有更局部指令时，一并读取适用部分。即使聊天工作目录仍是总目录，也须执行这一步，不依赖子目录指令自动加载。
+- 处理Nora或Iris资料区中的具体项目时，先明确所属资料区和项目根目录，依次读取所属工作区的 `README.md`、项目根目录的 `README.md`，再按当前任务读取唯一进度或状态文件及相关资料。后两层README由Agent按任务主动读取，不因文件存在而视为Codex已默认加载。业务资料区和项目不再另设AGENTS.md；工具或开发目录另有局部AGENTS.md时，仍读取其适用要求，历史快照不作为现行指令。
 - 用户当前明确要求优先；已获用户确认的项目专用约定，在其适用范围内优先于本工作区的通用制作流程和技能默认流程。没有冲突的工作区约定及技能要求继续执行，不将一个项目的例外扩大到其他项目。
 - 已读且未变化的项目规则直接复用；规则更新或任务范围改变时补读相关部分。项目接续和交接时注明项目规则入口，不仅引用聊天记忆或旧任务说明。
 
