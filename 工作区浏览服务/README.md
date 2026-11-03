@@ -129,13 +129,13 @@ pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend build
 ```
 
-日常代码修改默认在主线目录进行；仅在用户明确要求或双方另行约定时使用开发分支。正式发布统一递增版本、构建前端并通过托管入口重启后端；仅前端改动也需让后端加载新版本。代码修改和提交不等于发布，正式构建及重启按本次授权范围执行。项目Markdown、素材和记录变化不需要重启或执行生成脚本。macOS在创建 `.venv`、安装依赖及构建后，使用本目录 `.command` 或 `.venv/bin/python scripts/launcher.py start` 经launchd启动。Linux目前未接入系统托管，仍可手动执行 `.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8782`。
+日常代码修改默认在主线目录进行；仅在用户明确要求或双方另行约定时使用开发分支。正式发布统一递增版本、构建前端并通过托管入口重启后端；仅前端改动也需让后端加载新版本。代码修改和提交不等于发布，正式构建及重启按本次授权范围执行。项目Markdown、素材和记录变化不需要重启或执行生成脚本。macOS在创建 `.venv`、安装依赖及构建后，使用本目录 `.command` 或 `.venv/bin/python scripts/launcher.py start` 经launchd启动。当前系统托管支持Windows和macOS；其他系统尚无受支持的日常启动方式。
 
 ## 换电脑与工作区迁移
 
-项目初始化即可在网页“任务进度→编辑”管理工作区共用节点，支持添加、修改、删除和上移／下移，第一项为默认节点，其余为备用节点；点击保存才写入根目录`comfyui-config.json`。账号密码预填并可直接修改，密码默认遮挡；勾选“无需认证”禁用两个输入框。“还原”撤销未保存修改，恢复最近一次读取或保存成功的状态，不写配置；任务占用地址不能删除或替换，配置被其他页面或Agent改过时须重新载入。首次没有配置时可直接添加，不改动项目资料或历史任务。规则与独立技能的Agent配置方式统一见[工作区配置](../.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
+项目初始化即可在网页“任务进度→编辑”管理工作区共用节点，支持添加、修改、删除和上移／下移，第一项为默认节点，其余为备用节点；点击保存才写入所选资料空间根目录的`comfyui-config.json`。账号密码预填并可直接修改，密码默认遮挡；勾选“无需认证”禁用两个输入框。“还原”撤销未保存修改，恢复最近一次读取或保存成功的状态，不写配置；任务占用地址不能删除或替换，配置被其他页面或Agent改过时须重新载入。首次没有配置时可直接添加，不改动项目资料或历史任务。规则与独立技能的Agent配置方式统一见[工作区配置](../.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)。
 
-本服务默认从所在目录定位工作区，不依赖盘符、用户名、项目名称或Codex安装位置。GitHub仅同步共用代码、规则、模板和风格库；真实`projects/`、`综合资料/`、`.venv`、`frontend/node_modules`、`frontend/dist`、`runtime`及工作区根目录的`comfyui-config.json`按根目录.gitignore排除。另一台设备拉取仓库后，先按“安装与构建”安装本机依赖及构建前端，再在`projects/`放入自己的项目；没有ComfyUI配置时仍可浏览项目，生成任务复用[工作区服务配置](../.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)及本机Codex连接。后台读取实际资料工作区根目录的配置，独立开发目录共用资料时同样共用此文件；HTTP与WebSocket认证均从该文件加载；仅同源节点编辑管理接口返回凭据，普通节点及任务接口不返回凭据。
+本服务从代码所在位置定位AI Creative Studio总目录，再按本机服务配置及空间登记定位资料工作区；不把总目录当作单一项目资料根，不依赖固定盘符、用户名或Codex安装位置。GitHub仅同步共用代码、规则、模板和风格库；真实`projects/`、`综合资料/`、`.venv`、`frontend/node_modules`、`frontend/dist`、`runtime`及工作区根目录的`comfyui-config.json`按根目录.gitignore排除。另一台设备拉取仓库后，先按“安装与构建”安装本机依赖及构建前端，再按所属资料空间在`workspaces/Nora Workspace/projects/`或`workspaces/Iris Workspace/projects/`放入自己的项目；没有ComfyUI配置时仍可浏览项目，生成任务复用[工作区服务配置](../.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)及本机Codex连接。后台读取实际资料工作区根目录的配置，独立开发目录共用资料时同样共用此文件；HTTP与WebSocket认证均从该文件加载；仅同源节点编辑管理接口返回凭据，普通节点及任务接口不返回凭据。
 
 整份工作区换位置前停止浏览服务，完整复制真实项目、执行附件、素材和`runtime/workspaces/`内各空间的任务库和本机登记，核对复制结果后再启动新位置的服务；不让两份后台同时处理同一队列。虚拟环境须在新位置重新创建并安装requirements.txt；Node、FFmpeg及Codex属于本机环境，按README配置，不把另一台设备的可执行文件路径作为通用配置。若有runtime/service.json或NORA_WORKSPACE覆盖默认目录，需要改为本机实际资料目录；没有覆盖时不用填写工作区路径。项目缓存绑定旧根目录，迁移后自动重建。
 

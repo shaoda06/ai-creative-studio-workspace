@@ -87,6 +87,13 @@ def prepare(project, request_file):
         '用户决定原因与依据': '尚无本轮结果及用户决定', '正式文件入口': '尚未采用',
         '用户决定及具体候选、批准依据': '未送审；尚无本轮结果及用户决定'})
     body = images.fields(body, values)
+    # The shared template also serves Qwen; these facts do not exist for Imagegen.
+    unsupported = ('实际反向提示词', '种子、步数、CFG、采样器及调度器',
+                   '种子、步数、CFG、采样器、调度器及其他实际参数', '种子选择与输入避重依据',
+                   '其他实际参数（如降噪、缓存设置）', 'client_id、prompt_id', 'client ID／prompt ID')
+    for name in unsupported:
+        body = re.sub(r'^- ' + re.escape(name) + r'：[^\n]*\n?', '', body, flags=re.M)
+
     body = re.sub(r'```json\n\{\}\n```', lambda _: '```json\n' + json.dumps({'prompt': spec['prompt']}, ensure_ascii=False, indent=2) + '\n```', body, count=1)
     start, end = body.index('#### 2. 输入参考'), body.index('#### 3.')
     inputs = '\n'.join(f"- 输入{i}：{images.link(draft, ref['file'])}；用途：{ref['purpose']}；{ref['basis']}；未预处理" for i, ref in enumerate(refs, 1)) or '- 无输入参考图。'

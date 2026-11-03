@@ -32,6 +32,20 @@ class CandidateNamingTests(unittest.TestCase):
         return subprocess.run([sys.executable, '-B', str(CLI), 'prepare', '--project', str(self.root),
                                '--request', str(self.request)], capture_output=True, text=True)
 
+    def test_native_record_keeps_real_prompt_without_remote_parameters(self):
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        draft = (self.root / self.spec['draft']).read_text()
+        self.assertIn(self.spec['prompt'], draft)
+        self.assertIn(self.spec['authorization'], draft)
+        self.assertIn('请求响应与执行结果入口', draft)
+        self.assertIn('#### 2. 输入参考', draft)
+        self.assertIn('#### 5. 检查与采用', draft)
+        self.assertNotIn('- 种子、步数、CFG', draft)
+        self.assertNotIn('- client_id、prompt_id：', draft)
+        self.assertNotIn('- 实际反向提示词：', draft)
+        self.assertFalse((self.root / self.spec['output']).exists())
+
     def test_bad_suffixes_stop_before_record_or_handoff(self):
         standard = self.spec['output']
         for suffix in ('-imagegen', '-16x9', '-imagegen-16x9'):

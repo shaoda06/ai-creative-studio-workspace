@@ -90,6 +90,4 @@
 | STY-29 | reviewed_invariant | An adaptation mapping marked `move_earlier` or `cold_open` states the setup it depends on and where and through which carrier that setup appears first, or how the viewer is oriented in time, and what happens at the beat's original position. The reviewer checks the mapping against the episode record and screenplay; a moved beat that lands before the audience has the facts it needs is the defect. |
 | STY-30 | craft_default | Material the source does not contain—a new character, an invented scene, a new or replaced opponent—is registered as its own `add` mapping stating the function it serves, why existing source characters and events cannot carry that function, and which source facts were checked against it, and it is listed in the brief for the creator to confirm. Opposition an episode needs is drawn first from source characters and what they actually do; where the source has none, the rhythm-profile deviation is reported instead of hardening an ally or inventing an opponent. |
 
-规则分级由高到低：`structural_invariant`（结构缺陷，阻断）、
-`reviewed_invariant`（需证据判断）、`craft_default`（常用做法，可覆盖）、
-`taste_option`（创作者选择，不作缺陷）。创作者已接受的事实优先于本表。
+级别含义统一读取[审查规则分级](../../nora-drama-review/references/stage-contract.md#规则分级)；本阶段仍独立维护业务条目、来源事实和适用范围。

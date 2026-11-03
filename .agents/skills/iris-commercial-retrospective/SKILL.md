@@ -12,6 +12,6 @@ description: Iris 商业视频完单复盘二级业务阶段，用户明确最�
 - 内部生产：[模板](templates/项目复盘.md)。
 - 交付整理：[模板](templates/交接与结项摘要.md)，来源于当前生产资料与实际成果。
 
-Agent理解、写作、选择版本与处理反馈；脚本完成明确装配和文件处理。工具使用查[能力状态](../iris-commercial-video/references/工具适配.md)，不以登记工具名称代替实际验收。导出时按[交付规则](../iris-commercial-video/references/对外交付.md)调用[共用PDF工具](../studio-pdf-export/SKILL.md)。项目状态归一级业务入口，客户批准不由本技能推定。
+Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
 
 每单复盘检索同类经验、查重并提出适用规则建议，无新增不凑条目；正式规则修改按实际维护授权处理，不把建议标成已落地。

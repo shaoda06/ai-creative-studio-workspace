@@ -26,6 +26,8 @@
 | REV-13 | craft_default | Beyond the whole-episode read, three local passes each read one part only: an opening-hook pass on the first segment, which also reads the first beat alone as the opening frame, an ending-suspense pass on the last segment, and a reversal-density pass on the middle. |
 | REV-14 | craft_default | A revision request is a patch at a cited location with a preserve set, never a whole-episode rewrite; a strong hook, payoff line, or comic beat removed by polishing is logged with its prior location and quote so the owner can restore it. |
 
+## 规则分级
+
 规则分级由高到低：`structural_invariant`（结构缺陷，阻断）、
 `reviewed_invariant`（需证据判断）、`craft_default`（常用做法，可覆盖）、
 `taste_option`（创作者选择，不作缺陷）。创作者已接受的事实优先于本表。
