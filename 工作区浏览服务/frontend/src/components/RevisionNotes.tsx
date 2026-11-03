@@ -60,7 +60,7 @@ export function RevisionNoteEditor({ scope, segment, current, dialogues, fileRev
         const label = `${line.shot.match(/SH\d+$/)?.[0] || line.shot} ${line.speaker || '未标注说话人'} 第${line.index + 1}句`;
         return <label className="revision-dialogue" key={`${line.shot}/${line.index}`}>
           <span><span className="muted">{line.shot.match(/SH\d+$/)?.[0] || line.shot} · </span><strong>{line.speaker || '原台词'}</strong>：{line.original}</span>
-          <textarea aria-label={`${label} 新台词`} placeholder="输入新台词，留空表示不修改" rows={2} maxLength={20000} disabled={!data.loaded}
+          <textarea aria-label={`${label} 新台词`} placeholder="输入新台词，留空表示不修改" rows={1} maxLength={20000} disabled={!data.loaded}
             value={dialogueEdits.find(item => item.shot === line.shot && item.index === line.index)?.replacement ?? ''}
             onChange={event => {
               const replacement = event.target.value;

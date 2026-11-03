@@ -72,6 +72,7 @@
 .revision-notes-export:focus-visible{outline:none}.revision-note-editor textarea:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
 
 .revision-note-state{font-weight:600}.revision-note-state[data-state=empty]{color:#718279}.revision-note-state[data-state=waiting]{color:#946519}.revision-note-state[data-state=loading],.revision-note-state[data-state=saving]{color:#386fb0}.revision-note-state[data-state=saved]{color:#257163}.revision-note-state[data-state=error]{color:#a23b34}.revision-export-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.revision-export-actions>.notice{order:-1;margin:0;padding:0;background:none;color:var(--muted);font-size:13px}.revision-export-actions>textarea:not(.clipboard-buffer){order:1;flex-basis:100%}
+textarea[rows="1"]{min-height:0}
 .revision-dialogues{display:grid;gap:14px;flex-shrink:0}.revision-dialogue{display:grid;gap:6px;min-width:0}.revision-dialogue>span,.revision-dialogue-summary{white-space:pre-wrap;overflow-wrap:anywhere}
 
 dialog header:has(.revision-export-close-actions){flex-wrap:wrap}.revision-export-close-actions{margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.revision-export-discard{background:#a23b34;border-color:#a23b34;color:white}.revision-export-discard:hover{background:#87312b;border-color:#87312b}

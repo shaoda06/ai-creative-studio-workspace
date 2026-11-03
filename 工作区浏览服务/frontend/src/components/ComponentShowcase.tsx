@@ -81,6 +81,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-stack">
             <label>单行输入<input aria-label="单行输入示例" placeholder="输入中文或很长的标题，查看窄屏显示效果…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
             <label>多行输入<textarea aria-label="多行输入示例" placeholder="输入多行正文…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
+            <label>一行高台词输入<textarea aria-label="一行高台词输入示例" rows={1} placeholder="输入新台词…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
             <label>只读输入<input aria-label="只读输入示例" value="可以选择复制，不能修改的示例文字" readOnly /></label>
             <div className="component-demo-row"><span className="component-draft" style={{ flex: 1, minWidth: 0 }}>长说明文字与连续英文：LongSwitchDescriptionLongSwitchDescription</span><Switch label="长说明开关示例" checked={longSwitch} disabled={fieldsDisabled} onChange={setLongSwitch} /></div>
           </div>

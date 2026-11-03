@@ -117,6 +117,9 @@ try {
   const secondLine = page.getByRole('textbox', { name: 'SH002 男主（画外） 第2句 新台词', exact: true });
   assert.equal(await page.locator('.revision-dialogue').count(), 3, '逐句列出，多人同镜和无修改的原句都保留');
   assert.equal(await firstLine.inputValue(), '');
+  const lineHeight = await firstLine.evaluate(el => { const s = getComputedStyle(el); return { rows: el.rows, height: el.getBoundingClientRect().height, expected: parseFloat(s.lineHeight) + parseFloat(s.paddingTop) + parseFloat(s.paddingBottom) + parseFloat(s.borderTopWidth) + parseFloat(s.borderBottomWidth) }; });
+  assert.equal(lineHeight.rows, 1);
+  assert.ok(lineHeight.height <= lineHeight.expected + 1, '新台词输入框保持一行高');
   await firstLine.fill('先把面放下！\n跟我走！');
   await secondLine.fill('再等我一下。');
   await page.locator('.revision-note-state[data-state="saved"]').waitFor();

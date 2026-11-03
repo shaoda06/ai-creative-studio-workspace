@@ -20,6 +20,7 @@ export function InputsFixture() {
         <SearchField size="compact" label="紧凑搜索检查" placeholder={longText} value={value} onChange={change} disabled={disabled} />
         <input aria-label="单行输入检查" placeholder={longText} value={value} onChange={event => change(event.target.value)} disabled={disabled} />
         <textarea aria-label="多行输入检查" placeholder={longText} value={value} onChange={event => change(event.target.value)} disabled={disabled} />
+        <textarea aria-label="一行高台词检查" rows={1} placeholder={longText} value={value} onChange={event => change(event.target.value)} disabled={disabled} />
         <input aria-label="只读输入检查" value={longText} readOnly />
         <textarea aria-label="只读多行检查" value={longText} readOnly />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} data-testid="long-switch-row">

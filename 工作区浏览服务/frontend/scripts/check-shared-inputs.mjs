@@ -24,11 +24,15 @@ export async function checkSharedInputs(page, width, selfTest) {
   const fixture = page.getByTestId('inputs');
   const counts = async () => JSON.parse(await fixture.getByTestId('input-counts').innerText());
   const longValue = '中文搜索、标题与正文输入' + 'LongUnbrokenInputValue'.repeat(20);
-  for (const name of ['标准搜索检查', '紧凑搜索检查', '单行输入检查', '多行输入检查']) {
+  for (const name of ['标准搜索检查', '紧凑搜索检查', '单行输入检查', '多行输入检查', '一行高台词检查']) {
     const field = fixture.getByLabel(name, { exact: true });
     await field.scrollIntoViewIfNeeded();
     await fieldFits(field, `${width}/${name}/长占位`);
     const initialBox = await field.boundingBox();
+    if (name === '一行高台词检查') {
+      const oneLine = await field.evaluate(el => { const s = getComputedStyle(el); return parseFloat(s.lineHeight) + parseFloat(s.paddingTop) + parseFloat(s.paddingBottom) + parseFloat(s.borderTopWidth) + parseFloat(s.borderBottomWidth); });
+      assert.ok(initialBox.height <= oneLine + 1, 'rows=1的台词输入框只保留一行高度');
+    }
     await field.fill(longValue);
     assert.equal(await fixture.getByLabel('多行输入检查', { exact: true }).inputValue(), longValue, '输入应同步到受控状态');
     const filledBox = await field.boundingBox();
@@ -37,7 +41,7 @@ export async function checkSharedInputs(page, width, selfTest) {
     await fieldFits(field, `${width}/${name}/长输入`);
     await field.press('End'); await page.keyboard.insertText('新增中文');
     assert.equal(await field.inputValue(), longValue + '新增中文');
-    if (name === '多行输入检查') {
+    if (name === '多行输入检查' || name === '一行高台词检查') {
       await field.press('Enter'); await page.keyboard.insertText('第二行正文');
       assert.equal(await field.inputValue(), longValue + '新增中文\n第二行正文');
       assert.equal((await counts()).submits, 0, '多行回车不提交表单');
