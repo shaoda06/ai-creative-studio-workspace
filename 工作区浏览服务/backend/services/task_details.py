@@ -8,7 +8,7 @@ from urllib.parse import quote
 from backend.services.comfy_tasks import paths
 
 
-async def task_detail(store, key):
+async def task_detail(store, key, archive=None):
     row = store.rows[key]
     data, state = row['input'].model_copy(deep=True), deepcopy(row['state'])
     events = [dict(id=event_id, **store.record_paths(key).convert(json.loads(value))) for event_id, value in store.db.execute(
@@ -18,7 +18,7 @@ async def task_detail(store, key):
         batch = store.db.execute('SELECT task_ids, state FROM notification_batches WHERE id=?', (batch_id,)).fetchone()
         if batch:
             batches.append({'id': batch_id, 'task_count': len(json.loads(batch[0])), 'status': batch[1]})
-    files = await asyncio.to_thread(task_files, data, state, events)
+    files = await asyncio.to_thread(task_files, data, state, events, archive)
     fields = ('id', 'project', 'title', 'task_type', 'status', 'source_session_name', 'created_at',
               'submitted_at', 'started_at', 'ended_at', 'updated_at', 'prompt_id', 'failure_stage',
               'error', 'error_details', 'collected', 'expected', 'notification', 'dispatch_attempt', 'preparation_attempt',
@@ -39,10 +39,9 @@ async def task_detail(store, key):
     evidence = []
     replacements = []
     if resolution:
-        project_route = '/api/projects/' + quote(Path(data.project).name, safe='') + '/files/'
         for value in resolution['evidence_files']:
             path = paths.project_file(data.project, value)
-            evidence.append({'name': path.name, 'url': project_route + quote(value, safe='/') if recordio.exists(path) else None})
+            evidence.append({'name': path.name, 'url': file_info(Path(data.project), path, archive)['url']})
         for identity in resolution['replacement_task_ids']:
             target = store.rows.get(identity)
             replacements.append({'id': identity, 'title': target['state']['title'] if target else identity,
@@ -55,24 +54,36 @@ async def task_detail(store, key):
             'resolution_evidence': evidence, 'replacement_tasks': replacements}
 
 
-def task_files(data, state, events):
-    project = Path(data.project).resolve()
+def file_info(project, value, archive=None):
+    path = Path(value).resolve()
+    unavailable = {'available': False, 'bytes': None, 'url': None}
+    if not path.is_relative_to(project):
+        return unavailable
+    relative = path.relative_to(project)
+    if any(part.startswith('.') for part in relative.parts):
+        return unavailable
+    root, prefix = archive or (project, '/api/projects/' + quote(project.name, safe='') + '/files/')
+    file = (root / relative).resolve()
+    if not file.is_relative_to(root) or not recordio.exists(file) or not recordio.backing_file(file).resolve().is_relative_to(root):
+        return unavailable
+    size = file.stat().st_size if file.is_file() else len(recordio.text(file).encode('utf-8'))
+    return {'available': True, 'bytes': size, 'url': prefix + quote(relative.as_posix(), safe='/')}
 
-    def file_info(value):
-        path = Path(value).resolve()
-        if not path.is_relative_to(project) or any(part.startswith('.') for part in path.relative_to(project).parts):
-            return {'available': False, 'bytes': None, 'url': None}
-        available = recordio.exists(path) and recordio.backing_file(path).resolve().is_relative_to(project)
-        return {'available': available, 'bytes': (path.stat().st_size if path.is_file() else len(recordio.text(path).encode('utf-8'))) if available else None,
-                'url': '/api/projects/' + quote(project.name, safe='') + '/files/'
-                       + quote(path.relative_to(project).as_posix(), safe='/') if available else None}
+
+def task_files(data, state, events, archive=None):
+    project = Path(data.project).resolve()
 
     targets = [{'path': item.path, 'identity': None} for item in data.outputs]
     if data.segment_plan:
         mapping = Path(data.record_dir) / '输入映射.json'
+        if archive:
+            mapping = (archive[0] / mapping.relative_to(project)).resolve()
+            if not mapping.is_relative_to(archive[0]):
+                raise ValueError('输入映射越出历史任务归档')
         if mapping.is_file():
             from backend.services.comfy_segments import targets as segment_targets
-            targets += [{'path': str(item['candidate']), 'identity': item['identity']} for item in segment_targets(data)]
+            mapped = json.loads(mapping.read_text('utf-8-sig')) if archive else None
+            targets += [{'path': str(item['candidate']), 'identity': item['identity']} for item in segment_targets(data, mapped)]
         else:
             targets += [{'path': item.path, 'identity': state.get('segments', {}).get(str(item.index), {}).get('identity')}
                         for item in data.segment_plan.targets]
@@ -82,7 +93,7 @@ def task_files(data, state, events):
     for target in targets:
         if any(item['path'] == target['path'] for item in outputs):
             continue
-        info = file_info(target['path'])
+        info = file_info(project, target['path'], archive)
         downloads = [event for event in events if event['stage'] == 'download' and
                      (event.get('path') == target['path'] or target['identity'] and event.get('identity') == target['identity'])]
         latest = downloads[-1] if downloads else None
@@ -99,14 +110,11 @@ def task_files(data, state, events):
                         'downloaded_at': latest['time'] if latest and latest['result'] == 'success' else None,
                         'error': error})
     records = []
-    archive = Path(data.record_dir) / recordio.ARCHIVE
-    if archive.is_file():
-        records.append({'name': '完整执行档案', **file_info(archive)})
-    for label, name in (('任务摘要', '后台任务状态.json'), ('完整过程记录', '后台过程记录.json'),
+    for label, name in (('完整执行档案', recordio.ARCHIVE), ('任务摘要', '后台任务状态.json'), ('完整过程记录', '后台过程记录.json'),
                         ('结果收尾报告', '结果收尾报告.json'),
                         ('准备检查报告', '执行检查报告.json'),
                         ('远端执行结果', data.history_name)):
-        info = file_info(Path(data.record_dir) / name)
+        info = file_info(project, Path(data.record_dir) / name, archive)
         if info['available']:
             records.append({'name': label, **info})
     return {'outputs': outputs, 'records': records}

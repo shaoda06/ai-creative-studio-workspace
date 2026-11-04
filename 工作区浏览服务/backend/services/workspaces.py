@@ -52,6 +52,26 @@ class Workspaces:
             self.items[identity] = Workspace(identity, item['name'], target, state, view,
                 ProjectFiles(target / 'projects'), production_adapter=item.get('production_adapter'))
 
+        self.task_history_archives = {}
+        for item in registered:
+            space = self.items[item['id']]
+            for entry in item.get('task_history_archives', []):
+                source = entry['source_space']
+                project = entry['project']
+                relative = Path(entry['directory'])
+                project_root = space.projects.project(project)
+                directory = (project_root / relative).resolve()
+                if (source not in self.items or relative.is_absolute()
+                        or not relative.parts or any(part.startswith('.') for part in relative.parts)
+                        or not directory.is_relative_to(project_root) or not directory.is_dir()):
+                    raise ValueError('历史任务归档登记无效：' + project)
+                prefix = f'{space.api}/projects/{quote(project, safe="")}/files/{quote(relative.as_posix(), safe="/")}/'
+                for task_id in entry['task_ids']:
+                    key = (source, task_id)
+                    if key in self.task_history_archives:
+                        raise ValueError('历史任务归档重复登记：' + task_id)
+                    self.task_history_archives[key] = (directory, prefix)
+
     def get(self, identity):
         return self.items[identity]
 

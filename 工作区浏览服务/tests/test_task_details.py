@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from backend import main
 from backend.services.comfy_segments import SegmentPlan
 from backend.services.task_details import task_detail
+from backend.services.project_files import ProjectFiles
+from backend.services.workspaces import Workspaces
 from tests import test_comfy_tasks as task_tests
 
 
@@ -120,6 +122,39 @@ class DetailTests(unittest.IsolatedAsyncioTestCase):
             response = await client.get('/tasks/task')
             self.assertEqual(response.status_code, 503)
             self.assertIn('任务详情读取失败', response.json()['detail'])
+
+    async def test_historical_links_open_from_another_space_after_source_removal(self):
+        self.seed('completed', 'acknowledged')
+        target = self.root / 'iris'
+        archive = target / 'projects/归档项目/归档/原项目'
+        record = archive / '执行附件/任务001'
+        record.mkdir(parents=True)
+        (record / '后台任务状态.json').write_text('{}')
+        (archive / '候选').mkdir()
+        (archive / '候选/result.png').write_bytes(b'archived result')
+        self.store.record('task', 'download', 'success', path=self.data.outputs[0].path)
+        before = self.store.db.total_changes
+        self.project.rename(self.root / 'retired-source')
+        runtime = self.root / 'runtime'
+        (runtime / 'workspaces.json').write_text(json.dumps([{
+            'id': 'archive-space', 'name': '归档空间', 'path': str(target),
+            'task_history_archives': [{'source_space': 'nora', 'project': '归档项目',
+                                       'directory': '归档/原项目', 'task_ids': ['task']}],
+        }]))
+        api = FastAPI()
+        api.add_api_route('/tasks/{key}', main.comfy_task_detail, methods=['GET'])
+        api.state.comfy_tasks = self.store
+        api.state.workspaces = Workspaces(self.root, runtime, ProjectFiles(self.root / 'projects'), 'test')
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api), base_url='http://test') as client:
+            response = await client.get('/tasks/task')
+        self.assertEqual(response.status_code, 200, response.text)
+        detail = response.json()
+        self.assertEqual(detail['summary']['project'], '测试项目')
+        self.assertEqual(detail['outputs'][0]['status'], 'saved')
+        for item in [detail['outputs'][0], *detail['records']]:
+            self.assertTrue(item['url'].startswith('/api/workspaces/archive-space/projects/'))
+        self.assertEqual(len(detail['records']), 1)
+        self.assertEqual(self.store.db.total_changes, before)
 
 
 if __name__ == '__main__':

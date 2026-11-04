@@ -192,8 +192,10 @@ async def comfy_task_detail(key: str, request: Request) -> dict[str, Any]:
     if key not in task_store(request).rows:
         raise HTTPException(404, '任务不存在')
     try:
-        value = await task_detail(task_store(request), key)
         space = getattr(request.state, 'workspace_space', None)
+        workspaces = getattr(request.app.state, 'workspaces', None)
+        archive = workspaces.task_history_archives.get((space.id if space else 'nora', key)) if workspaces else None
+        value = await task_detail(task_store(request), key, archive)
         return scope_links(value, space.api) if space else value
     except (OSError, ValueError, KeyError) as error:
         raise HTTPException(503, '任务详情读取失败：' + str(error)) from error
