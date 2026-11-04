@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem, RecordData } from './api';
-import { Document, FileLink, FileTree, Result } from './components';
+import { Document, FileLink, FileTree, PreviewContext, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { ProjectProduction } from './components/ProjectProduction';
@@ -14,9 +14,6 @@ import { useRefreshState } from './refreshPosition';
 import './IrisProject.css';
 
 const stages = {
-  brief: { label: '需求与参考', description: '查看客户原件、制作简报和参考分析。', groups: [
-    ['01-客户资料', '需求与来源'], ['02-参考分析', '制作简报'],
-  ] },
   creative: { label: '创意与音画', description: '查看用于分镜和制作的脚本。', groups: [['03-创意脚本', '制作脚本']] },
   storyboard: { label: '分镜与声音', description: '查看逐镜安排和声音设计。', groups: [['04-分镜声音', '分镜与声音制作稿']] },
   assets: { label: '资产准备', description: '查看已采用的素材版本及其依据。', groups: [['05-资产', '资产清单与制作说明']] },
@@ -29,11 +26,12 @@ const archiveNames = ['07-交接', '07-审阅', '08-复盘', '归档', '历史�
 export interface IrisPresentation {
   primary: Record<string, string[]>;
   adopted: { title: string; version: string; media: FileItem }[];
+  brief?: { sources: FileItem[]; archived: FileItem[] };
 }
 
 const tabs = [
   { value: 'overview', label: '项目概况' },
-  { value: 'brief', label: stages.brief.label },
+  { value: 'brief', label: '需求与参考' },
   { value: 'creative', label: stages.creative.label },
   { value: 'storyboard', label: stages.storyboard.label },
   { value: 'assets', label: stages.assets.label },
@@ -57,6 +55,7 @@ export function IrisProject({ name, baseUrl, files, productionSection, presentat
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
     <div key={section} className="iris-project-section">
       {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={files} />}
+      {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'production' && <>
         {productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
           <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
@@ -78,7 +77,7 @@ const overviewDocuments = [
   { value: '项目状态.md', label: '项目状态' },
 ];
 
-function withoutReadmeTitle(document: RecordData): RecordData {
+function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
 }
 
@@ -89,7 +88,7 @@ function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }
   const key = available.find(item => item.value === selected)?.value ?? available[0]?.value;
   const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
     queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
-    select: key === 'README.md' ? withoutReadmeTitle : undefined });
+    select: key === 'README.md' ? withoutLeadingTitle : undefined });
 
   return <>
     <section className="panel" aria-label="项目概况正文">
@@ -100,6 +99,65 @@ function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }
       </> : <p className="muted">暂无项目说明或状态记录。</p>}
     </section>
     <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.some(doc => doc.value === item.name) && item.name !== '复盘.md')} />
+  </>;
+}
+
+const briefDocuments = [
+  ['02-参考分析', '制作简报'],
+  ['01-客户资料', '需求与来源'],
+] as const;
+
+function omitDisplayedFiles(items: FileItem[], displayed: Set<string>): FileItem[] {
+  return items.flatMap(item => {
+    if (displayed.has(item.key || '')) return [];
+    if (!item.children) return [item];
+    const children = omitDisplayedFiles(item.children, displayed);
+    return children.length ? [{ ...item, children }] : [];
+  });
+}
+
+function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: FileItem[]; presentation?: IrisPresentation }) {
+  const preview = useContext(PreviewContext);
+  const [selected, setSelected] = useRefreshState(`${baseUrl}/brief-document`, '');
+  const available = briefDocuments.flatMap(([folder, label]) => (presentation?.primary[folder] || []).map(key => ({
+    value: key,
+    label: (presentation?.primary[folder]?.length || 0) > 1 ? key.split('/').at(-1)! : label,
+  })));
+  const current = available.find(doc => doc.value === selected) ?? available[0];
+  const key = current?.value;
+  const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
+    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
+    select: withoutLeadingTitle });
+  const sources = presentation?.brief?.sources || [];
+  const archived = presentation?.brief?.archived || [];
+  const displayed = new Set([...available.map(doc => doc.value), ...sources.map(item => item.key || '')]);
+  const extras = omitDisplayedFiles(files.filter(item => briefDocuments.some(([folder]) => item.key === folder)), displayed);
+
+  return <>
+    <div className="section-heading iris-stage-heading"><h2>需求与参考</h2></div>
+    <section className="panel iris-brief-panel" aria-label="需求与参考正文">
+      {sources.length > 0 && <section aria-labelledby="iris-brief-sources">
+        <h3 id="iris-brief-sources">客户原件与参考</h3>
+        <div className="iris-brief-sources">{sources.map(item => {
+          const name = item.name.replace(/^SRC\d+-/i, '').replace(/(?:-v\d+(?:\.\d+)*)?\.[^.]+$/i, '');
+          const source = { ...item, name };
+          return item.kind === 'image' ? <button type="button" className="iris-brief-thumbnail" key={item.key} onClick={() => preview(source)}>
+            <img src={item.url} alt="" loading="lazy" /><span>{name}</span>
+          </button> : <FileLink key={item.key} item={source} showOriginal={false} showStatus={false} />;
+        })}</div>
+      </section>}
+      {current ? <div>
+        {available.length > 1
+          ? <UnderlineTabs label="需求与参考文档" items={available} selected={current.value} onChange={setSelected} />
+          : <h3>{current.label}</h3>}
+        <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+        {query.data && <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
+      </div> : archived.length > 0 ? <>
+        <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
+        <Supplement title="查看历史需求与参考" items={archived} />
+      </> : <p className="muted">暂无可确认的需求记录或制作简报。</p>}
+    </section>
+    <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={extras} />
   </>;
 }
 

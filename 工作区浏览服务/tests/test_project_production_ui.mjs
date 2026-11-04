@@ -25,16 +25,24 @@ try{
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path==='/api/workspaces/commercial/projects/未制作样片')return route.fulfill({json:{name:'未制作样片',files:[]}});
    const historical=path.startsWith('/api/workspaces/commercial/projects/历史样片');
-   const base='/api/workspaces/commercial/projects/'+(historical?'历史样片':'隔离样片');
+   const requirementsOnly=path.startsWith('/api/workspaces/commercial/projects/仅有需求');
+   const base='/api/workspaces/commercial/projects/'+(historical?'历史样片':requirementsOnly?'仅有需求':'隔离样片');
    const doc=(key)=>({kind:'file',name:key.split('/').at(-1),key,url:base+'/files/'+key});
    const folder=(name,files)=>({kind:'group',name,key:name,children:files.map(file=>doc(name+'/'+file))});
+   const requirement='01-客户资料/需求与来源-v02.md';
+   const brief='02-参考分析/制作简报.md';
+   const archived='归档/旧订单/制作简报.md';
    if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',
    irisPresentation:{primary:{
-     '02-参考分析':['02-参考分析/制作简报.md'],'04-分镜声音':['04-分镜声音/分镜与声音制作稿.md'],
+     '01-客户资料':historical?[]:[requirement],
+     '02-参考分析':historical||requirementsOnly?[]:[brief],'04-分镜声音':['04-分镜声音/分镜与声音制作稿.md'],
      '05-资产':['05-资产/资产清单.md'],'06-视频生产':['06-视频生产/生产任务.md'],
      '07-返修交接':['07-返修交接/交接说明.md'],'08-完单复盘':['08-完单复盘/项目复盘.md'],
-   },adopted:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
-     doc('README.md'),doc('项目状态.md'),folder('01-客户资料',['需求原件.md']),folder('02-参考分析',['制作简报.md']),
+   },brief:{sources:historical||requirementsOnly?[]:[doc('01-客户资料/需求原件.md'),{...doc('资源/参考-fixture.png'),kind:'image'}],
+     archived:historical?[doc(archived)]:[]},
+     adopted:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
+     doc('README.md'),doc('项目状态.md'),folder('01-客户资料',historical?[]:['需求原件.md','需求与来源-v02.md','需求与来源-v01.md']),
+     folder('02-参考分析',historical||requirementsOnly?[]:['制作简报.md']),
      folder('04-分镜声音',['分镜与声音制作稿.md','导演表.md']),folder('05-资产',['资产清单.md','候选.png']),folder('06-视频生产',['生产任务.md','执行记录.md']),
      folder('07-返修交接',['交接说明.md']),folder('08-完单复盘',['项目复盘.md']),folder('99-综合资料',['项目实验.md']),
    ]}});
@@ -45,6 +53,9 @@ try{
     }
     const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2>项目专用约定</h2><p>这里是项目说明正文。</p>'
       : key==='项目状态.md' ? '<h1>状态</h1><h2>当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
+        : key===brief ? '<h1>简报封面</h1><h2>制作简报正文</h2><p>这里是现行制作简报。</p>'
+          : key===requirement ? '<h1>需求记录</h1><h2>需求正文</h2><p>这里是现行需求。</p>'
+            : key===archived ? '<h1>历史简报正文</h1>'
         : '<h1>隔离资料正文</h1>';
     return route.fulfill({json:{html,url:base+'/files/'+key}});
    }
@@ -92,13 +103,24 @@ try{
   await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','项目资源','全部资料']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
-  assert.equal(await page.getByRole('button',{name:'需求原件.md',exact:true}).isVisible(),false);
-  await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
+  const briefTabs=page.getByRole('navigation',{name:'需求与参考文档',exact:true});
+  await page.getByRole('heading',{name:'制作简报正文',exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog').count(),0);
+  await page.getByRole('button',{name:'需求原件',exact:true}).click();
   await page.getByRole('dialog').getByRole('heading',{name:'隔离资料正文',exact:true}).waitFor();
   await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'参考-fixture',exact:true}).click();
+  await page.getByRole('dialog').getByRole('img',{name:'参考-fixture',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await briefTabs.getByRole('button',{name:'需求与来源',exact:true}).click();
+  await page.getByRole('heading',{name:'需求正文',exact:true}).waitFor();
+  await briefTabs.getByRole('button',{name:'制作简报',exact:true}).click();
+  await page.getByRole('heading',{name:'制作简报正文',exact:true}).waitFor();
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:`${out}/${width}-brief.png`});
   await page.locator('summary').getByText('其他资料（含工作稿、旧版和执行记录）',{exact:true}).click();
   await page.locator('summary').getByText('01-客户资料',{exact:true}).click();
-  await page.getByRole('button',{name:'需求原件.md',exact:true}).waitFor();
+  await page.getByRole('button',{name:'需求与来源-v01.md',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
   await page.getByText('暂无可确认的阶段主文件。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
@@ -159,10 +181,19 @@ try{
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
   await overview.getByRole('button',{name:'项目状态',exact:true}).click();
   await page.getByText('已交付并归档',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
+  await page.getByText('查看历史需求与参考',{exact:true}).click();
+  await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
+  await page.getByRole('dialog').getByRole('heading',{name:'历史简报正文',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
   await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('button',{name:/R002-隔离后处理.*历史只读/}).click();
   await page.locator('.segment-script-content').getByText('历史分镜快照',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'修改意见',exact:true}).count(),0);
+  await page.goto(origin+'/#/spaces/commercial/projects/仅有需求');
+  await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
+  await page.getByRole('heading',{name:'需求正文',exact:true}).waitFor();
+  assert.equal(await briefTabs.count(),0);
   await page.goto(origin+'/#/spaces/commercial/projects/未制作样片');
   await page.getByText('暂无项目说明或状态记录。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();

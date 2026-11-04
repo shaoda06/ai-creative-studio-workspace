@@ -76,6 +76,44 @@ class WorkspaceTests(HttpTestCase):
         self.assertEqual(adopted['media']['key'], ref['file'])
         self.assertEqual(self.client.get(adopted['media']['url']).content, b'approved image')
 
+    def test_iris_brief_preserves_originals_and_offers_archived_documents(self):
+        self.spaces.get('commercial').view = 'iris-commercial'
+        root = self.other / 'projects/同名项目'
+        customer = root / '01-客户资料'
+        customer.mkdir()
+        (customer / '需求与来源-v01.md').write_text('# 当前需求')
+        (customer / 'SRC003-甲方原稿.md').write_text('# 原稿')
+        (customer / '工作稿').mkdir()
+        (customer / '工作稿/临时说明.md').write_text('# 临时')
+        ref = resources.reserve(root, '01-客户资料/原始参考/SRC001-参考图.png', key='fixture', producer='隔离测试')
+        picture = root / ref['file']
+        picture.parent.mkdir(parents=True, exist_ok=True)
+        picture.write_bytes(b'customer image')
+        archive = root / '归档/原项目'
+        (archive / '01-甲方资料').mkdir(parents=True)
+        (archive / '01-甲方资料/来源记录.md').write_text('# 历史来源')
+        (archive / '制作简报.md').write_text('# 历史简报')
+
+        url = self.api + '/projects/同名项目'
+        view = self.client.get(url).json()['irisPresentation']
+        self.assertEqual(view['primary']['01-客户资料'], ['01-客户资料/需求与来源-v01.md'])
+        original, image = view['brief']['sources']
+        self.assertEqual(original['key'], '01-客户资料/SRC003-甲方原稿.md')
+        self.assertEqual(image['key'], ref['file'])
+        self.assertEqual(image['kind'], 'image')
+        self.assertEqual(self.client.get(image['url']).content, b'customer image')
+        self.assertEqual(view['brief']['archived'], [])
+
+        (customer / '需求与来源-v01.md').unlink()
+        (customer / 'SRC003-甲方原稿.md').unlink()
+        picture.unlink()
+        view = self.client.get(url).json()['irisPresentation']
+        self.assertEqual(view['brief']['sources'], [])
+        brief, sources = view['brief']['archived']
+        self.assertEqual(brief['key'], '归档/原项目/制作简报.md')
+        self.assertEqual(self.client.get(brief['url']).text, '# 历史简报')
+        self.assertEqual(sources['children'][0]['key'], '归档/原项目/01-甲方资料/来源记录.md')
+
     def test_archived_projects_leave_discovery_but_keep_file_access(self):
         for identity, root in [('nora', self.primary), ('commercial', self.other)]:
             project = root / 'projects/同名项目'

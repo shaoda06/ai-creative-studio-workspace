@@ -4,6 +4,12 @@
 .iris-stage-heading h2, .iris-stage-heading p { margin: 0; }
 .iris-stage-documents { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px; align-items: start; }
 .iris-stage-documents > .panel { min-width: 0; overflow-wrap: anywhere; }
+.iris-brief-panel { display: grid; gap: 18px; min-width: 0; }
+.iris-brief-panel > p, .iris-brief-panel > :is(section, div) > h3 { margin: 0; }
+.iris-brief-sources { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 8px; }
+.iris-brief-sources > * { min-width: 0; overflow-wrap: anywhere; }
+.iris-brief-thumbnail { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; }
+.iris-brief-thumbnail img { width: 52px; height: 42px; flex: none; object-fit: contain; }
 .iris-supplement { padding: 10px 0; border-block-start: 1px solid var(--line); }
 .iris-supplement > summary { cursor: pointer; }
 .iris-supplement > .tree { margin-top: 10px; }
