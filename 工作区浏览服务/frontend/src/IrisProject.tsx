@@ -91,7 +91,7 @@ function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }
       {key && available.length > 1 && <UnderlineTabs label="概况文档" items={available} selected={key} onChange={setSelected} />}
       {key ? <>
         <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-        {query.data && <Document key={key} value={query.data} chaptersInitiallyOpen={false} />}
+        {query.data && <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
       </> : <p className="muted">暂无项目说明或状态记录。</p>}
     </section>
     <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.some(doc => doc.value === item.name) && item.name !== '复盘.md')} />
