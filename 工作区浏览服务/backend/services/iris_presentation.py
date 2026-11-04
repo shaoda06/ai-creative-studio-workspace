@@ -4,6 +4,7 @@ import re
 from urllib.parse import quote, unquote, urlsplit
 
 from backend.parsers.documents import cells
+from backend.services.workspaces import jianying_links
 import project_resources as resources
 
 
@@ -153,10 +154,49 @@ def adopted_media(projects, project, api, listing):
     return items
 
 
+def delivery_overview(projects, project, api, root, status_text):
+    def linked_file(value):
+        link = LINK.fullmatch(value)
+        if not link:
+            return None
+        _, angle, bare = link.groups()
+        href = urlsplit(angle or bare)
+        key = Path(unquote(href.path))
+        if href.scheme or href.netloc or key.is_absolute() or '..' in key.parts:
+            return None
+        try:
+            return projects.file(project, key.as_posix())
+        except FileNotFoundError:
+            return None
+
+    info = next(table(status_text, '交付状态', '交付说明', '归档交接记录'), {})
+    handoff = linked_file(info.get('归档交接记录', ''))
+    items = []
+    for row in table(status_text, '交付成果', '类型', '项目文件', '版本', '用途'):
+        file = linked_file(row['项目文件'])
+        if file is None:
+            continue
+        key = file.relative_to(root).as_posix()
+        item = {
+            'key': key, 'name': file.name, 'kind': MEDIA_KINDS.get(resources.media_kind(file), 'file'),
+            'url': api + '/projects/' + quote(project, safe='') + '/files/' + quote(key, safe='/'),
+        }
+        if file.name.endswith('.jianying.json'):
+            item['jianying'] = jianying_links(api, project, key)
+        items.append({'title': row['交付成果'], 'type': row['类型'], 'version': row['版本'], 'purpose': row['用途'], 'file': item})
+    return {
+        'status': info.get('交付状态', ''),
+        'summary': info.get('交付说明', ''),
+        'archivedHandoff': handoff.relative_to(root).as_posix() if handoff and handoff.suffix.lower() == '.md' else None,
+        'items': items,
+    }
+
+
 def presentation(projects, project, api, files):
     root = projects.project(project)
     status = root / '项目状态.md'
-    rows = table(status.read_text('utf-8-sig'), '对象', '当前版本/文件') if status.is_file() else ()
+    status_text = status.read_text('utf-8-sig') if status.is_file() else ''
+    rows = table(status_text, '对象', '当前版本/文件')
     current = {unquote(path) for row in rows for _, path in entries(row['当前版本/文件'])}
     primary = {}
     for group in files:
@@ -193,4 +233,5 @@ def presentation(projects, project, api, files):
         'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
             files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
         'stageArchives': stage_archives,
+        'delivery': delivery_overview(projects, project, api, root, status_text),
     }

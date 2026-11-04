@@ -94,6 +94,11 @@ def scope_links(value, api):
     return value
 
 
+def jianying_links(api, project, key):
+    package = api + '/projects/' + quote(project, safe='') + '/jianying-download?path=' + quote(key, safe='')
+    return {'jypack': package + '&format=jypack', 'zip': package + '&format=zip'}
+
+
 def project_tree(projects, name, api):
     root = projects.project(name)
     prefix = api + '/projects/' + quote(name, safe='') + '/files/'
@@ -110,8 +115,7 @@ def project_tree(projects, name, api):
                 item = {'kind': 'file', 'name': path.name, 'key': key,
                         'url': prefix + quote(key, safe='/')}
                 if path.name.endswith('.jianying.json'):
-                    package = api + '/projects/' + quote(name, safe='') + '/jianying-download?path=' + quote(key, safe='')
-                    item['jianying'] = {'jypack': package + '&format=jypack', 'zip': package + '&format=zip'}
+                    item['jianying'] = jianying_links(api, name, key)
                 if path.name.endswith('.director.json'):
                     item['director'] = api + '/projects/' + quote(name, safe='') + '/director-download?path=' + quote(key, safe='')
                 result.append(item)

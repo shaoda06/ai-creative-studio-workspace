@@ -36,6 +36,9 @@ try{
    const storyboard='04-分镜声音/分镜与声音制作稿.md';
    const assetList='05-资产/资产清单.md';
    const archivedAssets='归档/旧订单/05-资产准备/资产清单.md';
+   const handoff='07-返修交接/交接说明.md';
+   const review='08-完单复盘/项目复盘.md';
+   const packageUrl=base+'/jianying-download?path=07-返修交接/剪辑.jianying.json&format=jypack';
    if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',
    irisPresentation:{primary:{
      '01-客户资料':historical?[]:[requirement],
@@ -51,6 +54,11 @@ try{
        '04-分镜声音':[folder('归档/旧订单/04-分镜与视觉方案',['旧分镜.md'])],
        '05-资产':[doc(archivedAssets)],
      }:{},
+     delivery:{status:requirementsOnly?'样片审阅中':'剪映草稿已交接',summary:'隔离交付状态。',archivedHandoff:null,
+       items:requirementsOnly?[]:[
+         {title:'隔离剪映草稿',type:'剪映草稿',version:'R006',purpose:'交给剪辑。',file:{...doc('07-返修交接/剪辑.jianying.json'),jianying:{jypack:packageUrl}}},
+         {title:'隔离审阅样片',type:'审阅样片',version:'v01',purpose:'供审阅。',file:{...doc('资源/预览.webm'),kind:'video'}},
+       ]},
      adopted:historical||requirementsOnly?[]:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
      doc('README.md'),doc('项目状态.md'),folder('01-客户资料',historical?[]:['需求原件.md','需求与来源-v02.md','需求与来源-v01.md']),
      folder('02-参考分析',historical||requirementsOnly?[]:['制作简报.md']),
@@ -75,10 +83,13 @@ try{
                 : key===storyboard ? '<h1>分镜封面</h1><h2>逐镜正文</h2><p>这里是现行分镜。</p>'
                   : key===assetList ? '<h1>清单封面</h1><h2>统一资产清单</h2><table><tbody><tr><td>本镜采用 A001</td></tr></tbody></table>'
                     : key===archivedAssets ? '<h1>历史清单封面</h1><h2>旧订单的资产清单</h2>'
+                      : key===handoff ? '<h1>交接记录</h1><h2>交接正文</h2>'
+                        : key===review ? '<h1>复盘记录</h1><h2>复盘正文</h2>'
         : '<h1>隔离资料正文</h1>';
     return route.fulfill({json:{html,url:base+'/files/'+key}});
    }
    if(path===base+'/resources')return route.fulfill({json:{items:[],total:0,page_size:20}});
+   if(path===base+'/jianying-download')return route.fulfill({body:'隔离下载响应',headers:{'Content-Disposition':'attachment; filename="fixture.jypack"'}});
    if(path===base+'/production'){
     const segments=['P001','P002'].map((id,i)=>({id,duration:3,scriptHtml:'',videos:['一采','二采','后处理'].flatMap((stage,j)=>[1,2].map(n=>({key:`${id}/${stage}/R00${n}.webm`,url:base+`/files/${id}-${j}-${n}.webm`,run:`R00${n}`,stage,approved:false,adoptionKnown:false,candidateNumber:n,fileRevision:`fixture-${i}-${j}-${n}`,deliveryStatus:'已取回',taskStatus:'completed',taskStateUrl:'',checkedAt:'',context:{scriptHtml:`<h4>${id}-SH001</h4><p>${id}实际镜头</p>`,shots:[{id:`${id}-SH001`,duration:3,html:`<h4>${id}-SH001</h4><p>${id}实际镜头</p>`}],prompts:{english:`summary:\n${id} actual R00${n}`,chinese:`${id}同版中文R00${n}`},references:{common:[],segment:[{kind:'image',name:'fixture.png',label:'Picture 1',url:base+'/files/fixture.png'}]},issues:[]}})))}));
     if(historical){for(const item of segments){item.label=item.id;item.id='EP001-C001-'+item.id;for(const video of item.videos){delete video.context;video.contextUrl=base+'/production-context?source=history&identity='+item.id}}}
@@ -186,8 +197,19 @@ try{
   await tabs.getByRole('button',{name:'项目资源',exact:true}).click();
   await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
-  await page.getByRole('button',{name:'交接说明.md',exact:true}).waitFor();
-  await page.getByRole('button',{name:'项目复盘.md',exact:true}).waitFor();
+  const deliveryTabs=page.getByRole('navigation',{name:'交付与复盘视图',exact:true});
+  const deliveryResults=page.getByRole('region',{name:'交付成果',exact:true});
+  await deliveryResults.getByRole('heading',{name:'剪映草稿已交接',exact:true}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('.iris-delivery-item video')?.readyState>=2);
+  const packageDownload=page.waitForEvent('download');
+  await deliveryResults.getByRole('button',{name:'下载剪映草稿包',exact:true}).click();
+  assert.equal((await packageDownload).suggestedFilename(),'fixture.jypack');
+  await deliveryTabs.getByRole('button',{name:'返修与交接',exact:true}).click();
+  await page.getByRole('heading',{name:'交接正文',exact:true}).waitFor();
+  assert.equal(await deliveryResults.count(),0);
+  await deliveryTabs.getByRole('button',{name:'完单复盘',exact:true}).click();
+  await page.getByRole('heading',{name:'复盘正文',exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog').count(),0);
   await tabs.getByRole('button',{name:'全部资料',exact:true}).click();
   await page.getByText('01-客户资料',{exact:true}).waitFor();
   await page.getByText('99-综合资料',{exact:true}).waitFor();
@@ -260,6 +282,11 @@ try{
   assert.equal(await briefTabs.count(),0);
   await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
   await creative.getByText('暂无可确认的阶段主文件。',{exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
+  await deliveryResults.getByRole('heading',{name:'样片审阅中',exact:true}).waitFor();
+  assert.equal(await deliveryResults.getByRole('button',{name:'下载剪映草稿包',exact:true}).count(),0);
+  await deliveryResults.getByRole('button',{name:'前往视频制作',exact:true}).click();
+  await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/未制作样片');
   await page.getByText('暂无项目说明或状态记录。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();

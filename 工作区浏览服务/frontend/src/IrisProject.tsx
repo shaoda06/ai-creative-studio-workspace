@@ -7,7 +7,9 @@ import type { FileItem, RecordData } from './api';
 import { Document, FileLink, FileTree, PreviewContext, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { DownloadButton } from './components/DownloadButton';
 import { ProjectProduction } from './components/ProjectProduction';
+import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { TabNav } from './components/TabNav';
 import { UnderlineTabs } from './components/UnderlineTabs';
@@ -19,14 +21,22 @@ const readingStages = {
   storyboard: { label: '分镜与声音', folder: '04-分镜声音' },
 } as const;
 
-const deliveryGroups = [['07-返修交接', '返修与交接'], ['08-完单复盘', '完单复盘']] as const;
 const archiveNames = ['07-交接', '07-审阅', '08-复盘', '归档', '历史制作资料'];
+const deliveryTabs = [
+  { value: 'results', label: '交付成果' },
+  { value: 'handoff', label: '返修与交接' },
+  { value: 'review', label: '完单复盘' },
+] as const;
 
 export interface IrisPresentation {
   primary: Record<string, string[]>;
   adopted: { title: string; version: string; media: FileItem }[];
   brief?: { sources: FileItem[]; archived: FileItem[] };
   stageArchives?: Record<string, FileItem[]>;
+  delivery?: {
+    status: string; summary: string; archivedHandoff: string | null;
+    items: { title: string; type: string; version: string; purpose: string; file: FileItem }[];
+  };
 }
 
 const tabs = [
@@ -69,7 +79,8 @@ export function IrisProject({ name, baseUrl, files, productionSection, presentat
       {section === 'files' && <section className="panel"><h2>全部资料</h2><FileTree items={files} showStatus={false} />
         {!files.length && <p className="muted">暂无项目资料。</p>}
       </section>}
-      {section === 'delivery' && <IrisDelivery files={files} presentation={presentation} />}
+      {section === 'delivery' && <IrisDelivery baseUrl={baseUrl} files={files} presentation={presentation}
+        openProduction={productionSection ? () => select('production') : undefined} />}
     </div>
   </>;
 }
@@ -234,28 +245,42 @@ function IrisAssets({ baseUrl, files, presentation }: { baseUrl: string; files: 
   </>;
 }
 
-function IrisDelivery({ files, presentation }: {
-  files: FileItem[]; presentation?: IrisPresentation;
+function IrisDelivery({ baseUrl, files, presentation, openProduction }: {
+  baseUrl: string; files: FileItem[]; presentation?: IrisPresentation; openProduction?: () => void;
 }) {
-  const documents = deliveryGroups.map(([name, title]) => {
-    const folder = files.find(item => item.kind === 'group' && item.name === name);
-    const items = folder?.children || [];
-    const keys = presentation?.primary[name] || [];
-    return { name, title, folder, main: items.filter(item => keys.includes(item.key || '')), extra: items.filter(item => !keys.includes(item.key || '')) };
-  });
+  const [view, setView] = useRefreshState<(typeof deliveryTabs)[number]['value']>(`${baseUrl}/delivery-view`, 'results');
+  const delivery = presentation?.delivery;
+  const handoffKeys = presentation?.primary['07-返修交接'] || [];
+  const reviewKeys = presentation?.primary['08-完单复盘'] || [];
+  const archivedHandoff = !handoffKeys.length ? delivery?.archivedHandoff : null;
+  const keys = view === 'handoff' ? (archivedHandoff ? [archivedHandoff] : handoffKeys) : reviewKeys;
+  const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
+  const excluded = new Set([...handoffKeys, ...reviewKeys, ...(delivery?.items.map(({ file }) => file.key!) || [])]);
+  const extras = omitDisplayedFiles(files.filter(item => item.key === '07-返修交接' || item.key === '08-完单复盘'), excluded);
   const archives = files.filter(item => archiveNames.includes(item.name) || item.name === '复盘.md');
   return <>
-    <div className="section-heading iris-stage-heading">
-      <div><h2>交付与复盘</h2><p className="muted">查阅返修、审阅、交接和完单复盘记录。</p></div>
-    </div>
-    <div className="iris-stage-documents">
-      {documents.map(({ name, title, main }) => <section className="panel" key={name}>
-        <h3>{title}</h3>
-        {main.length ? <FileTree items={main} showStatus={false} /> : <p className="muted">暂无可确认的阶段主文件。</p>}
-      </section>)}
-    </div>
-    <Supplement title="其他资料（含工作稿、旧版和执行记录）"
-      items={documents.flatMap(({ folder, extra }) => folder && extra.length ? [{ ...folder, children: extra }] : [])} />
+    <div className="section-heading iris-stage-heading"><h2>交付与复盘</h2></div>
+    <UnderlineTabs label="交付与复盘视图" items={[...deliveryTabs]} selected={view} onChange={setView} />
+    {view === 'results' ? <section className="panel iris-delivery-results" aria-label="交付成果">
+      {delivery?.status && <h3>{delivery.status}</h3>}
+      {delivery?.summary && <p className="muted">{delivery.summary}</p>}
+      {delivery?.items.length ? delivery.items.map(({ title, type, version, purpose, file }) =>
+        <article className="iris-delivery-item" key={file.key}>
+          <div className="iris-delivery-item-heading">
+            <div><h4>{title}</h4><p className="muted">{[type, version].filter(Boolean).join(' · ')}</p></div>
+            {file.jianying
+              ? <DownloadButton url={file.jianying.jypack} label="下载剪映草稿包" title={title} pack />
+              : <DownloadButton url={file.url!} filename={file.name} label={file.name.toLowerCase().endsWith('.jypack') ? '下载剪映草稿包' : '下载文件'} title={title} />}
+          </div>
+          {purpose && <p>{purpose}</p>}
+          {file.kind === 'video' && <ReleaseFilmPlayer item={file} />}
+        </article>) : <>
+        <p className="muted">暂无可播放或下载的交付成果。</p>
+        {openProduction && <button type="button" onClick={openProduction}>前往视频制作</button>}
+      </>}
+    </section> : <IrisDocumentReading key={view} baseUrl={baseUrl} section={view} label={view === 'handoff' ? '返修与交接' : '完单复盘'} documents={documents}
+      empty={<p className="muted">{view === 'handoff' ? '暂无返修与交接记录。' : '暂无完单复盘，最终交付后可在这里查阅。'}</p>} />}
+    <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={extras} />
     <Supplement title="历史归档" items={archives} />
   </>;
 }

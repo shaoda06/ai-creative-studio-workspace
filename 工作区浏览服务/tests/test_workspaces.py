@@ -76,6 +76,30 @@ class WorkspaceTests(HttpTestCase):
         self.assertEqual(adopted['media']['key'], ref['file'])
         self.assertEqual(self.client.get(adopted['media']['url']).content, b'approved image')
 
+    def test_iris_delivery_shows_only_registered_project_files(self):
+        self.spaces.get('commercial').view = 'iris-commercial'
+        root = self.other / 'projects/同名项目'
+        (root / '交接.jianying.json').write_text('{}')
+        (root / '预览.mp4').write_bytes(b'video')
+        (root / '候选.mp4').write_bytes(b'candidate')
+        (root / '历史交接.md').write_text('# 历史交接')
+        (root / '项目状态.md').write_text(
+            '| 交付状态 | 交付说明 | 归档交接记录 |\n| --- | --- | --- |\n'
+            '| 已交接 | 内部剪辑交接 | [说明](历史交接.md) |\n\n'
+            '| 交付成果 | 类型 | 项目文件 | 版本 | 用途 |\n| --- | --- | --- | --- | --- |\n'
+            '| 草稿 | 剪映草稿 | [清单](交接.jianying.json) | R006 | 剪辑 |\n'
+            '| 预览 | 审阅样片 | [文件](预览.mp4) | v01 | 审阅 |\n'
+            '| 缺失 | 成片 | [文件](不存在.mp4) | v01 | 交付 |\n'
+            '| 项目外 | 附件 | [文件](../说明.md) | v01 | 交付 |\n')
+        url = self.api + '/projects/同名项目'
+        delivery = self.client.get(url).json()['irisPresentation']['delivery']
+        self.assertEqual(delivery['status'], '已交接')
+        self.assertEqual(delivery['archivedHandoff'], '历史交接.md')
+        draft, preview = delivery['items']
+        self.assertTrue(draft['file']['jianying']['jypack'].endswith('&format=jypack'))
+        self.assertEqual(preview['file']['kind'], 'video')
+        self.assertEqual(self.client.get(preview['file']['url']).content, b'video')
+
     def test_iris_brief_preserves_originals_and_offers_archived_documents(self):
         self.spaces.get('commercial').view = 'iris-commercial'
         root = self.other / 'projects/同名项目'
