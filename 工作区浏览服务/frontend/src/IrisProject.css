@@ -6,9 +6,11 @@
 .iris-overview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .iris-stage-heading { margin: 0; }
 .iris-stage-heading h2, .iris-stage-heading p { margin: 0; }
-.iris-stage-documents:not(:empty) { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px; align-items: start; }
-.iris-stage-documents:empty { display: none; }
-.iris-stage-documents > .panel { min-width: 0; }
+.iris-stage-documents { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px; align-items: start; }
+.iris-stage-documents > .panel { min-width: 0; overflow-wrap: anywhere; }
+.iris-supplement { padding: 10px 0; border-block-start: 1px solid var(--line); }
+.iris-supplement > summary { cursor: pointer; }
+.iris-supplement > .tree { margin-top: 10px; }
 .iris-production-index p { margin: 0 0 14px; }
 .iris-batch-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .iris-batch-list > button { text-align: left; min-width: 0; overflow-wrap: anywhere; }

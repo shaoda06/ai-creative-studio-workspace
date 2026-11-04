@@ -32,6 +32,7 @@ from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
 from backend.services import production
+from backend.services.iris_presentation import presentation as iris_presentation
 from backend.services.review_notes import ProjectReviewNotes, ReviewNotes
 from backend.services import node_config
 from backend.services.prompts import WorkspacePromptLibrary
@@ -935,6 +936,8 @@ def workspace_project(name: str, request: Request):
         value = project_tree(space.projects, name, space.api)
         if space.production_adapter:
             value['productionSection'] = production.adapter(space).production_section(space.projects.project(name))
+        if space.view == 'iris-commercial':
+            value['irisPresentation'] = iris_presentation(space.projects, name, space.api, value['files'])
         return value
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error

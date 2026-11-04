@@ -28,9 +28,14 @@ try{
    const base='/api/workspaces/commercial/projects/'+(historical?'历史样片':'隔离样片');
    const doc=(key)=>({kind:'file',name:key.split('/').at(-1),key,url:base+'/files/'+key});
    const folder=(name,files)=>({kind:'group',name,key:name,children:files.map(file=>doc(name+'/'+file))});
-   if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',files:[
+   if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',
+   irisPresentation:{primary:{
+     '02-参考分析':['02-参考分析/制作简报.md'],'04-分镜声音':['04-分镜声音/分镜与声音制作稿.md'],
+     '05-资产':['05-资产/资产清单.md'],'06-视频生产':['06-视频生产/生产任务.md'],
+     '07-返修交接':['07-返修交接/交接说明.md'],'08-完单复盘':['08-完单复盘/项目复盘.md'],
+   },adopted:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
      doc('README.md'),doc('项目状态.md'),folder('01-客户资料',['需求原件.md']),folder('02-参考分析',['制作简报.md']),
-     folder('04-分镜声音',['导演表.md']),folder('05-资产',['资产清单.md']),folder('06-视频生产',['生产任务.md']),
+     folder('04-分镜声音',['分镜与声音制作稿.md','导演表.md']),folder('05-资产',['资产清单.md','候选.png']),folder('06-视频生产',['生产任务.md','执行记录.md']),
      folder('07-返修交接',['交接说明.md']),folder('08-完单复盘',['项目复盘.md']),folder('99-综合资料',['项目实验.md']),
    ]}});
    if(path===base+'/document'){
@@ -66,16 +71,25 @@ try{
   await page.screenshot({path:`${out}/${width}-overview.png`});
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','项目资源','全部资料']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
-  await page.getByRole('button',{name:'需求原件.md',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'需求原件.md',exact:true}).isVisible(),false);
   await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
   await page.getByRole('dialog').getByRole('heading',{name:'隔离资料正文',exact:true}).waitFor();
   await page.keyboard.press('Escape');
+  await page.locator('summary').getByText('其他资料（含工作稿、旧版和执行记录）',{exact:true}).click();
+  await page.locator('summary').getByText('01-客户资料',{exact:true}).click();
+  await page.getByRole('button',{name:'需求原件.md',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
-  await page.getByText('本项目暂无创意与音画资料。',{exact:true}).waitFor();
+  await page.getByText('暂无可确认的阶段主文件。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
-  await page.getByRole('button',{name:'导演表.md',exact:true}).waitFor();
+  await page.getByRole('button',{name:'分镜与声音制作稿.md',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'导演表.md',exact:true}).isVisible(),false);
   await tabs.getByRole('button',{name:'资产准备',exact:true}).click();
   await page.getByRole('button',{name:'资产清单.md',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'已采用素材',exact:true}).waitFor();
+  await page.getByRole('img',{name:'fixture.png',exact:true}).click();
+  await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('button',{name:'候选.png',exact:true}).isVisible(),false);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.getByRole('button',{name:'查看项目资源',exact:true}).click();
   await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
@@ -86,6 +100,8 @@ try{
   await page.getByText('99-综合资料',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
+  await page.getByRole('button',{name:'生产任务.md',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'执行记录.md',exact:true}).isVisible(),false);
   assert.equal(await page.locator('.segment-video video').count(),0);
   await page.screenshot({path:`${out}/${width}-batches.png`});
   await page.getByRole('button',{name:/R002-隔离后处理/}).click();

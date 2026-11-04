@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem, RecordData } from './api';
-import { FileTree, Result } from './components';
+import { FileLink, FileTree, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
+import { AssetMediaCard } from './components/AssetMediaCard';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { TabNav } from './components/TabNav';
@@ -13,17 +14,21 @@ import './IrisProject.css';
 
 const stages = {
   brief: { label: '需求与参考', description: '查看客户原件、制作简报和参考分析。', groups: [
-    ['01-客户资料', '客户需求与原件'], ['02-参考分析', '制作简报与参考分析'],
+    ['01-客户资料', '需求与来源'], ['02-参考分析', '制作简报'],
   ] },
-  creative: { label: '创意与音画', description: '查看创意方向、内容主线和音画脚本。', groups: [['03-创意脚本', '创意方案与脚本']] },
-  storyboard: { label: '分镜与声音', description: '查看逐镜安排、导演表和声音设计。', groups: [['04-分镜声音', '分镜与声音制作资料']] },
-  assets: { label: '资产准备', description: '查看素材要求、资产清单和采用记录。', groups: [['05-资产', '资产清单与制作资料']] },
+  creative: { label: '创意与音画', description: '查看用于分镜和制作的脚本。', groups: [['03-创意脚本', '制作脚本']] },
+  storyboard: { label: '分镜与声音', description: '查看逐镜安排和声音设计。', groups: [['04-分镜声音', '分镜与声音制作稿']] },
+  assets: { label: '资产准备', description: '查看已采用的素材版本及其依据。', groups: [['05-资产', '资产清单与制作说明']] },
   delivery: { label: '交付与复盘', description: '查阅返修、审阅、交接和完单复盘记录。', groups: [
     ['07-返修交接', '返修与交接'], ['08-完单复盘', '完单复盘'],
-    ['07-交接', '旧交接资料'], ['07-审阅', '旧审阅资料'], ['08-复盘', '旧复盘资料'],
-    ['归档', '归档资料'], ['历史制作资料', '历史制作资料'],
   ] },
 } as const;
+const archiveNames = ['07-交接', '07-审阅', '08-复盘', '归档', '历史制作资料'];
+
+export interface IrisPresentation {
+  primary: Record<string, string[]>;
+  adopted: { title: string; version: string; media: FileItem }[];
+}
 
 const tabs = [
   { value: 'overview', label: '项目概况' },
@@ -37,13 +42,15 @@ const tabs = [
   { value: 'files', label: '全部资料' },
 ] as const;
 
-export function IrisProject({ name, baseUrl, files, productionSection, clearPreview }: {
-  name: string; baseUrl: string; files: FileItem[]; productionSection?: string; clearPreview: () => void;
+export function IrisProject({ name, baseUrl, files, productionSection, presentation, clearPreview }: {
+  name: string; baseUrl: string; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; clearPreview: () => void;
 }) {
   const controls = useContext(HeaderControlsContext);
   const [section, setSection] = useRefreshState(`${baseUrl}/section`, 'overview');
   const select = (value: string) => { setSection(value); clearPreview(); window.scrollTo(0, 0); };
   const productionFiles = files.find(item => item.name === productionSection)?.children || [];
+  const productionKeys = presentation?.primary['06-视频生产'] || [];
+  const productionMain = productionFiles.filter(item => productionKeys.includes(item.key || ''));
 
   return <>
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
@@ -53,15 +60,14 @@ export function IrisProject({ name, baseUrl, files, productionSection, clearPrev
         {productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
           <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
         </section>}
-        {productionFiles.length > 0 && <section className="panel" aria-label="制作资料">
-          <details><summary>制作资料</summary><FileTree items={productionFiles} showStatus={false} /></details>
-        </section>}
+        {productionMain.length > 0 && <section className="panel"><h3>生产任务记录</h3><FileTree items={productionMain} showStatus={false} /></section>}
+        <Supplement title="其他制作资料（含工作稿、旧版和执行记录）" items={productionFiles.filter(item => !productionMain.includes(item))} />
       </>}
       {section === 'resources' && <section className="panel"><ResourceLibrary project={name} baseUrl={baseUrl} /></section>}
       {section === 'files' && <section className="panel"><h2>全部资料</h2><FileTree items={files} showStatus={false} />
         {!files.length && <p className="muted">暂无项目资料。</p>}
       </section>}
-      {Object.hasOwn(stages, section) && <IrisStage stage={section as keyof typeof stages} files={files} select={select} />}
+      {Object.hasOwn(stages, section) && <IrisStage stage={section as keyof typeof stages} files={files} presentation={presentation} select={select} />}
     </div>
   </>;
 }
@@ -85,7 +91,8 @@ function IrisOverview({ baseUrl, files, hasProduction, select }: {
     }
     return '';
   }, [html]);
-  const entryFiles = files.filter(item => item.kind !== 'group' && item.name !== '复盘.md');
+  const rootFiles = files.filter(item => item.kind !== 'group');
+  const entryFiles = rootFiles.filter(item => ['README.md', '项目状态.md'].includes(item.name));
 
   return <div className="iris-overview">
     <section className="panel" aria-label="当前进展">
@@ -101,28 +108,49 @@ function IrisOverview({ baseUrl, files, hasProduction, select }: {
     </section>
     <section className="panel"><h2>项目入口文件</h2>
       {entryFiles.length ? <FileTree items={entryFiles} showStatus={false} /> : <p className="muted">暂无入口文件。</p>}
+      <Supplement title="其他项目文件" items={rootFiles.filter(item => !entryFiles.includes(item) && item.name !== '复盘.md')} />
     </section>
   </div>;
 }
 
-function IrisStage({ stage, files, select }: {
-  stage: keyof typeof stages; files: FileItem[]; select: (section: string) => void;
+function Supplement({ title, items }: { title: string; items: FileItem[] }) {
+  return items.length > 0 && <details className="iris-supplement"><summary>{title}</summary>
+    <FileTree items={items} showStatus={false} />
+  </details>;
+}
+
+function IrisStage({ stage, files, presentation, select }: {
+  stage: keyof typeof stages; files: FileItem[]; presentation?: IrisPresentation; select: (section: string) => void;
 }) {
   const { label, description, groups } = stages[stage];
-  const documents = groups.flatMap(([name, title]) => {
+  const documents = groups.map(([name, title]) => {
     const folder = files.find(item => item.kind === 'group' && item.name === name);
-    return folder?.children?.length ? [{ name, title, items: folder.children }] : [];
+    const items = folder?.children || [];
+    const keys = presentation?.primary[name] || [];
+    return { name, title, folder, main: items.filter(item => keys.includes(item.key || '')), extra: items.filter(item => !keys.includes(item.key || '')) };
   });
-  const retrospective = stage === 'delivery' ? files.filter(item => item.kind === 'file' && item.name === '复盘.md') : [];
+  const archives = stage === 'delivery' ? files.filter(item => archiveNames.includes(item.name) || item.name === '复盘.md') : [];
+  const adopted = presentation?.adopted || [];
   return <>
     <div className="section-heading iris-stage-heading">
       <div><h2>{label}</h2><p className="muted">{description}</p></div>
       {stage === 'assets' && <button type="button" onClick={() => select('resources')}>查看项目资源</button>}
     </div>
     <div className="iris-stage-documents">
-      {documents.map(({ name, title, items }) => <section className="panel" key={name}><h3>{title}</h3><FileTree items={items} showStatus={false} /></section>)}
-      {retrospective.length > 0 && <section className="panel"><h3>完单复盘记录</h3><FileTree items={retrospective} showStatus={false} /></section>}
+      {documents.map(({ name, title, main }) => <section className="panel" key={name}>
+        <h3>{title}</h3>
+        {main.length ? <FileTree items={main} showStatus={false} /> : <p className="muted">暂无可确认的阶段主文件。</p>}
+      </section>)}
     </div>
-    {!documents.length && !retrospective.length && <section className="panel"><p className="muted">本项目暂无{label}资料。</p></section>}
+    {stage === 'assets' && <section className="panel"><h3>已采用素材</h3>
+      {adopted.length ? <div className="asset-media-grid">{adopted.map(item => item.media.kind === 'image'
+        ? <AssetMediaCard key={item.title + item.media.key} title={item.title} item={item} revision={0} formal />
+        : <article key={item.title + item.media.key}><h4>{item.title}</h4><FileLink item={item.media} showStatus={false} /></article>)}</div>
+        : <p className="muted">现行资产清单中暂无可预览的已采用素材。</p>}
+    </section>}
+    <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={documents.length === 1
+      ? documents[0].extra
+      : documents.flatMap(({ folder, extra }) => folder && extra.length ? [{ ...folder, children: extra }] : [])} />
+    <Supplement title="历史归档" items={archives} />
   </>;
 }

@@ -8,6 +8,7 @@ from backend import main
 from backend.services.projects import ProjectStore
 from backend.services.workspaces import Workspaces
 from tests.http_case import HttpTestCase
+import project_resources as resources
 
 
 class WorkspaceTests(HttpTestCase):
@@ -39,6 +40,41 @@ class WorkspaceTests(HttpTestCase):
         self.client = TestClient(main.app, client=('127.0.0.1', 50000))
         self.addCleanup(self.client.close)
         self.api = '/api/workspaces/commercial'
+
+    def test_iris_projects_prioritize_explicit_main_versions_and_adopted_media(self):
+        self.spaces.get('commercial').view = 'iris-commercial'
+        root = self.other / 'projects/同名项目'
+        for directory in ('04-分镜声音', '05-资产'):
+            (root / directory).mkdir()
+        (root / '项目状态.md').write_text(
+            '| 对象 | 当前版本/文件 |\n| --- | --- |\n'
+            '| 资产 | 05-资产/资产清单-v01.md |\n\n'
+            '| 分镜 | [现行稿](04-分镜声音/分镜与声音制作稿-v01.md) |\n\n'
+            '## 历史\n\n| 对象 | 当前版本/文件 |\n| --- | --- |\n'
+            '| 分镜 | 04-分镜声音/分镜与声音制作稿-v02.md |\n')
+        for version in ('v01', 'v02'):
+            (root / f'04-分镜声音/分镜与声音制作稿-{version}.md').write_text(version)
+        (root / '05-资产/资产清单-v02.md').write_text('旧版')
+        ref = resources.reserve(root, '05-资产/采用/定稿.png', key='adopted', producer='隔离测试')
+        (root / ref['file']).parent.mkdir(parents=True, exist_ok=True)
+        (root / ref['file']).write_bytes(b'approved image')
+        (root / '05-资产/资产清单-v01.md').write_text(
+            '| 编号 | 名称及具体状态 | 已有／需制作 | 当前文件及版本 |\n'
+            '| --- | --- | --- | --- |\n'
+            '| A001 | 已确认场景 | 已采用 | 采用/定稿.png；执行记录/生成.md |\n'
+            '| A002 | 候选 | 待审 | 采用/定稿.png |\n')
+        response = self.client.get(self.api + '/projects/同名项目')
+        self.assertEqual(response.status_code, 200)
+        presentation = response.json()['irisPresentation']
+        self.assertEqual(presentation['primary'], {
+            '04-分镜声音': ['04-分镜声音/分镜与声音制作稿-v01.md'],
+            '05-资产': ['05-资产/资产清单-v01.md'],
+        })
+        adopted, = presentation['adopted']
+        self.assertEqual(adopted['title'], 'A001 · 已确认场景')
+        self.assertEqual(adopted['version'], 'V001')
+        self.assertEqual(adopted['media']['key'], ref['file'])
+        self.assertEqual(self.client.get(adopted['media']['url']).content, b'approved image')
 
     def test_archived_projects_leave_discovery_but_keep_file_access(self):
         for identity, root in [('nora', self.primary), ('commercial', self.other)]:
