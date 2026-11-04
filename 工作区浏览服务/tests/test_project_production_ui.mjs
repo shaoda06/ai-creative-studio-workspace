@@ -16,7 +16,7 @@ let activePage;
 try{
  for(const width of [1280,1366,1920]){
   const page=await browser.newPage({viewport:{width,height:width===1280?640:width===1366?768:1080}}),errors=[],unexpected=[],writes=[];
-  const saved={notes:{},rounds:{}};let failSave=true;
+  const saved={notes:{},rounds:{}};let failSave=true,failRead=true;
   activePage=page;page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const req=route.request(),u=new URL(req.url()),path=decodeURIComponent(u.pathname);
@@ -39,10 +39,14 @@ try{
      folder('07-返修交接',['交接说明.md']),folder('08-完单复盘',['项目复盘.md']),folder('99-综合资料',['项目实验.md']),
    ]}});
    if(path===base+'/document'){
-    const html=u.searchParams.get('path')==='项目状态.md'
-      ? historical?'<h1>状态</h1><ul><li>更新：测试</li><li>状态：已交付并归档</li></ul>':'<h1>状态</h1><p>项目：隔离样片\n当前阶段与下一步：等待用户审阅。</p>'
-      : '<h1>隔离资料正文</h1>';
-    return route.fulfill({json:{html}});
+    const key=u.searchParams.get('path');
+    if(key==='README.md'&&failRead){
+     failRead=false;return route.fulfill({status:503,json:{detail:'隔离读取失败'}});
+    }
+    const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2>项目专用约定</h2><p>这里是项目说明正文。</p>'
+      : key==='项目状态.md' ? '<h1>状态</h1><h2>当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
+        : '<h1>隔离资料正文</h1>';
+    return route.fulfill({json:{html,url:base+'/files/'+key}});
    }
    if(path===base+'/resources')return route.fulfill({json:{items:[],total:0,page_size:20}});
    if(path===base+'/production'){
@@ -67,8 +71,25 @@ try{
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
   await page.goto(origin+'/#/spaces/commercial/projects/隔离样片');
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
-  await page.getByText('等待用户审阅。',{exact:true}).waitFor();
+  const overview=page.getByRole('navigation',{name:'概况文档',exact:true});
+  await page.getByRole('button',{name:'重新读取',exact:true}).click();
+  await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
+  assert.equal(await overview.getByRole('button',{name:'项目说明',exact:true}).getAttribute('aria-current'),'page');
+  assert.equal(await page.getByRole('dialog').count(),0);
+  const chapters=page.locator('.document .chapters');
+  assert.equal(await chapters.getAttribute('open'),null);
+  assert.ok(await page.getByText('这里是项目说明正文。',{exact:true}).evaluate(node=>node.getBoundingClientRect().bottom<=innerHeight-44));
+  await chapters.getByText('章节导航',{exact:true}).click();
+  await chapters.getByRole('button',{name:'项目专用约定',exact:true}).waitFor();
+  await chapters.getByText('章节导航',{exact:true}).click();
   await page.screenshot({path:`${out}/${width}-overview.png`});
+  await overview.getByRole('button',{name:'项目状态',exact:true}).click();
+  await page.getByText('等待用户审阅。',{exact:true}).waitFor();
+  await page.getByRole('heading',{name:'当前决定',exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog').count(),0);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await overview.getByRole('button',{name:'项目说明',exact:true}).click();
+  await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','项目资源','全部资料']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'需求原件.md',exact:true}).isVisible(),false);
@@ -136,13 +157,14 @@ try{
   await page.getByRole('button',{name:'返回批次列表',exact:true}).click();
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
+  await overview.getByRole('button',{name:'项目状态',exact:true}).click();
   await page.getByText('已交付并归档',{exact:true}).waitFor();
   await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('button',{name:/R002-隔离后处理.*历史只读/}).click();
   await page.locator('.segment-script-content').getByText('历史分镜快照',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'修改意见',exact:true}).count(),0);
   await page.goto(origin+'/#/spaces/commercial/projects/未制作样片');
-  await page.getByText('暂无项目状态记录。',{exact:true}).waitFor();
+  await page.getByText('暂无项目说明或状态记录。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByText('本项目暂无视频制作资料。',{exact:true}).waitFor();
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.ok(writes.every(path=>path.endsWith('/production-notes')));

@@ -1,14 +1,15 @@
-import { useContext, useMemo } from 'react';
+import { useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem, RecordData } from './api';
-import { FileLink, FileTree, Result } from './components';
+import { Document, FileLink, FileTree, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { TabNav } from './components/TabNav';
+import { UnderlineTabs } from './components/UnderlineTabs';
 import { useRefreshState } from './refreshPosition';
 import './IrisProject.css';
 
@@ -55,7 +56,7 @@ export function IrisProject({ name, baseUrl, files, productionSection, presentat
   return <>
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
     <div key={section} className="iris-project-section">
-      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={files} hasProduction={Boolean(productionSection)} select={select} />}
+      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={files} />}
       {section === 'production' && <>
         {productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
           <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
@@ -72,45 +73,29 @@ export function IrisProject({ name, baseUrl, files, productionSection, presentat
   </>;
 }
 
-function IrisOverview({ baseUrl, files, hasProduction, select }: {
-  baseUrl: string; files: FileItem[]; hasProduction: boolean; select: (section: string) => void;
-}) {
-  const status = files.find(item => item.name === '项目状态.md' && item.kind === 'file');
-  const query = useQuery({ queryKey: ['document', baseUrl, status?.key, 0],
-    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(status!.key!)}`), enabled: Boolean(status) });
-  const html: string = query.data?.html || '';
-  const progress = useMemo(() => {
-    const body = new DOMParser().parseFromString(html, 'text/html').body;
-    for (const node of body.children) {
-      if (node.tagName === 'H2') break;
-      const lines = node.matches('ul, ol') ? Array.from(node.children, item => item.textContent || '') : (node.textContent || '').split('\n');
-      for (const line of lines) {
-        const current = line.match(/^\s*(?:当前阶段与下一步|状态)[：:]\s*(.+)$/);
-        if (current) return current[1];
-      }
-    }
-    return '';
-  }, [html]);
-  const rootFiles = files.filter(item => item.kind !== 'group');
-  const entryFiles = rootFiles.filter(item => ['README.md', '项目状态.md'].includes(item.name));
+const overviewDocuments = [
+  { value: 'README.md', label: '项目说明' },
+  { value: '项目状态.md', label: '项目状态' },
+];
 
-  return <div className="iris-overview">
-    <section className="panel" aria-label="当前进展">
-      <p className="iris-eyebrow">IRIS 商业视频</p>
-      <h2>当前进展</h2>
-      {status && <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />}
-      {progress && <p className="iris-project-progress">{progress}</p>}
-      {(!status || query.data && !progress) && <p className="muted">{status ? '请查看项目状态文件中的详细记录。' : '暂无项目状态记录。'}</p>}
-      <div className="iris-overview-actions">
-        {hasProduction && <button type="button" onClick={() => select('production')}>查看视频制作</button>}
-        <button type="button" onClick={() => select(hasProduction ? 'delivery' : 'brief')}>{hasProduction ? '查看交付与复盘' : '查看需求与参考'}</button>
-      </div>
+function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
+  const [selected, setSelected] = useRefreshState(`${baseUrl}/overview-document`, overviewDocuments[0].value);
+  const rootFiles = files.filter(item => item.kind !== 'group');
+  const available = overviewDocuments.filter(item => rootFiles.some(file => file.kind === 'file' && file.key === item.value));
+  const key = available.find(item => item.value === selected)?.value ?? available[0]?.value;
+  const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
+    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key) });
+
+  return <>
+    <section className="panel" aria-label="项目概况正文">
+      {key && available.length > 1 && <UnderlineTabs label="概况文档" items={available} selected={key} onChange={setSelected} />}
+      {key ? <>
+        <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+        {query.data && <Document key={key} value={query.data} chaptersInitiallyOpen={false} />}
+      </> : <p className="muted">暂无项目说明或状态记录。</p>}
     </section>
-    <section className="panel"><h2>项目入口文件</h2>
-      {entryFiles.length ? <FileTree items={entryFiles} showStatus={false} /> : <p className="muted">暂无入口文件。</p>}
-      <Supplement title="其他项目文件" items={rootFiles.filter(item => !entryFiles.includes(item) && item.name !== '复盘.md')} />
-    </section>
-  </div>;
+    <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.some(doc => doc.value === item.name) && item.name !== '复盘.md')} />
+  </>;
 }
 
 function Supplement({ title, items }: { title: string; items: FileItem[] }) {
