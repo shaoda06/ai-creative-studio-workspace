@@ -155,6 +155,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
           </div>
         </PreviewContext.Provider>
       </ComponentExample>
+      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
+        <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />
+      </ComponentExample>
       <ComponentExample title="音视频卡片与试听" rule="试听播放2秒轻提示音，可暂停；视频入口打开公共预览。无音频时按钮禁用。" usage="参考音视频、人物音色">
         <ReferenceMediaCard item={{ kind: 'reference', name: audio.name, media: audio, approvalHtml: '<span class="status-badge status-gray">示例</span>' }} audio playing={sound.playingId === 'sample'} progress={sound.progress} onPlay={() => sound.toggle('sample', audio.url!)} onSelect={() => setPreview(audio)} />
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />

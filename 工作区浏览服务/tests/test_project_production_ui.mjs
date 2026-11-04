@@ -34,25 +34,28 @@ try{
    const archived='归档/旧订单/制作简报.md';
    const script='03-创意脚本/正式剧本-v04.md';
    const storyboard='04-分镜声音/分镜与声音制作稿.md';
+   const assetList='05-资产/资产清单.md';
+   const archivedAssets='归档/旧订单/05-资产准备/资产清单.md';
    if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',
    irisPresentation:{primary:{
      '01-客户资料':historical?[]:[requirement],
      '02-参考分析':historical||requirementsOnly?[]:[brief],
      '03-创意脚本':historical||requirementsOnly?[]:[script],
      '04-分镜声音':historical||requirementsOnly?[]:[storyboard],
-     '05-资产':['05-资产/资产清单.md'],'06-视频生产':['06-视频生产/生产任务.md'],
+     '05-资产':historical||requirementsOnly?[]:[assetList],'06-视频生产':['06-视频生产/生产任务.md'],
      '07-返修交接':['07-返修交接/交接说明.md'],'08-完单复盘':['08-完单复盘/项目复盘.md'],
    },brief:{sources:historical||requirementsOnly?[]:[doc('01-客户资料/需求原件.md'),{...doc('资源/参考-fixture.png'),kind:'image'}],
      archived:historical?[doc(archived)]:[]},
      stageArchives:historical?{
        '03-创意脚本':[folder('归档/旧订单/03-创意与脚本',['旧脚本.md'])],
        '04-分镜声音':[folder('归档/旧订单/04-分镜与视觉方案',['旧分镜.md'])],
+       '05-资产':[doc(archivedAssets)],
      }:{},
-     adopted:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
+     adopted:historical||requirementsOnly?[]:[{title:'A001 · 隔离采用图',version:'V001',media:{...doc('fixture.png'),kind:'image'}}]},files:[
      doc('README.md'),doc('项目状态.md'),folder('01-客户资料',historical?[]:['需求原件.md','需求与来源-v02.md','需求与来源-v01.md']),
      folder('02-参考分析',historical||requirementsOnly?[]:['制作简报.md']),
      folder('03-创意脚本',historical||requirementsOnly?[]:['正式剧本-v04.md','正式剧本-v03.md']),
-     folder('04-分镜声音',historical||requirementsOnly?[]:['分镜与声音制作稿.md','导演表.md']),folder('05-资产',['资产清单.md','候选.png']),folder('06-视频生产',['生产任务.md','执行记录.md']),
+     folder('04-分镜声音',historical||requirementsOnly?[]:['分镜与声音制作稿.md','导演表.md']),folder('05-资产',historical||requirementsOnly?[]:['资产清单.md','候选.png']),folder('06-视频生产',['生产任务.md','执行记录.md']),
      folder('07-返修交接',['交接说明.md']),folder('08-完单复盘',['项目复盘.md']),folder('99-综合资料',['项目实验.md']),
    ]}});
    if(path===base+'/document'){
@@ -70,6 +73,8 @@ try{
             : key===archived ? '<h1>历史简报正文</h1>'
               : key===script ? '<h1>剧本封面</h1><h2>剧本正文</h2><p>这里是正式剧本v04。</p>'
                 : key===storyboard ? '<h1>分镜封面</h1><h2>逐镜正文</h2><p>这里是现行分镜。</p>'
+                  : key===assetList ? '<h1>清单封面</h1><h2>统一资产清单</h2><table><tbody><tr><td>本镜采用 A001</td></tr></tbody></table>'
+                    : key===archivedAssets ? '<h1>历史清单封面</h1><h2>旧订单的资产清单</h2>'
         : '<h1>隔离资料正文</h1>';
     return route.fulfill({json:{html,url:base+'/files/'+key}});
    }
@@ -163,13 +168,22 @@ try{
   await page.keyboard.press('Escape');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await tabs.getByRole('button',{name:'资产准备',exact:true}).click();
-  await page.getByRole('button',{name:'资产清单.md',exact:true}).waitFor();
-  await page.getByRole('heading',{name:'已采用素材',exact:true}).waitFor();
+  const assetTabs=page.getByRole('navigation',{name:'资产准备视图',exact:true});
+  const adoptedPanel=page.getByRole('region',{name:'已采用素材',exact:true});
+  assert.equal(await assetTabs.getByRole('button',{name:'已采用素材',exact:true}).getAttribute('aria-current'),'page');
+  await adoptedPanel.getByText('资源版本：V001',{exact:true}).waitFor();
+  assert.equal(await adoptedPanel.getByRole('link',{name:'下载',exact:true}).count(),0);
   await page.getByRole('img',{name:'fixture.png',exact:true}).click();
-  await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');
+  await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await assetTabs.getByRole('button',{name:'资产清单与制作说明',exact:true}).click();
+  const assetListPanel=page.getByRole('region',{name:'资产清单与制作说明正文',exact:true});
+  await assetListPanel.getByRole('cell',{name:'本镜采用 A001',exact:true}).waitFor();
+  await assetListPanel.getByText('章节导航',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog').count(),0);
   assert.equal(await page.getByRole('button',{name:'候选.png',exact:true}).isVisible(),false);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-  await page.getByRole('button',{name:'查看项目资源',exact:true}).click();
+  await tabs.getByRole('button',{name:'项目资源',exact:true}).click();
   await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
   await page.getByRole('button',{name:'交接说明.md',exact:true}).waitFor();
@@ -232,6 +246,10 @@ try{
   await storyboardPanel.getByText('查看历史分镜与声音',{exact:true}).click();
   await storyboardPanel.getByText('归档/旧订单/04-分镜与视觉方案',{exact:true}).click();
   await storyboardPanel.getByRole('button',{name:'旧分镜.md',exact:true}).waitFor();
+  await tabs.getByRole('button',{name:'资产准备',exact:true}).click();
+  await page.getByRole('heading',{name:'旧订单的资产清单',exact:true}).waitFor();
+  assert.equal(await assetTabs.getByRole('button',{name:'查看历史资产清单',exact:true}).getAttribute('aria-current'),'page');
+  assert.equal(await page.getByRole('dialog').count(),0);
   await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('button',{name:/R002-隔离后处理.*历史只读/}).click();
   await page.locator('.segment-script-content').getByText('历史分镜快照',{exact:true}).waitFor();

@@ -96,6 +96,9 @@ class WorkspaceTests(HttpTestCase):
         for folder, filename in [('03-创意与脚本', '旧脚本.md'), ('04-分镜与视觉方案', '旧分镜.md')]:
             (archive / folder).mkdir()
             (archive / folder / filename).write_text('# 历史资料')
+        (archive / '05-资产准备/历史版本').mkdir(parents=True)
+        (archive / '05-资产准备/资产清单.md').write_text('# 归档清单')
+        (archive / '05-资产准备/历史版本/资产清单-v01.md').write_text('# 旧工作版本')
 
         url = self.api + '/projects/同名项目'
         view = self.client.get(url).json()['irisPresentation']
@@ -111,6 +114,9 @@ class WorkspaceTests(HttpTestCase):
             entry, = view['stageArchives'][stage]
             self.assertEqual(entry['children'][0]['key'], f'归档/原项目/{folder}/{filename}')
             self.assertEqual(self.client.get(entry['children'][0]['url']).text, '# 历史资料')
+        historical_assets, = view['stageArchives']['05-资产']
+        self.assertEqual(historical_assets['key'], '归档/原项目/05-资产准备/资产清单.md')
+        self.assertEqual(self.client.get(historical_assets['url']).text, '# 归档清单')
 
         (customer / '需求与来源-v01.md').unlink()
         (customer / 'SRC003-甲方原稿.md').unlink()

@@ -21,6 +21,7 @@ LINK = re.compile(r'\[([^\]]+)\]\((?:<([^>]+)>|([^)]+))\)')
 MEDIA_KINDS = {'图片': 'image', '视频': 'video', '音频': 'audio'}
 CUSTOMER_FOLDER = '01-客户资料'
 BRIEF_FOLDER = '02-参考分析'
+ASSET_FOLDER = '05-资产'
 PROCESS_FOLDERS = {'其他资料', '历史版本', '工作稿', '执行记录'}
 STAGE_ARCHIVE_FOLDERS = {
     '03-创意脚本': {'03-创意脚本', '03-创意与脚本', '02-剧集剧本'},
@@ -174,14 +175,22 @@ def presentation(projects, project, api, files):
             single_records = {keys[0] for keys in batches.values() if len(keys) == 1}
             selected = [key for key in possible if key in current or key in single_records]
         primary[group['name']] = selected or (possible if len(possible) == 1 else [])
-    listing = primary.get('05-资产', [])
+    listing = primary.get(ASSET_FOLDER, [])
     sources = brief_sources(projects, project, api, files, primary)
     has_current_brief = primary.get(CUSTOMER_FOLDER) or primary.get(BRIEF_FOLDER) or sources
+    stage_archives = {folder: archived_documents(files, folders)
+                      for folder, folders in STAGE_ARCHIVE_FOLDERS.items() if not primary.get(folder)}
+    if not listing:
+        asset_name = MAIN_NAMES[ASSET_FOLDER]
+        stage_archives[ASSET_FOLDER] = [
+            item for group in archived_documents(files, {ASSET_FOLDER, '05-资产准备'})
+            for item in group['children']
+            if item['kind'] == 'file' and re.fullmatch(rf'{asset_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)
+        ]
     return {
         'primary': primary,
         'adopted': adopted_media(projects, project, api, listing[0]) if len(listing) == 1 else [],
         'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
             files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
-        'stageArchives': {folder: archived_documents(files, folders)
-                          for folder, folders in STAGE_ARCHIVE_FOLDERS.items() if not primary.get(folder)},
+        'stageArchives': stage_archives,
     }

@@ -290,6 +290,13 @@ try {
     assert.equal((await fullExample.boundingBox()).width, width);
     await fullExample.getByRole('button', { name: '关闭', exact: true }).click();
     await showcase.getByRole('button', { name: '图片与音视频', exact: true }).click();
+    const compactAsset = showcase.locator('.asset-media-card-compact');
+    await compactAsset.getByText('资源版本：V002', { exact: true }).waitFor();
+    await contained(compactAsset, `${width}px / 紧凑图片卡片`);
+    assert.equal(await compactAsset.getByRole('link').count(), 0);
+    await compactAsset.getByRole('button').click();
+    await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     const detailCards = showcase.locator('.asset-media-card').filter({ has: page.locator('.asset-media-details') });
     assert.equal(await detailCards.count(), 3);
     const pendingCard = detailCards.filter({ hasText: '已登记尚未生成' });

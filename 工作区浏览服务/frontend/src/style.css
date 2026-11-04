@@ -110,6 +110,9 @@ dialog header:has(.revision-export-close-actions){flex-wrap:wrap}.revision-expor
 
 .asset-list-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))}
 .asset-media-card>h3{height:3.4em;line-height:1.7;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.asset-media-card-compact{padding:12px}
+.asset-media-card-compact>h3{margin-bottom:8px}
+.asset-media-card-compact .asset-media-item>.cover{height:180px}
 .asset-card-status{min-height:26px}.asset-card-status>span{white-space:nowrap}.asset-card-status>.prose,.asset-card-status>.prose p{margin:0}
 .asset-card,.asset-media-card{transition:border-color .15s}.asset-card:hover,.asset-media-card:hover{border-color:var(--green)}.asset-card-role>.field-label{margin-right:8px}
 .episode-button-status{max-width:40%;min-width:0}.episode-button-status .status-badge{display:block;overflow:hidden;text-overflow:ellipsis}
