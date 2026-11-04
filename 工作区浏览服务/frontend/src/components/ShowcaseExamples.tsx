@@ -121,8 +121,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <DownloadButton url={null} label="没有文件时禁用" title="暂无示例文件" />
         <DownloadControl label="正在准备…" busy title="准备中外观示例，不发起下载" />
       </ComponentExample>
-      <ComponentExample title="文档信息与附属资料" rule="由真实文档组件展示正文和附属资料。此示例默认收起章节导航，展开后可跳转正文。" usage="Iris 项目概况、项目文档、资料卡、开发记录弹窗">
-        <Document value={sampleDoc} showOriginal={false} chaptersInitiallyOpen={false} />
+      <ComponentExample title="文档信息与附属资料" rule="章节导航可展开并跳转正文。正文前可选的参考入口排在章节导航后，独立于文档章节。" usage="Iris 项目概况与需求参考、项目文档、资料卡、开发记录弹窗">
+        <Document value={sampleDoc} showOriginal={false} chaptersInitiallyOpen={false}
+          beforeBody={<details><summary>参考资料</summary><p>这里是与示例正文关联的参考资料。</p></details>} />
         <Groups groups={[{ name: '普通分组示例', files: [{ kind: 'document', name: '分组文件', doc: { html: '<p>普通分组中的示例文件。</p>' } }] }]} />
       </ComponentExample>
       <ComponentExample title="提示词分节与正文" rule="已识别的提示词字段可折叠；正文和状态标签沿用统一排版。" usage="视频提示词、文档正文与资产状态">

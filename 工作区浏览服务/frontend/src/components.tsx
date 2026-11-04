@@ -90,7 +90,7 @@ export function Groups({ groups = [], chapter = false }: { groups?: Group[]; cha
     {open && <div id={contentId} className="groups-content">{folders}</div>}
   </section> : <details className="groups"><summary>其他资料</summary>{folders}</details>;
 }
-export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true }: { value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean }) {
+export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, beforeBody }: { value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; beforeBody?: ReactNode }) {
   const [value, setValue] = useState(latest);
   const changed = (value.html || value.bodyHtml) !== (latest.html || latest.bodyHtml) || value.headerHtml !== latest.headerHtml;
   const body = value.bodyHtml || value.contentHtml || value.html || '';
@@ -181,6 +181,7 @@ export function Document({ value: latest, showOriginal = true, showChapters = tr
     <div className="meta document-meta-inline">{value.confirmationHtml && <Rich html={value.confirmationHtml.match(/^<span class="status-badge.*?<\/span>/s)?.[0]} />}{value.meta && Object.entries(value.meta).filter(([key]) => key !== '确认状态').map(([key, text]) => <span key={key}>{key}：{String(text)}</span>)}{showOriginal && <FileActions url={value.url} />}</div>
     {value.headerHtml && <DocumentInformation><Rich html={value.headerHtml} /></DocumentInformation>}
     {showChapters && <ChapterNavigation headings={headings} initiallyOpen={chaptersInitiallyOpen} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />}
+    {beforeBody}
     <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} /><Groups groups={latest.groups} chapter /></div>
   </div>;
 }

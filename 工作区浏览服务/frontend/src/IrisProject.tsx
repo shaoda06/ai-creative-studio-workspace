@@ -133,29 +133,34 @@ function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: F
   const displayed = new Set([...available.map(doc => doc.value), ...sources.map(item => item.key || '')]);
   const extras = omitDisplayedFiles(files.filter(item => briefDocuments.some(([folder]) => item.key === folder)), displayed);
 
+  const sourceDetails = sources.length > 0 && <details className="iris-brief-attachments">
+    <summary>客户原件与参考</summary>
+    <div className="iris-brief-sources">{sources.map(item => {
+      const name = item.name.replace(/^SRC\d+-/i, '').replace(/(?:-v\d+(?:\.\d+)*)?\.[^.]+$/i, '');
+      const source = { ...item, name };
+      return item.kind === 'image' ? <button type="button" className="iris-brief-thumbnail" key={item.key} onClick={() => preview(source)}>
+        <img src={item.url} alt="" loading="lazy" /><span>{name}</span>
+      </button> : <FileLink key={item.key} item={source} showOriginal={false} showStatus={false} />;
+    })}</div>
+  </details>;
+
   return <>
     <div className="section-heading iris-stage-heading"><h2>需求与参考</h2></div>
     <section className="panel iris-brief-panel" aria-label="需求与参考正文">
-      {sources.length > 0 && <section aria-labelledby="iris-brief-sources">
-        <h3 id="iris-brief-sources">客户原件与参考</h3>
-        <div className="iris-brief-sources">{sources.map(item => {
-          const name = item.name.replace(/^SRC\d+-/i, '').replace(/(?:-v\d+(?:\.\d+)*)?\.[^.]+$/i, '');
-          const source = { ...item, name };
-          return item.kind === 'image' ? <button type="button" className="iris-brief-thumbnail" key={item.key} onClick={() => preview(source)}>
-            <img src={item.url} alt="" loading="lazy" /><span>{name}</span>
-          </button> : <FileLink key={item.key} item={source} showOriginal={false} showStatus={false} />;
-        })}</div>
-      </section>}
       {current ? <div>
         {available.length > 1
           ? <UnderlineTabs label="需求与参考文档" items={available} selected={current.value} onChange={setSelected} />
           : <h3>{current.label}</h3>}
         <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-        {query.data && <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
-      </div> : archived.length > 0 ? <>
-        <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
-        <Supplement title="查看历史需求与参考" items={archived} />
-      </> : <p className="muted">暂无可确认的需求记录或制作简报。</p>}
+        {query.data ? <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} beforeBody={sourceDetails} />
+          : query.isError && sourceDetails}
+      </div> : <>
+        {archived.length > 0 ? <>
+          <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
+          <Supplement title="查看历史需求与参考" items={archived} />
+        </> : <p className="muted">暂无可确认的需求记录或制作简报。</p>}
+        {sourceDetails}
+      </>}
     </section>
     <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={extras} />
   </>;

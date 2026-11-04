@@ -313,6 +313,16 @@ try {
     }
     console.log(`图片卡片：${width}px仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
     await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });
+    const referenceSummary = sampleDocument.getByText('参考资料', { exact: true });
+    const referenceContent = sampleDocument.getByText('这里是与示例正文关联的参考资料。', { exact: true });
+    assert.deepEqual(await sampleDocument.locator(':scope > details > summary').allTextContents(), ['文档信息', '章节导航', '参考资料']);
+    assert.equal(await referenceContent.isVisible(), false);
+    await referenceSummary.click();
+    await referenceContent.waitFor();
+    await contained(referenceContent, `${width}px / 文档参考入口`);
+    await referenceSummary.click();
+    assert.equal(await referenceContent.isVisible(), false);
     const release = showcase.locator('.release-films');
     const releaseCategories = release.getByRole('navigation', { name: '成片交付分类', exact: true });
     assert.deepEqual(await releaseCategories.getByRole('button').allTextContents(), ['片头', '片尾', 'EP003', '其他文件']);

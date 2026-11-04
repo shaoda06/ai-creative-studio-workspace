@@ -106,6 +106,15 @@ try{
   const briefTabs=page.getByRole('navigation',{name:'需求与参考文档',exact:true});
   await page.getByRole('heading',{name:'制作简报正文',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog').count(),0);
+  const sources=page.locator('details').filter({has:page.locator('summary').getByText('客户原件与参考',{exact:true})});
+  assert.ok(await chapters.evaluate(node=>Boolean(node.compareDocumentPosition(node.parentElement.querySelector('.iris-brief-attachments'))&Node.DOCUMENT_POSITION_FOLLOWING)));
+  assert.equal(await sources.getAttribute('open'),null);
+  assert.equal(await sources.getByRole('button',{name:'需求原件',exact:true}).isVisible(),false);
+  await chapters.getByText('章节导航',{exact:true}).click();
+  await chapters.getByRole('button',{name:'制作简报正文',exact:true}).click();
+  assert.ok(await page.getByRole('heading',{name:'制作简报正文',exact:true}).evaluate(node=>node===document.activeElement));
+  await chapters.getByText('章节导航',{exact:true}).click();
+  await sources.getByText('客户原件与参考',{exact:true}).click();
   await page.getByRole('button',{name:'需求原件',exact:true}).click();
   await page.getByRole('dialog').getByRole('heading',{name:'隔离资料正文',exact:true}).waitFor();
   await page.keyboard.press('Escape');
