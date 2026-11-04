@@ -78,13 +78,18 @@ const overviewDocuments = [
   { value: '项目状态.md', label: '项目状态' },
 ];
 
+function withoutReadmeTitle(document: RecordData): RecordData {
+  return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
+}
+
 function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
   const [selected, setSelected] = useRefreshState(`${baseUrl}/overview-document`, overviewDocuments[0].value);
   const rootFiles = files.filter(item => item.kind !== 'group');
   const available = overviewDocuments.filter(item => rootFiles.some(file => file.kind === 'file' && file.key === item.value));
   const key = available.find(item => item.value === selected)?.value ?? available[0]?.value;
   const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
-    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key) });
+    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
+    select: key === 'README.md' ? withoutReadmeTitle : undefined });
 
   return <>
     <section className="panel" aria-label="项目概况正文">
