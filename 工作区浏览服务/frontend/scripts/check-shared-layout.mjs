@@ -316,6 +316,7 @@ try {
     const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });
     const referenceSummary = sampleDocument.getByText('参考资料', { exact: true });
     const referenceContent = sampleDocument.getByText('这里是与示例正文关联的参考资料。', { exact: true });
+    await sampleDocument.getByText('章节导航', { exact: true }).waitFor();
     assert.deepEqual(await sampleDocument.locator(':scope > details > summary').allTextContents(), ['文档信息', '章节导航', '参考资料']);
     assert.equal(await referenceContent.isVisible(), false);
     await referenceSummary.click();

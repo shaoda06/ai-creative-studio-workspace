@@ -1,4 +1,5 @@
 import { useContext } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
@@ -13,9 +14,12 @@ import { UnderlineTabs } from './components/UnderlineTabs';
 import { useRefreshState } from './refreshPosition';
 import './IrisProject.css';
 
+const readingStages = {
+  creative: { label: '创意与音画', folder: '03-创意脚本' },
+  storyboard: { label: '分镜与声音', folder: '04-分镜声音' },
+} as const;
+
 const stages = {
-  creative: { label: '创意与音画', description: '查看用于分镜和制作的脚本。', groups: [['03-创意脚本', '制作脚本']] },
-  storyboard: { label: '分镜与声音', description: '查看逐镜安排和声音设计。', groups: [['04-分镜声音', '分镜与声音制作稿']] },
   assets: { label: '资产准备', description: '查看已采用的素材版本及其依据。', groups: [['05-资产', '资产清单与制作说明']] },
   delivery: { label: '交付与复盘', description: '查阅返修、审阅、交接和完单复盘记录。', groups: [
     ['07-返修交接', '返修与交接'], ['08-完单复盘', '完单复盘'],
@@ -27,13 +31,14 @@ export interface IrisPresentation {
   primary: Record<string, string[]>;
   adopted: { title: string; version: string; media: FileItem }[];
   brief?: { sources: FileItem[]; archived: FileItem[] };
+  stageArchives?: Record<string, FileItem[]>;
 }
 
 const tabs = [
   { value: 'overview', label: '项目概况' },
   { value: 'brief', label: '需求与参考' },
-  { value: 'creative', label: stages.creative.label },
-  { value: 'storyboard', label: stages.storyboard.label },
+  { value: 'creative', label: readingStages.creative.label },
+  { value: 'storyboard', label: readingStages.storyboard.label },
   { value: 'assets', label: stages.assets.label },
   { value: 'production', label: '视频制作' },
   { value: 'delivery', label: stages.delivery.label },
@@ -56,6 +61,7 @@ export function IrisProject({ name, baseUrl, files, productionSection, presentat
     <div key={section} className="iris-project-section">
       {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={files} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
+      {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'production' && <>
         {productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
           <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
@@ -107,6 +113,28 @@ const briefDocuments = [
   ['01-客户资料', '需求与来源'],
 ] as const;
 
+function IrisDocumentReading({ baseUrl, section, label, documents, empty, beforeBody }: {
+  baseUrl: string; section: string; label: string; documents: { value: string; label: string }[]; empty: ReactNode; beforeBody?: ReactNode;
+}) {
+  const [selected, setSelected] = useRefreshState(`${baseUrl}/${section}-document`, '');
+  const current = documents.find(doc => doc.value === selected) ?? documents[0];
+  const key = current?.value;
+  const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
+    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
+    select: withoutLeadingTitle });
+
+  return <section className="panel iris-reading-panel" aria-label={`${label}正文`}>
+    {current ? <div>
+      {documents.length > 1
+        ? <UnderlineTabs label={`${label}文档`} items={documents} selected={current.value} onChange={setSelected} />
+        : <h3>{current.label}</h3>}
+      <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+      {query.data ? <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} beforeBody={beforeBody} />
+        : query.isError && beforeBody}
+    </div> : <>{empty}{beforeBody}</>}
+  </section>;
+}
+
 function omitDisplayedFiles(items: FileItem[], displayed: Set<string>): FileItem[] {
   return items.flatMap(item => {
     if (displayed.has(item.key || '')) return [];
@@ -118,16 +146,10 @@ function omitDisplayedFiles(items: FileItem[], displayed: Set<string>): FileItem
 
 function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: FileItem[]; presentation?: IrisPresentation }) {
   const preview = useContext(PreviewContext);
-  const [selected, setSelected] = useRefreshState(`${baseUrl}/brief-document`, '');
   const available = briefDocuments.flatMap(([folder, label]) => (presentation?.primary[folder] || []).map(key => ({
     value: key,
     label: (presentation?.primary[folder]?.length || 0) > 1 ? key.split('/').at(-1)! : label,
   })));
-  const current = available.find(doc => doc.value === selected) ?? available[0];
-  const key = current?.value;
-  const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
-    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
-    select: withoutLeadingTitle });
   const sources = presentation?.brief?.sources || [];
   const archived = presentation?.brief?.archived || [];
   const displayed = new Set([...available.map(doc => doc.value), ...sources.map(item => item.key || '')]);
@@ -146,23 +168,32 @@ function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: F
 
   return <>
     <div className="section-heading iris-stage-heading"><h2>需求与参考</h2></div>
-    <section className="panel iris-brief-panel" aria-label="需求与参考正文">
-      {current ? <div>
-        {available.length > 1
-          ? <UnderlineTabs label="需求与参考文档" items={available} selected={current.value} onChange={setSelected} />
-          : <h3>{current.label}</h3>}
-        <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-        {query.data ? <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} beforeBody={sourceDetails} />
-          : query.isError && sourceDetails}
-      </div> : <>
-        {archived.length > 0 ? <>
-          <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
-          <Supplement title="查看历史需求与参考" items={archived} />
-        </> : <p className="muted">暂无可确认的需求记录或制作简报。</p>}
-        {sourceDetails}
-      </>}
-    </section>
+    <IrisDocumentReading baseUrl={baseUrl} section="brief" label="需求与参考" documents={available} beforeBody={sourceDetails}
+      empty={archived.length > 0 ? <>
+        <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
+        <Supplement title="查看历史需求与参考" items={archived} />
+      </> : <p className="muted">暂无可确认的需求记录或制作简报。</p>} />
     <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={extras} />
+  </>;
+}
+
+function IrisReadingStage({ stage, baseUrl, files, presentation }: {
+  stage: keyof typeof readingStages; baseUrl: string; files: FileItem[]; presentation?: IrisPresentation;
+}) {
+  const { label, folder } = readingStages[stage];
+  const keys = presentation?.primary[folder] || [];
+  const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
+  const items = files.find(item => item.key === folder)?.children || [];
+  const archived = presentation?.stageArchives?.[folder] || [];
+
+  return <>
+    <div className="section-heading iris-stage-heading"><h2>{label}</h2></div>
+    <IrisDocumentReading baseUrl={baseUrl} section={stage} label={label} documents={documents}
+      empty={archived.length > 0 ? <>
+        <p className="muted">本项目的{label}资料保存在历史归档中。</p>
+        <Supplement title={`查看历史${label}`} items={archived} />
+      </> : <p className="muted">暂无可确认的阶段主文件。</p>} />
+    <Supplement title="其他资料（含工作稿、旧版和执行记录）" items={omitDisplayedFiles(items, new Set(keys))} />
   </>;
 }
 

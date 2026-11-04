@@ -22,6 +22,10 @@ MEDIA_KINDS = {'图片': 'image', '视频': 'video', '音频': 'audio'}
 CUSTOMER_FOLDER = '01-客户资料'
 BRIEF_FOLDER = '02-参考分析'
 PROCESS_FOLDERS = {'其他资料', '历史版本', '工作稿', '执行记录'}
+STAGE_ARCHIVE_FOLDERS = {
+    '03-创意脚本': {'03-创意脚本', '03-创意与脚本', '02-剧集剧本'},
+    '04-分镜声音': {'04-分镜声音', '04-分镜与视觉方案', '03-分镜脚本'},
+}
 
 
 def table(text, *columns):
@@ -91,17 +95,17 @@ def brief_sources(projects, project, api, files, primary):
     return list(items.values())
 
 
-def archived_brief(files):
+def archived_documents(files, folders, name_pattern=None):
     def collect(items):
         results = []
         for item in items:
             if item['kind'] == 'group':
-                if item['name'] in {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}:
+                if item['name'] in folders:
                     if item['children']:
                         results.append(item)
                 elif item['name'] not in PROCESS_FOLDERS:
                     results.extend(collect(item['children']))
-            elif re.fullmatch(r'制作简报(?:-v\d+(?:\.\d+)*)?\.md', item['name']):
+            elif name_pattern and re.fullmatch(name_pattern, item['name']):
                 results.append(item)
         return results
 
@@ -176,5 +180,8 @@ def presentation(projects, project, api, files):
     return {
         'primary': primary,
         'adopted': adopted_media(projects, project, api, listing[0]) if len(listing) == 1 else [],
-        'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_brief(files)},
+        'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
+            files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
+        'stageArchives': {folder: archived_documents(files, folders)
+                          for folder, folders in STAGE_ARCHIVE_FOLDERS.items() if not primary.get(folder)},
     }
