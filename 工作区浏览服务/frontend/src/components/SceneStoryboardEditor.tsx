@@ -1,3 +1,4 @@
+import { useProductionAccess } from './ProductionAccess';
 import { DownloadButton } from './DownloadButton';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -36,6 +37,8 @@ function inlineMarkdown(node: Node): string {
 }
 
 export function SceneStoryboardEditor({ scope, segments, source }: { scope: NoteScope; segments: NonNullable<FileItem['segments']>[string]; source: string }) {
+  const workMode = useProductionAccess().unitKind === 'work';
+  const label = workMode ? `${scope.episode}-分镜与声音` : `${scope.episode}-${scope.scene}-场次分镜`;
   const rows = useMemo(() => segments.flatMap((segment, segmentIndex) => {
     const document = new DOMParser().parseFromString(segment.scriptHtml, 'text/html');
     const elements = Array.from(document.body.children);
@@ -58,7 +61,7 @@ export function SceneStoryboardEditor({ scope, segments, source }: { scope: Note
       return [{ key: `${segment.id}/${shot}/${index}`, kind: 'text', html: element.outerHTML, text: inlineMarkdown(element), editable: true }];
     })];
   }), [segments]);
-  const storageKey = `nora-storyboard-draft/${scope.project}/${scope.episode}/${scope.scene}`;
+  const storageKey = scope.stateKey ? `${scope.stateKey}/storyboard-draft` : `nora-storyboard-draft/${scope.project}/${scope.episode}/${scope.scene}`;
   const [savedDraft, setSavedDraft] = useState<{ values: Record<string, string>; source: string }>(() => {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
     if (!saved) return { values: {}, source };
@@ -86,7 +89,7 @@ export function SceneStoryboardEditor({ scope, segments, source }: { scope: Note
       if (shot !== writtenShot) { content.push(shot); writtenShot = shot; }
       content.push(row.label ? `${row.label}：${draft[row.key].trimEnd()}` : draft[row.key].trimEnd());
     }
-    setExportText(`以下是我对${scope.project} / ${scope.episode}-${scope.scene}-场次分镜的修改意见：\n依据：${savedDraft.source}\n这是页签草稿，尚未写回项目分镜。\n\`\`\`\n${content.join('\n\n').replace(/\n{3,}/g, '\n\n')}\n\`\`\``);
+    setExportText(`以下是我对${scope.project} / ${label}的修改意见：\n依据：${savedDraft.source}\n这是页签草稿，尚未写回项目分镜。\n\`\`\`\n${content.join('\n\n').replace(/\n{3,}/g, '\n\n')}\n\`\`\``);
   };
   return <>
     <p className="muted">修改仅保存在当前浏览器页签，关闭页签可能丢失，不会写回项目或发送给 Agent。请导出后复制到制作会话，或下载 Markdown 交给 Agent。</p>
@@ -99,9 +102,9 @@ export function SceneStoryboardEditor({ scope, segments, source }: { scope: Note
         </div>)}
       </section>)}
     </div>
-    {exportText !== null && <Dialog title={`${scope.episode} · ${scope.scene} 导出分镜`} close={() => setExportText(null)}>
+    {exportText !== null && <Dialog title={`${scope.episode}${workMode ? '' : ' · ' + scope.scene} 导出分镜`} close={() => setExportText(null)}>
       <p className="muted">以下是本次导出的修改快照，只包含改动字段。复制或下载后，请交给制作会话中的 Agent 处理。</p>
-      <div className="revision-export-actions"><CopyButton label="复制" text={exportText} /><DownloadButton url={null} file={{ text: exportText, name: `${scope.episode}-${scope.scene}-场次分镜-修改意见.md`, type: "text/markdown;charset=utf-8" }} label="下载 Markdown" title="分镜修改意见" /></div>
+      <div className="revision-export-actions"><CopyButton label="复制" text={exportText} /><DownloadButton url={null} file={{ text: exportText, name: `${label}-修改意见.md`, type: "text/markdown;charset=utf-8" }} label="下载 Markdown" title="分镜修改意见" /></div>
       <textarea className="revision-notes-export scene-revision-export" aria-label="导出分镜文本" readOnly value={exportText} />
     </Dialog>}
   </>;

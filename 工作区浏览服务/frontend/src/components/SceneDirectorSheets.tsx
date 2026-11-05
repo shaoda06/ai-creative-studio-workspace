@@ -1,3 +1,4 @@
+import { useProductionAccess } from './ProductionAccess';
 import { useContext, useState } from 'react';
 import type { DirectorSheets } from '../api';
 import { Dialog, PreviewContext } from '../components';
@@ -17,6 +18,8 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
   sheets?: DirectorSheets; storyboardVersion?: string; scenes?: DirectorSheetScene[];
   sceneId?: string; integrated?: boolean; onIntegratedChange?: (value: boolean) => void; revision: number;
 }) {
+  const access = useProductionAccess();
+  const workMode = access.unitKind === 'work';
   const preview = useContext(PreviewContext);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [pageKey, setPageKey] = useState(`${sceneId}/`);
@@ -47,19 +50,19 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
   const current = pages[pageIndex];
   const active = current?.group || groups[0];
   const selectPage = (page: number) => setPageKey(pages[page - 1].key);
-  const count = `${integrated ? '整集' : ''}第${pageIndex + 1}页 / 共${pages.length}页`;
+  const count = `${integrated ? (workMode ? '整片' : '整集') : ''}第${pageIndex + 1}页 / 共${pages.length}页`;
   const sceneCount = current && integrated ? ` · ${current.group.id} 第${current.index + 1}页 / 共${current.group.images.length}页` : '';
   const emptyMessage = (group: typeof groups[number]) => <p className="muted">
     {integrated && `场次 ${group.id}：`}{!group.storyboardVersion ? '该轮缺少来源分镜版本，无法关联导演分镜表。' : `分镜 ${group.storyboardVersion} 尚未制作导演分镜表。`}
     {group.sheets?.candidates.some(item => !item.sourceVersion || !item.candidateNumber) && '本场有图片尚未登记来源或候选编号，请查看生成与审阅记录。'}
   </p>;
-  return <section aria-label={integrated ? '整集导演分镜表' : '本场导演分镜表'}>
+  return <section aria-label={workMode ? '本片导演分镜表' : integrated ? '整集导演分镜表' : '本场导演分镜表'}>
     {active && <div className="toolbar director-sheet-toolbar">
       <div className="director-sheet-choice">
-        {onIntegratedChange && <label className="director-sheet-integrate"><input type="checkbox" checked={integrated} onChange={event => {
+        {onIntegratedChange && (!workMode || (scenes?.length || 0) > 1) && <label className="director-sheet-integrate"><input type="checkbox" checked={integrated} onChange={event => {
           setPageKey(event.target.checked ? current?.key || `${sceneId}/` : `${sceneId}/`);
           onIntegratedChange(event.target.checked);
-        }} />整合本集</label>}
+        }} />{workMode ? "整合本片" : "整合本集"}</label>}
         {integrated && <span className="director-sheet-source">场次 {active.id}</span>}
         {active.options.length > 0 && <TabSelect highlightSelected label="导演分镜表候选" selected={active.selected} onChange={value => {
           setChoices(previous => ({ ...previous, [active.sourceKey]: value })); setPageKey(`${active.id}/`);

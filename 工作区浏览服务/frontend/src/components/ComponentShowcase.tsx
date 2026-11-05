@@ -101,7 +101,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <p>演示状态：{pending ? '进行中' : '未进行'}</p>
           <div className="component-demo-row"><button disabled={!pending} onClick={() => { setPending(false); showNotice('演示已结束'); }}>结束演示</button><button className="link" onClick={clearNotices}>清除演示消息</button></div>
         </Example>
-        <Example title="页面内说明" rule="与当前内容相关的说明留在正文中，悬停或聚焦文字可查看详情。操作反馈使用左下角消息。" usage="剧集制作的分段说明与资料状态">
+        <Example title="页面内说明" rule="与当前内容相关的说明留在正文中，悬停或聚焦文字可查看详情。操作反馈使用左下角消息。" usage="Nora 剧集制作与 Iris 视频制作的分段说明和资料状态">
           <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: '示例资料待确认。', actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
         </Example>
       </>}

@@ -1,5 +1,6 @@
+import { useProductionAccess } from './ProductionAccess';
 import { useQuery } from '@tanstack/react-query';
-import { get, projectUrl, type FileItem } from '../api';
+import { get, type FileItem } from '../api';
 import { EpisodeButton } from './EpisodeButton';
 import { FloatingMessage } from './Notifications';
 import { formatProductionDuration, sceneDurationEntries, useEpisodeDurations } from './useEpisodeDurations';
@@ -8,8 +9,9 @@ import { formatProductionDuration, sceneDurationEntries, useEpisodeDurations } f
 export function ProductionEpisodeButton({ item, project, revision, onSelect }: {
   item: FileItem; project: string; revision: number; onSelect: (episode: string) => void;
 }) {
-  const detail = useQuery({ queryKey: ['episode', project, item.name, revision],
-    queryFn: () => get<FileItem>(`${projectUrl(project)}/episodes/${item.name}`) });
+  const access = useProductionAccess();
+  const detail = useQuery({ queryKey: ['episode', access.namespace(project), item.name, revision],
+    queryFn: () => get<FileItem>(access.detail(project, item.name)) });
   const episode = detail.data;
   const latest = episode?.episodeRounds?.at(-1);
   const scenes = latest?.scenes || episode?.scenes || [];

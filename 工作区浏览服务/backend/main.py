@@ -973,6 +973,53 @@ def workspace_production(name: str, request: Request, work: str | None = None):
         raise HTTPException(409, '视频制作资料读取失败：' + str(error)) from error
 
 
+@spaces_router.get('/projects/{name}/production-works')
+def workspace_production_works(name: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        return production.workbench(space).items(space.projects, name)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-detail')
+def workspace_production_detail(name: str, work: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        return production.workbench(space).detail(space.projects, name, space.api, work)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品制作资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-downloads')
+def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole'):
+    space = request.state.workspace_space
+    try:
+        return production.workbench(space).downloads(space.projects, name, space.api, work, scene)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品下载资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-director')
+def workspace_production_director(name: str, work: str, path: str, request: Request):
+    if not management_request(request):
+        raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
+    space = request.state.workspace_space
+    try:
+        spec = production.workbench(space).director_spec(space.projects, name, work, path)
+        return director_spec_response(space.projects, name, spec)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
+        raise HTTPException(409, str(error)) from error
+
+
 @spaces_router.get('/projects/{name}/production-notes')
 @spaces_router.get('/projects/{name}/works/{work}/production-notes')
 def workspace_production_notes(name: str, request: Request, work: str | None = None) -> ReviewNotes:
@@ -1006,7 +1053,9 @@ def update_production_notes(name, request, changes, work=None):
         project = space.projects.project(name, writable=True)
         data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work)
         identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
-        if changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
+        if work:
+            production.workbench(space).validate_notes(project, work, identities, changes)
+        elif changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
             raise ValueError('意见必须对应项目中已有的分段与候选版本')
         return production_notes.save(business.notes_path(project, work), changes)
     except (PermissionError, NotesChangedError, ValueError) as error:
