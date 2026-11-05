@@ -16,3 +16,5 @@ description: Iris 商业视频返修与交接二级业务阶段，评估局部�
 Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
 
 先评估局部修复，合适才修，不合适回相关段重做。剪映包默认jypack、ZIP按需；Agent只有用户明确要求时才调用脚本生成并提供包，不手工打包或逐包打开剪映。日常网页下载由用户点击触发后台脚本及自动检查，详细分工归阶段规则。
+
+处理前明确 C 项目与 F 作品；本阶段资料和本片状态归作品，客户共用原件及媒体版本归项目。目录与状态分工统一按[建档规范](../iris-commercial-brief/references/项目建档与README规范.md)执行。

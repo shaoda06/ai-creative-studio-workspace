@@ -4,7 +4,8 @@ import re
 from urllib.parse import quote, unquote, urlsplit
 
 from backend.parsers.documents import cells
-from backend.services.workspaces import jianying_links
+from backend.services.workspaces import jianying_links, project_tree
+from iris_works import work_root, historical_sources
 import project_resources as resources
 
 
@@ -59,7 +60,7 @@ def entries(value):
 
 def brief_sources(projects, project, api, files, primary):
     root = projects.project(project)
-    customer = next((item['children'] for item in files if item['key'] == CUSTOMER_FOLDER), [])
+    customer = [child for item in files if item['name'] == CUSTOMER_FOLDER for child in item['children']]
     requirement_name = MAIN_NAMES[CUSTOMER_FOLDER]
     candidates = {item['key'] for item in customer if item['kind'] == 'file'
                   and not re.fullmatch(rf'{requirement_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)}
@@ -192,9 +193,13 @@ def delivery_overview(projects, project, api, root, status_text):
     }
 
 
-def presentation(projects, project, api, files):
+def presentation(projects, project, api, files, work_directory=None, shared_files=None, archive_files=None):
     root = projects.project(project)
-    status = root / '项目状态.md'
+    status = work_directory / '作品状态.md' if work_directory else root / '项目状态.md'
+    # Shared originals and project archives remain project-owned. Work stages
+    # receive only their own stage files plus explicitly selected archives.
+    sources_files = files + (shared_files or [])
+    archived_files = archive_files if archive_files is not None else files
     status_text = status.read_text('utf-8-sig') if status.is_file() else ''
     rows = table(status_text, '对象', '当前版本/文件')
     current = {unquote(path) for row in rows for _, path in entries(row['当前版本/文件'])}
@@ -216,14 +221,14 @@ def presentation(projects, project, api, files):
             selected = [key for key in possible if key in current or key in single_records]
         primary[group['name']] = selected or (possible if len(possible) == 1 else [])
     listing = primary.get(ASSET_FOLDER, [])
-    sources = brief_sources(projects, project, api, files, primary)
+    sources = brief_sources(projects, project, api, sources_files, primary)
     has_current_brief = primary.get(CUSTOMER_FOLDER) or primary.get(BRIEF_FOLDER) or sources
-    stage_archives = {folder: archived_documents(files, folders)
+    stage_archives = {folder: archived_documents(archived_files, folders)
                       for folder, folders in STAGE_ARCHIVE_FOLDERS.items() if not primary.get(folder)}
     if not listing:
         asset_name = MAIN_NAMES[ASSET_FOLDER]
         stage_archives[ASSET_FOLDER] = [
-            item for group in archived_documents(files, {ASSET_FOLDER, '05-资产准备'})
+            item for group in archived_documents(archived_files, {ASSET_FOLDER, '05-资产准备'})
             for item in group['children']
             if item['kind'] == 'file' and re.fullmatch(rf'{asset_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)
         ]
@@ -231,7 +236,26 @@ def presentation(projects, project, api, files):
         'primary': primary,
         'adopted': adopted_media(projects, project, api, listing[0]) if len(listing) == 1 else [],
         'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
-            files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
+            archived_files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
         'stageArchives': stage_archives,
         'delivery': delivery_overview(projects, project, api, root, status_text),
     }
+
+
+def work_view(projects, project, api, work, business):
+    root = projects.project(project)
+    directory = work_root(root, work)
+    value = project_tree(projects, project, api, directory)
+    shared = []
+    for name in ('01-客户资料', '08-完单复盘'):
+        path = root / name
+        if path.is_dir() and not path.is_symlink():
+            shared.append({'kind': 'group', 'name': name, 'key': name,
+                           'children': project_tree(projects, project, api, path)['files']})
+    value['files'].extend(item for item in shared if item['name'] == '08-完单复盘')
+    archives = [{'kind': 'group', 'name': '归档', 'key': source.relative_to(root).as_posix(),
+                 'children': project_tree(projects, project, api, source)['files']}
+                for source in historical_sources(root, work, 'archives')]
+    value['productionSection'] = business.production_section(root, work)
+    value['irisPresentation'] = presentation(projects, project, api, value['files'], directory, shared, archives)
+    return value

@@ -14,3 +14,5 @@ description: Iris 商业视频分镜与声音二级业务阶段，落实逐镜�
 导演表：另读[制作规则](references/导演表规则.md)和[内容及登记模板](templates/导演表内容.md)。
 
 Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
+
+处理前明确 C 项目与 F 作品；本阶段资料和本片状态归作品，客户共用原件及媒体版本归项目。目录与状态分工统一按[建档规范](../iris-commercial-brief/references/项目建档与README规范.md)执行。

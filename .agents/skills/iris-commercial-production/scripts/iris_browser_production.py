@@ -9,13 +9,15 @@ import execution_records as records
 import project_resources as resources
 from prepared_documents import read_journal
 from h3_browser_context import empty_context, request_context
+from iris_works import work_root, historical_sources
 
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
 
 
-def production_section(project):
-    return next((name for name in ('06-视频生产', '06-视频制作') if (project / name).is_dir()), None)
+def production_section(project, work=None):
+    root = work_root(project, work)
+    return next(((root / name).relative_to(project).as_posix() for name in ('06-视频生产', '06-视频制作') if (root / name).is_dir()), None)
 
 
 def local_key(project, value, old_root=None):
@@ -32,12 +34,16 @@ def file_url(api, key):
     return api + '/files/' + quote(key, safe='/')
 
 
-def production_data(project, api):
-    section = production_section(project)
+def production_data(project, api, work=None):
+    section = production_section(project, work)
     segments, batches, contexts, bindings = {}, [], {}, {}
     if not section:
         return {'segments': [], 'batches': [], 'issues': []}
-    for journal_path in sorted((project / section / '执行记录').rglob('*-装配结果.json')):
+    directories = [project / section / '执行记录']
+    if work is not None:
+        directories.extend(historical_sources(project, work, 'records'))
+    journals = sorted({path for directory in directories for path in directory.rglob('*-装配结果.json')})
+    for journal_path in journals:
         local_key(project, journal_path)
         journal = read_journal(journal_path)
         if not journal.get('accepted'):
@@ -99,12 +105,14 @@ def production_data(project, api):
             batches.append({'id': batch_key, 'name': batch_name, 'segments': batch_segments,
                             'url': file_url(api, batch_key)})
     if not segments:
-        return legacy_production(project, api)
+        return legacy_production(project, api, work)
     return {'segments': sorted(segments.values(), key=lambda item: item['id']), 'batches': batches,
             'issues': ['候选按实际执行记录展示；网页不根据任务完成或文件存在推断业务采用。']}
 
 
-def legacy_sources(project):
+def legacy_sources(project, work=None):
+    if work is not None:
+        return historical_sources(project, work, 'archives')
     return sorted(path for folder in ('归档', '历史制作资料') for path in (project / folder).glob('*')
                   if path.is_dir() and (path / '09-剧集制作').is_dir())
 
@@ -122,10 +130,10 @@ def legacy_links(value, prefix):
     return value
 
 
-def legacy_production(project, api):
+def legacy_production(project, api, work=None):
     from backend.parsers.project import build_data
     segments, batches = [], []
-    for source in legacy_sources(project):
+    for source in legacy_sources(project, work):
         root_key = local_key(project, source)
         prefix = api + '/files/' + quote(root_key, safe='/') + '/'
         for episode in sorted((source / '09-剧集制作').iterdir()):
@@ -141,7 +149,7 @@ def legacy_production(project, api):
                         for video in item['videos']:
                             context_key = '-'.join((identity, video['run'], video['stage']))
                             video['key'] = root_key + '/' + video['key']
-                            video['contextUrl'] = api + '/production-context?source=' + quote(root_key, safe='') + '&identity=' + quote(context_key, safe='')
+                            video['contextUrl'] = api + ('/works/' + work if work else '') + '/production-context?source=' + quote(root_key, safe='') + '&identity=' + quote(context_key, safe='')
                         item['label'] = item['id']
                         item['id'] = identity
                         segments.append(item)
@@ -154,11 +162,11 @@ def legacy_production(project, api):
     return {'segments': segments, 'batches': batches, 'issues': ['历史制作资料只读展示，保留原采用事实，不重新开启生产。'] if batches else []}
 
 
-def legacy_context(project, api, source, identity):
+def legacy_context(project, api, source, identity, work=None):
     from backend.parsers.project import build_data
     from backend.parsers.generation import load_context
     root = project / local_key(project, source)
-    if root not in legacy_sources(project) or not re.fullmatch(r'(EP\d{3,}|片头|片尾)-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', identity):
+    if root not in legacy_sources(project, work) or not re.fullmatch(r'(EP\d{3,}|片头|片尾)-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', identity):
         raise FileNotFoundError('历史生成记录不存在')
     data = build_data(root, web_episode_navigation=True, load_scope='09-剧集制作', episode_id=identity.split('-')[0], episode_mode='playback')
     if identity not in data['generationContexts']:
@@ -184,8 +192,8 @@ def historical_contexts(root, contexts):
     return result
 
 
-def notes_path(project):
-    section = production_section(project)
+def notes_path(project, work=None):
+    section = production_section(project, work)
     if not section:
         raise FileNotFoundError('项目尚无视频生产资料')
     return project / local_key(project, section + '/视频修改意见.json')

@@ -32,7 +32,8 @@ from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
 from backend.services import production
-from backend.services.iris_presentation import presentation as iris_presentation
+from iris_works import discover_works
+from backend.services.iris_presentation import presentation as iris_presentation, work_view as iris_work_view
 from backend.services.review_notes import ProjectReviewNotes, ReviewNotes
 from backend.services import node_config
 from backend.services.prompts import WorkspacePromptLibrary
@@ -937,18 +938,35 @@ def workspace_project(name: str, request: Request):
         if space.production_adapter:
             value['productionSection'] = production.adapter(space).production_section(space.projects.project(name))
         if space.view == 'iris-commercial':
+            value['works'] = discover_works(space.projects.project(name))
             value['irisPresentation'] = iris_presentation(space.projects, name, space.api, value['files'])
         return value
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}')
+def workspace_work(name: str, work: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        if space.view != 'iris-commercial':
+            raise FileNotFoundError('该项目空间未启用作品目录')
+        return iris_work_view(space.projects, name, space.api, work, production.adapter(space))
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(409, '作品资料读取失败：' + str(error)) from error
 
 
 @spaces_router.get('/projects/{name}/production')
-def workspace_production(name: str, request: Request):
+@spaces_router.get('/projects/{name}/works/{work}/production')
+def workspace_production(name: str, request: Request, work: str | None = None):
     space = request.state.workspace_space
     try:
         api = space.api + '/projects/' + quote(name, safe='')
-        return production.adapter(space).production_data(space.projects.project(name), api)
+        return production.adapter(space).production_data(space.projects.project(name), api, work)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -956,10 +974,11 @@ def workspace_production(name: str, request: Request):
 
 
 @spaces_router.get('/projects/{name}/production-notes')
-def workspace_production_notes(name: str, request: Request) -> ReviewNotes:
+@spaces_router.get('/projects/{name}/works/{work}/production-notes')
+def workspace_production_notes(name: str, request: Request, work: str | None = None) -> ReviewNotes:
     space = request.state.workspace_space
     try:
-        return production_notes.read(production.adapter(space).notes_path(space.projects.project(name)))
+        return production_notes.read(production.adapter(space).notes_path(space.projects.project(name), work))
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError) as error:
@@ -967,28 +986,29 @@ def workspace_production_notes(name: str, request: Request) -> ReviewNotes:
 
 
 @spaces_router.get('/projects/{name}/production-context')
-def workspace_production_context(name: str, source: str, identity: str, request: Request):
+@spaces_router.get('/projects/{name}/works/{work}/production-context')
+def workspace_production_context(name: str, source: str, identity: str, request: Request, work: str | None = None):
     space = request.state.workspace_space
     try:
-        return production.adapter(space).legacy_context(space.projects.project(name), space.api + '/projects/' + quote(name, safe=''), source, identity)
+        return production.adapter(space).legacy_context(space.projects.project(name), space.api + '/projects/' + quote(name, safe=''), source, identity, work)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError) as error:
         raise HTTPException(409, '历史生成资料读取失败：' + str(error)) from error
 
 
-def update_production_notes(name, request, changes):
+def update_production_notes(name, request, changes, work=None):
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     space = request.state.workspace_space
     try:
         business = production.adapter(space)
         project = space.projects.project(name, writable=True)
-        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''))
+        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work)
         identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
         if changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
             raise ValueError('意见必须对应项目中已有的分段与候选版本')
-        return production_notes.save(business.notes_path(project), changes)
+        return production_notes.save(business.notes_path(project, work), changes)
     except (PermissionError, NotesChangedError, ValueError) as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -998,13 +1018,15 @@ def update_production_notes(name, request, changes):
 
 
 @spaces_router.put('/projects/{name}/production-notes')
-def save_workspace_production_note(name: str, request: Request, value: NoteChange) -> RevisionNote:
-    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[])).notes[value.key()]
+@spaces_router.put('/projects/{name}/works/{work}/production-notes')
+def save_workspace_production_note(name: str, request: Request, value: NoteChange, work: str | None = None) -> RevisionNote:
+    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[]), work).notes[value.key()]
 
 
 @spaces_router.put('/projects/{name}/production-notes/export')
-def save_workspace_production_export(name: str, request: Request, value: ExportChanges) -> ReviewNotes:
-    return update_production_notes(name, request, value)
+@spaces_router.put('/projects/{name}/works/{work}/production-notes/export')
+def save_workspace_production_export(name: str, request: Request, value: ExportChanges, work: str | None = None) -> ReviewNotes:
+    return update_production_notes(name, request, value, work)
 
 
 @spaces_router.get('/projects/{name}/document')

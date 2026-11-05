@@ -16,4 +16,6 @@ description: Iris 商业视频资产准备二级业务阶段，维护唯一资�
 
 新建或关键视觉未定/变化时先验证代表样例；已有有效基准且授权覆盖时直接接续。按范围分批交接，待绑定与资产齐备分别说明，具体完成口径见[分批接续](references/流程规则.md#分批交接与完成)。
 
-Agent负责理解、创作、依据现行决定定位版本及异常处理；脚本负责明确装配和文件处理，用户决定采用。工具使用查[能力状态](../iris-commercial-video/references/工具适配.md)，不以登记工具名称代替实际验收。需要PDF时按[交付规则](../iris-commercial-video/references/对外交付.md)调用[共用PDF工具](../studio-pdf-export/SKILL.md)。项目状态归一级业务入口，客户批准不由本技能推定。
+Agent负责理解、创作、依据现行决定定位版本及异常处理；脚本负责明确装配和文件处理，用户决定采用。工具使用查[能力状态](../iris-commercial-video/references/工具适配.md)，不以登记工具名称代替实际验收。需要PDF时按[交付规则](../iris-commercial-video/references/对外交付.md)调用[共用PDF工具](../studio-pdf-export/SKILL.md)。作品状态归一级业务入口，客户批准不由本技能推定。
+
+处理前明确 C 项目与 F 作品；本阶段资料和本片状态归作品，客户共用原件及媒体版本归项目。目录与状态分工统一按[建档规范](../iris-commercial-brief/references/项目建档与README规范.md)执行。

@@ -99,7 +99,7 @@ def jianying_links(api, project, key):
     return {'jypack': package + '&format=jypack', 'zip': package + '&format=zip'}
 
 
-def project_tree(projects, name, api):
+def project_tree(projects, name, api, directory=None):
     root = projects.project(name)
     prefix = api + '/projects/' + quote(name, safe='') + '/files/'
 
@@ -121,4 +121,4 @@ def project_tree(projects, name, api):
                 result.append(item)
         return result
 
-    return {'name': name, 'files': read(root)}
+    return {'name': name, 'files': read(directory or root)}

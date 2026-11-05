@@ -12,6 +12,7 @@ import { ProjectProduction } from './components/ProjectProduction';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { TabNav } from './components/TabNav';
+import { TabSelect } from './components/TabSelect';
 import { UnderlineTabs } from './components/UnderlineTabs';
 import { useRefreshState } from './refreshPosition';
 import './IrisProject.css';
@@ -39,6 +40,10 @@ export interface IrisPresentation {
   };
 }
 
+export interface IrisWork { id: string; name: string; key: string }
+
+interface IrisWorkData { files: FileItem[]; productionSection?: string; irisPresentation: IrisPresentation }
+
 const tabs = [
   { value: 'overview', label: '项目概况' },
   { value: 'brief', label: '需求与参考' },
@@ -51,37 +56,55 @@ const tabs = [
   { value: 'resources', label: '项目资源' },
 ] as const;
 
-export function IrisProject({ name, baseUrl, files, productionSection, presentation, clearPreview }: {
-  name: string; baseUrl: string; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; clearPreview: () => void;
+export function IrisProject({ name, baseUrl, files: projectFiles, productionSection: projectProductionSection, presentation: projectPresentation, works, clearPreview }: {
+  name: string; baseUrl: string; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; works?: IrisWork[] | null; clearPreview: () => void;
 }) {
   const controls = useContext(HeaderControlsContext);
   const [section, setSection] = useRefreshState(`${baseUrl}/section`, 'overview');
+  const [selectedWork, setSelectedWork] = useRefreshState(`${baseUrl}/work`, '');
+  const currentWork = works?.find(work => work.id === selectedWork) || works?.[0];
+  const workSection = !['overview', 'files', 'resources'].includes(section);
+  const workApi = currentWork ? `${baseUrl}/works/${currentWork.id}` : undefined;
+  const work = useQuery({ queryKey: ['iris-work', workApi], queryFn: () => get<IrisWorkData>(workApi!),
+    enabled: Boolean(workApi && workSection), refetchInterval: 5000 });
+  const legacy = works == null;
+  const files = legacy ? projectFiles : work.data?.files || [];
+  const presentation = legacy ? projectPresentation : work.data?.irisPresentation;
+  const productionSection = legacy ? projectProductionSection : work.data?.productionSection;
+  const productionApi = legacy ? baseUrl : workApi;
   const select = (value: string) => { setSection(value); clearPreview(); window.scrollTo(0, 0); };
-  const productionFiles = files.find(item => item.name === productionSection)?.children || [];
+  const productionFiles = files.find(item => item.key === productionSection)?.children || [];
   const productionKeys = presentation?.primary['06-视频生产'] || [];
   const productionMain = productionFiles.filter(item => productionKeys.includes(item.key || ''));
 
   return <>
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
-    <div key={section} className="iris-project-section">
-      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={files} />}
+    {workSection && !legacy && <div className="iris-work-toolbar">
+      <span>当前作品</span><TabSelect label="切换作品" items={(works || []).map(item => ({ value: item.id, label: `${item.id} · ${item.name}` }))}
+        selected={currentWork?.id || ''} onChange={value => { setSelectedWork(value); clearPreview(); }} />
+    </div>}
+    {workSection && !legacy && (currentWork
+      ? <Result page loading={work.isPending} error={work.error} retry={work.refetch} retrying={work.isFetching} />
+      : <section className="panel"><p className="muted">本项目尚未建立作品。</p></section>)}
+    {(!workSection || legacy || work.data) && <div key={`${section}/${currentWork?.id || ''}`} className="iris-project-section">
+      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'assets' && <IrisAssets baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'production' && <>
-        {productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
-          <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
+        {productionSection ? <ProjectProduction project={name} baseUrl={productionApi!} batchIndex /> : <section className="panel iris-production-index">
+          <h2>生产批次</h2><p className="muted">{legacy ? '本项目暂无视频制作资料。' : '本作品暂无视频制作资料。'}</p>
         </section>}
         {productionMain.length > 0 && <section className="panel"><h3>生产任务记录</h3><FileTree items={productionMain} showStatus={false} /></section>}
         <Supplement title="其他制作资料（含工作稿、旧版和执行记录）" items={productionFiles.filter(item => !productionMain.includes(item))} />
       </>}
       {section === 'resources' && <section className="panel"><ResourceLibrary project={name} baseUrl={baseUrl} /></section>}
-      {section === 'files' && <section className="panel"><h2>全部资料</h2><FileTree items={files} showStatus={false} />
-        {!files.length && <p className="muted">暂无项目资料。</p>}
+      {section === 'files' && <section className="panel"><h2>全部资料</h2><FileTree items={projectFiles} showStatus={false} />
+        {!projectFiles.length && <p className="muted">暂无项目资料。</p>}
       </section>}
       {section === 'delivery' && <IrisDelivery baseUrl={baseUrl} files={files} presentation={presentation}
         openProduction={productionSection ? () => select('production') : undefined} />}
-    </div>
+    </div>}
   </>;
 }
 
@@ -160,7 +183,7 @@ function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: F
   const sources = presentation?.brief?.sources || [];
   const archived = presentation?.brief?.archived || [];
   const displayed = new Set([...available.map(doc => doc.value), ...sources.map(item => item.key || '')]);
-  const extras = omitDisplayedFiles(files.filter(item => briefDocuments.some(([folder]) => item.key === folder)), displayed);
+  const extras = omitDisplayedFiles(files.filter(item => briefDocuments.some(([folder]) => item.name === folder)), displayed);
 
   const sourceDetails = sources.length > 0 && <details className="iris-brief-attachments">
     <summary>客户原件与参考</summary>
@@ -190,7 +213,7 @@ function IrisReadingStage({ stage, baseUrl, files, presentation }: {
   const { label, folder } = readingStages[stage];
   const keys = presentation?.primary[folder] || [];
   const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
-  const items = files.find(item => item.key === folder)?.children || [];
+  const items = files.find(item => item.name === folder)?.children || [];
   const archived = presentation?.stageArchives?.[folder] || [];
 
   return <>
@@ -217,7 +240,7 @@ function IrisAssets({ baseUrl, files, presentation }: { baseUrl: string; files: 
   const historical = current.length === 0 && archived.length > 0;
   const keys = historical ? archived.map(item => item.key!) : current;
   const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
-  const items = files.find(item => item.key === folder)?.children || [];
+  const items = files.find(item => item.name === folder)?.children || [];
   const adopted = presentation?.adopted || [];
   const [view, setView] = useRefreshState<'media' | 'list'>(`${baseUrl}/asset-view`, historical ? 'list' : 'media');
   const listLabel = historical ? '查看历史资产清单' : '资产清单与制作说明';
@@ -256,7 +279,7 @@ function IrisDelivery({ baseUrl, files, presentation, openProduction }: {
   const keys = view === 'handoff' ? (archivedHandoff ? [archivedHandoff] : handoffKeys) : reviewKeys;
   const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
   const excluded = new Set([...handoffKeys, ...reviewKeys, ...(delivery?.items.map(({ file }) => file.key!) || [])]);
-  const extras = omitDisplayedFiles(files.filter(item => item.key === '07-返修交接' || item.key === '08-完单复盘'), excluded);
+  const extras = omitDisplayedFiles(files.filter(item => item.name === '07-返修交接' || item.name === '08-完单复盘'), excluded);
   const archives = files.filter(item => archiveNames.includes(item.name) || item.name === '复盘.md');
   return <>
     <div className="section-heading iris-stage-heading"><h2>交付与复盘</h2></div>

@@ -13,7 +13,7 @@ import { TabNav } from './components/TabNav';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { IrisProject } from './IrisProject';
-import type { IrisPresentation } from './IrisProject';
+import type { IrisPresentation, IrisWork } from './IrisProject';
 
 export function ProjectSpace() {
   const { spaceId = '' } = useParams();
@@ -43,7 +43,7 @@ export function FilesProject() {
   const [preview, setPreview] = useState<FileItem | null>(null);
   const workspaces = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
   const iris = workspaces.data?.find(space => space.id === spaceId)?.view === 'iris-commercial';
-  const query = useQuery({ queryKey: ['project-files', spaceId, name], queryFn: () => get<{ name: string; files: FileItem[]; productionSection?: string; irisPresentation?: IrisPresentation }>(baseUrl), refetchInterval: 5000 });
+  const query = useQuery({ queryKey: ['project-files', spaceId, name], queryFn: () => get<{ name: string; files: FileItem[]; productionSection?: string; irisPresentation?: IrisPresentation; works?: IrisWork[] | null }>(baseUrl), refetchInterval: 5000 });
   useEffect(() => { setSection(''); setPreview(null); }, [spaceId, name]);
   const files = query.data?.files || [];
   const directories = files.filter(item => item.kind === 'group');
@@ -60,7 +60,7 @@ export function FilesProject() {
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !workspaces.data && <Result page loading={workspaces.isPending} error={workspaces.error} retry={workspaces.refetch} retrying={workspaces.isFetching} />}
     {query.data && workspaces.data && (iris ? <IrisProject key={baseUrl} name={name} baseUrl={baseUrl}
-      files={files} productionSection={query.data.productionSection} presentation={query.data.irisPresentation} clearPreview={() => setPreview(null)} /> : <>
+      files={files} productionSection={query.data.productionSection} presentation={query.data.irisPresentation} works={query.data.works} clearPreview={() => setPreview(null)} /> : <>
       {controlsRoot && createPortal(<TabNav wide label="项目栏目" items={tabs} selected={selected}
         onChange={value => { setSection(value); setPreview(null); }} />, controlsRoot)}
       {selected === query.data.productionSection && <ProjectProduction key={baseUrl} project={name} baseUrl={baseUrl} />}
