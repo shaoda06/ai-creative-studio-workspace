@@ -44,6 +44,9 @@ try{
   page.on('pageerror',error=>errors.push(String(error)));mode='normal';writes=[];unexpected=[];
   await page.goto(base+'/tests/release-films.html');
   const entry=page.getByRole('combobox',{name:'发布资料',exact:true});
+  const projectTabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
+  await projectTabs.getByRole('button',{name:'项目资源',exact:true}).waitFor();
+  assert.equal(await projectTabs.locator(':scope > *').last().textContent(),'项目资源');
   const open=async label=>{await entry.click();await page.getByRole('option',{name:new RegExp('^'+label+'(?:\\s+当前)?$')}).click();};
   await entry.click();assert.deepEqual(await page.getByRole('listbox',{name:'发布资料'}).locator('[role=option] > span:first-child').allTextContents(),['社交媒体资料','成片交付']);await entry.press('Escape');
   await open('社交媒体资料');

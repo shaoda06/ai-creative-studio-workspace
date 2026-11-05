@@ -47,8 +47,8 @@ const tabs = [
   { value: 'assets', label: '资产准备' },
   { value: 'production', label: '视频制作' },
   { value: 'delivery', label: '交付与复盘' },
-  { value: 'resources', label: '项目资源' },
   { value: 'files', label: '全部资料' },
+  { value: 'resources', label: '项目资源' },
 ] as const;
 
 export function IrisProject({ name, baseUrl, files, productionSection, presentation, clearPreview }: {

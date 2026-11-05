@@ -131,7 +131,7 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await overview.getByRole('button',{name:'项目说明',exact:true}).click();
   await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
-  assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','项目资源','全部资料']);
+  assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','全部资料','项目资源']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   const briefTabs=page.getByRole('navigation',{name:'需求与参考文档',exact:true});
   await page.getByRole('heading',{name:'制作简报正文',exact:true}).waitFor();
