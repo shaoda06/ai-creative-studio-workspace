@@ -47,7 +47,7 @@ class Workspaces:
             if state in [space.runtime for space in self.items.values()]:
                 raise ValueError('运行资料目录重复：' + runtime_id)
             view = item.get('view', 'files')
-            if view not in ('files', 'iris-commercial'):
+            if view not in ('files', 'iris-commercial', 'chloe-commerce'):
                 raise ValueError('项目空间页面类型无效：' + identity)
             self.items[identity] = Workspace(identity, item['name'], target, state, view,
                 ProjectFiles(target / 'projects'), production_adapter=item.get('production_adapter'))

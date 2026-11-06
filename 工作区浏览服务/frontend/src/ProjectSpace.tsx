@@ -13,6 +13,7 @@ import { TabNav } from './components/TabNav';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { IrisProject } from './IrisProject';
+import { ChloeWorkspace } from './ChloeWorkspace';
 import type { IrisPresentation, IrisWork } from './IrisProject';
 
 export function ProjectSpace() {
@@ -26,11 +27,11 @@ export function ProjectSpace() {
     <PageCheckStatus queries={[query]} />
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !space && <p role="alert">项目空间未登记。</p>}
-    {space && <>
+    {space && (space.view === 'chloe-commerce' ? <ChloeWorkspace /> : <>
       <div className="section-heading"><h2>业务项目</h2>{space.view === 'serial-drama' && <button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button>}</div>
       <div className="grid">{space.projects.map((project, index) => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(index + 1).padStart(2, '0')}-${project.name}`} description="查看项目资料与素材" icon="▤" />)}</div>
       {!space.projects.length && <p className="muted">暂无项目。</p>}
-    </>}
+    </>)}
     {indexOpen && <Dialog title="项目总索引" close={() => setIndexOpen(false)}><Result loading={index.isPending} error={index.error} retry={index.refetch} retrying={index.isFetching} />{index.data && <Document value={index.data} showOriginal={false} />}</Dialog>}
   </div>;
 }
