@@ -1,12 +1,13 @@
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { get } from './api';
 import type { FileItem, RecordData } from './api';
 import { Document, FileLink, FileTree, PreviewContext, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
-import { Breadcrumbs } from './components/Breadcrumbs';
+import { BreadcrumbActionsContext, Breadcrumbs, BreadcrumbSelectorContext } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { DownloadButton } from './components/DownloadButton';
@@ -64,25 +65,39 @@ export function IrisProject({ name, baseUrl, headerActions, files: projectFiles,
   name: string; baseUrl: string; headerActions: ReactNode; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; works?: IrisWork[] | null; clearPreview: () => void;
 }) {
   const controls = useContext(HeaderControlsContext);
+  const { pathname } = useLocation();
   const [section, setSection] = useRefreshState<string>(`${baseUrl}/section`, 'overview');
   const sectionTitle = (tabs.find(tab => tab.value === section) ?? tabs[0]).label;
   const [selectedWork, setSelectedWork] = useRefreshState(`${baseUrl}/work`, '');
+  const [productionOpened, setProductionOpened] = useRefreshState(`${baseUrl}/production/opened`, false);
+  const [breadcrumbActions, setBreadcrumbActions] = useState<HTMLDivElement | null>(null);
+  const [breadcrumbSelector, setBreadcrumbSelector] = useState<HTMLSpanElement | null>(null);
+  const currentPath = useRef<HTMLSpanElement>(null);
   const currentWork = works?.find(work => work.id === selectedWork) || works?.[0];
+  const productionWork = section === 'production' && productionOpened ? currentWork : undefined;
+  const selectProductionWork = (value: string | null) => {
+    if (value) setSelectedWork(value);
+    setProductionOpened(Boolean(value));
+    clearPreview();
+    if (value) requestAnimationFrame(() => {
+      currentPath.current!.scrollIntoView({ block: 'start' });
+      currentPath.current!.focus({ preventScroll: true });
+    });
+  };
   const workSection = !['overview', 'files', 'resources'].includes(section);
   const workApi = currentWork ? `${baseUrl}/works/${currentWork.id}` : undefined;
   const work = useQuery({ queryKey: ['iris-work', workApi], queryFn: () => get<IrisWorkData>(workApi!),
-    enabled: Boolean(workApi && workSection), refetchInterval: 5000 });
+    enabled: Boolean(workApi && workSection && section !== 'production'), refetchInterval: 5000 });
   const legacy = works == null;
   const files = legacy ? projectFiles : work.data?.files || [];
   const presentation = legacy ? projectPresentation : work.data?.irisPresentation;
   const productionSection = legacy ? projectProductionSection : work.data?.productionSection;
-  const productionApi = legacy ? baseUrl : workApi;
-  const select = (value: string) => { setSection(value); clearPreview(); window.scrollTo(0, 0); };
-  const productionFiles = files.find(item => item.key === productionSection)?.children || [];
-  const productionKeys = presentation?.primary['06-视频生产'] || [];
+  const select = (value: string) => { setSection(value); setProductionOpened(false); clearPreview(); window.scrollTo(0, 0); };
+  const productionFiles = legacy ? projectFiles.find(item => item.key === projectProductionSection)?.children || [] : [];
+  const productionKeys = projectPresentation?.primary['06-视频生产'] || [];
   const productionMain = productionFiles.filter(item => productionKeys.includes(item.key || ''));
 
-  const productionRecords = <>
+  const productionRecords = legacy && <>
         {productionMain.length > 0 && <section className="panel"><h3>生产任务记录</h3><FileTree items={productionMain} showStatus={false} /></section>}
         <Supplement title="其他制作资料（含工作稿、旧版和执行记录）" items={productionFiles.filter(item => !productionMain.includes(item))} />
   </>;
@@ -90,7 +105,11 @@ export function IrisProject({ name, baseUrl, headerActions, files: projectFiles,
   return <>
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
     <PageHeader stacked title={name} actions={headerActions}>
-      <Breadcrumbs items={[{ label: sectionTitle }]} />
+      <Breadcrumbs currentRef={currentPath} actionsRef={productionWork ? setBreadcrumbActions : undefined}
+        selectorRef={productionWork ? setBreadcrumbSelector : undefined} items={productionWork ? [
+          { label: sectionTitle, href: `#${pathname}`, onClick: () => selectProductionWork(null) },
+          { label: `${productionWork.id} · ${productionWork.name}` },
+        ] : [{ label: sectionTitle }]} />
     </PageHeader>
     {workSection && !legacy && section !== 'production' && <div className="iris-work-toolbar">
       <span>当前作品</span><TabSelect label="切换作品" items={(works || []).map(item => ({ value: item.id, label: `${item.id} · ${item.name}` }))}
@@ -100,14 +119,16 @@ export function IrisProject({ name, baseUrl, headerActions, files: projectFiles,
       ? <Result page loading={work.isPending} error={work.error} retry={work.refetch} retrying={work.isFetching} />
       : <section className="panel"><p className="muted">本项目尚未建立作品。</p></section>)}
     {(!workSection || legacy || section === 'production' || work.data) && <div key={`${section}/${section === 'production' ? '' : currentWork?.id || ''}`}
-      className={section === 'production' ? 'iris-project-section iris-production-section' : 'iris-project-section'}>
+      className="iris-project-section">
       {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} hiddenSections={projectPresentation?.overviewHiddenSections} works={works} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'assets' && <IrisAssets baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'production' && <>
-        {!legacy ? <IrisProduction project={name} baseUrl={baseUrl} work={currentWork?.id || ''} onWorkChange={setSelectedWork}>{productionRecords}</IrisProduction> : productionSection ? <ProjectProduction project={name} baseUrl={productionApi!} batchIndex /> : <section className="panel iris-production-index">
-          <h2>生产批次</h2><p className="muted">{legacy ? '本项目暂无视频制作资料。' : '本作品暂无视频制作资料。'}</p>
+        {!legacy ? <BreadcrumbSelectorContext.Provider value={breadcrumbSelector}><BreadcrumbActionsContext.Provider value={breadcrumbActions}>
+          <section className="panel"><IrisProduction project={name} baseUrl={baseUrl} work={productionWork?.id || null} onSelect={selectProductionWork} /></section>
+        </BreadcrumbActionsContext.Provider></BreadcrumbSelectorContext.Provider> : productionSection ? <ProjectProduction project={name} baseUrl={baseUrl} batchIndex /> : <section className="panel iris-production-index">
+          <h2>生产批次</h2><p className="muted">本项目暂无视频制作资料。</p>
         </section>}
         {legacy && productionRecords}
       </>}

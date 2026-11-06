@@ -66,8 +66,8 @@ export function SegmentStageStrip({ segments, selected, onSelect, vertical = fal
       <PointerTooltip text={`${item.id} · 计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? ' · 本轮新生成视频' : ''}`}><button aria-label={`分段 ${item.id}，计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? '，本轮新生成视频' : ''}`} aria-pressed={item.id === selected} onClick={() => onSelect(item.id)}><span>{item.label || item.id}</span><span>{item.duration}秒</span>{newVideoSegments.has(item.id) && <RoundNewDot />}</button></PointerTooltip>
     </div>)}
   </div>;
-  return <div className={'segment-scroll segment-progress-scroll' + (workProgress ? ' is-work' : '')}>
-    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '') + (workProgress ? ' is-work' : '')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
+  return <div className="segment-scroll segment-progress-scroll">
+    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
       {previousButton}
       {previousStatus}
       <div className="segment-strip" role="group" aria-label="本场分段">

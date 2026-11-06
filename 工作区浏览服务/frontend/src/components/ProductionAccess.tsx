@@ -6,7 +6,6 @@ import type { NoteScope } from './RevisionNotes';
 // Business adapters supply addresses and terms; the complete reviewer stays shared.
 export interface ProductionAccess {
   unitKind: 'episode' | 'work';
-  candidateSelection: 'switch-round' | 'preview';
   storyboard?: (unit: string, scene: string) => string;
   namespace: (project: string) => string;
   detail: (project: string, unit: string) => string;
@@ -19,7 +18,6 @@ export interface ProductionAccess {
 }
 export const noraProductionAccess: ProductionAccess = {
   unitKind: 'episode',
-  candidateSelection: 'switch-round',
   storyboard: (unit, scene) => `09-剧集制作/${unit}/03-分镜脚本/${unit}-${scene}-场次分镜.md`,
   namespace: project => project,
   detail: (project, unit) => `${projectUrl(project)}/episodes/${unit}`,

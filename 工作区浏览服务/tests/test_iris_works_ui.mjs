@@ -10,20 +10,7 @@ const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
 const out=await mkdtemp('/private/tmp/W489-workbench-');
-const repairFileName='F002-P001-repair.webm';
-const repairFixture=await readFile(frontend+'public/component-samples/video.webm');
-const nativeDownloads=[];
-const nativeDownloadFixture={name:'isolated-native-download',configureServer(vite){
- vite.middlewares.use((request,response,next)=>{
-  const url=new URL(request.url,'http://localhost');
-  if(!url.pathname.endsWith('/'+repairFileName)||!url.searchParams.has('download'))return next();
-  nativeDownloads.push(repairFileName);
-  response.setHeader('Content-Type','application/octet-stream');
-  response.setHeader('Content-Disposition',`attachment; filename="${repairFileName}"`);
-  response.end(repairFixture);
- });
-}};
-const server=await createServer({configFile:false,root:frontend,plugins:[react(),nativeDownloadFixture],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
+const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
 let activePage;
@@ -176,7 +163,7 @@ try {
   assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).count(),0);
   await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
   await page.getByText('产品片专属正文',{exact:true}).waitFor();
-  const choose=async id=>{await page.getByRole('combobox',{name:'切换作品',exact:true}).click();await page.getByRole('option',{name:new RegExp('^'+id)}).click()};
+  const choose=async id=>{await page.getByRole('combobox',{name:'切换作品',exact:true}).or(page.getByRole('combobox',{name:'快速选择制作对象',exact:true})).click();await page.getByRole('option',{name:new RegExp('^'+id)}).click()};
   await choose('F002');
   await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByText('品牌片专属正文',{exact:true}).waitFor();
@@ -196,27 +183,30 @@ try {
   const statistics=page.getByLabel('作品制作统计',{exact:true});
   for(const status of ['待启动 1 部','剪映草稿已交接 1 部','未登记制作状态 1 部'])await statistics.getByText(status,{exact:true}).waitFor();
   await page.locator('[data-episode=F002]').click();
-  const region=page.getByRole('region',{name:'作品制作状态',exact:true});
-  await region.getByText('剪映草稿已交接',{exact:true}).waitFor();
-  assert.equal(await region.getByRole('button',{name:'查看作品状态',exact:true}).count(),0);
+  const location=page.getByRole('navigation',{name:'当前位置',exact:true});
+  const productionSwitch=location.getByRole('combobox',{name:'快速选择制作对象',exact:true});
+  await productionSwitch.waitFor();
   const videoLocator=page.locator('.segment-video video');
   await videoLocator.waitFor();
   await page.evaluate(()=>window.scrollTo(0,0));
-  const frame=await videoLocator.boundingBox();
-  assert.ok(frame.y<page.viewportSize().height-120,'首屏应至少能看到视频区域上方120px');
+  assert.deepEqual(await page.locator('.episode-detail').evaluate(detail=>{
+   const strip=detail.querySelector('.segment-progress-scroll');
+   const preparation=detail.querySelector('.scene-video-preparation');
+   const player=detail.querySelector('.segment-video');
+   return [getComputedStyle(detail.closest('.panel')).padding,
+    getComputedStyle(detail.querySelector('.episode-scene-content')).paddingTop,
+    strip.nextElementSibling===preparation, Boolean(preparation.compareDocumentPosition(player)&Node.DOCUMENT_POSITION_FOLLOWING)];
+  }),['23px','20px',true,true]);
+  assert.equal(await page.getByRole('region',{name:'作品制作状态',exact:true}).count(),0);
+  assert.equal(await page.getByRole('heading',{name:'生产任务记录',exact:true}).count(),0);
+  assert.equal(await page.getByRole('link',{name:'下载当前视频',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:/查看.*上集末段/}).count(),0);
   await page.screenshot({path:`${out}/${width}-production-first-screen.png`});
   const product=page.getByRole('combobox',{name:'产物选择',exact:true});
   await product.click();
   await page.getByRole('option',{name:'修复版',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.segment-video video')?.currentSrc.endsWith('F002-P001-repair.webm'));
-  const filesBefore=nativeDownloads.length;
-  const repairFile=page.waitForEvent('download');
-  await page.getByRole('link',{name:'下载当前视频',exact:true}).click();
-  const selectedFile=await repairFile;
-  assert.equal(selectedFile.suggestedFilename(),repairFileName);
-  assert.equal(nativeDownloads.length,filesBefore+1);
-  assert.deepEqual(await readFile(await selectedFile.path()),repairFixture);
+  assert.match(await page.getByRole('link',{name:/^查看视频原文件/}).getAttribute('href'),/F002-P001-repair\.webm$/);
   await product.click();
   await page.getByRole('option',{name:/^原版/}).click();
   await videoLocator.waitFor();
@@ -243,18 +233,31 @@ try {
   await dialog.getByRole('button',{name:'保存',exact:true}).click();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(saved.F002.rounds['2'].text,'品牌片整片意见');
-  // A candidate preview never changes the registered whole-film combination.
+  // A candidate outside the selected scene's registered rounds is a preview.
   await page.getByRole('combobox',{name:'版本切换',exact:true}).click();
-  await page.getByRole('option').filter({hasText:/候选一 · R001 · 任务状态待核对 · 未取回/}).click();
-  await page.getByText('执行记录 · 任务状态待核对 · 未取回',{exact:true}).waitFor();
+  await page.getByRole('option',{name:/^候选一/}).click();
   await page.getByRole('img',{name:'P001 一采：已采纳（R002）',exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'2');
   assert.equal(await page.getByRole('checkbox',{name:'连续播放',exact:true}).isDisabled(),true);
   await page.getByRole('button',{name:'返回本轮组合',exact:true}).click();
 
+  // Selecting a candidate registered in the scene switches the saved round, as in Nora.
+  await choose('F001');
+  const roundSelector=page.getByRole('combobox',{name:'修改轮次',exact:true});
+  await page.getByRole('combobox',{name:'版本切换',exact:true}).click();
+  await page.getByRole('option',{name:/^候选一/}).click();
+  assert.equal(await roundSelector.getAttribute('data-value'),'1');
+  await page.getByRole('button',{name:/^分段 P002/}).click();
+  assert.match(await page.getByRole('link',{name:/^查看视频原文件/}).getAttribute('href'),/F001-P002-R001\.webm$/);
+  await page.getByRole('button',{name:'切换到最新修改轮次',exact:true}).click();
+  await page.getByRole('button',{name:/^分段 P001/}).click();
+  await choose('F002');
+  await page.getByRole('button',{name:'修改意见',exact:true}).click();
+  await editor.waitFor();
+
   await page.reload();
-  await page.getByRole('combobox',{name:'切换作品',exact:true}).waitFor();
-  assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).getAttribute('data-value'),'F002');
+  await productionSwitch.waitFor();
+  assert.equal(await productionSwitch.getAttribute('data-value'),'F002');
   await editor.waitFor();
   assert.equal(await editor.inputValue(),'品牌片新意见');
 
@@ -313,7 +316,7 @@ try {
   await choose('F003');
   const editionTabs=page.getByRole('navigation',{name:'作品制作入口',exact:true});
   const currentEdition=editionTabs.getByRole('button',{name:'现行制作',exact:true});
-  const archivedEdition=editionTabs.getByRole('button',{name:'历史归档',exact:true});
+  const archivedEdition=editionTabs.getByRole('button',{name:'历史归档（只读）',exact:true});
   assert.equal(await currentEdition.getAttribute('aria-current'),'page');
   await page.getByRole('button',{name:'查看生产任务',exact:true}).click();
   await dialog.getByText('隔离英文生产段与输入',{exact:true}).waitFor();
@@ -328,7 +331,7 @@ try {
   await archivedEdition.click();
   await page.getByRole('button',{name:'下载归档剪映包',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'查看生产任务',exact:true}).count(),0);
-  assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).getAttribute('data-value'),'F003');
+  assert.equal(await productionSwitch.getAttribute('data-value'),'F003');
   await page.getByRole('button',{name:'查看历史意见',exact:true}).click();
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).inputValue(),'原归档分段意见');
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).getAttribute('readonly'),'');
@@ -366,7 +369,6 @@ try {
   await pack;
   assert.equal(downloads.length,before+1);
   await choose('F002');
-  await page.getByRole('region',{name:'作品制作状态',exact:true}).getByText('剪映草稿已交接',{exact:true}).waitFor();
   const handoff=page.getByRole('group',{name:'整片交接下载',exact:true});
   await handoff.getByText('第2轮 · R002 剪映草稿包（2段）',{exact:true}).waitFor();
   assert.equal(downloads.length,before+1);
@@ -401,10 +403,11 @@ try {
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'1');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:`${out}/${width}-works.png`});
+  await location.getByRole('link',{name:'视频制作',exact:true}).click();
+  await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();
   await page.getByText('项目共用说明',{exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).count(),0);
-  const location = page.getByRole('navigation',{name:'当前位置',exact:true});
   for (const label of await tabs.getByRole('button').allTextContents()) {
    await tabs.getByRole('button',{name:label,exact:true}).click();
    const title = location.locator('[aria-current="page"]');

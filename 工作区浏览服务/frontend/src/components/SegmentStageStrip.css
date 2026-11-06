@@ -23,5 +23,3 @@
 .segment-vertical-item.is-previous-ending>.previous-ending-button[aria-pressed=true]{background:var(--green);color:white}
 
 .segment-strip>button,.segment-vertical-item>button{position:relative}
-.segment-progress-scroll.is-work{padding-bottom:0;border-bottom:0}
-.segment-timeline.is-work>.segment-strip>button,.segment-timeline.is-work .segment-stage-cell{padding-block:4px}

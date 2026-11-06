@@ -4,7 +4,7 @@ import type { ReactNode, Ref } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TaskDetailDialog } from './TaskDetailDialog';
 import type { SegmentVideo as VideoItem } from '../api';
-import { FileActions, Original } from '../components';
+import { Original } from '../components';
 
 export const candidateLabel = (number: number, approved = false) => {
   const digits = '零一二三四五六七八九';
@@ -133,11 +133,11 @@ export function watchVideoPlayback(element: HTMLVideoElement, recover: (reason: 
 export interface SegmentVideoHandle { seekTo: (time: number) => void }
 export interface RepeatPlaybackControl { checked: boolean; onChange: (checked: boolean) => void }
 
-export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, downloadOriginal = false }: {
+export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef }: {
   current?: VideoItem; onTimeChange: (time: number) => void; autoPlay?: boolean;
   onEnded?: () => void; onError?: () => void;
   onFileRevision?: (revision: string) => void;
-  cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode; downloadOriginal?: boolean;
+  cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode;
   repeatControl?: RepeatPlaybackControl;
   retainSource: (source: string) => () => void;
   playerRef: Ref<SegmentVideoHandle>;
@@ -227,9 +227,7 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
         <label className="scene-continuous"><input type="checkbox" checked={repeat && !continuous} disabled={continuous || !loaded?.url} onChange={event => setRepeat(event.target.checked)} />重复播放</label>
         {continuousControl}
         <button className="video-layout-toggle" aria-pressed={wide} onClick={onToggleWide}>{wide ? '恢复布局' : '宽屏显示'}</button>
-        {loaded?.url && (downloadOriginal
-          ? <FileActions url={loaded.downloadUrl || loaded.url} viewLabel="查看视频原文件" downloadLabel="下载当前视频" />
-          : <Original url={loaded.downloadUrl || loaded.url} label="查看视频原文件" />)}
+        {loaded?.url && <Original url={loaded.downloadUrl || loaded.url} label="查看视频原文件" />}
       </div>
     </div>
     {loaded?.previewNote && <p className="muted">{loaded.previewNote}</p>}

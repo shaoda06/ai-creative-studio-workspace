@@ -25,7 +25,7 @@ import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
-export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, workControls }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; workControls?: ReactNode }) {
+export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
   const namespace = access.namespace(project);
@@ -110,7 +110,6 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   });
   const handoffs = downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!)) || [];
   const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];
-  const workStatus = workMode ? current?.workStatus : undefined;
   const productionTask = workMode ? current?.productionTask : undefined;
   const continuous = !!playback && playback.episode === current?.name;
   const nextScene = scenes[scenes.indexOf(selectedScene) + 1];
@@ -190,19 +189,9 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   return <>
     {breadcrumbSelector && selectedItem && createPortal(<TabSelect iconOnly label="快速选择制作对象" selected={selected!} onChange={open}
       items={items.map(item => ({ value: item.name, label: `${item.name} · ${item.title || (item.name === '片头' || item.name === '片尾' ? '全剧通用' : '题名未记录')}${item.titleStatus ? `（${item.titleStatus}）` : ''}` }))} />, breadcrumbSelector)}
-    {workMode && selectedItem && <div className="iris-production-heading">{workControls}
-      {workStatus && <section className="iris-production-status" aria-label="作品制作状态">
-        <details>
-          <summary>作品制作状态 {workStatus.label && <span className="status-badge status-gray">{current!.readOnly ? '原交付 · ' : ''}{workStatus.label}</span>}</summary>
-          {workStatus.summaryHtml ? <Rich html={workStatus.summaryHtml} /> : workStatus.deliverySummary && <p>{workStatus.deliverySummary}</p>}
-          {current!.readOnly && workStatus.summaryHtml && workStatus.deliverySummary && <p className="muted">{workStatus.deliverySummary}</p>}
-          <button className="link" onClick={() => preview(workStatus.record)}>查看作品状态</button>
-        </details>
-      </section>}
-      {current && renderActions()}
-    </div>}
     {selectedItem && !current ? <Result page loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} /> : current ? <div className="episode-detail">
-    {!workMode && breadcrumbActions && createPortal(renderActions(), breadcrumbActions)}
+    {breadcrumbActions && createPortal(renderActions(), breadcrumbActions)}
+    {detailControls}
     {workMode && downloads.error && <FloatingMessage tone="error">交接清单读取失败：{downloads.error.message}。<button className="link" onClick={() => void downloads.refetch()}>重新读取</button></FloatingMessage>}
     {durations.failed > 0 && <FloatingMessage key={current.name + '/' + selectedRound} tone="error">{durations.failed}段视频时长读取失败，暂用计划时长（*）。<button className="link" onClick={durations.retry}>重新读取</button></FloatingMessage>}
     <div className="episode-scene-header">
@@ -249,7 +238,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       })}
     </details>}
   </div> : <>
-    <div ref={cards} className={workMode ? "panel" : undefined}>
+    <div ref={cards}>
       {!workMode && <section aria-label="片头与片尾"><h2>片头与片尾</h2><div className="episode-grid episode-grid-pairs">{shared.map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!shared.length && <p className="muted">片头、片尾尚未开始制作。</p>}</section>}
       <section aria-label={workMode ? "视频制作" : "剧集制作"}><h2>{workMode ? "作品列表" : "剧集制作"}</h2>
