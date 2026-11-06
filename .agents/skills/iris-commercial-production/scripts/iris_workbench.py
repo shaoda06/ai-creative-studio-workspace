@@ -9,7 +9,7 @@ from urllib.parse import quote, unquote, urlsplit
 
 from backend.parsers import documents
 from backend.parsers.documents import cells
-from backend.services.iris_presentation import delivery_overview, table, entries, work_view
+from backend.services.iris_presentation import asset_review, delivery_overview, table, entries, work_view
 from iris_works import discover_works, work_root
 import iris_browser_production as production
 
@@ -32,7 +32,7 @@ def document(projects, name, api, key, version=''):
 def work_status(projects, name, space_api, project, root):
     path = root / '作品状态.md'
     if not path.is_file():
-        return None, {'items': []}, None
+        return None, {'items': []}, {}
     path = projects.file(name, path.relative_to(project).as_posix())
     api = space_api + '/projects/' + quote(name, safe='')
     ref = document_ref(project, api, path)
@@ -40,11 +40,10 @@ def work_status(projects, name, space_api, project, root):
     delivery = delivery_overview(projects, name, space_api, project, text)
     summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
     stage = re.search(r'(?m)^(?:-\s*)?制作状态[：:][ \t]*([^\n]+)', text)
-    adoption = next((row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')
-                     if row['对象'] == '视频采用记录'), None)
-    return {'label': delivery['status'] or (stage[1].strip() if stage else ''), 'summaryHtml': production.legacy_links(
+    records = {row['对象']: row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')}
+    return {'label': stage[1].strip() if stage else '', 'summaryHtml': production.legacy_links(
         documents.markdown(summary[1], ref['key']), api + '/files/'
-    ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery, adoption
+    ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery, records
 
 
 def adopted_segments(projects, name, project, root, record):
@@ -93,7 +92,7 @@ def segment_rows(text):
 
 def scene_segments(identities, rows):
     assigned = [rows.get(identity, {}).get('场次', '').strip() for identity in identities]
-    if not any(assigned):
+    if all(scene in ('', '整片') for scene in assigned):
         return {'whole': identities}
     scenes = {}
     previous = None
@@ -109,6 +108,10 @@ def scene_segments(identities, rows):
 
 def listed_shots(row):
     value = row.get('对应镜号') or row.get('所含原镜号') or row.get('源摄影镜头', '')
+    interval = re.fullmatch(r'SH(\d{3,})\s*[-–—]\s*SH(\d{3,})', value.strip())
+    if interval:
+        first, last = map(int, interval.groups())
+        return [f'SH{number:03d}' for number in range(first, last + 1)]
     ids = re.split(r'[、,，\s]+', value.strip())
     return ids if all(re.fullmatch(r'SH\d{3,}', identity) for identity in ids) and len(set(ids)) == len(ids) else []
 
@@ -177,12 +180,12 @@ def items(projects, name):
     for item in discover_works(project) or []:
         archived = bool(production.legacy_sources(project, item['id']))
         result.append({'kind': 'group', 'name': item['id'], 'title': item['name'], 'key': item['key'],
-                       'readOnly': archived, 'statusHtml': '<span class="status-badge status-gray">历史归档</span>' if archived else ''})
+                       'hasArchive': archived})
     return result
 
 
-def validate_notes(project, work, identities, changes):
-    if production.legacy_sources(project, work):
+def validate_notes(project, work, identities, changes, view=None):
+    if view == 'archive' or (view is None and production.legacy_sources(project, work)):
         raise ValueError('历史制作归档只读')
     rounds = {item['number']: {(entry['id'], entry['stage'], entry['run']) for entry in item['segments']}
               for item in round_spec(project, work)}
@@ -235,13 +238,15 @@ def legacy_detail(project, api, work, archived):
     return result
 
 
-def detail(projects, name, space_api, work):
+def detail(projects, name, space_api, work, view=None):
     project = projects.project(name)
     root = work_root(project, work)
     api = space_api + '/projects/' + quote(name, safe='')
     entry = next(item for item in discover_works(project) if item['id'] == work)
-    status, _, adoption = work_status(projects, name, space_api, project, root)
-    archived = archive_episode(project, work)
+    status, delivery, records = work_status(projects, name, space_api, project, root)
+    archived = archive_episode(project, work) if view != 'current' else None
+    if view == 'archive' and not archived:
+        raise FileNotFoundError('本作品没有登记历史制作归档')
     if archived:
         archive, _ = archived
         legacy = legacy_detail(project, api, work, archived)
@@ -250,9 +255,20 @@ def detail(projects, name, space_api, work):
             sheet = legacy.setdefault('directorSheets', {}).setdefault(legacy['scenes'][0],
                                                                       {'candidates': [], 'formal': [], 'record': None})
             sheet['history'] = history
+        if status:
+            status.update(label=delivery['status'], summaryHtml='')
+            handoff = delivery['archivedHandoff']
+            if handoff and (project / handoff).is_relative_to(archive):
+                status['record'] = document_ref(project, api, project / handoff)
         return {**legacy, 'title': entry['name'], 'workStatus': status}
-    data = production.production_data(project, api, work)
+    if status:
+        if production.legacy_sources(project, work):
+            status['deliverySummary'] = ''
+        else:
+            status['label'] = delivery['status'] or status['label']
+    data = production.production_data(project, api, work, legacy_fallback=False)
     segments = data['segments']
+    adoption = records.get('视频采用记录')
     if adoption:
         adopted = adopted_segments(projects, name, project, root, adoption)
         for item in segments:
@@ -345,12 +361,22 @@ def detail(projects, name, space_api, work):
         rounds.append({'number': number, 'created_at': spec['created_at'], 'note': spec.get('note', ''),
                        'episodeRound': True, 'script': script, 'storyboard': storyboard, 'issues': issues, 'segments': values})
     rounds.sort(key=lambda item: item['number'])
-    view = work_view(projects, name, space_api, work, production)
-    primary = view['irisPresentation']['primary']
+    presentation = work_view(projects, name, space_api, work, production, include_archives=False)['irisPresentation']
+    primary = presentation['primary']
+    registered = {}
+    for field, folder in [('制作脚本', '03-创意脚本'), ('分镜与声音', '04-分镜声音'),
+                          ('资产清单', '05-资产'), ('生产任务', '06-视频生产')]:
+        key = records.get(field, '')
+        if Path(key).suffix.lower() == '.md':
+            path = projects.file(name, key)
+            if not path.is_relative_to(root / folder):
+                raise ValueError('现行制作资料须位于本作品对应阶段：' + key)
+            registered[folder] = path.relative_to(project).as_posix()
     current_sources = {}
     for field, folder in [('script', '03-创意脚本'), ('storyboard', '04-分镜声音')]:
-        values = primary.get(folder, [])
+        values = [registered[folder]] if folder in registered else primary.get(folder, [])
         current_sources[field] = document(projects, name, api, values[0], re.search(r'v\d+', values[0])[0] if re.search(r'v\d+', values[0]) else '') if len(values) == 1 else None
+    production_task = document_ref(project, api, project / registered['06-视频生产']) if '06-视频生产' in registered else None
     scene_members = {}
     scene_rounds = {}
     episode_rounds = []
@@ -361,9 +387,9 @@ def detail(projects, name, space_api, work):
         for scene, identities in groups.items():
             scene_members.setdefault(scene, {}).update((identity, by_id[identity]) for identity in identities)
             scene_rounds.setdefault(scene, []).append({**round_, 'segments': [entries_by_id[identity] for identity in identities]})
-    if not rounds and current_sources['storyboard']:
-        board = current_sources['storyboard']
-        text = projects.file(name, board['key']).read_text('utf-8-sig')
+    current_plan = production_task or current_sources['storyboard']
+    if not rounds and current_plan:
+        text = projects.file(name, current_plan['key']).read_text('utf-8-sig')
         rows = segment_rows(text)
         headings = {match[1]: match[0] for match in re.finditer(r'(?m)^#{2,4}\s+(?:分段\s*)?(P\d{3,})[^\n]*', text)}
         planned_ids = list(dict.fromkeys([*rows, *headings]))
@@ -372,8 +398,8 @@ def detail(projects, name, space_api, work):
             part = segment_text(text, identity)
             row = rows.get(identity, {})
             duration = re.search(r'(\d+(?:\.\d+)?)\s*秒', row.get('请求时长') or row.get('目标时长') or headings.get(identity, ''))
-            item.update(planned=not item['videos'], scriptHtml=production.legacy_links(documents.markdown(part, board['key']), api + '/files/'),
-                        scriptUrl=board['url'], shotIds=SHOT_HEADING.findall(part) or listed_shots(row),
+            item.update(planned=not item['videos'], scriptHtml=production.legacy_links(documents.markdown(part, current_plan['key']), api + '/files/'),
+                        scriptUrl=current_plan['url'], shotIds=SHOT_HEADING.findall(part) or listed_shots(row),
                         duration=float(duration[1]) if duration else item['duration'])
         scene_members = {scene: {identity: by_id[identity] for identity in identities}
                          for scene, identities in scene_segments(planned_ids, rows).items()}
@@ -381,12 +407,13 @@ def detail(projects, name, space_api, work):
     unassigned = {identity: item for identity, item in by_id.items() if identity not in assigned_ids}
     if unassigned or not scene_members:
         scene_members.setdefault('whole', {}).update(unassigned)
-    listing = primary.get('05-资产', [])
+    listing = [registered['05-资产']] if '05-资产' in registered else primary.get('05-资产', [])
     material_record = document_ref(project, api, project / listing[0]) if len(listing) == 1 else None
+    review = asset_review(projects, name, space_api, listing[0]) if listing and listing != primary.get('05-资产') else presentation['assetReview']
     materials = [{**item['media'], 'materialGroup': item['group'], 'materialStatus': item['status'],
                   'materialNote': ' · '.join(filter(None, (item['title'], item['version']))), 'materialReview': material_record,
                   'approvalHtml': production.legacy_links(documents.markdown(item['decision'], listing[0]), api + '/files/')}
-                 for item in view['irisPresentation']['assetReview'] if item['media']['kind'] == 'image']
+                 for item in review if item['media']['kind'] == 'image']
     label = status['label'] if status else ''
     status_html = '<span class="status-badge status-gray">' + escape(label) + '</span>' if label else ''
     return {'kind': 'group', 'name': work, 'title': entry['name'], 'key': entry['key'], 'scenes': list(scene_members),
@@ -394,7 +421,8 @@ def detail(projects, name, space_api, work):
             'sceneRounds': {scene: scene_rounds.get(scene, []) for scene in scene_members}, 'episodeRounds': episode_rounds,
             'script': current_sources['script'], 'storyboards': {scene: current_sources['storyboard'] for scene in scene_members} if current_sources['storyboard'] else {},
             'directorSheets': {'whole': director_sheets(projects, name, api, root)},
-            'materials': materials, 'materialRecord': material_record, 'workStatus': status, 'statusHtml': status_html,
+            'materials': materials, 'materialRecord': material_record, 'productionTask': production_task,
+            'workStatus': status, 'statusHtml': status_html,
             'productionComplete': False, 'productionIssues': []}
 
 
@@ -476,12 +504,13 @@ def director_spec(projects, name, work, path):
     return spec
 
 
-def downloads(projects, name, space_api, work, scene='whole'):
+def downloads(projects, name, space_api, work, scene='whole', view=None):
     project = projects.project(name)
     api = space_api + '/projects/' + quote(name, safe='')
     result = {stage: {kind: {'count': 0, 'url': None, 'files': []} for kind in ('videos', 'director', 'canvas')}
               for stage in ('一采', '二采', '后处理')}
-    values = detail(projects, name, space_api, work)
+    values = detail(projects, name, space_api, work, view)
+    archive_paths = production.legacy_sources(project, work)
     if values.get('readOnly'):
         if scene == 'whole' and len(values['scenes']) == 1:
             scene = values['scenes'][0]
@@ -514,6 +543,8 @@ def downloads(projects, name, space_api, work, scene='whole'):
         covered.setdefault(files, []).append(round_['number'])
     items = {item['file']['key']: item for item in delivery['items']}
     for key, item in items.items():
+        if bool(values.get('readOnly')) != any((project / key).is_relative_to(path) for path in archive_paths):
+            continue
         file = item['file']
         base = {'key': key, 'label': item['title'], 'version': item['version'], 'purpose': item['purpose']}
         if values.get('readOnly') and key.lower().endswith('.jypack'):

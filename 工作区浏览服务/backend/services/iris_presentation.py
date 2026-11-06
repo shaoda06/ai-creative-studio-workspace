@@ -125,13 +125,18 @@ def asset_review(projects, project, api, listing):
     legacy = not rows
     if legacy:
         # The older list uses the current link label for the adoption decision.
-        rows = table(content, '编号', '对象/版本', '当前入口', '状态及用途')
+        rows = list(table(content, '编号', '对象/版本', '当前入口', '状态及用途'))
+    reference_list = not rows
+    if reference_list:
+        rows = table(content, '编号', '名称与状态', '文件版本与使用依据')
     items = []
     for row in rows:
-        decision = row.get('状态及用途', row.get('使用／采用依据', ''))
+        decision = row.get('状态及用途') or row.get('使用／采用依据') or row.get('文件版本与使用依据', '')
         state = decision if legacy else row['已有／需制作']
-        for label, href in entries(row['当前入口'] if legacy else row['当前文件及版本']):
-            if re.search(r'未采用|不采用|历史候选|不作当前输入|旧版留档|停用', state):
+        for label, href in entries(row.get('当前入口', row.get('当前文件及版本', decision))):
+            if reference_list:
+                group, status = 'unknown', '见素材记录'
+            elif re.search(r'未采用|不采用|历史候选|不作当前输入|旧版留档|停用', state):
                 group, status = 'history', '历史留档'
             elif re.search(r'待修改|需修改|待返修', state):
                 group, status = 'revision', '待修改'
@@ -153,7 +158,7 @@ def asset_review(projects, project, api, listing):
             kind = MEDIA_KINDS[resources.media_kind(file)]
             ref = resources.reference(root, key)
             items.append({
-                'title': row['编号'] + ' · ' + row.get('名称及具体状态', row.get('对象/版本', label)),
+                'title': row['编号'] + ' · ' + row.get('名称及具体状态', row.get('对象/版本', row.get('名称与状态', label))),
                 'version': ref['version'] if ref else '',
                 'group': group, 'status': status, 'decision': decision,
                 'media': {'kind': kind, 'key': key, 'name': file.name,
@@ -251,7 +256,7 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
     }
 
 
-def work_view(projects, project, api, work, business):
+def work_view(projects, project, api, work, business, *, include_archives=True):
     root = projects.project(project)
     directory = work_root(root, work)
     value = project_tree(projects, project, api, directory)
@@ -264,7 +269,7 @@ def work_view(projects, project, api, work, business):
     value['files'].extend(item for item in shared if item['name'] == '08-完单复盘')
     archives = [{'kind': 'group', 'name': '归档', 'key': source.relative_to(root).as_posix(),
                  'children': project_tree(projects, project, api, source)['files']}
-                for source in historical_sources(root, work, 'archives')]
+                for source in historical_sources(root, work, 'archives')] if include_archives else []
     value['productionSection'] = business.production_section(root, work)
     value['irisPresentation'] = presentation(projects, project, api, value['files'], directory, shared, archives)
     return value

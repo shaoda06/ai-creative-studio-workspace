@@ -174,8 +174,65 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         change = {key: value for key, value in note.items() if key != 'updatedAt'}
         self.assertEqual(self.client.put(url, json={**change, 'expectedText': ''}).status_code, 409)
         self.assertEqual(self.client.put(url + '/archive', json=change).status_code, 405)
+        active = {**change, 'roundNumber': 1, 'text': '现行同段同批意见', 'expectedText': ''}
+        self.assertEqual(self.client.put(url + '?view=archive', json=active).status_code, 409)
+        self.assertEqual(self.client.put(url + '?view=current', json=active).status_code, 200)
+        written = self.client.put(url + '/export?view=current', json={'notes': [], 'rounds': [
+            {'number': 1, 'text': '现行整轮意见', 'expectedText': ''}]})
+        self.assertEqual(written.status_code, 200, written.text)
+        self.assertEqual(written.json()['notes']['round/1/P001/一采/R001']['text'], active['text'])
         self.assertEqual(path.read_bytes(), original)
-        self.assertFalse((self.project / work / '06-视频生产/视频修改意见.json').exists())
+
+    def test_current_plan_and_archive_pack_stay_separate_under_one_work(self):
+        key = self.works['F001']
+        archive = '归档/原制作'
+        scene = archive + '/09-剧集制作/EP001/06-阶段采用视频/01-一采/C001-场次'
+        self.write(scene + '/EP001-C001-P001-R001-一采.mp4', '中文原候选')
+        self.write(archive + '/09-剧集制作/EP001/03-分镜脚本/EP001-C001-场次分镜.md', '# 中文原分镜')
+        self.write(archive + '/09-剧集制作/EP001/03-分镜脚本/EP001-分镜索引.md',
+                   '| 场次 | 分段 | 分段计划时长（秒） |\n| --- | --- | --- |\n| EP001-C001 | EP001-C001-P001 | 6 |\n')
+        self.write(key + '/06-视频生产/历史执行入口.json', json.dumps({'archives': [archive]}))
+        archived_pack = archive + '/原第6轮剪映草稿.jypack'
+        self.write(archived_pack, 'original archive bytes')
+        board = key + '/04-分镜声音/其他资料/工作稿/英文分镜-v01.md'
+        plan = key + '/06-视频生产/生产任务-英文R001-v01.md'
+        assets = key + '/05-资产/其他资料/工作稿/英文资产-v01.md'
+        self.write(board, '# 英文现行分镜\n### SH001\n现行正文\n')
+        self.write(plan, '| 段号 | 场次 | 对应镜号 | 目标时长 |\n| --- | --- | --- | --- |\n'
+                   '| P001 | 整片 | SH001—SH002 | 6秒 |\n')
+        self.write('资源/图片/隔离参考.png', 'reference fixture')
+        self.write(assets, '| 编号 | 名称与状态 | 文件版本与使用依据 |\n| --- | --- | --- |\n'
+                   '| A01 | 英文参考 | [原素材](../../../../../资源/图片/隔离参考.png) |\n')
+        self.write(key + '/作品状态.md', '当前阶段与下一步：英文现行制作\n\n'
+                   '| 对象 | 当前版本/文件 |\n| --- | --- |\n'
+                   f'| 分镜与声音 | {board} |\n| 资产清单 | {assets} |\n| 生产任务 | {plan} |\n\n'
+                   '| 交付成果 | 类型 | 项目文件 | 版本 | 用途 |\n| --- | --- | --- | --- | --- |\n'
+                   f'| 原交接草稿 | 剪映草稿 | [原包]({archived_pack}) | 第6轮 | 中文原交接 |\n')
+        # Simulate a current plan before its first registered task. The old candidate must stay archived.
+        journal = self.project / key / '06-视频生产/执行记录/R001-一采/提交任务清单-装配结果.json'
+        journal.unlink()
+        route = self.api + '/works/F001/production-detail'
+        current = self.client.get(route + '?view=current')
+        self.assertEqual(current.status_code, 200, current.text)
+        current = current.json()
+        self.assertFalse(current.get('readOnly', False))
+        self.assertEqual(current['episodeRounds'], [])
+        item, = current['segments']['whole']
+        self.assertEqual((item['shotIds'], item['duration'], item['videos']), (['SH001', 'SH002'], 6, []))
+        self.assertEqual(current['storyboards']['whole']['key'], board)
+        self.assertEqual(current['productionTask']['key'], plan)
+        self.assertEqual(current['materials'][0]['key'], '资源/图片/隔离参考.png')
+        history = self.client.get(route + '?view=archive').json()
+        self.assertTrue(history['readOnly'])
+        self.assertNotIn('英文现行制作', history['workStatus']['summaryHtml'])
+        self.assertTrue(self.client.get(route).json()['readOnly'])
+        download_route = self.api + '/works/F001/production-downloads'
+        self.assertEqual(self.client.get(download_route + '?view=current').json()['workPackages'], [])
+        archived_downloads = self.client.get(download_route + '?view=archive')
+        self.assertEqual(archived_downloads.status_code, 200, archived_downloads.text)
+        package, = archived_downloads.json()['workPackages']
+        self.assertEqual(package['key'], archived_pack)
+        self.assertEqual(self.client.get(package['jypack']).content, b'original archive bytes')
 
     def test_round_notes_are_separate_and_unknown_combinations_are_rejected(self):
         for identity in self.works:

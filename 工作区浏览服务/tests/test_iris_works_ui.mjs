@@ -22,8 +22,8 @@ try {
   page.on('pageerror',error=>errors.push(String(error)));
   const base='/api/workspaces/commercial/projects/隔离多作品';
   const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片'},
-    {id:'F003',name:'历史片',key:'作品/F003-历史片',readOnly:true}];
-  const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}}};
+    {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true}];
+  const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
   saved.F001.notes['round/2/P001/一采/R002']={...saved.F001.notes['P001/一采/R001'],roundNumber:2,run:'R002'};
   const file=key=>({kind:'file',key,name:key.split('/').at(-1),url:base+'/files/'+key});
@@ -35,12 +35,14 @@ try {
    if(path===base)return route.fulfill({json:{name:'隔离多作品',works,files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'作品',name:'作品',children:[]}]}});
    if(path===base+'/document') {
     const key=url.searchParams.get('path');
+    if(key.endsWith('生产任务-英文R001.md'))return route.fulfill({json:{title:'现行英文生产任务',html:'<p>隔离英文生产段与输入</p>'}});
     return route.fulfill({json:{html:key==='README.md'?'<h1>项目</h1><h2>项目说明</h2><p>项目共用说明</p>':`<h1>正文</h1><h2>作品正文</h2><p>${key.includes('F002')?'品牌片专属正文':'产品片专属正文'}</p>`,url:base+'/files/'+key}});
    }
-   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key,readOnly:work.readOnly}))});
+   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key,hasArchive:work.hasArchive}))});
    const match=path.match(/\/works\/(F\d{3})(.*)$/);
    if(match) {
     const identity=match[1],suffix=match[2],work=works.find(item=>item.id===identity),key=work.key;
+    const archive=work.hasArchive && url.searchParams.get('view')==='archive';
     const script=key+'/03-创意脚本/制作脚本-v01.md',packageKey=key+'/07-返修交接/草稿.jianying.json';
     if(suffix==='') {
      if(identity==='F002'&&failWork){failWork=false;return route.fulfill({status:503,json:{detail:'隔离作品读取失败'}})}
@@ -52,7 +54,7 @@ try {
      const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
-     const whole=work.readOnly?'C001':'whole';
+     const whole=archive?'C001':'whole';
      const scenes=identity==='F002'?['S001','S002']:[whole];
      const members=identity==='F002'?{whole:['P001','P002'],S001:['P001'],S002:['P002']}:{[whole]:['P001','P002']};
      const entries=Object.entries(members);
@@ -62,7 +64,8 @@ try {
        kind:'image',name:group+'图',key:key+'/'+group+'.svg',url:'/component-samples/image.svg',
        materialGroup:group,materialReview:review,approvalHtml:'<p>本版本审阅依据</p>',
      })):[];
-     return route.fulfill({json:{kind:'group',name:identity,title:work.name,readOnly:work.readOnly,scenes:Object.keys(members),
+     return route.fulfill({json:{kind:'group',name:identity,title:work.name,readOnly:archive,scenes:Object.keys(members),
+       productionTask:work.hasArchive && !archive ? file(key+'/06-视频生产/生产任务-英文R001.md') : null,
        episodeRounds:[{number:1,scenes:[whole]},{number:2,scenes}],
        sceneRounds:Object.fromEntries(entries.map(([scene,ids])=>[scene,[1,2].filter(n=>(n===1?[whole]:scenes).includes(scene)).map(n=>({...round(n),segments:round(n).segments.filter(item=>ids.includes(item.id))}))])),
        segments:Object.fromEntries(entries.map(([scene,ids])=>[scene,ids.map(segment)])),script:source(2),storyboards:{[whole]:source(2)},
@@ -74,22 +77,25 @@ try {
      const download=base+'/jianying-download?path='+encodeURIComponent(packageKey);
      const stagePackage={name:'隔离交接包',count:2,url:download+'&format=zip'};
      const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:stage==='一采'?{...stagePackage,packages:[stagePackage],files:[]}:{count:0,url:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
-     const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:[];
+     const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:archive?
+       [{key:'归档/原剪映草稿.jypack',label:'第6轮 · 中文原交接',version:'第6轮',purpose:'隔离历史',rounds:[],archived:true,jypack:base+'/files/归档/原剪映草稿.jypack?download=1',zip:null}]:[];
      return route.fulfill({json:{...stages,workPackages}});
     }
     if(suffix==='/production-notes/export') {
+     if(work.hasArchive)assert.equal(url.searchParams.get('view'),'current');
      const changes=request.postDataJSON();writes.push(identity+'-export');
      for(const note of changes.notes)saved[identity].notes[`round/${note.roundNumber}/${note.segment}/${note.stage}/${note.run}`]={...note,updatedAt:'2026-11-06'};
      for(const note of changes.rounds)saved[identity].rounds[note.number]={...note,updatedAt:'2026-11-06'};
      return route.fulfill({json:saved[identity]});
     }
     if(suffix==='/production')return route.fulfill({json:{issues:[],segments:[{id:'P001',duration:3,scriptHtml:'',videos:[{key:identity+'/P001.mp4',url:base+'/files/'+identity+'.webm',run:'R001',stage:'一采',approved:false,adoptionKnown:false,candidateNumber:1,fileRevision:identity,deliveryStatus:'已取回',context:{scriptHtml:'<p>'+identity+'实际镜头</p>',shots:[],prompts:{english:identity+' actual prompt',chinese:identity+'中文'},references:{common:[],segment:[]},issues:[]}}]}],batches:[{id:'R001',name:'R001-'+work.name,segments:[{id:'P001',stage:'一采',key:identity+'/P001.mp4'}]}]}});
-    if(suffix==='/production-notes/archive' && work.readOnly && request.method()==='GET') {
+    if(suffix==='/production-notes/archive' && work.hasArchive && request.method()==='GET') {
      const note={segment:'P001',stage:'一采',run:'R001',roundNumber:1,text:'原归档分段意见',fileRevision:'old',updatedAt:'2026-11-06'};
      return route.fulfill({json:{episode:'EP001',scenes:{C001:{notes:{'round/1/P001/一采/R001':note},rounds:{}}},
        rounds:{1:{number:1,text:'原归档总体意见',updatedAt:'2026-11-06'}}}});
     }
-    if(suffix==='/production-notes' && !work.readOnly) {
+    if(suffix==='/production-notes' && !archive) {
+     if(work.hasArchive)assert.equal(url.searchParams.get('view'),'current');
      if(request.method()==='GET')return route.fulfill({json:saved[identity]});
      writes.push(identity);
      if(failSave){failSave=false;return route.fulfill({status:503,json:{detail:'隔离保存失败'}})}
@@ -215,7 +221,24 @@ try {
   assert.equal(await dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true}).inputValue(),'品牌片整片意见');
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await choose('F003');
+  const editionTabs=page.getByRole('navigation',{name:'作品制作入口',exact:true});
+  const currentEdition=editionTabs.getByRole('button',{name:'现行制作',exact:true});
+  const archivedEdition=editionTabs.getByRole('button',{name:'历史归档',exact:true});
+  assert.equal(await currentEdition.getAttribute('aria-current'),'page');
+  await page.getByRole('button',{name:'查看生产任务',exact:true}).click();
+  await dialog.getByText('隔离英文生产段与输入',{exact:true}).waitFor();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.getByRole('button',{name:'修改意见',exact:true}).click();
+  await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
+  await dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true}).fill('同片现行总体意见');
+  await dialog.getByRole('button',{name:'保存',exact:true}).click();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  assert.equal(saved.F003.rounds['2'].text,'同片现行总体意见');
   const writesBeforeArchive=writes.length;
+  await archivedEdition.click();
+  await page.getByRole('button',{name:'下载归档剪映包',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'查看生产任务',exact:true}).count(),0);
+  assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).getAttribute('data-value'),'F003');
   await page.getByRole('button',{name:'查看历史意见',exact:true}).click();
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).inputValue(),'原归档分段意见');
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).getAttribute('readonly'),'');
@@ -223,6 +246,9 @@ try {
   assert.equal(await dialog.getByRole('button',{name:'保存',exact:true}).count(),0);
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(writes.length,writesBeforeArchive);
+  await currentEdition.click();
+  await page.getByRole('button',{name:'查看生产任务',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'下载归档剪映包',exact:true}).count(),0);
   await choose('F001');
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const continuous=page.getByRole('checkbox',{name:'连续播放',exact:true});

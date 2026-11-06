@@ -47,7 +47,9 @@ export async function prepareNotesExport(url: string) {
   return data;
 }
 export async function saveNotesExport(url: string, changes: { notes: (NoteInput & { expectedText: string; expectedDialogueEdits?: DialogueEdit[] })[]; rounds: { number: number; text: string; expectedText: string }[] }) {
-  const response = await fetch(url + '/export', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
+  const endpoint = new URL(url, window.location.origin);
+  endpoint.pathname += '/export';
+  const response = await fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
   if (!response.ok) {
     const error = await response.json();
     throw new Error(typeof error.detail === 'string' ? error.detail : `保存失败（${response.status}）`);

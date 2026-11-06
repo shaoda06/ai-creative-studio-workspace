@@ -106,6 +106,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const handoffs = downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!)) || [];
   const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];
   const workStatus = workMode ? current?.workStatus : undefined;
+  const productionTask = workMode ? current?.productionTask : undefined;
   const continuous = !!playback && playback.episode === current?.name;
   const nextScene = scenes[scenes.indexOf(selectedScene) + 1];
   const nextRoundNumber = continuous ? playback!.rounds[nextScene] : undefined;
@@ -206,6 +207,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         items={[...selectableRounds].reverse().map(item => ({ value: String(item.number), label: `第${item.number}轮` }))} />
     </div>}
       <PointerTooltip text={script ? undefined : `${contentLabel}尚未建立`}><button className="link episode-script-link" disabled={!script} onClick={() => preview(script!)}>查看{contentLabel}</button></PointerTooltip>
+      {productionTask && <button className="link episode-script-link" onClick={() => preview(productionTask)}>查看生产任务</button>}
       </div>
     </div>
     {issues.length > 0 ? <div className="notice episode-data-issues" role="alert">

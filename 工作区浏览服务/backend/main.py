@@ -985,10 +985,10 @@ def workspace_production_works(name: str, request: Request):
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-detail')
-def workspace_production_detail(name: str, work: str, request: Request):
+def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None):
     space = request.state.workspace_space
     try:
-        return production.workbench(space).detail(space.projects, name, space.api, work)
+        return production.workbench(space).detail(space.projects, name, space.api, work, view)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -996,10 +996,11 @@ def workspace_production_detail(name: str, work: str, request: Request):
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-downloads')
-def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole'):
+def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole',
+                                   view: Literal['current', 'archive'] | None = None):
     space = request.state.workspace_space
     try:
-        return production.workbench(space).downloads(space.projects, name, space.api, work, scene)
+        return production.workbench(space).downloads(space.projects, name, space.api, work, scene, view)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -1058,17 +1059,17 @@ def workspace_production_context(name: str, source: str, identity: str, request:
         raise HTTPException(409, '历史生成资料读取失败：' + str(error)) from error
 
 
-def update_production_notes(name, request, changes, work=None):
+def update_production_notes(name, request, changes, work=None, view=None):
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     space = request.state.workspace_space
     try:
         business = production.adapter(space)
         project = space.projects.project(name, writable=True)
-        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work)
+        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work, legacy_fallback=work is None)
         identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
         if work:
-            production.workbench(space).validate_notes(project, work, identities, changes)
+            production.workbench(space).validate_notes(project, work, identities, changes, view)
         elif changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
             raise ValueError('意见必须对应项目中已有的分段与候选版本')
         return production_notes.save(business.notes_path(project, work), changes)
@@ -1082,14 +1083,16 @@ def update_production_notes(name, request, changes, work=None):
 
 @spaces_router.put('/projects/{name}/production-notes')
 @spaces_router.put('/projects/{name}/works/{work}/production-notes')
-def save_workspace_production_note(name: str, request: Request, value: NoteChange, work: str | None = None) -> RevisionNote:
-    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[]), work).notes[value.key()]
+def save_workspace_production_note(name: str, request: Request, value: NoteChange, work: str | None = None,
+                                   view: Literal['current', 'archive'] | None = None) -> RevisionNote:
+    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[]), work, view).notes[value.key()]
 
 
 @spaces_router.put('/projects/{name}/production-notes/export')
 @spaces_router.put('/projects/{name}/works/{work}/production-notes/export')
-def save_workspace_production_export(name: str, request: Request, value: ExportChanges, work: str | None = None) -> ReviewNotes:
-    return update_production_notes(name, request, value, work)
+def save_workspace_production_export(name: str, request: Request, value: ExportChanges, work: str | None = None,
+                                     view: Literal['current', 'archive'] | None = None) -> ReviewNotes:
+    return update_production_notes(name, request, value, work, view)
 
 
 @spaces_router.get('/projects/{name}/document')

@@ -236,7 +236,9 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       tab={segmentTab} onTabChange={onSegmentTabChange}
       readOnly={scope.readOnly}
       plannedScript={roundEntry && (viewingRoundRevision || (workMode && !chosen.key)) ? { html: roundEntry.scriptHtml, url: roundEntry.scriptUrl, shotIds: roundEntry.shotIds,
-        label: `第${productionRound!.number}轮保存的分镜${productionRound!.storyboard ? `（${productionRound!.storyboard.version}）` : ''}` } : currentSegment.planned ? { html: currentSegment.scriptHtml, url: currentSegment.scriptUrl, shotIds: currentSegment.shotIds, label: '当前分段计划' } : undefined}
+        label: `第${productionRound!.number}轮保存的分镜${productionRound!.storyboard ? `（${productionRound!.storyboard.version}）` : ''}` }
+        : currentSegment.planned || (workMode && !productionRound && currentSegment.scriptUrl)
+          ? { html: currentSegment.scriptHtml, url: currentSegment.scriptUrl, shotIds: currentSegment.shotIds, label: '当前分段计划' } : undefined}
       segmentNavigation={navigation(true)}
       wideVideo={wideVideo} onToggleWide={onToggleWide} repeatControl={repeatControl}
       continuous={continuous}

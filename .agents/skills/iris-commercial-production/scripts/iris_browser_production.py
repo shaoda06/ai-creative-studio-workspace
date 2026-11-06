@@ -34,7 +34,7 @@ def file_url(api, key):
     return api + '/files/' + quote(key, safe='/')
 
 
-def production_data(project, api, work=None):
+def production_data(project, api, work=None, *, legacy_fallback=True):
     section = production_section(project, work)
     segments, batches, contexts, bindings = {}, [], {}, {}
     if not section:
@@ -104,7 +104,7 @@ def production_data(project, api, work=None):
         if batch_segments:
             batches.append({'id': batch_key, 'name': batch_name, 'segments': batch_segments,
                             'url': file_url(api, batch_key)})
-    if not segments:
+    if not segments and legacy_fallback:
         return legacy_production(project, api, work)
     return {'segments': sorted(segments.values(), key=lambda item: item['id']), 'batches': batches,
             'issues': ['候选按实际执行记录展示；网页不根据任务完成或文件存在推断业务采用。']}
