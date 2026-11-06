@@ -61,8 +61,8 @@ def initialize_workspace(value):
 def named_folder(parent, identity, title, prefix):
     if not re.fullmatch(prefix + r'[0-9]{3,}', identity) or int(identity[len(prefix):]) < 1:
         raise ValueError('编号应为 ' + prefix + '001 等正整数编号')
-    if not title.strip() or title != title.strip() or any(c in title for c in '/\\\n\r\0'):
-        raise ValueError('名称不能为空、带首尾空白或路径分隔符')
+    if not title.strip() or title != title.strip() or any(c in title for c in '/\\\n\r\0|'):
+        raise ValueError('名称不能为空、带首尾空白、路径分隔符或表格竖线')
     path = parent / (identity + '-' + title)
     if path.resolve().parent != parent.resolve():
         raise ValueError('目录越出所属资料范围')
@@ -101,7 +101,7 @@ def initialize_asset(value, kind, identity, title):
     with resources.index_lock(owner):
         asset = named_folder(owner / directory, identity, title, prefix)
         skill = 'chloe-selection' if kind == '商品' else 'chloe-assets'
-        template = '商品说明模板.md' if kind == '商品' else '资产说明模板.md'
+        template = filename.replace('.md', '模板.md')
         write_template(asset / filename, skill, template, identity=identity, title=title, kind=kind)
     return asset
 
