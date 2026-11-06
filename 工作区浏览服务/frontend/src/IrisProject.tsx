@@ -32,6 +32,7 @@ const deliveryTabs = [
 
 export interface IrisPresentation {
   primary: Record<string, string[]>;
+  overviewHiddenSections?: Record<string, string[]>;
   adopted: { title: string; version: string; media: FileItem }[];
   brief?: { sources: FileItem[]; archived: FileItem[] };
   stageArchives?: Record<string, FileItem[]>;
@@ -93,7 +94,7 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
       ? <Result page loading={work.isPending} error={work.error} retry={work.refetch} retrying={work.isFetching} />
       : <section className="panel"><p className="muted">本项目尚未建立作品。</p></section>)}
     {(!workSection || legacy || section === 'production' || work.data) && <div key={`${section}/${section === 'production' ? '' : currentWork?.id || ''}`} className="iris-project-section">
-      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} />}
+      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} hiddenSections={projectPresentation?.overviewHiddenSections} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'assets' && <IrisAssets baseUrl={baseUrl} files={files} presentation={presentation} />}
@@ -119,8 +120,16 @@ function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
 }
 
-function overviewBody(document: RecordData, path: string): string {
+function overviewBody(document: RecordData, path: string, hiddenSections: string[] = []): string {
   const body = new DOMParser().parseFromString(withoutLeadingTitle(document).html, 'text/html').body;
+  if (hiddenSections.length) {
+    let hide = false;
+    for (const element of Array.from(body.children)) {
+      if (element.tagName === 'H1') hide = false;
+      if (element.tagName === 'H2') hide = hiddenSections.includes(element.textContent?.trim() ?? '');
+      if (hide) element.remove();
+    }
+  }
   // Two source files can contain headings with the same name.
   body.querySelectorAll('h2[id],h3[id],h4[id],h5[id],h6[id]').forEach(heading => {
     heading.id = `overview-${path}-${heading.id}`;
@@ -128,13 +137,13 @@ function overviewBody(document: RecordData, path: string): string {
   return body.innerHTML;
 }
 
-function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
+function IrisOverview({ baseUrl, files, hiddenSections }: { baseUrl: string; files: FileItem[]; hiddenSections?: Record<string, string[]> }) {
   const rootFiles = files.filter(item => item.kind !== 'group');
   const available = overviewDocuments.filter(path => rootFiles.some(file => file.kind === 'file' && file.key === path));
   const queries = useQueries({ queries: available.map(path => ({
     queryKey: ['document', baseUrl, path, 0],
     queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(path)}`),
-    select: (value: RecordData) => overviewBody(value, path),
+    select: (value: RecordData) => overviewBody(value, path, hiddenSections?.[path]),
   })) });
   const loaded = available.flatMap((path, index) => queries[index].data === undefined ? [] : [{ path, html: queries[index].data }]);
   const failed = queries.filter(query => query.isError);

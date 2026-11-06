@@ -1,4 +1,5 @@
 """Select the current Iris documents and adopted media for the project page."""
+import json
 from pathlib import Path
 import re
 from urllib.parse import quote, unquote, urlsplit
@@ -205,6 +206,21 @@ def delivery_overview(projects, project, api, root, status_text):
     }
 
 
+def overview_hidden_sections(projects, project):
+    try:
+        path = projects.file(project, '99-综合资料/项目概况展示.json')
+    except FileNotFoundError:
+        return {}
+    config = json.loads(path.read_text('utf-8-sig'))
+    if not isinstance(config, dict) or any(
+        name not in ('README.md', '项目状态.md') or not isinstance(sections, list)
+        or any(not isinstance(section, str) or not section.strip() for section in sections)
+        for name, sections in config.items()
+    ):
+        raise ValueError('项目概况展示.json 须按来源文档填写要隐藏的二级标题列表')
+    return config
+
+
 def presentation(projects, project, api, files, work_directory=None, shared_files=None, archive_files=None):
     root = projects.project(project)
     status = work_directory / '作品状态.md' if work_directory else root / '项目状态.md'
@@ -246,6 +262,7 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
             if item['kind'] == 'file' and re.fullmatch(rf'{asset_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)
         ]
     return {
+        'overviewHiddenSections': overview_hidden_sections(projects, project) if work_directory is None else {},
         'primary': primary,
         'adopted': [{k: item[k] for k in ('title', 'version', 'media')} for item in review if item['group'] == 'adopted'],
         'assetReview': review,

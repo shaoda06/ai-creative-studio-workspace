@@ -41,6 +41,20 @@ class WorkspaceTests(HttpTestCase):
         self.addCleanup(self.client.close)
         self.api = '/api/workspaces/commercial'
 
+    def test_iris_overview_config_is_optional_and_leaves_source_readable(self):
+        self.spaces.get('commercial').view = 'iris-commercial'
+        root = self.other / 'projects/同名项目'
+        (root / 'README.md').write_text('# 说明\n\n## 附件入口\n\n原文链接。', encoding='utf-8')
+        url = self.api + '/projects/同名项目'
+        self.assertEqual(self.client.get(url).json()['irisPresentation']['overviewHiddenSections'], {})
+
+        config = root / '99-综合资料/项目概况展示.json'
+        config.parent.mkdir()
+        config.write_text(json.dumps({'README.md': ['附件入口']}, ensure_ascii=False), encoding='utf-8')
+        self.assertEqual(self.client.get(url).json()['irisPresentation']['overviewHiddenSections'],
+                         {'README.md': ['附件入口']})
+        self.assertIn('原文链接。', self.client.get(url + '/document', params={'path': 'README.md'}).json()['html'])
+
     def test_iris_projects_prioritize_explicit_main_versions_and_adopted_media(self):
         self.spaces.get('commercial').view = 'iris-commercial'
         root = self.other / 'projects/同名项目'

@@ -43,7 +43,7 @@ try{
    const review='08-完单复盘/项目复盘.md';
    const packageUrl=base+'/jianying-download?path=07-返修交接/剪辑.jianying.json&format=jypack';
    if(path===base)return route.fulfill({json:{name:'隔离样片',productionSection:'06-视频生产',
-   irisPresentation:{primary:{
+   irisPresentation:{overviewHiddenSections:historical?undefined:{'README.md':['资料入口','进度入口']},primary:{
      '01-客户资料':historical?[]:[requirement],
      '02-参考分析':historical||requirementsOnly?[]:[brief],
      '03-创意脚本':historical||requirementsOnly?[]:[script],
@@ -78,6 +78,7 @@ try{
      failStoryboard=false;return route.fulfill({status:503,json:{detail:'隔离分镜读取失败'}});
     }
     const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2 id="details">项目专用约定</h2><p>这里是项目说明正文。</p>'
+        + '<h2>资料入口</h2><p>隔离资料链接。</p><h3>附属条目</h3><p>隔离附属正文。</p><h2>进度入口</h2><p>隔离进度链接。</p>'
       : key==='项目状态.md' ? '<h1>项目状态</h1><h2 id="details">当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
         : key===brief ? '<h1>简报封面</h1><h2>制作简报正文</h2><p>这里是现行制作简报。</p>'
           : key===requirement ? '<h1>需求记录</h1><h2>需求正文</h2><p>这里是现行需求。</p>'
@@ -129,6 +130,7 @@ try{
   await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await overview.getByText('这里是项目说明正文。',{exact:true}).waitFor();
   assert.deepEqual(await overview.getByRole('heading').allTextContents(),['项目概况','项目专用约定','当前决定']);
+  assert.equal(await overview.getByText(/隔离(资料链接|附属正文|进度链接)/).count(),0);
   const currentDecision=overview.getByRole('heading',{name:'当前决定',exact:true});
   assert.equal(await currentDecision.evaluate(node=>node.previousElementSibling?.textContent),'这里是项目说明正文。');
   assert.equal(await page.getByRole('dialog').count(),0);
@@ -268,6 +270,7 @@ try{
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
   await overview.getByText('已交付并归档',{exact:true}).waitFor();
+  await overview.getByRole('heading',{name:'资料入口',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   await page.getByText('查看历史需求与参考',{exact:true}).click();
   await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
