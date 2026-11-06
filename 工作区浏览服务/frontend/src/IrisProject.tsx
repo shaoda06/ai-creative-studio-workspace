@@ -115,6 +115,7 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
 }
 
 const overviewDocuments = ['README.md', '项目状态.md'];
+const overviewLocalSections = ['目录与资料入口', '进度与版本入口', '接续要求'];
 
 function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
@@ -122,11 +123,12 @@ function withoutLeadingTitle(document: RecordData): RecordData {
 
 function overviewBody(document: RecordData, path: string, hiddenSections: string[] = []): string {
   const body = new DOMParser().parseFromString(withoutLeadingTitle(document).html, 'text/html').body;
-  if (hiddenSections.length) {
+  const hidden = new Set(path === 'README.md' ? [...overviewLocalSections, ...hiddenSections] : hiddenSections);
+  if (hidden.size) {
     let hide = false;
     for (const element of Array.from(body.children)) {
       if (element.tagName === 'H1') hide = false;
-      if (element.tagName === 'H2') hide = hiddenSections.includes(element.textContent?.trim() ?? '');
+      if (element.tagName === 'H2') hide = hidden.has(element.textContent?.trim() ?? '');
       if (hide) element.remove();
     }
   }
