@@ -21,7 +21,7 @@ import { workSceneLabel } from '../episodeRevisionNotes';
 import { useRevisionNotesExport } from './RevisionNotes';
 import { formatProductionDuration, sceneDurationEntries, useEpisodeDurations } from './useEpisodeDurations';
 import { FloatingMessage } from './Notifications';
-import type { Downloads } from './SceneDownloads';
+import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
@@ -167,8 +167,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       <PointerTooltip text={sharedSelected ? "按当前轮次的选中场次统计；* 表示含计划时长" : "按当前轮次统计；* 表示含计划时长"}><span className="muted" aria-label={`${unitLabel}时长`}>{sharedSelected ? current!.name : unitLabel}时长：{formatProductionDuration(sharedSelected ? durations.scenes[selectedScene] : durations.total)}</span></PointerTooltip>
       {workMode && handoff && <div className="episode-heading-actions" role="group" aria-label="整片交接下载">
         {handoffs.length > 1 ? <TabSelect label="选择交接版本" selected={handoff.key} onChange={setHandoffKey}
-          items={handoffs.map(item => ({ value: item.key, label: item.label }))} />
-          : <span className="muted">{handoff.label}{handoff.count ? `（${handoff.count}段）` : ''}</span>}
+          items={handoffs.map(item => ({ value: item.key, label: workPackageLabel(item) }))} />
+          : <span className="muted">{workPackageLabel(handoff)}{handoff.count ? `（${handoff.count}段）` : ''}</span>}
         {handoff.jypack && <DownloadButton key={handoff.jypack} url={handoff.jypack} pack={!handoff.archived}
           label={handoff.archived ? '下载归档剪映包' : '剪映草稿包'} title={[handoff.version, handoff.purpose].filter(Boolean).join(' · ')} />}
         {handoff.zip && <DownloadButton key={handoff.zip} url={handoff.zip} pack

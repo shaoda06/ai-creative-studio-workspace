@@ -49,7 +49,7 @@ try {
     if(suffix==='/production-detail') {
      const source=n=>({kind:'document',name:'分镜v0'+n+'.md',key:key+'/分镜-v0'+n+'.md',version:'v0'+n,doc:{html:'<h2>已保存分镜v0'+n+'</h2><p>'+identity+'历史来源</p>'}});
      const shot=(id,duration)=>({id,duration,html:'<h4>'+id+'</h4><p>隔离镜头 '+id+'</p>'});
-     const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:false,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
+     const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
      const whole=work.readOnly?'C001':'whole';
@@ -72,7 +72,8 @@ try {
     }
     if(suffix==='/production-downloads') {
      const download=base+'/jianying-download?path='+encodeURIComponent(packageKey);
-     const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:{count:stage==='一采'?2:0,url:stage==='一采'?download:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
+     const stagePackage={name:'隔离交接包',count:2,url:download+'&format=zip'};
+     const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:stage==='一采'?{...stagePackage,packages:[stagePackage],files:[]}:{count:0,url:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
      const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:[];
      return route.fulfill({json:{...stages,workPackages}});
     }
@@ -241,6 +242,7 @@ try {
   await page.getByRole('checkbox',{name:'重复播放',exact:true}).check();
   assert.equal(await continuous.isChecked(),false);
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
+  await page.getByText('未关联整片轮次 · 隔离交接包',{exact:true}).waitFor();
   const before=downloads.length;
   assert.equal(before,1);
   const pack=page.waitForEvent('download');
@@ -250,7 +252,7 @@ try {
   await choose('F002');
   await page.getByRole('region',{name:'作品制作状态',exact:true}).getByText('剪映草稿已交接',{exact:true}).waitFor();
   const handoff=page.getByRole('group',{name:'整片交接下载',exact:true});
-  await handoff.getByText('R002 剪映草稿包（2段）',{exact:true}).waitFor();
+  await handoff.getByText('第2轮 · R002 剪映草稿包（2段）',{exact:true}).waitFor();
   assert.equal(downloads.length,before+1);
   for(const [label,ext] of [['剪映草稿包','jypack'],['本片 ZIP 下载','zip']]){
    const clicked=page.waitForEvent('download');
@@ -262,9 +264,15 @@ try {
   for(const group of ['待审核','待修改','当前采用','历史素材'])await page.getByText(group+'（1）',{exact:true}).waitFor();
   await page.getByRole('button',{name:'查看资产清单',exact:true}).click();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  await firstScene.click();
+  await page.getByRole('img',{name:'P001 一采：已采纳（R002）',exact:true}).waitFor();
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:/^第1轮/}).click();
   assert.equal(await handoff.count(),0);
+  await page.getByRole('button',{name:'资源下载',exact:true}).click();
+  await page.getByRole('region',{name:'一采资源下载',exact:true}).getByText('第2轮 · R002 剪映草稿包',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'1');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:`${out}/${width}-works.png`});
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();

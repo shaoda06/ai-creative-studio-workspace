@@ -5,7 +5,7 @@ import json
 from math import isclose
 from pathlib import Path
 import re
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlsplit
 
 from backend.parsers import documents
 from backend.parsers.documents import cells
@@ -32,16 +32,38 @@ def document(projects, name, api, key, version=''):
 def work_status(projects, name, space_api, project, root):
     path = root / '作品状态.md'
     if not path.is_file():
-        return None, {'items': []}
+        return None, {'items': []}, None
     path = projects.file(name, path.relative_to(project).as_posix())
     api = space_api + '/projects/' + quote(name, safe='')
     ref = document_ref(project, api, path)
     text = path.read_text('utf-8-sig')
     delivery = delivery_overview(projects, name, space_api, project, text)
     summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
-    return {'label': delivery['status'], 'summaryHtml': production.legacy_links(
+    stage = re.search(r'(?m)^(?:-\s*)?制作状态[：:][ \t]*([^\n]+)', text)
+    adoption = next((row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')
+                     if row['对象'] == '视频采用记录'), None)
+    return {'label': delivery['status'] or (stage[1].strip() if stage else ''), 'summaryHtml': production.legacy_links(
         documents.markdown(summary[1], ref['key']), api + '/files/'
-    ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery
+    ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery, adoption
+
+
+def adopted_segments(projects, name, project, root, record):
+    path = projects.file(name, record)
+    if path.suffix != '.md' or not path.is_relative_to(root / '07-返修交接'):
+        raise ValueError('视频采用记录须位于本作品的返修交接目录')
+    section = re.search(r'(?ms)^## 当前采用组合[ \t]*\n(.*?)(?=^#{1,2} |\Z)', path.read_text('utf-8-sig'))
+    if not section:
+        return set()
+    adopted = set()
+    for row in table(section[1], '段号', '采用版本及文件'):
+        for _, link in entries(row['采用版本及文件']):
+            href = urlsplit(link)
+            relative = Path(unquote(href.path))
+            if href.scheme or href.netloc or relative.is_absolute():
+                raise ValueError('采用版本须引用本项目的媒体文件')
+            key = production.local_key(project, (path.parent / relative).resolve())
+            adopted.add((row['段号'], key))
+    return adopted
 
 
 def segment_text(text, identity):
@@ -62,11 +84,11 @@ def segment_text(text, identity):
 
 
 def segment_rows(text):
-    rows = list(table(text, '生成段'))
-    field = '生成段' if rows else '段号'
-    if not rows:
-        rows = table(text, field)
-    return {row[field]: row for row in rows if re.fullmatch(r'P\d{3,}', row[field])}
+    for field in ('生成段', '段号', '生产段'):
+        rows = {row[field]: row for row in table(text, field) if re.fullmatch(r'P\d{3,}', row[field])}
+        if rows:
+            return rows
+    return {}
 
 
 def scene_segments(identities, rows):
@@ -86,7 +108,7 @@ def scene_segments(identities, rows):
 
 
 def listed_shots(row):
-    value = row.get('对应镜号') or row.get('所含原镜号', '')
+    value = row.get('对应镜号') or row.get('所含原镜号') or row.get('源摄影镜头', '')
     ids = re.split(r'[、,，\s]+', value.strip())
     return ids if all(re.fullmatch(r'SH\d{3,}', identity) for identity in ids) and len(set(ids)) == len(ids) else []
 
@@ -97,28 +119,37 @@ def apply_plan_timing(context, row, duration, business_ids):
         return
     ids = listed_shots(row)
     declared = row.get('段内Shot及时间', '')
-    if not declared or not ids or len(ids) != len(shots) or (business_ids and ids != business_ids):
+    if not ids or len(ids) != len(shots) or (business_ids and ids != business_ids):
         return
-    spans = []
-    end = 0.0
-    for index, part in enumerate(re.split(r'[；;]', declared), 1):
-        match = re.fullmatch(r'\s*Shot\s+(\d+)\s*[:：]\s*(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*秒\s*', part)
-        if not match or int(match[1]) != index:
+    if declared:
+        spans = []
+        end = 0.0
+        for index, part in enumerate(re.split(r'[；;]', declared), 1):
+            match = re.fullmatch(r'\s*Shot\s+(\d+)\s*[:：]\s*(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*秒\s*', part)
+            if not match or int(match[1]) != index:
+                return
+            start, stop = map(float, match.groups()[1:])
+            if not isclose(start, end, abs_tol=1e-6) or stop <= start:
+                return
+            spans.append((start, stop - start))
+            end = stop
+        request_length = row.get('请求时长') or row.get('目标时长') or row.get('目标段长', '')
+        requested = re.fullmatch(r'(\d+(?:\.\d+)?)\s*秒', request_length)
+        plan_duration = float(requested[1]) if requested else duration
+        if len(spans) != len(shots) or not isclose(end, plan_duration, abs_tol=1e-6) or spans[-1][0] >= duration:
             return
-        start, stop = map(float, match.groups()[1:])
-        if not isclose(start, end, abs_tol=1e-6) or stop <= start:
-            return
-        spans.append((start, stop - start))
-        end = stop
-    if len(spans) != len(shots) or not isclose(end, duration, abs_tol=1e-6):
+    elif len(ids) == 1 and duration > 0:
+        # An explicitly mapped single shot starts at the beginning of the segment.
+        spans = [(0, duration)]
+    else:
         return
     for index, (shot, (start, planned)) in enumerate(zip(shots, spans), 1):
         if shot['id'] != f'SH{index:03d}' or (shot['duration'] is not None and (
                 not isclose(shot['duration'], planned, abs_tol=1e-6)
                 or not isclose(shot['start'], start, abs_tol=1e-6))):
             return
-    for shot, identity, (start, planned) in zip(shots, ids, spans):
-        shot.update(id=identity, start=start, duration=planned)
+    for shot, (start, planned) in zip(shots, spans):
+        shot.update(start=start, duration=planned)
     context['shotTimingSource'] = 'plan'
 
 
@@ -209,7 +240,7 @@ def detail(projects, name, space_api, work):
     root = work_root(project, work)
     api = space_api + '/projects/' + quote(name, safe='')
     entry = next(item for item in discover_works(project) if item['id'] == work)
-    status, _ = work_status(projects, name, space_api, project, root)
+    status, _, adoption = work_status(projects, name, space_api, project, root)
     archived = archive_episode(project, work)
     if archived:
         archive, _ = archived
@@ -222,6 +253,12 @@ def detail(projects, name, space_api, work):
         return {**legacy, 'title': entry['name'], 'workStatus': status}
     data = production.production_data(project, api, work)
     segments = data['segments']
+    if adoption:
+        adopted = adopted_segments(projects, name, project, root, adoption)
+        for item in segments:
+            for video in item['videos']:
+                if (item['id'], video['key']) in adopted:
+                    video.update(approved=True, adoptionKnown=True)
     by_id = {item['id']: item for item in segments}
     rounds = []
     groups_by_round = {}
@@ -286,6 +323,7 @@ def detail(projects, name, space_api, work):
                     elif not business_shots and len(shot_ids) == len(context['shots']) and all(
                             shot['id'] == f'SH{index:03d}' for index, shot in enumerate(context['shots'], 1)):
                         for shot, shot_id in zip(context['shots'], shot_ids):
+                            shot['html'] = shot['html'].replace(f"<h4>{shot['id']}</h4>", f'<h4>{shot_id}</h4>', 1)
                             shot['id'] = shot_id
                     dialogues = []
                     for shot in business_shots:
@@ -466,7 +504,7 @@ def downloads(projects, name, space_api, work, scene='whole'):
                 resource['count'] += 1
     candidates = {video['key']: video for items in values.get('segments', {}).values() for item in items for video in item['videos']}
     # Only existing explicit delivery manifests enable packaging; opening the tab does not pack.
-    _, delivery = work_status(projects, name, space_api, project, work_root(project, work))
+    _, delivery, _ = work_status(projects, name, space_api, project, work_root(project, work))
     work_packages = []
     covered = {}
     for round_ in values.get('episodeRounds', []):

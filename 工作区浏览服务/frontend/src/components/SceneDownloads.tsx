@@ -7,13 +7,18 @@ import { Result } from '../components';
 import { DownloadButton } from './DownloadButton';
 import './SceneDownloads.css';
 
-type Resource = { packages?: { name: string; count: number; url: string }[]; count: number; url: string | null; files: { name: string; url: string }[] };
+type StagePackage = { name: string; count: number; url: string };
+type Resource = { packages?: StagePackage[]; count: number; url: string | null; files: { name: string; url: string }[] };
 interface WorkPackage {
   key: string; label: string; version: string; purpose: string; rounds: number[];
   count?: number; archived?: boolean; jypack: string | null; zip: string | null;
 }
 export type Downloads = Record<'后处理' | '二采' | '一采', Record<'videos' | 'director' | 'canvas', Resource>>
   & { workPackages?: WorkPackage[] };
+
+export function workPackageLabel({ label, rounds }: WorkPackage) {
+  return rounds.length ? `${rounds.map(number => `第${number}轮`).join('、')} · ${label}` : label;
+}
 
 function OriginalDownloads({ resource, label, generated = false }: { resource: Resource; label: string; generated?: boolean }) {
   return resource.files.length
@@ -28,6 +33,11 @@ export function SceneDownloads({ project, episode, scene, revision }: { project:
   const videoLabel = workMode ? '交接视频下载' : '已采用视频下载';
   const downloads = useQuery({ queryKey: ['episode-downloads', access.namespace(project), episode, scene, revision],
     queryFn: () => get<Downloads>(access.downloads(project, episode, scene)), placeholderData: keepPreviousData });
+  const packageLabel = (item: StagePackage) => {
+    if (!workMode) return item.name;
+    const handoff = downloads.data?.workPackages?.find(pkg => pkg.zip === item.url);
+    return handoff ? workPackageLabel(handoff) : `未关联整片轮次 · ${item.name}`;
+  };
   return <div className="stage-downloads" aria-label="资源下载">
     {(downloads.isFetching || downloads.isPending || downloads.error) && <Result
       loading={downloads.isFetching || downloads.isPending} error={downloads.error} retry={downloads.refetch} retrying={downloads.isFetching} />}
@@ -35,12 +45,14 @@ export function SceneDownloads({ project, episode, scene, revision }: { project:
     {downloads.data && <>
     {(['后处理', '二采', '一采'] as const).map(stage => {
       const original = downloads.data[stage].videos;
-      const videos = original.packages?.find(item => item.url === choices[stage]) || original.packages?.[0] || original;
+      const selectedPackage = original.packages?.find(item => item.url === choices[stage]) || original.packages?.[0];
+      const videos = selectedPackage || original;
       return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
       <h3>{stage}</h3>
       <section className="stage-download-group" aria-label={stage + videoLabel}>
         <h4>{videoLabel} <small className="stage-download-count muted">{videos.count}份产物文件</small></h4>
-        {original.packages && original.packages.length > 1 && <TabSelect label={`${stage}交付版本`} selected={videos.url || ''} onChange={url => setChoices(previous => ({ ...previous, [stage]: url }))} items={original.packages.map(item => ({ value: item.url, label: item.name }))} />}
+        {workMode && selectedPackage && original.packages?.length === 1 && <p className="muted">{packageLabel(selectedPackage)}</p>}
+        {original.packages && original.packages.length > 1 && <TabSelect label={`${stage}交付版本`} selected={videos.url || ''} onChange={url => setChoices(previous => ({ ...previous, [stage]: url }))} items={original.packages.map(item => ({ value: item.url, label: packageLabel(item) }))} />}
         <div className="stage-download-actions">
         <DownloadButton url={videos.url ? videos.url.replace(/&format=zip$/, '') + '&format=jypack' : null}
           label="剪映草稿包" pack title={workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />

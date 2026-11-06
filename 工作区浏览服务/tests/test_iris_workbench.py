@@ -55,6 +55,31 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         path.write_bytes(value)
         self.assertTrue(self.detail()['segments']['whole'][0]['videos'][0]['url'])
 
+    def test_legacy_single_shot_and_plan_timing_use_business_ids(self):
+        spec = self.register()
+        key = self.works['F001']
+        self.write(key + '/06-视频生产/执行记录/R001-一采/请求.json', json.dumps({'prompt': {'1': {
+            'class_type': 'MiniMaxH3Director', 'inputs': {'timeline_data': json.dumps({'segments': [
+                {'prompt': 'detailed_description:\n[Shot 1]\nOne shot'}], 'global': {}})},
+        }}}))
+        spec['segments'][0]['duration'] = 5.125
+        self.write(key + '/06-视频生产/制作轮次.json', json.dumps({'rounds': [spec]}))
+        for plan, duration in [(
+            '| 生产段 | 源摄影镜头 | 目标段长 |\n| --- | --- | --- |\n| P001 | SH002 | 5秒 |', 5.125,
+        ), (
+            '| 生成段 | 对应镜号 | 请求时长 | 段内Shot及时间 |\n| --- | --- | --- | --- |\n'
+            '| P001 | SH002 | 5秒 | Shot 1：0–5秒 |', 5,
+        )]:
+            with self.subTest(plan=plan):
+                self.write(spec['storyboard']['file'], plan)
+                item, = self.detail()['segments']['whole']
+                context = item['videos'][0]['context']
+                shot, = context['shots']
+                self.assertEqual((context['shotTimingSource'], shot['id'], shot['start'], shot['duration']),
+                                 ('plan', 'SH002', 0, duration))
+                self.assertIn('<h4>SH002</h4>', shot['html'])
+                self.assertIn('[Shot 1]', context['prompts']['english'])
+
     def test_versioned_plan_groups_a_whole_film_and_aligns_only_evidenced_shots(self):
         spec = self.register()
         key = self.works['F001']
@@ -186,6 +211,7 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             self.assertEqual(data['一采']['videos']['count'], 1)
             package, = data['workPackages']
             self.assertEqual(package['rounds'], [1])
+            self.assertEqual(data['一采']['videos']['packages'][0]['url'], package['zip'])
             self.assertIsNone(data['后处理']['videos']['url'])
             export.assert_not_called()
             download = self.client.get(data['一采']['videos']['url'] + '&format=jypack')
@@ -215,6 +241,29 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertTrue(all(item['materialReview']['key'].startswith(directory) and '该版本的原决定' in item['approvalHtml']
                             for item in data['materials']))
         self.assertTrue(all(not video['approved'] for segment in data['segments']['whole'] for video in segment['videos']))
+
+    def test_work_status_and_adoption_use_only_the_linked_versions(self):
+        spec = self.register()
+        self.register('F002')
+        key = self.works['F001']
+        alternate = key + '/06-视频生产/候选/旧版/P001-一采.mp4'
+        self.write(alternate, 'another version with the same P and R')
+        journal = self.project / key / '06-视频生产/执行记录/R001-一采/提交任务清单-装配结果.json'
+        data = json.loads(journal.read_text())
+        data['tasks'][0]['outputs'].append({'path': alternate})
+        journal.write_text(json.dumps(data))
+        adoption = key + '/07-返修交接/采用记录.md'
+        self.write(adoption, '## 当前采用组合\n\n| 段号 | 采用版本及文件 |\n| --- | --- |\n'
+                   '| P001 | [采用版本](../06-视频生产/候选/P001-一采.mp4) |\n')
+        self.write(key + '/作品状态.md', '制作状态：后期接续\n当前阶段与下一步：第1轮已采用。\n\n'
+                   f'| 对象 | 当前版本/文件 |\n| --- | --- |\n| 视频采用记录 | {adoption} |\n')
+        work = self.detail()
+        self.assertEqual(work['workStatus']['label'], '后期接续')
+        self.assertIn('第1轮已采用', work['workStatus']['summaryHtml'])
+        videos = work['segments']['whole'][0]['videos']
+        self.assertEqual([video['key'] for video in videos if video['approved']], [spec['segments'][0]['file']])
+        self.assertTrue(videos[0]['adoptionKnown'])
+        self.assertFalse(self.detail('F002')['segments']['whole'][0]['videos'][0]['approved'])
 
     def test_before_generation_plan_is_visible_without_a_fake_round(self):
         key = '作品/F003-未生成'
