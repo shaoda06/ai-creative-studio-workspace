@@ -189,6 +189,10 @@ try {
   assert.equal((await downloaded).suggestedFilename(),'F002.jypack');
   assert.deepEqual(downloads,['作品/F002-品牌片/07-返修交接/草稿.jianying.json']);
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+  const workList=page.getByRole('region',{name:'视频制作',exact:true});
+  await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
+  assert.ok(await workList.evaluate(node=>Boolean(node.closest('.panel'))));
+  assert.equal(await page.getByRole('region',{name:'片头与片尾',exact:true}).count(),0);
   const statistics=page.getByLabel('作品制作统计',{exact:true});
   for(const status of ['待启动 1 部','剪映草稿已交接 1 部','未登记制作状态 1 部'])await statistics.getByText(status,{exact:true}).waitFor();
   await page.locator('[data-episode=F002]').click();
