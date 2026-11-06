@@ -59,3 +59,9 @@
 /workspaces/Nora Workspace/综合资料/*
 /workspaces/Nora Workspace/comfyui-config.json
 /workspaces/Nora Workspace/工作区浏览服务/
+
+# Chloe skills and skeleton are public; account data, assets and actual videos stay local.
+/workspaces/Chloe Workspace/projects/*
+!/workspaces/Chloe Workspace/projects/README.md
+/workspaces/Chloe Workspace/综合资料/*
+/workspaces/Chloe Workspace/comfyui-config.json

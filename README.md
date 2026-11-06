@@ -4,12 +4,12 @@
 
 ## 开始使用
 
-在Codex中选择本总目录。Nora、Iris是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
+在Codex中选择本总目录。Nora、Iris、Chloe是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
 
-统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，Nora与Iris共用的运营由[运营一级业务](.agents/skills/studio-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续。
+统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，各业务共用的运营由[运营一级业务](.agents/skills/studio-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续，自营带货由[Chloe一级业务](.agents/skills/chloe-commerce-video/SKILL.md)接续。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
-2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属Nora/Iris工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
+2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属业务工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
 3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
 4. 新增外部技能默认安装到本工作区 `.agents/skills/{技能名}/`，已有可用安装复用。该工作区是本README所在目录，不是某部短剧的项目目录。当前独立安装的外部技能按 `.gitignore` 排除；新增技能默认可被Git发现，提交前核对来源、许可及是否需要随模板提供。
 5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
@@ -37,6 +37,7 @@
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
 | `workspaces/Nora Workspace/projects/` | Nora真实短剧及角色项目 |
 | `workspaces/Iris Workspace/projects/` | Iris商业订单，原Git历史独立保留 |
+| `workspaces/Chloe Workspace/` | Chloe自营带货账号，综合资料保存共用资产，projects中每条视频一个项目 |
 | `综合资料/` | 跨项目资料、未分类资料和本机过程资料，模板仅保留目录说明 |
 
 技能历史版本、真实服务库存、项目、个人配置和工具缓存仍可留在本机，但由 `.gitignore` 排除。不要把它们的本地存在误认为已被Git备份。
@@ -92,7 +93,7 @@ FFmpeg是工作区的本地音视频处理依赖。只在初始化项目工作�
 
 ## 工作区浏览服务
 
-Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现Nora与Iris的projects项目，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
+Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现Nora、Iris与Chloe的projects项目；Chloe使用通用资料页，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
 
 首次安装、构建、开发及测试说明见[服务README](工作区浏览服务/README.md)。服务需要Python 3.10＋及项目依赖，前端构建需要Node.js 22＋、pnpm 11；已构建后普通浏览不需要Node.js；ComfyUI后台的Codex会话通知需要本机Node，具体接入见服务README。项目页面由浏览服务读取源资料展示，不再生成或维护项目静态HTML。
 
@@ -125,7 +126,7 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## Git边界
 
-采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。Nora资料区的 `projects/` 和总层 `综合资料/` 仅保留各自README，新增项目和过程资料仍自动排除；总层不再保留 `projects/` 兼容链接。可被Git发现不等于自动提交；提交范围按[工作区Git提交规则](AGENTS.md#git-提交与推送)核对，其中公开提示词的新增、修改和删除随正常工作区提交一并归入，隐私提示词继续排除。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
+采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。Nora与Chloe资料区的 `projects/` 和总层 `综合资料/` 仅保留各自README，Chloe账号配置与共用素材保留本机，新增项目和过程资料仍自动排除；总层不再保留 `projects/` 兼容链接。可被Git发现不等于自动提交；提交范围按[工作区Git提交规则](AGENTS.md#git-提交与推送)核对，其中公开提示词的新增、修改和删除随正常工作区提交一并归入，隐私提示词继续排除。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
 
 每次完成获授权维护并通过检查后，agent按上述规则，将本次任务与公开提示词变更归入同次本地提交；纯讨论和只读检查不提交，推送须另有明确要求。提交前查看差异和暂存清单，不混入并发修改。Git只保存被跟踪且已提交的文件；真实项目需另行安排私有版本管理或备份。
 
@@ -140,4 +141,4 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## 分层README规范
 
-一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)或[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)等所属业务入口维护；公共运营只规定[接入信息要求](.agents/skills/nora-operations-setup/references/运营项目README规范.md)，不另定项目结构。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。
+一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)或[Chloe视频建档规范](.agents/skills/chloe-creative/references/视频项目与脚本规范.md)等所属业务入口维护；公共运营只规定[接入信息要求](.agents/skills/nora-operations-setup/references/运营项目README规范.md)，不另定项目结构。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。

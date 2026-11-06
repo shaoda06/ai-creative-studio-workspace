@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe 共用资产与镜头图片"
+  short_description: "管理 Chloe 商品参考、模特、服装、造型、场景、声音与镜头图片，落实单份共用存储和准确版本引用。"
+  default_prompt: "使用 $chloe-assets 按实际对象、当前阶段与有效授权处理任务。"

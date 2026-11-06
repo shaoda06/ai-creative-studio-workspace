@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe 视频策划、脚本与分镜"
+  short_description: "为 Chloe 确定单条带货视频主题、卖点、画面和声音，合并脚本与分镜并维护视频项目建档。"
+  default_prompt: "使用 $chloe-creative 按实际对象、当前阶段与有效授权处理任务。"

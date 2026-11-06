@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe 选品与商品资料"
+  short_description: "为 Chloe 评估精选联盟候选商品、整理真实卖点和原始资料，维护商品选择依据及可展示内容。"
+  default_prompt: "使用 $chloe-selection 按实际对象、当前阶段与有效授权处理任务。"

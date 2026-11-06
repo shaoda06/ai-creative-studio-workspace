@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe 视频制作与返修"
+  short_description: "按 Chloe 已确认脚本与实际输入制作带货视频片段，管理提示词、生成、返修、技术处理和采用。"
+  default_prompt: "使用 $chloe-production 按实际对象、当前阶段与有效授权处理任务。"
