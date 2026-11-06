@@ -77,8 +77,8 @@ try{
     if(key===storyboard&&failStoryboard){
      failStoryboard=false;return route.fulfill({status:503,json:{detail:'隔离分镜读取失败'}});
     }
-    const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2>项目专用约定</h2><p>这里是项目说明正文。</p>'
-      : key==='项目状态.md' ? '<h1>状态</h1><h2>当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
+    const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2 id="details">项目专用约定</h2><p>这里是项目说明正文。</p>'
+      : key==='项目状态.md' ? '<h1>项目状态</h1><h2 id="details">当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
         : key===brief ? '<h1>简报封面</h1><h2>制作简报正文</h2><p>这里是现行制作简报。</p>'
           : key===requirement ? '<h1>需求记录</h1><h2>需求正文</h2><p>这里是现行需求。</p>'
             : key===archived ? '<h1>历史简报正文</h1>'
@@ -124,24 +124,27 @@ try{
   assert.ok(Math.abs(layout[0].entryBottom-layout[1].entryBottom)<=1);
   await cards.first().click();
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
-  const overview=page.getByRole('region',{name:'项目概况正文',exact:true});
-  const description=overview.getByRole('region',{name:'项目说明',exact:true});
-  const status=overview.getByRole('region',{name:'项目状态',exact:true});
-  await status.getByText('等待用户审阅。',{exact:true}).waitFor();
+  const overview=page.getByRole('region',{name:'项目概况',exact:true});
+  await overview.getByText('等待用户审阅。',{exact:true}).waitFor();
   await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  await description.getByText('这里是项目说明正文。',{exact:true}).waitFor();
-  assert.equal(await overview.getByRole('navigation',{name:'概况文档',exact:true}).count(),0);
-  assert.equal(await description.evaluate(node=>node.nextElementSibling?.getAttribute('aria-label')),'项目状态');
+  await overview.getByText('这里是项目说明正文。',{exact:true}).waitFor();
+  assert.deepEqual(await overview.getByRole('heading').allTextContents(),['项目概况','项目专用约定','当前决定']);
+  const currentDecision=overview.getByRole('heading',{name:'当前决定',exact:true});
+  assert.equal(await currentDecision.evaluate(node=>node.previousElementSibling?.textContent),'这里是项目说明正文。');
   assert.equal(await page.getByRole('dialog').count(),0);
-  const overviewChapters=description.locator('.document .chapters');
+  const overviewChapters=overview.locator('.document .chapters');
   assert.equal(await overviewChapters.getAttribute('open'),null);
   assert.ok(await page.getByText('这里是项目说明正文。',{exact:true}).evaluate(node=>node.getBoundingClientRect().bottom<=innerHeight-44));
   await overviewChapters.getByText('章节导航',{exact:true}).click();
+  const overviewNavigation=overview.getByRole('navigation',{name:'章节导航',exact:true});
+  await overviewNavigation.waitFor();
+  assert.deepEqual(await overviewNavigation.getByRole('button').allTextContents(),['项目专用约定','当前决定']);
   await overviewChapters.getByRole('button',{name:'项目专用约定',exact:true}).click();
-  assert.ok(await description.getByRole('heading',{name:'项目专用约定',exact:true}).evaluate(node=>node===document.activeElement));
+  assert.ok(await overview.getByRole('heading',{name:'项目专用约定',exact:true}).evaluate(node=>node===document.activeElement));
+  await overviewChapters.getByRole('button',{name:'当前决定',exact:true}).click();
+  assert.ok(await currentDecision.evaluate(node=>node===document.activeElement));
   await overviewChapters.getByText('章节导航',{exact:true}).click();
   await page.screenshot({path:`${out}/${width}-overview.png`});
-  await status.getByRole('heading',{name:'当前决定',exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','全部资料','项目资源']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
@@ -264,7 +267,7 @@ try{
   await page.getByRole('button',{name:'返回批次列表',exact:true}).click();
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
-  await status.getByText('已交付并归档',{exact:true}).waitFor();
+  await overview.getByText('已交付并归档',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   await page.getByText('查看历史需求与参考',{exact:true}).click();
   await page.getByRole('button',{name:'制作简报.md',exact:true}).click();

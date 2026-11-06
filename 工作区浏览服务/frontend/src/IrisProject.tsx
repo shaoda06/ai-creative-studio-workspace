@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem, RecordData } from './api';
 import { Document, FileLink, FileTree, PreviewContext, Result } from './components';
@@ -113,38 +113,43 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
   </>;
 }
 
-const overviewDocuments = [
-  { value: 'README.md', label: '项目说明' },
-  { value: '项目状态.md', label: '项目状态' },
-];
+const overviewDocuments = ['README.md', '项目状态.md'];
 
 function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
 }
 
-function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
-  const rootFiles = files.filter(item => item.kind !== 'group');
-  const available = overviewDocuments.filter(item => rootFiles.some(file => file.kind === 'file' && file.key === item.value));
-
-  return <>
-    <section className="panel iris-reading-panel" aria-label="项目概况正文">
-      {available.length ? available.map(({ value, label }) => (
-        <IrisOverviewDocument key={value} baseUrl={baseUrl} path={value} label={label} />
-      )) : <p className="muted">暂无项目说明或状态记录。</p>}
-    </section>
-    <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.some(doc => doc.value === item.name) && item.name !== '复盘.md')} />
-  </>;
+function overviewBody(document: RecordData, path: string): string {
+  const body = new DOMParser().parseFromString(withoutLeadingTitle(document).html, 'text/html').body;
+  // Two source files can contain headings with the same name.
+  body.querySelectorAll('h2[id],h3[id],h4[id],h5[id],h6[id]').forEach(heading => {
+    heading.id = `overview-${path}-${heading.id}`;
+  });
+  return body.innerHTML;
 }
 
-function IrisOverviewDocument({ baseUrl, path, label }: { baseUrl: string; path: string; label: string }) {
-  const query = useQuery({ queryKey: ['document', baseUrl, path, 0],
+function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
+  const rootFiles = files.filter(item => item.kind !== 'group');
+  const available = overviewDocuments.filter(path => rootFiles.some(file => file.kind === 'file' && file.key === path));
+  const queries = useQueries({ queries: available.map(path => ({
+    queryKey: ['document', baseUrl, path, 0],
     queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(path)}`),
-    select: path === 'README.md' ? withoutLeadingTitle : undefined });
+    select: (value: RecordData) => overviewBody(value, path),
+  })) });
+  const loaded = available.flatMap((path, index) => queries[index].data === undefined ? [] : [{ path, html: queries[index].data }]);
+  const failed = queries.filter(query => query.isError);
 
-  return <section className="iris-overview-document" aria-label={label}>
-    <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && <Document value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
-  </section>;
+  return <>
+    <section className="panel iris-overview-panel" aria-labelledby="iris-overview-title">
+      <h2 id="iris-overview-title">项目概况</h2>
+      <Result page loading={!loaded.length && queries.some(query => query.isPending)} error={failed[0]?.error ?? null}
+        retry={() => Promise.all(failed.map(query => query.refetch()))} retrying={queries.some(query => query.isFetching)} />
+      {loaded.length > 0 && <Document key={loaded.map(item => item.path).join('/')}
+        value={{ html: loaded.map(item => item.html).join('\n') }} showOriginal={false} chaptersInitiallyOpen={false} />}
+      {!available.length && <p className="muted">暂无项目说明或状态记录。</p>}
+    </section>
+    <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.includes(item.name) && item.name !== '复盘.md')} />
+  </>;
 }
 
 const briefDocuments = [
