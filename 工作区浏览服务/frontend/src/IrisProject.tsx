@@ -123,24 +123,28 @@ function withoutLeadingTitle(document: RecordData): RecordData {
 }
 
 function IrisOverview({ baseUrl, files }: { baseUrl: string; files: FileItem[] }) {
-  const [selected, setSelected] = useRefreshState(`${baseUrl}/overview-document`, overviewDocuments[0].value);
   const rootFiles = files.filter(item => item.kind !== 'group');
   const available = overviewDocuments.filter(item => rootFiles.some(file => file.kind === 'file' && file.key === item.value));
-  const key = available.find(item => item.value === selected)?.value ?? available[0]?.value;
-  const query = useQuery({ queryKey: ['document', baseUrl, key, 0],
-    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key!)}`), enabled: Boolean(key),
-    select: key === 'README.md' ? withoutLeadingTitle : undefined });
 
   return <>
-    <section className="panel" aria-label="项目概况正文">
-      {key && available.length > 1 && <UnderlineTabs label="概况文档" items={available} selected={key} onChange={setSelected} />}
-      {key ? <>
-        <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-        {query.data && <Document key={key} value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
-      </> : <p className="muted">暂无项目说明或状态记录。</p>}
+    <section className="panel iris-reading-panel" aria-label="项目概况正文">
+      {available.length ? available.map(({ value, label }) => (
+        <IrisOverviewDocument key={value} baseUrl={baseUrl} path={value} label={label} />
+      )) : <p className="muted">暂无项目说明或状态记录。</p>}
     </section>
     <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.some(doc => doc.value === item.name) && item.name !== '复盘.md')} />
   </>;
+}
+
+function IrisOverviewDocument({ baseUrl, path, label }: { baseUrl: string; path: string; label: string }) {
+  const query = useQuery({ queryKey: ['document', baseUrl, path, 0],
+    queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(path)}`),
+    select: path === 'README.md' ? withoutLeadingTitle : undefined });
+
+  return <section className="iris-overview-document" aria-label={label}>
+    <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    {query.data && <Document value={query.data} showOriginal={false} chaptersInitiallyOpen={false} />}
+  </section>;
 }
 
 const briefDocuments = [

@@ -83,6 +83,13 @@ try {
     await checkSharedInputs(page, width, selfTest);
     const showcase = page.getByTestId('showcase'), business = page.getByTestId('business');
     await showcase.getByRole('button', { name: '布局与搜索', exact: true }).click();
+    await showcase.getByRole('searchbox', { name: '搜索示例入口', exact: true }).fill('');
+    const entryCards = showcase.getByRole('region', { name: '入口卡片与搜索' }).getByRole('link');
+    await entryCards.nth(1).waitFor();
+    assert.equal(await entryCards.count(), 2);
+    const entryBottoms = await entryCards.evaluateAll(cards => cards.map(card => card.querySelector('p').getBoundingClientRect().bottom));
+    assert.ok(Math.abs(entryBottoms[0] - entryBottoms[1]) <= 1, `${width}px / 展示页入口卡片贴底对齐`);
+    await contained(entryCards.first(), `${width}px / 展示页入口卡片`);
     const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
     assert.match(await namingPath.innerText(), /EP001 · 组件演示集/);
     assert.doesNotMatch(await namingPath.innerText(), /（最终定名）/);

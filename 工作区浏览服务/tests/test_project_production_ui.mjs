@@ -21,7 +21,10 @@ try{
   await page.route('**/api/**',route=>{
    const req=route.request(),u=new URL(req.url()),path=decodeURIComponent(u.pathname);
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
-   if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[{id:'隔离样片',name:'隔离样片'}]}]});
+   if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[
+     {id:'隔离样片',name:'隔离样片'},
+     {id:'历史样片',name:'用于测试卡片同行对齐的多行项目名称，用于验证长标题换行后入口文字和短标题卡片依然对齐'},
+   ]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path==='/api/workspaces/commercial/projects/未制作样片')return route.fulfill({json:{name:'未制作样片',files:[]}});
    const historical=path.startsWith('/api/workspaces/commercial/projects/历史样片');
@@ -110,30 +113,40 @@ try{
    unexpected.push(req.method()+' '+path);return route.abort();
   });
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
-  await page.goto(origin+'/#/spaces/commercial/projects/隔离样片');
+  await page.goto(origin+'/#/spaces/commercial');
+  const cards=page.locator('.project-card');
+  await cards.nth(1).waitFor();
+  const layout=await cards.evaluateAll(items=>items.map(card=>({
+   titleHeight:card.querySelector('h3').getBoundingClientRect().height,
+   entryBottom:card.querySelector('p').getBoundingClientRect().bottom,
+  })));
+  assert.ok(layout[1].titleHeight>layout[0].titleHeight);
+  assert.ok(Math.abs(layout[0].entryBottom-layout[1].entryBottom)<=1);
+  await cards.first().click();
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
-  const overview=page.getByRole('navigation',{name:'概况文档',exact:true});
+  const overview=page.getByRole('region',{name:'项目概况正文',exact:true});
+  const description=overview.getByRole('region',{name:'项目说明',exact:true});
+  const status=overview.getByRole('region',{name:'项目状态',exact:true});
+  await status.getByText('等待用户审阅。',{exact:true}).waitFor();
   await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
-  assert.equal(await overview.getByRole('button',{name:'项目说明',exact:true}).getAttribute('aria-current'),'page');
+  await description.getByText('这里是项目说明正文。',{exact:true}).waitFor();
+  assert.equal(await overview.getByRole('navigation',{name:'概况文档',exact:true}).count(),0);
+  assert.equal(await description.evaluate(node=>node.nextElementSibling?.getAttribute('aria-label')),'项目状态');
   assert.equal(await page.getByRole('dialog').count(),0);
-  const chapters=page.locator('.document .chapters');
-  assert.equal(await chapters.getAttribute('open'),null);
+  const overviewChapters=description.locator('.document .chapters');
+  assert.equal(await overviewChapters.getAttribute('open'),null);
   assert.ok(await page.getByText('这里是项目说明正文。',{exact:true}).evaluate(node=>node.getBoundingClientRect().bottom<=innerHeight-44));
-  await chapters.getByText('章节导航',{exact:true}).click();
-  await chapters.getByRole('button',{name:'项目专用约定',exact:true}).waitFor();
-  await chapters.getByText('章节导航',{exact:true}).click();
+  await overviewChapters.getByText('章节导航',{exact:true}).click();
+  await overviewChapters.getByRole('button',{name:'项目专用约定',exact:true}).click();
+  assert.ok(await description.getByRole('heading',{name:'项目专用约定',exact:true}).evaluate(node=>node===document.activeElement));
+  await overviewChapters.getByText('章节导航',{exact:true}).click();
   await page.screenshot({path:`${out}/${width}-overview.png`});
-  await overview.getByRole('button',{name:'项目状态',exact:true}).click();
-  await page.getByText('等待用户审阅。',{exact:true}).waitFor();
-  await page.getByRole('heading',{name:'当前决定',exact:true}).waitFor();
-  assert.equal(await page.getByRole('dialog').count(),0);
+  await status.getByRole('heading',{name:'当前决定',exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-  await overview.getByRole('button',{name:'项目说明',exact:true}).click();
-  await page.getByText('这里是项目说明正文。',{exact:true}).waitFor();
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','全部资料','项目资源']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   const briefTabs=page.getByRole('navigation',{name:'需求与参考文档',exact:true});
+  const chapters=page.locator('.document .chapters');
   await page.getByRole('heading',{name:'制作简报正文',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog').count(),0);
   const sources=page.locator('details').filter({has:page.locator('summary').getByText('客户原件与参考',{exact:true})});
@@ -251,8 +264,7 @@ try{
   await page.getByRole('button',{name:'返回批次列表',exact:true}).click();
   await page.getByRole('heading',{name:'生产批次',exact:true}).waitFor();
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
-  await overview.getByRole('button',{name:'项目状态',exact:true}).click();
-  await page.getByText('已交付并归档',{exact:true}).waitFor();
+  await status.getByText('已交付并归档',{exact:true}).waitFor();
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   await page.getByText('查看历史需求与参考',{exact:true}).click();
   await page.getByRole('button',{name:'制作简报.md',exact:true}).click();
