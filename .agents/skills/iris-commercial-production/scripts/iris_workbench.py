@@ -1,5 +1,6 @@
 """Iris business projection for the complete shared production page. Read only."""
 from copy import deepcopy
+from html import escape
 import json
 from math import isclose
 from pathlib import Path
@@ -8,7 +9,7 @@ from urllib.parse import quote, unquote
 
 from backend.parsers import documents
 from backend.parsers.documents import cells
-from backend.services.iris_presentation import table, entries, work_view
+from backend.services.iris_presentation import delivery_overview, table, entries, work_view
 from iris_works import discover_works, work_root
 import iris_browser_production as production
 
@@ -16,15 +17,31 @@ import iris_browser_production as production
 SHOT_HEADING = re.compile(r'(?m)^####\s+(SH\d{3,})(?!\d)[^\n]*\n')
 
 
+def document_ref(project, api, path):
+    key = path.relative_to(project).as_posix()
+    return {'kind': 'document', 'name': path.name, 'key': key, 'url': production.file_url(api, key)}
+
+
 def document(projects, name, api, key, version=''):
     path = projects.file(name, key)
-    project = projects.project(name)
-    key = path.relative_to(project).as_posix()
-    html = documents.markdown(path.read_text('utf-8-sig'), key)
-    html = production.legacy_links(html, api + '/files/')
-    return {'kind': 'document', 'name': path.name, 'key': key, 'version': version,
-            'url': production.file_url(api, key), 'doc': {'title': path.stem, 'html': html,
-                                                        'url': production.file_url(api, key)}}
+    ref = document_ref(projects.project(name), api, path)
+    html = production.legacy_links(documents.markdown(path.read_text('utf-8-sig'), ref['key']), api + '/files/')
+    return {**ref, 'version': version, 'doc': {'title': path.stem, 'html': html, 'url': ref['url']}}
+
+
+def work_status(projects, name, space_api, project, root):
+    path = root / '作品状态.md'
+    if not path.is_file():
+        return None, {'items': []}
+    path = projects.file(name, path.relative_to(project).as_posix())
+    api = space_api + '/projects/' + quote(name, safe='')
+    ref = document_ref(project, api, path)
+    text = path.read_text('utf-8-sig')
+    delivery = delivery_overview(projects, name, space_api, project, text)
+    summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
+    return {'label': delivery['status'], 'summaryHtml': production.legacy_links(
+        documents.markdown(summary[1], ref['key']), api + '/files/'
+    ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery
 
 
 def segment_text(text, identity):
@@ -159,11 +176,8 @@ def archive_episode(project, work):
     return archive, episodes[0].name
 
 
-def legacy_detail(project, api, work):
+def legacy_detail(project, api, work, archived):
     """Keep the archive's native scene/round/source data instead of flattened batch cards."""
-    archived = archive_episode(project, work)
-    if archived is None:
-        return None
     from backend.parsers.project import build_data
     archive, episode = archived
     data = build_data(archive, web_episode_navigation=True, load_scope='09-剧集制作',
@@ -195,9 +209,17 @@ def detail(projects, name, space_api, work):
     root = work_root(project, work)
     api = space_api + '/projects/' + quote(name, safe='')
     entry = next(item for item in discover_works(project) if item['id'] == work)
-    legacy = legacy_detail(project, api, work)
-    if legacy is not None:
-        return {**legacy, 'title': entry['name']}
+    status, _ = work_status(projects, name, space_api, project, root)
+    archived = archive_episode(project, work)
+    if archived:
+        archive, _ = archived
+        legacy = legacy_detail(project, api, work, archived)
+        history = archived_director_sheets(projects, name, api, project, archive)
+        if history and len(legacy['scenes']) == 1:
+            sheet = legacy.setdefault('directorSheets', {}).setdefault(legacy['scenes'][0],
+                                                                      {'candidates': [], 'formal': [], 'record': None})
+            sheet['history'] = history
+        return {**legacy, 'title': entry['name'], 'workStatus': status}
     data = production.production_data(project, api, work)
     segments = data['segments']
     by_id = {item['id']: item for item in segments}
@@ -321,33 +343,79 @@ def detail(projects, name, space_api, work):
     unassigned = {identity: item for identity, item in by_id.items() if identity not in assigned_ids}
     if unassigned or not scene_members:
         scene_members.setdefault('whole', {}).update(unassigned)
-    materials = [{**item['media'], 'materialGroup': 'adopted', 'materialStatus': '已采用', 'materialNote': item['title']}
-                 for item in view['irisPresentation']['adopted'] if item['media']['kind'] == 'image']
+    listing = primary.get('05-资产', [])
+    material_record = document_ref(project, api, project / listing[0]) if len(listing) == 1 else None
+    materials = [{**item['media'], 'materialGroup': item['group'], 'materialStatus': item['status'],
+                  'materialNote': ' · '.join(filter(None, (item['title'], item['version']))), 'materialReview': material_record,
+                  'approvalHtml': production.legacy_links(documents.markdown(item['decision'], listing[0]), api + '/files/')}
+                 for item in view['irisPresentation']['assetReview'] if item['media']['kind'] == 'image']
+    label = status['label'] if status else ''
+    status_html = '<span class="status-badge status-gray">' + escape(label) + '</span>' if label else ''
     return {'kind': 'group', 'name': work, 'title': entry['name'], 'key': entry['key'], 'scenes': list(scene_members),
             'segments': {scene: list(items.values()) for scene, items in scene_members.items()},
             'sceneRounds': {scene: scene_rounds.get(scene, []) for scene in scene_members}, 'episodeRounds': episode_rounds,
             'script': current_sources['script'], 'storyboards': {scene: current_sources['storyboard'] for scene in scene_members} if current_sources['storyboard'] else {},
             'directorSheets': {'whole': director_sheets(projects, name, api, root)},
-            'materials': materials, 'productionComplete': False, 'productionIssues': []}
+            'materials': materials, 'materialRecord': material_record, 'workStatus': status, 'statusHtml': status_html,
+            'productionComplete': False, 'productionIssues': []}
+
+
+def archived_director_sheets(projects, name, api, project, archive):
+    records = sorted(archive.glob('客户项目/*/04-分镜与视觉方案/导演分镜表-当前索引.md'))
+    if len(records) != 1:
+        return []
+    record = projects.file(name, records[0].relative_to(project).as_posix())
+    text = record.read_text('utf-8-sig')
+    versions = {version: source for source, version in re.findall(r'分镜\s*(v\d+)\s*对应导演表\s*(v\d+)', text)}
+    sources = [(record, [link for row in table(text, '页码', '原图入口', '状态') for _, link in entries(row['原图入口'])])]
+    for label, link in entries(text):
+        if label != '分镜制作工作稿与历史记录':
+            continue
+        notes = (record.parent / unquote(link)).resolve()
+        if notes.is_relative_to(archive) and notes.is_file():
+            notes = projects.file(name, notes.relative_to(project).as_posix())
+            sources.append((notes, [href for _, href in entries(notes.read_text('utf-8-sig'))]))
+    images = []
+    seen = set()
+    for source, links in sources:
+        reference = document_ref(project, api, source)
+        for link in links:
+            path = (source.parent / unquote(link)).resolve()
+            match = re.search(r'导演分镜表-(v\d+)-第(\d+)页\.png$', path.name)
+            if not match or (source != record and match[1] not in versions) or not path.is_relative_to(archive) or not path.is_file() or path in seen:
+                continue
+            path = projects.file(name, path.relative_to(project).as_posix())
+            seen.add(path)
+            key = path.relative_to(project).as_posix()
+            images.append({'kind': 'image', 'name': path.name, 'key': key, 'url': production.file_url(api, key),
+                           'page': int(match[2]), 'sourceVersion': versions.get(match[1], ''),
+                           'version': match[1], 'sourceRecord': reference})
+    return images
 
 
 def director_sheets(projects, name, api, root):
+    project = projects.project(name)
     candidates, formal = [], []
     records = sorted((root / '04-分镜声音/导演表').glob('导演表来源与登记*.md'))
     for record in records:
+        reference = document_ref(project, api, projects.file(name, record.relative_to(project).as_posix()))
         for row in table(record.read_text('utf-8-sig'), '页码', '来源分镜版本', '图表版本／候选编号', '候选原图', '正式采用图'):
             version, candidate = re.split(r'[/／]', row['图表版本／候选编号'])
+            adopted = next((link for label, link in entries(row['正式采用图']) if label), None)
             for _, link in entries(row['候选原图']):
-                path = projects.file(name, production.local_key(projects.project(name), (record.parent / unquote(link)).resolve()))
-                key = path.relative_to(projects.project(name)).as_posix()
+                path = projects.file(name, production.local_key(project, (record.parent / unquote(link)).resolve()))
+                key = path.relative_to(project).as_posix()
                 image = {'kind': 'image', 'name': path.name, 'key': key, 'url': production.file_url(api, key),
                          'page': int(row['页码'].split('/')[0]), 'sourceVersion': row['来源分镜版本'],
-                         'version': version, 'candidateNumber': int(candidate), 'adopted': row['正式采用图'].startswith('[')}
+                         'version': version, 'candidateNumber': int(candidate), 'adopted': adopted is not None,
+                         'sourceRecord': reference}
                 candidates.append(image)
-                if image['adopted']:
-                    formal.append(image)
+                if adopted:
+                    file = projects.file(name, production.local_key(project, (record.parent / unquote(adopted)).resolve()))
+                    key = file.relative_to(project).as_posix()
+                    formal.append({**image, 'name': file.name, 'key': key, 'url': production.file_url(api, key)})
     return {'candidates': candidates, 'formal': formal,
-            'record': document(projects, name, api, records[-1].relative_to(projects.project(name)).as_posix()) if records else None}
+            'record': reference if records else None}
 
 
 def director_spec(projects, name, work, path):
@@ -398,21 +466,39 @@ def downloads(projects, name, space_api, work, scene='whole'):
                 resource['count'] += 1
     candidates = {video['key']: video for items in values.get('segments', {}).values() for item in items for video in item['videos']}
     # Only existing explicit delivery manifests enable packaging; opening the tab does not pack.
-    view = work_view(projects, name, space_api, work, production)
-    manifests = [item['file']['key'] for item in view['irisPresentation']['delivery']['items']
-                 if item['file']['key'].endswith('.jianying.json')]
-    for manifest in dict.fromkeys(manifests):
-        path = projects.file(name, manifest)
+    _, delivery = work_status(projects, name, space_api, project, work_root(project, work))
+    work_packages = []
+    covered = {}
+    for round_ in values.get('episodeRounds', []):
+        files = tuple(segment.get('key') for scene_id in round_['scenes']
+                      for group in values['sceneRounds'][scene_id] if group['number'] == round_['number']
+                      for segment in group['segments'])
+        covered.setdefault(files, []).append(round_['number'])
+    items = {item['file']['key']: item for item in delivery['items']}
+    for key, item in items.items():
+        file = item['file']
+        base = {'key': key, 'label': item['title'], 'version': item['version'], 'purpose': item['purpose']}
+        if values.get('readOnly') and key.lower().endswith('.jypack'):
+            work_packages.append({**base, 'archived': True, 'rounds': [], 'jypack': file['url'] + '?download=1', 'zip': None})
+        if not file.get('jianying'):
+            continue
+        path = projects.file(name, key)
         spec = json.loads(path.read_text('utf-8-sig'))
         media = [item for item in spec['media'] if item.get('timeline', True)]
         keys = [production.local_key(project, item['file']) for item in media]
+        if not keys or not all(key in candidates for key in keys):
+            continue
+        rounds = covered.get(tuple(keys), [])
+        if rounds and all(candidates[key]['url'] for key in keys):
+            work_packages.append({**base, **file['jianying'], 'rounds': rounds, 'count': len(keys)})
         stages = {candidates[key]['stage'] for key in keys if key in candidates}
-        if len(stages) != 1 or not all(key in candidates for key in keys):
+        if len(stages) != 1:
             continue
         stage = stages.pop()
-        package = {'name': spec['name'], 'count': len(keys), 'url': api + '/jianying-download?path=' + quote(manifest, safe='') + '&format=zip'}
+        package = {'name': spec['name'], 'count': len(keys), 'url': file['jianying']['zip']}
         resource = result[stage]['videos']
         resource.setdefault('packages', []).append(package)
         if len(resource['packages']) == 1:
             resource.update(count=package['count'], url=package['url'])
+    result['workPackages'] = work_packages
     return result

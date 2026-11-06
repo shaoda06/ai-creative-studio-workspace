@@ -8,7 +8,12 @@ import { DownloadButton } from './DownloadButton';
 import './SceneDownloads.css';
 
 type Resource = { packages?: { name: string; count: number; url: string }[]; count: number; url: string | null; files: { name: string; url: string }[] };
-type Downloads = Record<string, Record<'videos' | 'director' | 'canvas', Resource>>;
+interface WorkPackage {
+  key: string; label: string; version: string; purpose: string; rounds: number[];
+  count?: number; archived?: boolean; jypack: string | null; zip: string | null;
+}
+export type Downloads = Record<'后处理' | '二采' | '一采', Record<'videos' | 'director' | 'canvas', Resource>>
+  & { workPackages?: WorkPackage[] };
 
 function OriginalDownloads({ resource, label, generated = false }: { resource: Resource; label: string; generated?: boolean }) {
   return resource.files.length
@@ -28,7 +33,7 @@ export function SceneDownloads({ project, episode, scene, revision }: { project:
       loading={downloads.isFetching || downloads.isPending} error={downloads.error} retry={downloads.refetch} retrying={downloads.isFetching} />}
     <div hidden={downloads.isFetching || downloads.isPending || !!downloads.error}>
     {downloads.data && <>
-    {['后处理', '二采', '一采'].map(stage => {
+    {(['后处理', '二采', '一采'] as const).map(stage => {
       const original = downloads.data[stage].videos;
       const videos = original.packages?.find(item => item.url === choices[stage]) || original.packages?.[0] || original;
       return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>

@@ -21,6 +21,7 @@ import { workSceneLabel } from '../episodeRevisionNotes';
 import { useRevisionNotesExport } from './RevisionNotes';
 import { formatProductionDuration, sceneDurationEntries, useEpisodeDurations } from './useEpisodeDurations';
 import { FloatingMessage } from './Notifications';
+import type { Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
@@ -39,6 +40,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const [repeatVideo, setRepeatVideo] = useRefreshState(`project/${namespace}/production/${selected || ''}/repeat-video`, false);
   const [integrateSheets, setIntegrateSheets] = useRefreshState(`project/${namespace}/production/${selected || ''}/integrate-sheets`, false);
   const [page, setPage] = useState(1);
+  const [handoffKey, setHandoffKey] = useState('');
   const [roundEntry, setRoundEntry] = useState(0);
   const [playback, setPlayback] = useState<{ episode: string; rounds: Record<string, number | undefined>; start?: EpisodePlayback['start'] } | null>(null);
   const cards = useRef<HTMLDivElement>(null);
@@ -96,6 +98,14 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const selectableRounds = workMode ? episodeRounds : sceneRounds;
   const selectedRound = roundNumberForScene(selectedScene);
   const round = sceneRounds.find(item => item.number === selectedRound);
+  const downloads = useQuery({
+    queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision],
+    queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene)),
+    enabled: workMode && !!current && !!selectedScene,
+  });
+  const handoffs = downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!)) || [];
+  const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];
+  const workStatus = workMode ? current?.workStatus : undefined;
   const continuous = !!playback && playback.episode === current?.name;
   const nextScene = scenes[scenes.indexOf(selectedScene) + 1];
   const nextRoundNumber = continuous ? playback!.rounds[nextScene] : undefined;
@@ -155,7 +165,16 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   };
   const renderActions = () => <div className="episode-heading-actions">
       <PointerTooltip text={sharedSelected ? "按当前轮次的选中场次统计；* 表示含计划时长" : "按当前轮次统计；* 表示含计划时长"}><span className="muted" aria-label={`${unitLabel}时长`}>{sharedSelected ? current!.name : unitLabel}时长：{formatProductionDuration(sharedSelected ? durations.scenes[selectedScene] : durations.total)}</span></PointerTooltip>
-      {episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
+      {workMode && handoff && <div className="episode-heading-actions" role="group" aria-label="整片交接下载">
+        {handoffs.length > 1 ? <TabSelect label="选择交接版本" selected={handoff.key} onChange={setHandoffKey}
+          items={handoffs.map(item => ({ value: item.key, label: item.label }))} />
+          : <span className="muted">{handoff.label}{handoff.count ? `（${handoff.count}段）` : ''}</span>}
+        {handoff.jypack && <DownloadButton key={handoff.jypack} url={handoff.jypack} pack={!handoff.archived}
+          label={handoff.archived ? '下载归档剪映包' : '剪映草稿包'} title={[handoff.version, handoff.purpose].filter(Boolean).join(' · ')} />}
+        {handoff.zip && <DownloadButton key={handoff.zip} url={handoff.zip} pack
+          label="本片 ZIP 下载" title={`按交接清单打包本轮 ${handoff.count} 段视频`} />}
+      </div>}
+      {!workMode && episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
       url={access.package(project, current!.name) + '?format=jypack'} label="剪映草稿包"
       title="下载全部后处理已采用视频的剪映草稿包；双击或拖入剪映导入，需对应会员权限" />
       <DownloadButton key={current!.name} pack
@@ -167,6 +186,16 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       items={items.map(item => ({ value: item.name, label: `${item.name} · ${item.title || (item.name === '片头' || item.name === '片尾' ? '全剧通用' : '题名未记录')}${item.titleStatus ? `（${item.titleStatus}）` : ''}` }))} />, breadcrumbSelector)}
     {selectedItem && !current ? <Result page loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} /> : current ? <div className="episode-detail">
     {(breadcrumbActions || workMode) && (breadcrumbActions ? createPortal(renderActions(), breadcrumbActions) : renderActions())}
+    {workMode && downloads.error && <FloatingMessage tone="error">交接清单读取失败：{downloads.error.message}。<button className="link" onClick={() => void downloads.refetch()}>重新读取</button></FloatingMessage>}
+    {workStatus && <section className="panel" aria-label="作品制作状态">
+      <div className="phase-progress-status">
+        <strong>作品制作状态</strong>
+        {workStatus.label && <span className="status-badge status-gray">{current.readOnly ? '原交付 · ' : ''}{workStatus.label}</span>}
+        <button className="link" onClick={() => preview(workStatus.record)}>查看作品状态</button>
+      </div>
+      {workStatus.summaryHtml ? <Rich html={workStatus.summaryHtml} /> : <p>{workStatus.deliverySummary}</p>}
+      {current.readOnly && workStatus.summaryHtml && workStatus.deliverySummary && <p className="muted">{workStatus.deliverySummary}</p>}
+    </section>}
     {durations.failed > 0 && <FloatingMessage key={current.name + '/' + selectedRound} tone="error">{durations.failed}段视频时长读取失败，暂用计划时长（*）。<button className="link" onClick={durations.retry}>重新读取</button></FloatingMessage>}
     <div className="episode-scene-header">
       {scenes.length > 0 && <TabNav label={workMode ? '本片场次' : '本集场次'} items={scenes.map(id => ({ value: id, label: `${workMode ? workSceneLabel(id) : '场次 ' + id} · ${formatProductionDuration(durations.scenes[id])}`, marker: newVideoSegmentsForRound(current.segments?.[id] || [], current.sceneRounds?.[id] || [], roundNumberForScene(id)).size ? '本轮新生成视频' : undefined }))} selected={selectedScene} onChange={value => { setPlayback(previous => previous ? { ...previous, start: undefined } : null); setScene(value); }} />}
@@ -188,12 +217,12 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     {selectedScene ? <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + (episodeRounds.length ? '/' + roundEntry : '')} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} showRoundSelector={!episodeRounds.length} previousEnding={previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
       : <div className="scene-empty" role="status"><h3>暂无可显示的场次</h3><p className="muted">{emptyMessage}</p></div>}
     {episodeNotesExport.dialog}
-    {!!current.materials?.length && <details className="asset-candidate-type production-materials"><summary>专用素材与图片候选（{current.materials.length}）</summary>
-      {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>查看素材生成与审阅记录</button></p>}
+    {(!!current.materials?.length || (workMode && current.materialRecord)) && <details className="asset-candidate-type production-materials"><summary>{workMode ? '制作素材与审阅' : '专用素材与图片候选'}（{current.materials?.length || 0}）</summary>
+      {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>{workMode && !current.readOnly ? '查看资产清单' : '查看素材生成与审阅记录'}</button></p>}
       {(['pending', 'revision', 'adopted', 'unknown', 'history'] as const).map(group => {
-        const images = current.materials!.filter(file => (file.materialGroup || 'unknown') === group)
+        const images = (current.materials || []).filter(file => (file.materialGroup || 'unknown') === group)
           .sort((a, b) => b.name.replace(/\.[^.]+$/, '').localeCompare(a.name.replace(/\.[^.]+$/, ''), 'zh-CN', { numeric: true }));
-        const label = { pending: '待审核', revision: '待修改', adopted: '当前采用', unknown: '状态待核对', history: '旧版留档与已采用源图' }[group];
+        const label = { pending: '待审核', revision: '待修改', adopted: '当前采用', unknown: '状态待核对', history: workMode ? '历史素材' : '旧版留档与已采用源图' }[group];
         return images.length || group === 'adopted' ? <details key={group} className="asset-candidate-type" data-material-group={group} open={group !== 'history'}>
           <summary>{label}（{images.length}）</summary>
           {!images.length && <p className="muted">暂无适用于当前制作的已采用专用图；项目人物、场景和道具资产仍按素材索引引用。</p>}

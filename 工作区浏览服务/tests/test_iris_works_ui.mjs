@@ -57,13 +57,25 @@ try {
      const members=identity==='F002'?{whole:['P001','P002'],S001:['P001'],S002:['P002']}:{[whole]:['P001','P002']};
      const entries=Object.entries(members);
      const board={candidates:[1,2].map(number=>({kind:'image',name:'对应分镜v0'+number+'导演表',key:key+'/导演表-'+number+'.svg',url:'/component-samples/image.svg',page:1,version:'v0'+number,sourceVersion:'v0'+number,candidateNumber:number})),formal:[],record:null};
+     const review=file(key+'/05-资产/资产清单与制作说明-v01.md');
+     const materials=identity==='F002'?['pending','revision','adopted','history'].map(group=>({
+       kind:'image',name:group+'图',key:key+'/'+group+'.svg',url:'/component-samples/image.svg',
+       materialGroup:group,materialReview:review,approvalHtml:'<p>本版本审阅依据</p>',
+     })):[];
      return route.fulfill({json:{kind:'group',name:identity,title:work.name,readOnly:work.readOnly,scenes:Object.keys(members),
        episodeRounds:[{number:1,scenes:[whole]},{number:2,scenes}],
        sceneRounds:Object.fromEntries(entries.map(([scene,ids])=>[scene,[1,2].filter(n=>(n===1?[whole]:scenes).includes(scene)).map(n=>({...round(n),segments:round(n).segments.filter(item=>ids.includes(item.id))}))])),
        segments:Object.fromEntries(entries.map(([scene,ids])=>[scene,ids.map(segment)])),script:source(2),storyboards:{[whole]:source(2)},
-       directorSheets:{[whole]:board},materials:[],productionComplete:false,productionIssues:[]}});
+       directorSheets:{[whole]:board},materials,materialRecord:materials.length?review:null,
+       workStatus:identity==='F002'?{label:'剪映草稿已交接',summaryHtml:'<p>隔离作品的现行制作状态</p>',record:file(key+'/作品状态.md')}:null,
+       productionComplete:false,productionIssues:[]}});
     }
-    if(suffix==='/production-downloads')return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:{count:stage==='一采'?2:0,url:stage==='一采'?base+'/jianying-download?path='+encodeURIComponent(packageKey):null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]))});
+    if(suffix==='/production-downloads') {
+     const download=base+'/jianying-download?path='+encodeURIComponent(packageKey);
+     const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:{count:stage==='一采'?2:0,url:stage==='一采'?download:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
+     const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:[];
+     return route.fulfill({json:{...stages,workPackages}});
+    }
     if(suffix==='/production-notes/export') {
      const changes=request.postDataJSON();writes.push(identity+'-export');
      for(const note of changes.notes)saved[identity].notes[`round/${note.roundNumber}/${note.segment}/${note.stage}/${note.run}`]={...note,updatedAt:'2026-11-06'};
@@ -84,7 +96,11 @@ try {
      return route.fulfill({json:saved[identity].notes[noteKey]});
     }
    }
-   if(path===base+'/jianying-download'){const key=url.searchParams.get('path');downloads.push(key);return route.fulfill({body:'isolated package',headers:{'Content-Disposition':'attachment; filename="F002.jypack"'}})}
+   if(path===base+'/jianying-download'){
+    downloads.push(url.searchParams.get('path'));
+    const extension=url.searchParams.get('format')==='zip'?'zip':'jypack';
+    return route.fulfill({body:'isolated package',headers:{'Content-Disposition':'attachment; filename="F002.'+extension+'"'}});
+   }
    if(path===base+'/resources')return route.fulfill({json:{items:[],total:0,page_size:20}});
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
    unexpected.push(request.method()+' '+path);return route.abort();
@@ -149,6 +165,11 @@ try {
   await page.getByRole('button',{name:'分镜与声音',exact:true}).last().click();
   await page.getByRole('heading',{name:'已保存分镜v02',exact:true}).waitFor();
   await page.getByRole('button',{name:'导演分镜表',exact:true}).click();
+  await page.getByRole('img',{name:'对应分镜v02导演表',exact:true}).waitFor();
+  await page.getByRole('button',{name:'历史版本',exact:true}).click();
+  await page.getByRole('img',{name:'对应分镜v01导演表',exact:true}).waitFor();
+  assert.equal(await page.getByRole('img',{name:'对应分镜v02导演表',exact:true}).count(),0);
+  await page.getByRole('button',{name:'当轮',exact:true}).click();
   await page.getByRole('img',{name:'对应分镜v02导演表',exact:true}).waitFor();
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:/^第1轮/}).click();
@@ -226,6 +247,24 @@ try {
   await page.getByRole('button',{name:'剪映草稿包',exact:true}).and(page.locator('button:not(:disabled)')).first().click();
   await pack;
   assert.equal(downloads.length,before+1);
+  await choose('F002');
+  await page.getByRole('region',{name:'作品制作状态',exact:true}).getByText('剪映草稿已交接',{exact:true}).waitFor();
+  const handoff=page.getByRole('group',{name:'整片交接下载',exact:true});
+  await handoff.getByText('R002 剪映草稿包（2段）',{exact:true}).waitFor();
+  assert.equal(downloads.length,before+1);
+  for(const [label,ext] of [['剪映草稿包','jypack'],['本片 ZIP 下载','zip']]){
+   const clicked=page.waitForEvent('download');
+   await handoff.getByRole('button',{name:label,exact:true}).click();
+   assert.equal((await clicked).suggestedFilename(),'F002.'+ext);
+   assert.equal(downloads.at(-1),'作品/F002-品牌片/07-返修交接/草稿.jianying.json');
+  }
+  await page.getByText('制作素材与审阅（4）',{exact:true}).click();
+  for(const group of ['待审核','待修改','当前采用','历史素材'])await page.getByText(group+'（1）',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'查看资产清单',exact:true}).click();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
+  await page.getByRole('option',{name:/^第1轮/}).click();
+  assert.equal(await handoff.count(),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:`${out}/${width}-works.png`});
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();

@@ -114,6 +114,16 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             video, = item['videos']
             context = video['context']
             self.assertEqual((context['shotTimingSource'], [(shot['id'], shot['start'], shot['duration']) for shot in context['shots']]), expected)
+        manifest = key + '/07-返修交接/草稿.jianying.json'
+        media = [{'file': item['file'], 'member': item['id'] + '.mp4'} for item in spec['segments']]
+        url = self.api + '/works/F001/production-downloads?scene=S001'
+        self.write(manifest, json.dumps({'name': '隔离整片', 'media': media}))
+        package, = self.client.get(url).json()['workPackages']
+        self.assertEqual((package['rounds'], package['count']), ([1], 2))
+        self.write(manifest, json.dumps({'name': '顺序不同', 'media': media[::-1]}))
+        mismatched = self.client.get(url).json()
+        self.assertEqual(mismatched['workPackages'], [])
+        self.assertEqual(mismatched['一采']['videos']['count'], 2)
         self.write(spec['storyboard']['file'], plan.replace('Shot 2：3–7秒', 'Shot 2：4–7秒'))
         invalid = self.detail()['segments']['S001'][0]['videos'][0]['context']
         self.assertEqual([(shot['id'], shot['duration']) for shot in invalid['shots']], [('SH001', None), ('SH002', None)])
@@ -174,12 +184,37 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             self.assertEqual(response.status_code, 200, response.text)
             data = response.json()
             self.assertEqual(data['一采']['videos']['count'], 1)
+            package, = data['workPackages']
+            self.assertEqual(package['rounds'], [1])
             self.assertIsNone(data['后处理']['videos']['url'])
             export.assert_not_called()
             download = self.client.get(data['一采']['videos']['url'] + '&format=jypack')
             self.assertEqual(download.status_code, 200, download.text)
             self.assertEqual(export.call_args.args[0], [(self.project / video, 'P001.mp4')])
             self.assertEqual(export.call_args.args[4], 'jypack')
+
+    def test_work_status_and_material_review_read_only_the_current_evidence(self):
+        self.register()
+        key = self.works['F001']
+        status = self.project / key / '作品状态.md'
+        status.write_text('当前阶段与下一步：样片已取回，等用户看图。\n\n' + status.read_text()
+                          + '\n| 交付状态 | 交付说明 | 归档交接记录 |\n| --- | --- | --- |\n| 样片审阅中 | 审阅后再登记采用 | — |\n')
+        directory = key + '/05-资产/'
+        groups = [('已采用', 'adopted'), ('待审阅', 'pending'), ('待修改', 'revision'), ('未采用', 'history'), ('参考', 'unknown')]
+        rows = []
+        for index, (label, _) in enumerate(groups, 1):
+            image = f'图{index}.png'
+            self.write(directory + image, 'image fixture')
+            rows.append(f'| A{index:03d} | {label} | [{image}]({image}) | 该版本的原决定 |')
+        self.write(directory + '资产清单与制作说明-v01.md',
+                   '| 编号 | 已有／需制作 | 当前文件及版本 | 使用／采用依据 |\n| --- | --- | --- | --- |\n' + '\n'.join(rows))
+        data = self.detail()
+        self.assertEqual(data['workStatus']['label'], '样片审阅中')
+        self.assertIn('样片已取回', data['workStatus']['summaryHtml'])
+        self.assertEqual([item['materialGroup'] for item in data['materials']], [group for _, group in groups])
+        self.assertTrue(all(item['materialReview']['key'].startswith(directory) and '该版本的原决定' in item['approvalHtml']
+                            for item in data['materials']))
+        self.assertTrue(all(not video['approved'] for segment in data['segments']['whole'] for video in segment['videos']))
 
     def test_before_generation_plan_is_visible_without_a_fake_round(self):
         key = '作品/F003-未生成'

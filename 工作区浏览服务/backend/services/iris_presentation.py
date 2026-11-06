@@ -117,7 +117,7 @@ def archived_documents(files, folders, name_pattern=None):
     return sorted(archived, key=lambda item: item['kind'] == 'group')
 
 
-def adopted_media(projects, project, api, listing):
+def asset_review(projects, project, api, listing):
     root = projects.project(project)
     source = root / listing
     content = source.read_text('utf-8-sig')
@@ -128,13 +128,19 @@ def adopted_media(projects, project, api, listing):
         rows = table(content, '编号', '对象/版本', '当前入口', '状态及用途')
     items = []
     for row in rows:
-        if legacy and re.search(r'未采用|不采用|待审|历史候选|不作当前输入', row['状态及用途']):
-            continue
-        if not legacy and row['已有／需制作'] != '已采用':
-            continue
+        decision = row.get('状态及用途', row.get('使用／采用依据', ''))
+        state = decision if legacy else row['已有／需制作']
         for label, href in entries(row['当前入口'] if legacy else row['当前文件及版本']):
-            if legacy and not label.startswith(('已采用', '已确认', '当前认可', '已通过', '正式')):
-                continue
+            if re.search(r'未采用|不采用|历史候选|不作当前输入|旧版留档|停用', state):
+                group, status = 'history', '历史留档'
+            elif re.search(r'待修改|需修改|待返修', state):
+                group, status = 'revision', '待修改'
+            elif re.search(r'待审|待确认', state):
+                group, status = 'pending', '待审核'
+            elif state == '已采用' or (legacy and label.startswith(('已采用', '已确认', '当前认可', '已通过', '正式'))):
+                group, status = 'adopted', '已采用'
+            else:
+                group, status = 'unknown', '状态待核对'
             link = urlsplit(href)
             path = (source.parent / unquote(link.path)).resolve()
             if link.scheme or link.netloc or not path.is_relative_to(root) or not resources.media_kind(path):
@@ -149,6 +155,7 @@ def adopted_media(projects, project, api, listing):
             items.append({
                 'title': row['编号'] + ' · ' + row.get('名称及具体状态', row.get('对象/版本', label)),
                 'version': ref['version'] if ref else '',
+                'group': group, 'status': status, 'decision': decision,
                 'media': {'kind': kind, 'key': key, 'name': file.name,
                           'url': api + '/projects/' + quote(project, safe='') + '/files/' + quote(key, safe='/')},
             })
@@ -221,6 +228,7 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
             selected = [key for key in possible if key in current or key in single_records]
         primary[group['name']] = selected or (possible if len(possible) == 1 else [])
     listing = primary.get(ASSET_FOLDER, [])
+    review = asset_review(projects, project, api, listing[0]) if len(listing) == 1 else []
     sources = brief_sources(projects, project, api, sources_files, primary)
     has_current_brief = primary.get(CUSTOMER_FOLDER) or primary.get(BRIEF_FOLDER) or sources
     stage_archives = {folder: archived_documents(archived_files, folders)
@@ -234,7 +242,8 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
         ]
     return {
         'primary': primary,
-        'adopted': adopted_media(projects, project, api, listing[0]) if len(listing) == 1 else [],
+        'adopted': [{k: item[k] for k in ('title', 'version', 'media')} for item in review if item['group'] == 'adopted'],
+        'assetReview': review,
         'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
             archived_files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
         'stageArchives': stage_archives,

@@ -1,6 +1,6 @@
 import { useProductionAccess } from './ProductionAccess';
 import { useContext, useState } from 'react';
-import type { DirectorSheets } from '../api';
+import type { DirectorSheetImage, DirectorSheets } from '../api';
 import { Dialog, PreviewContext } from '../components';
 import { FileActions } from './FileActions';
 import { Pagination } from './Pagination';
@@ -24,21 +24,31 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [pageKey, setPageKey] = useState(`${sceneId}/`);
   const [fullscreen, setFullscreen] = useState(false);
+  const [scope, setScope] = useState('round');
+  const history = workMode && scope === 'history';
+  const versionKey = (item: DirectorSheetImage) => history ? `${item.sourceVersion}/${item.version}` : item.version;
   const groups = (scenes ? scenes.filter(scene => integrated || scene.id === sceneId) : [{ id: '', sheets, storyboardVersion }]).map(scene => {
-    const sourceKey = `${scene.id}/${scene.storyboardVersion}`;
-    const candidates = scene.sheets?.candidates.filter(item => item.sourceVersion === scene.storyboardVersion && item.candidateNumber) || [];
-    const versions = [...new Set(candidates.map(item => item.version))].sort((a, b) =>
-      candidates.find(item => item.version === b)!.candidateNumber! - candidates.find(item => item.version === a)!.candidateNumber!);
+    const sourceKey = `${scene.id}/${scene.storyboardVersion}${history ? '/history' : ''}`;
+    const registered = scene.sheets?.candidates || [];
+    const candidates = history
+      ? [...registered.filter(item => !item.sourceVersion || item.sourceVersion !== scene.storyboardVersion), ...(scene.sheets?.history || [])]
+      : registered.filter(item => item.sourceVersion === scene.storyboardVersion && item.candidateNumber && (!workMode || scene.storyboardVersion));
+    const versions = [...new Set(candidates.map(versionKey))].sort((a, b) =>
+      (candidates.find(item => versionKey(item) === b)?.candidateNumber || 0)
+      - (candidates.find(item => versionKey(item) === a)?.candidateNumber || 0));
     const options = versions.map(version => {
-      const pages = candidates.filter(item => item.version === version);
+      const pages = candidates.filter(item => versionKey(item) === version);
       const adopted = pages.filter(item => item.adopted).length;
-      return { value: version, label: `候选${pages[0].candidateNumber}（${pages.length}张）`,
+      const first = pages[0];
+      const title = history ? `${first.sourceVersion ? '分镜 ' + first.sourceVersion : '来源分镜未标注'} · 导演表 ${first.version}`
+        : `候选${first.candidateNumber}`;
+      return { value: version, label: `${title}（${pages.length}张）`,
         badge: adopted === pages.length ? '已采用' : adopted ? '部分已采用' : undefined };
     });
     const selected = options.some(item => item.value === choices[sourceKey]) ? choices[sourceKey]
       : options.find(item => item.badge)?.value || options[0]?.value || '';
-    const images = candidates.filter(item => item.version === selected).sort((a, b) => a.page - b.page).map(item =>
-      item.adopted ? scene.sheets!.formal.find(formal => formal.sourceVersion === scene.storyboardVersion
+    const images = candidates.filter(item => versionKey(item) === selected).sort((a, b) => a.page - b.page).map(item =>
+      item.adopted ? scene.sheets!.formal.find(formal => formal.sourceVersion === item.sourceVersion
         && formal.version === item.version && formal.page === item.page)! : item);
     return { ...scene, sourceKey, options, selected, images };
   });
@@ -49,14 +59,19 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
   const pageIndex = exactIndex >= 0 ? exactIndex : Math.max(0, pages.findIndex(item => item.group.id === pageKey.split('/')[0]));
   const current = pages[pageIndex];
   const active = current?.group || groups[0];
+  const record = workMode ? current?.image.sourceRecord || (current ? active?.sheets?.record : undefined) : active?.sheets?.record;
   const selectPage = (page: number) => setPageKey(pages[page - 1].key);
   const count = `${integrated ? (workMode ? '整片' : '整集') : ''}第${pageIndex + 1}页 / 共${pages.length}页`;
   const sceneCount = current && integrated ? ` · ${current.group.id} 第${current.index + 1}页 / 共${current.group.images.length}页` : '';
   const emptyMessage = (group: typeof groups[number]) => <p className="muted">
-    {integrated && `场次 ${group.id}：`}{!group.storyboardVersion ? '该轮缺少来源分镜版本，无法关联导演分镜表。' : `分镜 ${group.storyboardVersion} 尚未制作导演分镜表。`}
-    {group.sheets?.candidates.some(item => !item.sourceVersion || !item.candidateNumber) && '本场有图片尚未登记来源或候选编号，请查看生成与审阅记录。'}
+    {integrated && `场次 ${group.id}：`}
+    {history ? '暂无已登记的历史导演分镜表。' : !group.storyboardVersion ? '该轮缺少来源分镜版本，无法关联导演分镜表。'
+      : workMode ? `本轮分镜 ${group.storyboardVersion} 暂无对应导演分镜表。` : `分镜 ${group.storyboardVersion} 尚未制作导演分镜表。`}
+    {!workMode && group.sheets?.candidates.some(item => !item.sourceVersion || !item.candidateNumber) && '本场有图片尚未登记来源或候选编号，请查看生成与审阅记录。'}
   </p>;
   return <section aria-label={workMode ? '本片导演分镜表' : integrated ? '整集导演分镜表' : '本场导演分镜表'}>
+    {workMode && <TabNav compact label="导演分镜表范围" items={[{ value: 'round', label: '当轮' }, { value: 'history', label: '历史版本' }]}
+      selected={scope} onChange={value => { setScope(value); setPageKey(`${sceneId}/`); }} />}
     {active && <div className="toolbar director-sheet-toolbar">
       <div className="director-sheet-choice">
         {onIntegratedChange && (!workMode || (scenes?.length || 0) > 1) && <label className="director-sheet-integrate"><input type="checkbox" checked={integrated} onChange={event => {
@@ -64,15 +79,15 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
           onIntegratedChange(event.target.checked);
         }} />{workMode ? "整合本片" : "整合本集"}</label>}
         {integrated && <span className="director-sheet-source">场次 {active.id}</span>}
-        {active.options.length > 0 && <TabSelect highlightSelected label="导演分镜表候选" selected={active.selected} onChange={value => {
+        {active.options.length > 0 && <TabSelect highlightSelected label={history ? '历史导演分镜表版本' : '导演分镜表候选'} selected={active.selected} onChange={value => {
           setChoices(previous => ({ ...previous, [active.sourceKey]: value })); setPageKey(`${active.id}/`);
         }} items={active.options} />}
       </div>
       {current && <div className="director-sheet-pages"><TabNav compact scrollable label="导演分镜表页码"
         items={pages.map((item, index) => ({ value: item.key, label: String(index + 1) }))}
         selected={current.key} onChange={setPageKey} /></div>}
-      {(active.sheets?.record || current) && <div className="director-sheet-record">
-        {active.sheets?.record && <button className="link" onClick={() => preview(active.sheets!.record!)}>查看记录</button>}
+      {(record || current) && <div className="director-sheet-record">
+        {record && <button className="link" onClick={() => preview(record)}>查看记录</button>}
         {current && <FileActions url={current.image.url} downloadOnly downloadLabel="下载原图" />}
       </div>}
     </div>}
@@ -92,7 +107,7 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
     </> : active && emptyMessage(active)}
     {integrated && groups.filter(group => !group.images.length && group !== active).map(group => <div key={group.id}>
       {emptyMessage(group)}
-      {group.sheets?.record && <button className="link" onClick={() => preview(group.sheets!.record!)}>查看 {group.id} 生成与审阅记录</button>}
+      {!workMode && group.sheets?.record && <button className="link" onClick={() => preview(group.sheets!.record!)}>查看 {group.id} 生成与审阅记录</button>}
     </div>)}
   </section>;
 }
