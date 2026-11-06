@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 封面制作"
-  short_description: "社交媒体运营二级阶段，设计和维护项目通用、单集封面，规定成套用途、规格、候选及采用。"
+  short_description: "社交媒体运营二级阶段，设计和维护通用及单作品封面，规定成套用途、规格、候选及采用。"
   default_prompt: "使用$nora-cover-images处理当前任务，先确定输入、授权和实际范围。"

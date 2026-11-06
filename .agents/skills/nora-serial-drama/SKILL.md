@@ -25,7 +25,7 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 | D10 视频制作、返修、采用和留档 | [视频制作](../nora-drama-production/SKILL.md) |
 | D11 本集交接、完成与复盘 | [交付收尾](../nora-drama-handoff/SKILL.md) |
 | D12 专项审查 | [审查](../nora-drama-review/SKILL.md) |
-| 运营及发布 | [运营入口](../studio-social-operations/SKILL.md) |
+| 运营及发布 | 先按[本业务运营接入](../nora-drama-positioning/references/社媒运营接入规范.md)提供对象和资料入口，再调用[公共运营](../studio-social-operations/SKILL.md) |
 
 上游、产出和接续关系见[流程表](references/阶段流程与接续规范.md#整体流程)。阶段完成按其实际规则判断，不将阶段路由增加为审批。正式目录、编号和版本按[业务文件规范](references/文件版本与工作稿规范.md)执行。
 
