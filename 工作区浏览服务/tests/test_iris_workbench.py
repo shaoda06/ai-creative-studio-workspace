@@ -4,7 +4,7 @@ from unittest.mock import patch
 from fastapi.responses import Response
 
 from tests import test_iris_works as fixtures
-from backend.services import episode_downloads
+from backend.services import director_packages, episode_downloads
 
 
 class IrisWorkbenchTests(fixtures.IrisWorksTests):
@@ -276,6 +276,78 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             self.assertEqual(export.call_args.args[0], [(self.project / video, 'P001.mp4')])
             self.assertEqual(export.call_args.args[4], 'jypack')
 
+    def test_candidate_products_leave_round_and_handoff_file_unchanged(self):
+        spec = self.register()
+        key = self.works['F001']
+        original = spec['segments'][0]['file']
+        repaired = key + '/06-视频生产/候选/P001-局部修复.mp4'
+        self.write(repaired, 'repaired media')
+        self.write(key + '/06-视频生产/执行记录/R001-一采/视频产物.json', json.dumps({
+            'candidates': {original: {'products': [
+                {'id': 'raw', 'label': '原版', 'file': original, 'default': True},
+                {'id': 'repaired', 'label': '修复版', 'file': repaired},
+            ]}},
+        }))
+        manifest = key + '/07-返修交接/草稿.jianying.json'
+        self.write(manifest, json.dumps({'name': '原交接', 'media': [{'file': original, 'member': 'P001.mp4'}]}))
+        data = self.detail()
+        video, = data['segments']['whole'][0]['videos']
+        self.assertEqual(video['key'], original)
+        self.assertEqual(data['sceneRounds']['whole'][0]['segments'][0]['key'], original)
+        self.assertNotIn('products', self.detail('F002')['segments']['whole'][0]['videos'][0])
+        raw, fixed = video['products']
+        self.assertEqual((raw['default'], fixed['default']), (True, False))
+        self.assertEqual(self.client.get(raw['url'] + '?download=1').text, 'F001候选')
+        self.assertEqual(self.client.get(fixed['url'] + '?download=1').text, 'repaired media')
+        with patch.object(episode_downloads.jianying_export, 'export_archive') as export:
+            export.side_effect = lambda files, output, *args: output.write_bytes(b'isolated handoff')
+            package, = self.client.get(self.api + '/works/F001/production-downloads').json()['workPackages']
+            self.assertEqual((package['rounds'], package['count']), ([1], 1))
+            self.assertEqual(self.client.get(package['zip']).status_code, 200)
+            self.assertEqual(export.call_args.args[0], [(self.project / original, 'P001.mp4')])
+
+    def test_current_execution_downloads_use_exact_request_and_frozen_inputs(self):
+        self.register()
+        record = self.works['F001'] + '/06-视频生产/执行记录/R001-一采'
+        journal_path = self.project / record / '提交任务清单-装配结果.json'
+        journal = json.loads(journal_path.read_text())
+        media = '资源/原图.png'
+        image = self.write(media, 'frozen input')
+        timeline = {'global': {}, 'segments': [{'refs': [{'imageFile': 'stored/ref.png'}]}]}
+        request = {'prompt': {'4': {'class_type': 'MiniMaxH3Director', 'inputs': {'timeline_data': json.dumps(timeline)}}}}
+        journal['tasks'][0]['uploads'] = [{'node': '4', 'input': 'timeline_data', 'file': media,
+                                           'json-path': ['segments', 0, 'refs', 0, 'imageFile']}]
+        journal_path.write_text(json.dumps(journal))
+        self.write(record + '/任务.workflow.json', '{"nodes": []}')
+        self.write(record + '/请求.json', json.dumps(request))
+        self.write(record + '/后台任务状态.json', json.dumps({
+            'prompt_id': 'actual', 'status': 'completed', 'remote_url': 'http://example.invalid',
+        }))
+        stamp = image.stat()
+        self.write(record + '/执行检查报告.json', json.dumps({'sources': {media: [stamp.st_size, stamp.st_mtime_ns]}}))
+        base = self.api + '/works/F001/production-'
+        with patch.object(director_packages.director_export, 'export_package') as export:
+            export.side_effect = lambda spec, resolve, workspace, output: output.write_bytes(resolve(media).read_bytes())
+            listing = self.client.get(base + 'downloads?view=current').json()['一采']
+            export.assert_not_called()
+            canvas, = listing['canvas']['files']
+            self.assertEqual(self.client.get(canvas['url']).json(), {'nodes': []})
+            director, = listing['director']['files']
+            self.assertIn('R001-一采 · P001', director['name'])
+            self.assertEqual(self.client.get(director['url'].replace('/F001/', '/F002/')).status_code, 404)
+            self.assertEqual(self.client.get(director['url']).content, b'frozen input')
+            self.assertEqual(export.call_args.args[0]['workflow'], request['prompt'])
+            self.assertEqual(export.call_args.args[0]['media'], {'stored/ref.png': media})
+            self.assertEqual(list((self.root / 'downloads').iterdir()), [])
+            export.reset_mock()
+            image.write_text('changed input after submission')
+            listing = self.client.get(base + 'downloads?view=current').json()['一采']
+            self.assertEqual(listing['canvas']['count'], 1)
+            self.assertEqual(listing['director']['files'], [])
+            self.assertIn('执行后原素材已变更', listing['director']['messages'][0])
+            self.assertEqual(self.client.get(director['url']).status_code, 409)
+            export.assert_not_called()
+
     def test_work_status_and_material_review_read_only_the_current_evidence(self):
         self.register()
         key = self.works['F001']
@@ -317,6 +389,9 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         work = self.detail()
         self.assertEqual(work['workStatus']['label'], '后期接续')
         self.assertIn('第1轮已采用', work['workStatus']['summaryHtml'])
+        listed = self.client.get(self.api + '/production-works').json()
+        self.assertEqual({item['name']: item['workStatusLabel'] for item in listed},
+                         {'F001': '后期接续', 'F002': '未登记制作状态'})
         videos = work['segments']['whole'][0]['videos']
         self.assertEqual([video['key'] for video in videos if video['approved']], [spec['segments'][0]['file']])
         self.assertTrue(videos[0]['adoptionKnown'])

@@ -13,6 +13,41 @@ import execution_records as recordio
 from h3_pack import MEDIA, verify_pack
 
 
+def timeline_media_paths(value):
+    """Include the editor snapshots as well as the active timeline."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in MEDIA and child:
+                yield child
+            else:
+                yield from timeline_media_paths(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from timeline_media_paths(child)
+
+
+def submitted_media(timeline, node_id, uploads, resolve_frozen_file):
+    """Map the actual remote paths through the accepted task's explicit upload slots."""
+    media = {}
+    for upload in uploads:
+        slot = upload.get('json-path')
+        if upload['node'] != node_id or upload['input'] != 'timeline_data' or not slot or slot[-1] not in MEDIA:
+            continue
+        remote = timeline
+        for field in slot:
+            remote = remote[field]
+        if not remote:
+            continue
+        local = resolve_frozen_file(upload['file'])
+        if remote in media and media[remote] != local:
+            raise ValueError('同一远端素材路径对应不同原文件：' + Path(remote).name)
+        media[remote] = local
+    missing = set(timeline_media_paths(timeline)) - media.keys()
+    if missing:
+        raise ValueError('缺少原素材绑定：' + '、'.join(sorted({Path(value).name for value in missing})))
+    return media
+
+
 def export_package(spec, resolve_file, workspace, output, timeout=300):
     workflow = copy.deepcopy(spec['workflow']) if 'workflow' in spec else recordio.read(resolve_file(spec['api']))
     node = spec['node_id']

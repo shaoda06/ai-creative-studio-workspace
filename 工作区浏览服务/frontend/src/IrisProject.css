@@ -27,3 +27,7 @@
 .iris-batch-list > button strong, .iris-batch-list > button span { display: block; }
 .iris-batch-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .iris-work-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; min-width: 0; }
+.iris-production-heading, .iris-production-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
+.iris-production-heading { justify-content: space-between; }
+.iris-production-status summary { cursor: pointer; }
+.iris-production-status:has(details[open]) { flex-basis: 100%; order: 1; }

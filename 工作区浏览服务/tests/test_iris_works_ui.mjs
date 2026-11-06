@@ -10,7 +10,20 @@ const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
 const out=await mkdtemp('/private/tmp/W489-workbench-');
-const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
+const repairFileName='F002-P001-repair.webm';
+const repairFixture=await readFile(frontend+'public/component-samples/video.webm');
+const nativeDownloads=[];
+const nativeDownloadFixture={name:'isolated-native-download',configureServer(vite){
+ vite.middlewares.use((request,response,next)=>{
+  const url=new URL(request.url,'http://localhost');
+  if(!url.pathname.endsWith('/'+repairFileName)||!url.searchParams.has('download'))return next();
+  nativeDownloads.push(repairFileName);
+  response.setHeader('Content-Type','application/octet-stream');
+  response.setHeader('Content-Disposition',`attachment; filename="${repairFileName}"`);
+  response.end(repairFixture);
+ });
+}};
+const server=await createServer({configFile:false,root:frontend,plugins:[react(),nativeDownloadFixture],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
 let activePage;
@@ -18,10 +31,10 @@ try {
  for (const width of [1280,1366,1920]) {
   const page=await browser.newPage({viewport:{width,height:width===1280?640:width===1366?768:1080}});
   activePage=page;page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],downloads=[],writes=[];
+  const errors=[],unexpected=[],downloads=[],writes=[],technicalDownloads=[];
   page.on('pageerror',error=>errors.push(String(error)));
   const base='/api/workspaces/commercial/projects/隔离多作品';
-  const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片'},
+  const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片',status:'待启动'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片',status:'剪映草稿已交接'},
     {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
@@ -38,7 +51,7 @@ try {
     if(key.endsWith('生产任务-英文R001.md'))return route.fulfill({json:{title:'现行英文生产任务',html:'<p>隔离英文生产段与输入</p>'}});
     return route.fulfill({json:{html:key==='README.md'?'<h1>项目</h1><h2>项目说明</h2><p>项目共用说明</p>':`<h1>正文</h1><h2>作品正文</h2><p>${key.includes('F002')?'品牌片专属正文':'产品片专属正文'}</p>`,url:base+'/files/'+key}});
    }
-   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key,hasArchive:work.hasArchive}))});
+   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key,hasArchive:work.hasArchive,workStatusLabel:work.status}))});
    const match=path.match(/\/works\/(F\d{3})(.*)$/);
    if(match) {
     const identity=match[1],suffix=match[2],work=works.find(item=>item.id===identity),key=work.key;
@@ -51,7 +64,19 @@ try {
     if(suffix==='/production-detail') {
      const source=n=>({kind:'document',name:'分镜v0'+n+'.md',key:key+'/分镜-v0'+n+'.md',version:'v0'+n,doc:{html:'<h2>已保存分镜v0'+n+'</h2><p>'+identity+'历史来源</p>'}});
      const shot=(id,duration)=>({id,duration,html:'<h4>'+id+'</h4><p>隔离镜头 '+id+'</p>'});
-     const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
+     const video=(id,run,n)=>{
+      const oldFailure=identity==='F002'&&id==='P001'&&run==='R001';
+      const unavailable=oldFailure||identity==='F001'&&id==='P002'&&run==='R002'&&missing;
+      const key=identity+'/'+id+'-'+run+'.webm', mediaUrl=base+'/files/'+identity+'-'+id+'-'+run+'.webm';
+      const products=identity==='F002'&&id==='P001'&&run==='R002'?[{
+       id:'raw',label:'原版',default:true,key,url:mediaUrl,fileRevision:'raw',
+      },{
+       id:'repair',label:'修复版',default:false,key:'F002/P001-repair.webm',url:base+'/files/F002-P001-repair.webm',fileRevision:'repair',
+      }]:undefined;
+      return {key,url:unavailable?'':mediaUrl,run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,
+       fileRevision:unavailable?'':identity+id+run,deliveryStatus:unavailable?'未取回':'已取回',taskStatus:oldFailure?'needs_attention':'completed',products,
+       context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}};
+     };
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
      const whole=archive?'C001':'whole';
@@ -77,6 +102,11 @@ try {
      const download=base+'/jianying-download?path='+encodeURIComponent(packageKey);
      const stagePackage={name:'隔离交接包',count:2,url:download+'&format=zip'};
      const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:stage==='一采'?{...stagePackage,packages:[stagePackage],files:[]}:{count:0,url:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
+     if(identity==='F002'){
+      stages['一采'].canvas={count:1,url:null,files:[{name:'R002 · P001 · 画布',url:base+'/files/isolated.workflow.json?download=1'}]};
+      stages['一采'].director={count:1,url:null,files:[{name:'R002 · P001 · 导演包',url:base+'/works/F002/production-director?record=R002'}],
+       messages:['R001 · P001：缺少原素材绑定']};
+     }
      const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:archive?
        [{key:'归档/原剪映草稿.jypack',label:'第6轮 · 中文原交接',version:'第6轮',purpose:'隔离历史',rounds:[],archived:true,jypack:base+'/files/归档/原剪映草稿.jypack?download=1',zip:null}]:[];
      return route.fulfill({json:{...stages,workPackages}});
@@ -87,6 +117,11 @@ try {
      for(const note of changes.notes)saved[identity].notes[`round/${note.roundNumber}/${note.segment}/${note.stage}/${note.run}`]={...note,updatedAt:'2026-11-06'};
      for(const note of changes.rounds)saved[identity].rounds[note.number]={...note,updatedAt:'2026-11-06'};
      return route.fulfill({json:saved[identity]});
+    }
+    if(suffix==='/production-director'&&identity==='F002'){
+     assert.equal(url.searchParams.get('record'),'R002');
+     technicalDownloads.push('director');
+     return route.fulfill({body:'isolated director pack',headers:{'Content-Disposition':'attachment; filename="R002.mmxpack.zip"'}});
     }
     if(suffix==='/production')return route.fulfill({json:{issues:[],segments:[{id:'P001',duration:3,scriptHtml:'',videos:[{key:identity+'/P001.mp4',url:base+'/files/'+identity+'.webm',run:'R001',stage:'一采',approved:false,adoptionKnown:false,candidateNumber:1,fileRevision:identity,deliveryStatus:'已取回',context:{scriptHtml:'<p>'+identity+'实际镜头</p>',shots:[],prompts:{english:identity+' actual prompt',chinese:identity+'中文'},references:{common:[],segment:[]},issues:[]}}]}],batches:[{id:'R001',name:'R001-'+work.name,segments:[{id:'P001',stage:'一采',key:identity+'/P001.mp4'}]}]}});
     if(suffix==='/production-notes/archive' && work.hasArchive && request.method()==='GET') {
@@ -109,7 +144,11 @@ try {
     return route.fulfill({body:'isolated package',headers:{'Content-Disposition':'attachment; filename="F002.'+extension+'"'}});
    }
    if(path===base+'/resources')return route.fulfill({json:{items:[],total:0,page_size:20}});
-   if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
+   if(path.endsWith('/isolated.workflow.json')){
+    technicalDownloads.push('canvas');
+    return route.fulfill({body:'{"nodes":[]}',headers:{'Content-Disposition':'attachment; filename="R002.workflow.json"'}});
+   }
+   if(path.endsWith('.webm'))return url.searchParams.has('download')?route.continue():route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
    unexpected.push(request.method()+' '+path);return route.abort();
   });
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
@@ -132,7 +171,34 @@ try {
   assert.equal((await downloaded).suggestedFilename(),'F002.jypack');
   assert.deepEqual(downloads,['作品/F002-品牌片/07-返修交接/草稿.jianying.json']);
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+  const statistics=page.getByLabel('作品制作统计',{exact:true});
+  for(const status of ['待启动 1 部','剪映草稿已交接 1 部','未登记制作状态 1 部'])await statistics.getByText(status,{exact:true}).waitFor();
   await page.locator('[data-episode=F002]').click();
+  const region=page.getByRole('region',{name:'作品制作状态',exact:true});
+  await region.getByText('剪映草稿已交接',{exact:true}).waitFor();
+  assert.equal(await region.getByRole('button',{name:'查看作品状态',exact:true}).count(),0);
+  const videoLocator=page.locator('.segment-video video');
+  await videoLocator.waitFor();
+  await page.evaluate(()=>window.scrollTo(0,0));
+  const frame=await videoLocator.boundingBox();
+  assert.ok(frame.y<page.viewportSize().height-120,'首屏应至少能看到视频区域上方120px');
+  assert.equal(await page.getByRole('button',{name:/查看.*上集末段/}).count(),0);
+  await page.screenshot({path:`${out}/${width}-production-first-screen.png`});
+  const product=page.getByRole('combobox',{name:'产物选择',exact:true});
+  await product.click();
+  await page.getByRole('option',{name:'修复版',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.segment-video video')?.currentSrc.endsWith('F002-P001-repair.webm'));
+  const filesBefore=nativeDownloads.length;
+  const repairFile=page.waitForEvent('download');
+  await page.getByRole('link',{name:'下载当前视频',exact:true}).click();
+  const selectedFile=await repairFile;
+  assert.equal(selectedFile.suggestedFilename(),repairFileName);
+  assert.equal(nativeDownloads.length,filesBefore+1);
+  assert.deepEqual(await readFile(await selectedFile.path()),repairFixture);
+  await product.click();
+  await page.getByRole('option',{name:/^原版/}).click();
+  await videoLocator.waitFor();
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'2');
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
   let editor=page.getByRole('textbox',{name:'修改意见',exact:true});
   assert.equal(await editor.inputValue(),'');
@@ -157,7 +223,9 @@ try {
   assert.equal(saved.F002.rounds['2'].text,'品牌片整片意见');
   // A candidate preview never changes the registered whole-film combination.
   await page.getByRole('combobox',{name:'版本切换',exact:true}).click();
-  await page.getByRole('option').filter({hasText:/^候选一/}).click();
+  await page.getByRole('option').filter({hasText:/候选一 · R001 · 任务状态待核对 · 未取回/}).click();
+  await page.getByText('执行记录 · 任务状态待核对 · 未取回',{exact:true}).waitFor();
+  await page.getByRole('img',{name:'P001 一采：已采纳（R002）',exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'2');
   assert.equal(await page.getByRole('checkbox',{name:'连续播放',exact:true}).isDisabled(),true);
   await page.getByRole('button',{name:'返回本轮组合',exact:true}).click();
@@ -296,8 +364,18 @@ try {
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:/^第1轮/}).click();
   assert.equal(await handoff.count(),0);
+  await page.getByRole('img',{name:'P001 一采：R001 · 任务状态待核对 · 未取回',exact:true}).waitFor();
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
   await page.getByRole('region',{name:'一采资源下载',exact:true}).getByText('第2轮 · R002 剪映草稿包',{exact:true}).waitFor();
+  const technical=page.getByLabel('一采画布与导演包',{exact:true});
+  await technical.getByText('画布与导演包',{exact:true}).click();
+  await technical.getByText('R001 · P001：缺少原素材绑定',{exact:true}).waitFor();
+  assert.deepEqual(technicalDownloads,[]);
+  for(const [label,file] of [['画布','R002.workflow.json'],['导演包','R002.mmxpack.zip']]){
+   const triggered=page.waitForEvent('download');
+   await technical.getByRole('button',{name:'R002 · P001 · '+label,exact:true}).click();
+   assert.equal((await triggered).suggestedFilename(),file);
+  }
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'1');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:`${out}/${width}-works.png`});

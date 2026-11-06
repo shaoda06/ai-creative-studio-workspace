@@ -977,7 +977,7 @@ def workspace_production(name: str, request: Request, work: str | None = None):
 def workspace_production_works(name: str, request: Request):
     space = request.state.workspace_space
     try:
-        return production.workbench(space).items(space.projects, name)
+        return production.workbench(space).items(space.projects, name, space.api)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -1008,16 +1008,21 @@ def workspace_production_downloads(name: str, work: str, request: Request, scene
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-director')
-def workspace_production_director(name: str, work: str, path: str, request: Request):
+def workspace_production_director(name: str, work: str, request: Request, path: str | None = None,
+                                  record: str | None = None):
     if not management_request(request):
         raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
     space = request.state.workspace_space
     try:
-        spec = production.workbench(space).director_spec(space.projects, name, work, path)
+        adapter = production.workbench(space)
+        if (path is None) == (record is None):
+            raise ValueError('请指定一份导演包清单或一条实际执行记录')
+        spec = adapter.director_spec(space.projects, name, work, path) if record is None else adapter.execution_director_spec(
+            space.projects, name, work, record)
         return director_spec_response(space.projects, name, spec)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
-    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
+    except (ValueError, KeyError, IndexError, zipfile.BadZipFile, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
 

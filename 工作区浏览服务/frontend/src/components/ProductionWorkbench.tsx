@@ -1,6 +1,6 @@
 import { newVideoSegmentsForRound } from '../sceneRoundVideos';
 import { PointerTooltip } from './PointerTooltip';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { FileItem } from '../api';
@@ -25,7 +25,7 @@ import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
-export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number }) {
+export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, workControls }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; workControls?: ReactNode }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
   const namespace = access.namespace(project);
@@ -52,6 +52,11 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const selectedItem = items.find(item => item.name === selected);
   const shared = items.filter(item => item.name === '片头' || item.name === '片尾');
   const episodes = items.filter(item => item.name !== '片头' && item.name !== '片尾');
+  const workCounts = new Map<string, number>();
+  if (workMode) for (const item of episodes) {
+    const label = item.workStatusLabel || '未登记制作状态';
+    workCounts.set(label, (workCounts.get(label) || 0) + 1);
+  }
   const sharedSelected = selected === '片头' || selected === '片尾';
   const contentLabel = sharedSelected ? `${selected}内容稿` : workMode ? '制作脚本' : '本集剧本';
   const detail = useQuery({ queryKey: ['episode', namespace, selected, revision],
@@ -185,18 +190,20 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   return <>
     {breadcrumbSelector && selectedItem && createPortal(<TabSelect iconOnly label="快速选择制作对象" selected={selected!} onChange={open}
       items={items.map(item => ({ value: item.name, label: `${item.name} · ${item.title || (item.name === '片头' || item.name === '片尾' ? '全剧通用' : '题名未记录')}${item.titleStatus ? `（${item.titleStatus}）` : ''}` }))} />, breadcrumbSelector)}
+    {workMode && selectedItem && <div className="iris-production-heading">{workControls}
+      {workStatus && <section className="iris-production-status" aria-label="作品制作状态">
+        <details>
+          <summary>作品制作状态 {workStatus.label && <span className="status-badge status-gray">{current!.readOnly ? '原交付 · ' : ''}{workStatus.label}</span>}</summary>
+          {workStatus.summaryHtml ? <Rich html={workStatus.summaryHtml} /> : workStatus.deliverySummary && <p>{workStatus.deliverySummary}</p>}
+          {current!.readOnly && workStatus.summaryHtml && workStatus.deliverySummary && <p className="muted">{workStatus.deliverySummary}</p>}
+          <button className="link" onClick={() => preview(workStatus.record)}>查看作品状态</button>
+        </details>
+      </section>}
+      {current && renderActions()}
+    </div>}
     {selectedItem && !current ? <Result page loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} /> : current ? <div className="episode-detail">
-    {(breadcrumbActions || workMode) && (breadcrumbActions ? createPortal(renderActions(), breadcrumbActions) : renderActions())}
+    {!workMode && breadcrumbActions && createPortal(renderActions(), breadcrumbActions)}
     {workMode && downloads.error && <FloatingMessage tone="error">交接清单读取失败：{downloads.error.message}。<button className="link" onClick={() => void downloads.refetch()}>重新读取</button></FloatingMessage>}
-    {workStatus && <section className="panel" aria-label="作品制作状态">
-      <div className="phase-progress-status">
-        <strong>作品制作状态</strong>
-        {workStatus.label && <span className="status-badge status-gray">{current.readOnly ? '原交付 · ' : ''}{workStatus.label}</span>}
-        <button className="link" onClick={() => preview(workStatus.record)}>查看作品状态</button>
-      </div>
-      {workStatus.summaryHtml ? <Rich html={workStatus.summaryHtml} /> : <p>{workStatus.deliverySummary}</p>}
-      {current.readOnly && workStatus.summaryHtml && workStatus.deliverySummary && <p className="muted">{workStatus.deliverySummary}</p>}
-    </section>}
     {durations.failed > 0 && <FloatingMessage key={current.name + '/' + selectedRound} tone="error">{durations.failed}段视频时长读取失败，暂用计划时长（*）。<button className="link" onClick={durations.retry}>重新读取</button></FloatingMessage>}
     <div className="episode-scene-header">
       {scenes.length > 0 && <TabNav label={workMode ? '本片场次' : '本集场次'} items={scenes.map(id => ({ value: id, label: `${workMode ? workSceneLabel(id) : '场次 ' + id} · ${formatProductionDuration(durations.scenes[id])}`, marker: newVideoSegmentsForRound(current.segments?.[id] || [], current.sceneRounds?.[id] || [], roundNumberForScene(id)).size ? '本轮新生成视频' : undefined }))} selected={selectedScene} onChange={value => { setPlayback(previous => previous ? { ...previous, start: undefined } : null); setScene(value); }} />}
@@ -216,7 +223,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         <PointerTooltip text={issue.key}><button className="link"  onClick={() => preview({ kind: 'document', key: issue.key, name: issue.key.split('/').pop()! })}>{issue.key.split('/').pop()}</button></PointerTooltip>：{issue.message}
       </li>)}</ul>
     </div> : null}
-    {selectedScene ? <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + (episodeRounds.length ? '/' + roundEntry : '')} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} showRoundSelector={!episodeRounds.length} previousEnding={previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
+    {selectedScene ? <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + (episodeRounds.length ? '/' + roundEntry : '')} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} showRoundSelector={!episodeRounds.length} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
       : <div className="scene-empty" role="status"><h3>暂无可显示的场次</h3><p className="muted">{emptyMessage}</p></div>}
     {episodeNotesExport.dialog}
     {(!!current.materials?.length || (workMode && current.materialRecord)) && <details className="asset-candidate-type production-materials"><summary>{workMode ? '制作素材与审阅' : '专用素材与图片候选'}（{current.materials?.length || 0}）</summary>
@@ -246,7 +253,10 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       {!workMode && <section aria-label="片头与片尾"><h2>片头与片尾</h2><div className="episode-grid episode-grid-pairs">{shared.map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!shared.length && <p className="muted">片头、片尾尚未开始制作。</p>}</section>}
       <section aria-label={workMode ? "视频制作" : "剧集制作"}><h2>{workMode ? "视频制作" : "剧集制作"}</h2>
-        <div className="production-statistics" aria-label="剧集制作统计"><span>共 <strong>{statistics.total}</strong>{workMode ? " 部" : " 集"}</span>{!workMode && <><span>未开始 <strong>{statistics.notStarted}</strong>{workMode ? " 部" : " 集"}</span><span>进行中 <strong>{statistics.running}</strong>{workMode ? " 部" : " 集"}</span><span>已完成 <strong>{statistics.completed}</strong>{workMode ? " 部" : " 集"}</span></>}</div>
+        <div className="production-statistics" aria-label={workMode ? "作品制作统计" : "剧集制作统计"}><span>共 <strong>{statistics.total}</strong>{workMode ? " 部" : " 集"}</span>
+          {workMode ? [...workCounts].map(([label, count]) => <span key={label}>{label} <strong>{count}</strong> 部</span>)
+            : <><span>未开始 <strong>{statistics.notStarted}</strong> 集</span><span>进行中 <strong>{statistics.running}</strong> 集</span><span>已完成 <strong>{statistics.completed}</strong> 集</span></>}
+        </div>
         <div className="episode-grid episode-grid-pairs">{episodes.slice((page - 1) * 36, page * 36).map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!episodes.length && <p className="muted">{workMode ? "尚无作品，请先建立作品资料。" : "尚无剧集制作目录。"}</p>}
         <Pagination page={page} total={episodes.length} change={setPage} />

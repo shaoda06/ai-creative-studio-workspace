@@ -38,14 +38,15 @@ export function IrisProduction({ project, baseUrl, work, onWorkChange, children 
   return <ProductionAccessContext value={access}>
     <Result page loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
     {list.data && <>
-      {opened && <div className="iris-work-toolbar"><button className="link" onClick={() => select(null)}>返回作品列表</button>
-        <TabSelect label="切换作品" selected={work} onChange={select} items={list.data.map(item => ({ value: item.name, label: `${item.name} · ${item.title}` }))} />
-        {view === 'archive' && <span className="muted">历史制作归档（只读）</span>}
-      </div>}
-      {opened && hasArchive && <UnderlineTabs label="作品制作入口" selected={view}
-        items={[{ value: 'current', label: '现行制作' }, { value: 'archive', label: '历史归档' }]}
-        onChange={next => setArchiveWork(next === 'archive' ? work : '')} />}
       <ProductionWorkbench key={view} project={project} items={list.data} selected={opened ? work : null} onSelect={select} revision={0}
+        workControls={opened && <div className="iris-production-controls">
+          <button className="link" onClick={() => select(null)}>返回作品列表</button>
+          <TabSelect label="切换作品" selected={work} onChange={select} items={list.data.map(item => ({ value: item.name, label: `${item.name} · ${item.title}` }))} />
+          {hasArchive && <UnderlineTabs label="作品制作入口" selected={view}
+            items={[{ value: 'current', label: '现行制作' }, { value: 'archive', label: '历史归档' }]}
+            onChange={next => setArchiveWork(next === 'archive' ? work : '')} />}
+          {view === 'archive' && <span className="muted">历史制作归档（只读）</span>}
+        </div>}
         statistics={{ total: list.data.length, completed: 0, notStarted: 0, running: 0 }} />
       {opened && view === 'current' && children}
     </>}

@@ -1,9 +1,3 @@
-from pathlib import Path
-
-import sys
-_SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
-    sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 """One revision owns all its deliverables; default only selects presentation."""
 from copy import deepcopy
 

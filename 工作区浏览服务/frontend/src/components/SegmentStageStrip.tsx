@@ -4,6 +4,8 @@ import type { CSSProperties } from 'react';
 import type { FileItem, SegmentVideo } from '../api';
 import { PointerTooltip } from './PointerTooltip';
 import type { PreviousEpisodeEnding } from '../previousEpisodeEnding';
+import type { ReviewVersions } from './RevisionNotes';
+import { latestVideo, workVideoState } from './SegmentVideo';
 import './SegmentStageStrip.css';
 
 const stages = ['一采', '二采', '后处理'];
@@ -21,9 +23,21 @@ export function segmentStageStatus(videos: SegmentVideo[], stage: string) {
   return { state: 'started', symbol: '−', detail: `${stage}：${latest.run} · ${details.join('；') || '资料准备中，尚未完成'}` };
 }
 
-export function SegmentStageStrip({ segments, selected, onSelect, vertical = false, newVideoSegments, previousEnding, previousSelected, onPreviousSelect }: {
+function workStageStatus(videos: SegmentVideo[], stage: string, chosen: ReviewVersions[string] | undefined) {
+  const recorded = videos.filter(video => video.stage === stage);
+  const candidate = chosen === undefined ? latestVideo(recorded)
+    : recorded.find(video => chosen && video.key === chosen.key && video.run === chosen.run);
+  if (!candidate) return { state: 'not-started', symbol: '○',
+    detail: `${stage}：${recorded.length ? '本轮未选，有其他执行记录' : '暂无执行记录'}` };
+  if (candidate.approved) return { state: 'adopted', symbol: '✓',
+    detail: `${stage}：已采纳（${candidate.run}）${candidate.url ? '' : ' · ' + workVideoState(candidate)}` };
+  return { state: 'started', symbol: '−', detail: `${stage}：${candidate.run} · ${workVideoState(candidate)}` };
+}
+
+export function SegmentStageStrip({ segments, selected, onSelect, vertical = false, newVideoSegments, previousEnding, previousSelected, onPreviousSelect, workProgress }: {
   segments: NonNullable<FileItem['segments']>[string]; newVideoSegments: Set<string>; selected: string; vertical?: boolean; onSelect: (id: string) => void;
   previousEnding: PreviousEpisodeEnding | null; previousSelected: boolean; onPreviousSelect: () => void;
+  workProgress?: { round: ReviewVersions | null };
 }) {
   const rail = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -52,8 +66,8 @@ export function SegmentStageStrip({ segments, selected, onSelect, vertical = fal
       <PointerTooltip text={`${item.id} · 计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? ' · 本轮新生成视频' : ''}`}><button aria-label={`分段 ${item.id}，计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? '，本轮新生成视频' : ''}`} aria-pressed={item.id === selected} onClick={() => onSelect(item.id)}><span>{item.label || item.id}</span><span>{item.duration}秒</span>{newVideoSegments.has(item.id) && <RoundNewDot />}</button></PointerTooltip>
     </div>)}
   </div>;
-  return <div className="segment-scroll segment-progress-scroll">
-    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
+  return <div className={'segment-scroll segment-progress-scroll' + (workProgress ? ' is-work' : '')}>
+    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '') + (workProgress ? ' is-work' : '')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
       {previousButton}
       {previousStatus}
       <div className="segment-strip" role="group" aria-label="本场分段">
@@ -62,7 +76,9 @@ export function SegmentStageStrip({ segments, selected, onSelect, vertical = fal
       <div className="segment-stage-strip" role="group" aria-label="分段制作进度：一采、二采、后处理">
         {segments.map(item => <div className="segment-stage-cell" key={item.id} data-segment={item.id} data-selected={item.id === selected}>
           {stages.map(stage => {
-            const status = segmentStageStatus(item.videos, stage);
+            const status = workProgress
+              ? workStageStatus(item.videos, stage, workProgress.round ? workProgress.round[item.id] || null : undefined)
+              : segmentStageStatus(item.videos, stage);
             const label = `${item.id} ${status.detail}`;
             return <PointerTooltip key={stage} text={label}><span className={`segment-stage-icon is-${status.state}`} role="img" aria-label={label} tabIndex={0}>{status.symbol}</span></PointerTooltip>;
           })}

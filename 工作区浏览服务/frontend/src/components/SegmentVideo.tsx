@@ -4,7 +4,7 @@ import type { ReactNode, Ref } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TaskDetailDialog } from './TaskDetailDialog';
 import type { SegmentVideo as VideoItem } from '../api';
-import { Original } from '../components';
+import { FileActions, Original } from '../components';
 
 export const candidateLabel = (number: number, approved = false) => {
   const digits = '零一二三四五六七八九';
@@ -51,6 +51,13 @@ export const videoTaskMessages: Record<string, string> = {
   collection_failed: '视频取回失败，请查看任务详情', cancelled: '任务已取消', resolved: '任务已结案',
   needs_attention: '任务状态待核对', submission_unknown: '提交结果待核对',
 };
+
+export function workVideoState(video: VideoItem) {
+  if (video.url) return '已取回';
+  const status = video.taskStatus === '未记录' ? '无后台状态记录'
+    : videoTaskMessages[video.taskStatus] || '任务状态待核对';
+  return `${status} · 未取回`;
+}
 
 // A media clock can keep advancing after the browser loses its video renderer.
 // loadedmetadata and error alone do not report that state.
@@ -126,11 +133,11 @@ export function watchVideoPlayback(element: HTMLVideoElement, recover: (reason: 
 export interface SegmentVideoHandle { seekTo: (time: number) => void }
 export interface RepeatPlaybackControl { checked: boolean; onChange: (checked: boolean) => void }
 
-export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef }: {
+export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, downloadOriginal = false }: {
   current?: VideoItem; onTimeChange: (time: number) => void; autoPlay?: boolean;
   onEnded?: () => void; onError?: () => void;
   onFileRevision?: (revision: string) => void;
-  cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode;
+  cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode; downloadOriginal?: boolean;
   repeatControl?: RepeatPlaybackControl;
   retainSource: (source: string) => () => void;
   playerRef: Ref<SegmentVideoHandle>;
@@ -220,7 +227,9 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
         <label className="scene-continuous"><input type="checkbox" checked={repeat && !continuous} disabled={continuous || !loaded?.url} onChange={event => setRepeat(event.target.checked)} />重复播放</label>
         {continuousControl}
         <button className="video-layout-toggle" aria-pressed={wide} onClick={onToggleWide}>{wide ? '恢复布局' : '宽屏显示'}</button>
-        {loaded?.url && <Original url={loaded.downloadUrl || loaded.url} label="查看视频原文件" />}
+        {loaded?.url && (downloadOriginal
+          ? <FileActions url={loaded.downloadUrl || loaded.url} viewLabel="查看视频原文件" downloadLabel="下载当前视频" />
+          : <Original url={loaded.downloadUrl || loaded.url} label="查看视频原文件" />)}
       </div>
     </div>
     {loaded?.previewNote && <p className="muted">{loaded.previewNote}</p>}

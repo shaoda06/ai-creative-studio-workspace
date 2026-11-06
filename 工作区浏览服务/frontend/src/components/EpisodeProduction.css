@@ -1,1 +1,4 @@
 .episode-heading-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px}
+.scene-workspace-tabs.is-work{margin-top:10px}
+.episode-scene-content.is-work{padding-top:10px}
+.segment-selectors.is-work{margin-top:8px}

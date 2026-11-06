@@ -181,6 +181,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     selectSegment(PREVIOUS_ENDING);
   };
   const navigation = (vertical = false) => <SegmentStageStrip vertical={vertical} segments={segments} selected={segment} newVideoSegments={newVideoSegments}
+    workProgress={workMode && !scope.readOnly ? { round: reviewRound?.versions || null } : undefined}
     previousEnding={previousEnding} previousSelected={viewingPrevious} onPreviousSelect={selectPrevious} onSelect={selectSegment} />;
   const changeRound = (number: number, keepSegment = false) => {
     const next = sceneRounds.find(item => item.number === number)!;
@@ -200,8 +201,12 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     }
     setSelections(previous => ({ ...previous, [segment]: value }));
   };
+  const preparationStatus = !wideVideo && (videoCache.total > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
+      {productionRound ? `第${productionRound.number}轮视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
+        : videoCache.ready === videoCache.total ? `${reviewRound ? '本轮' : '最新'}视频已全部准备好` : `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
+    </p></PointerTooltip>;
   return <>
-    <div className="scene-workspace-tabs">
+    <div className={'scene-workspace-tabs' + (workMode ? ' is-work' : '')}>
       <UnderlineTabs label={workMode ? "作品制作内容" : "场次内容"} items={[{ value: 'segments', label: '分段制作' }, { value: 'storyboard', label: workMode ? '分镜与声音' : '场次分镜' }, { value: 'director-sheets', label: '导演分镜表' }, ...(!scope.readOnly ? [{ value: 'dialogue', label: '分镜修改' }] : []), { value: 'downloads', label: '资源下载' }]} selected={view} onChange={value => { setAutoPlay(false); onViewChange(value); }} />
     {showRoundSelector && sceneRounds.length > 0 && <div className="scene-round-selector">
       <span className="production-latest">当前最新{selectedRound !== latestRound!.number && <>：第{latestRound!.number}轮：剧本{latestRound!.script?.version || '缺失'} · 分镜{latestRound!.storyboard?.version || '缺失'}，<button className="production-latest-link" aria-label="切换到最新修改轮次" onClick={() => changeRound(latestRound!.number)}>点击切换</button></>}</span>
@@ -210,14 +215,11 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
           label: `第${item.number}轮：剧本${item.script?.version || '缺失'} · 分镜${item.storyboard?.version || '缺失'}` }))} />
     </div>}
     </div>
-    <div className="episode-scene-content" aria-label={workMode && scene === 'whole' ? '整片制作内容' : scene ? `场次 ${scene} 内容` : '场次内容'}>
+    <div className={'episode-scene-content' + (workMode ? ' is-work' : '')} aria-label={workMode && scene === 'whole' ? '整片制作内容' : scene ? `场次 ${scene} 内容` : '场次内容'}>
     {view === 'segments' && <>
     {segments.length === 0 ? <div className="scene-empty" role="status"><h3>{scene ? '暂无可显示的分段' : '暂无可显示的场次'}</h3><p className="muted">{emptyMessage}</p></div> : null}
     {!wideVideo && (segments.length > 0 || previousEnding) && navigation()}
-    {!wideVideo && (videoCache.total > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
-      {productionRound ? `第${productionRound.number}轮视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
-        : videoCache.ready === videoCache.total ? `${reviewRound ? '本轮' : '最新'}视频已全部准备好` : `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
-    </p></PointerTooltip>}
+    {!workMode && preparationStatus}
     </>}
     <MessagePanel label="场次提示" messages={[
       !!productionRound?.issues.length && { id: 'round-issues', tone: 'error', content: `${productionRound.issues.join('；')}；不会换用当前文档。` },
@@ -233,6 +235,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     ]} />
     {view === 'segments' ? <>
     {currentSegment && <SegmentWorkspace key={`${displayScope.episode}/${displayScope.scene}/${currentSegment.id}`} scope={displayScope} roundNumber={viewingPrevious || workMode && !viewingRoundRevision ? undefined : productionRound?.number} segment={currentSegment.id} revision={revision} items={currentSegment.videos} selection={chosen} cachedSources={videoCache.sources} retainSource={videoCache.retainSource}
+      roundVersion={roundDefault?.key}
       tab={segmentTab} onTabChange={onSegmentTabChange}
       readOnly={scope.readOnly}
       plannedScript={roundEntry && (viewingRoundRevision || (workMode && !chosen.key)) ? { html: roundEntry.scriptHtml, url: roundEntry.scriptUrl, shotIds: roundEntry.shotIds,
@@ -246,12 +249,13 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance}
       onSelectionChange={changeSelection}
       notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
+    {workMode && preparationStatus}
     {notesExport.dialog}
     </> : view === 'storyboard' ? <div className="scene-storyboard">
       {!scene ? <p className="muted">本集尚无场次分镜。</p> : <>
         {!storyboardDocument && !productionRound && !workMode && <Result loading={storyboard.isPending} error={storyboard.error} retry={storyboard.refetch} retrying={storyboard.isFetching} />}
         {(storyboardDocument || (!productionRound && storyboard.data)) && <Document key={productionRound?.number || 'current'} value={storyboardDocument || storyboard.data!} />}
       </>}
-    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} /> : view === 'dialogue' ? productionRound && productionRound.number !== sceneRounds.at(-1)?.number ? null : <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} /> : <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} />}
+    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} /> : view === 'dialogue' ? productionRound && productionRound.number !== sceneRounds.at(-1)?.number ? null : <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} /> : <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} readOnly={scope.readOnly} />}
   </div></>;
 }

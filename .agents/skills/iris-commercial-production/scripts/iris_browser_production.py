@@ -3,6 +3,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import re
+import sys
 from urllib.parse import quote, urlsplit
 
 import execution_records as records
@@ -11,8 +12,11 @@ from prepared_documents import read_journal
 from h3_browser_context import empty_context, request_context
 from iris_works import work_root, historical_sources
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
+from postprocess_products import product_rows
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
+VIDEO_EXTENSIONS = ('.mp4', '.mov', '.webm')
 
 
 def production_section(project, work=None):
@@ -34,7 +38,21 @@ def file_url(api, key):
     return api + '/files/' + quote(key, safe='/')
 
 
-def production_data(project, api, work=None, *, legacy_fallback=True):
+def video_products(project, api, declared):
+    products = []
+    for row in product_rows(declared):
+        key = local_key(project, row['file'])
+        path = project / key
+        if path.suffix.lower() not in VIDEO_EXTENSIONS or not path.is_file():
+            raise ValueError('登记的候选产物不可播放或已缺失：' + key)
+        info = path.stat()
+        products.append({'id': row['id'], 'label': row['label'], 'default': row['default'],
+                         'key': key, 'url': file_url(api, key),
+                         'fileRevision': f'{info.st_size}:{info.st_mtime_ns}'})
+    return products
+
+
+def production_data(project, api, work=None, *, legacy_fallback=True, executions=None):
     section = production_section(project, work)
     segments, batches, contexts, bindings = {}, [], {}, {}
     if not section:
@@ -65,7 +83,10 @@ def production_data(project, api, work=None, *, legacy_fallback=True):
             state = records.read(state_path) if records.exists(state_path) else {}
             check_path = record / '执行检查报告.json'
             sources = records.read(check_path).get('sources', {}) if records.exists(check_path) else {}
+            product_path = record / '视频产物.json'
+            products = {local_key(project, key): value for key, value in records.read(product_path)['candidates'].items()} if records.exists(product_path) else {}
             outputs = (task.get('segment_plan') or {}).get('targets', []) + task.get('outputs', [])
+            task_segments = []
             for target in outputs:
                 key = local_key(project, target['path'], task['project'])
                 identity = re.search(r'(?:^|/)(P\d{3,})(?:-|\.)', key)
@@ -73,15 +94,16 @@ def production_data(project, api, work=None, *, legacy_fallback=True):
                     raise ValueError('商业视频输出缺少分段编号：' + key)
                 segment = identity[1]
                 path = project / key
-                if path.suffix.lower() not in ('.mp4', '.mov', '.webm'):
+                if path.suffix.lower() not in VIDEO_EXTENSIONS:
                     continue
+                task_segments.append((segment, key))
                 item = segments.setdefault(segment, {'id': segment, 'duration': 0, 'scriptHtml': '', 'videos': []})
                 if any(video['key'] == key for video in item['videos']):
                     continue
                 context = request_context(project, task, target.get('index', 0), request, api, sources, bindings, resolve_key=local_key, file_link=file_url) if request else empty_context('实际提交请求尚未保存；不以准备稿替代生成记录。')
                 if stage == '后处理':
-                    sources = [local_key(project, upload['file'], task['project']) for upload in task.get('uploads', [])]
-                    source = next((contexts[source] for source in sources if source in contexts), None)
+                    input_keys = [local_key(project, upload['file'], task['project']) for upload in task.get('uploads', [])]
+                    source = next((contexts[source] for source in input_keys if source in contexts), None)
                     if source:
                         context = deepcopy(source)
                         context['source'] = '后处理输入所对应的生成记录'
@@ -95,12 +117,17 @@ def production_data(project, api, work=None, *, legacy_fallback=True):
                          'context': context, 'deliveryStatus': '已取回' if info else '未取回',
                          'taskStatus': state.get('status', '未记录'), 'taskStateUrl': file_url(api, state_path.relative_to(project).as_posix()),
                          'checkedAt': state.get('updated_at', '')}
+                if key in products:
+                    video['products'] = video_products(project, api, products[key])
                 item['videos'].append(video)
                 if request and task.get('segment_plan'):
                     director = request['prompt'][task['segment_plan']['director_node']]['inputs']
                     group = json.loads(director['timeline_data'])['segments'][target['index']]
                     item['duration'] = group.get('durationSec') or group['length'] / director['frame_rate']
                 batch_segments.append({'id': segment, 'stage': stage, 'key': key})
+            if executions is not None and task_segments:
+                executions.append({'task': task, 'record': record, 'batch': batch_name, 'stage': stage,
+                                   'segments': task_segments, 'request': request, 'state': state, 'sources': sources})
         if batch_segments:
             batches.append({'id': batch_key, 'name': batch_name, 'segments': batch_segments,
                             'url': file_url(api, batch_key)})

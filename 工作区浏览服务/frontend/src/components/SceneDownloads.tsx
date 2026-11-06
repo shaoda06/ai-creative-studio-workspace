@@ -8,7 +8,7 @@ import { DownloadButton } from './DownloadButton';
 import './SceneDownloads.css';
 
 type StagePackage = { name: string; count: number; url: string };
-type Resource = { packages?: StagePackage[]; count: number; url: string | null; files: { name: string; url: string }[] };
+type Resource = { packages?: StagePackage[]; count: number; url: string | null; files: { name: string; url: string }[]; messages?: string[] };
 interface WorkPackage {
   key: string; label: string; version: string; purpose: string; rounds: number[];
   count?: number; archived?: boolean; jypack: string | null; zip: string | null;
@@ -26,10 +26,11 @@ function OriginalDownloads({ resource, label, generated = false }: { resource: R
     : <DownloadButton url={resource.url} label={label} title={resource.url ? '按当前已采用来源临时生成导演包' : '本场该阶段暂无对应文件'} />;
 }
 
-export function SceneDownloads({ project, episode, scene, revision }: { project: string; episode: string; scene: string; revision: number }) {
+export function SceneDownloads({ project, episode, scene, revision, readOnly }: { project: string; episode: string; scene: string; revision: number; readOnly?: boolean }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
+  const currentWork = workMode && !readOnly;
   const videoLabel = workMode ? '交接视频下载' : '已采用视频下载';
   const downloads = useQuery({ queryKey: ['episode-downloads', access.namespace(project), episode, scene, revision],
     queryFn: () => get<Downloads>(access.downloads(project, episode, scene)), placeholderData: keepPreviousData });
@@ -61,13 +62,26 @@ export function SceneDownloads({ project, episode, scene, revision }: { project:
           : workMode ? `本片暂无${stage}交接清单` : `场次${scene}的${stage}暂无已采用视频`} />
         </div>
       </section>
-      <details className="stage-download-group" aria-label={stage + '导演包下载'}>
+      {currentWork ? <details className="stage-download-group" aria-label={stage + '画布与导演包'}>
+        <summary>画布与导演包</summary>
+        {([{ key: 'canvas', label: '原画布' }, { key: 'director', label: '导演包' }] as const).map(({ key, label }) => {
+          const resource = downloads.data[stage][key];
+          return <div key={key}>
+            <h4>{label}</h4>
+            {resource.files.length > 0 && <div className="stage-download-actions">
+              <OriginalDownloads resource={resource} label={label} generated={key === 'director'} />
+            </div>}
+            {resource.messages?.map(message => <p className="muted" key={message}>{message}</p>)}
+            {!resource.files.length && !resource.messages?.length && <p className="muted">本场该阶段暂无执行记录。</p>}
+          </div>;
+        })}
+      </details> : <details className="stage-download-group" aria-label={stage + '导演包下载'}>
         <summary>导演包下载</summary>
         <div className="stage-download-actions">
           <OriginalDownloads resource={downloads.data[stage].director} label="下载导演包" generated />
           <OriginalDownloads resource={downloads.data[stage].canvas} label="下载画布" />
         </div>
-      </details>
+      </details>}
     </section>; })}
     </>}
     </div>

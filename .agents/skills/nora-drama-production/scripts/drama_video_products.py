@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
 from postprocess_products import product_rows
 
 def load_products(project, identity, read):
