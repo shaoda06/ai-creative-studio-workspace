@@ -252,7 +252,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     <div ref={cards}>
       {!workMode && <section aria-label="片头与片尾"><h2>片头与片尾</h2><div className="episode-grid episode-grid-pairs">{shared.map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!shared.length && <p className="muted">片头、片尾尚未开始制作。</p>}</section>}
-      <section aria-label={workMode ? "视频制作" : "剧集制作"}><h2>{workMode ? "视频制作" : "剧集制作"}</h2>
+      <section aria-label={workMode ? "视频制作" : "剧集制作"}>{!workMode && <h2>剧集制作</h2>}
         <div className="production-statistics" aria-label={workMode ? "作品制作统计" : "剧集制作统计"}><span>共 <strong>{statistics.total}</strong>{workMode ? " 部" : " 集"}</span>
           {workMode ? [...workCounts].map(([label, count]) => <span key={label}>{label} <strong>{count}</strong> 部</span>)
             : <><span>未开始 <strong>{statistics.notStarted}</strong> 集</span><span>进行中 <strong>{statistics.running}</strong> 集</span><span>已完成 <strong>{statistics.completed}</strong> 集</span></>}

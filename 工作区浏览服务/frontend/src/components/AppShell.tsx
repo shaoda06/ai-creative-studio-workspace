@@ -13,6 +13,7 @@ export const FooterCheckContext = createContext<HTMLElement | null>(null);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const projectPage = /^\/(?:spaces\/[^/]+\/)?projects\//.test(location.pathname);
   const { service, pending } = useAppUpdate();
   const development = service.data?.environment === 'development';
   const [backTop, setBackTop] = useState(false);
@@ -40,7 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="header-main"><ProjectSwitcher />
         <div className="header-controls" ref={setControlsRoot} /></div>
     </header>
-    <main ref={main} className={location.pathname.startsWith('/projects/') ? 'project-page' : undefined}>{children}</main>
+    <main ref={main} className={projectPage ? 'project-page' : undefined}>{children}</main>
     <footer className="site-footer">
       <span className="service-dot">{development ? '开发环境 · 共用正式资料' : '服务运行中'}</span>
       <Link className="history-link" to="/history">版本与开发记录 · v{APP_VERSION}</Link>

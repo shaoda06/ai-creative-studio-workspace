@@ -6,6 +6,8 @@ import { get } from './api';
 import type { FileItem, RecordData } from './api';
 import { Document, FileLink, FileTree, PreviewContext, Result } from './components';
 import { HeaderControlsContext } from './components/AppShell';
+import { Breadcrumbs } from './components/Breadcrumbs';
+import { PageHeader } from './components/PageHeader';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { DownloadButton } from './components/DownloadButton';
 import { ProjectProduction } from './components/ProjectProduction';
@@ -58,11 +60,12 @@ const tabs = [
   { value: 'resources', label: '项目资源' },
 ] as const;
 
-export function IrisProject({ name, baseUrl, files: projectFiles, productionSection: projectProductionSection, presentation: projectPresentation, works, clearPreview }: {
-  name: string; baseUrl: string; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; works?: IrisWork[] | null; clearPreview: () => void;
+export function IrisProject({ name, baseUrl, headerActions, files: projectFiles, productionSection: projectProductionSection, presentation: projectPresentation, works, clearPreview }: {
+  name: string; baseUrl: string; headerActions: ReactNode; files: FileItem[]; productionSection?: string; presentation?: IrisPresentation; works?: IrisWork[] | null; clearPreview: () => void;
 }) {
   const controls = useContext(HeaderControlsContext);
-  const [section, setSection] = useRefreshState(`${baseUrl}/section`, 'overview');
+  const [section, setSection] = useRefreshState<string>(`${baseUrl}/section`, 'overview');
+  const sectionTitle = (tabs.find(tab => tab.value === section) ?? tabs[0]).label;
   const [selectedWork, setSelectedWork] = useRefreshState(`${baseUrl}/work`, '');
   const currentWork = works?.find(work => work.id === selectedWork) || works?.[0];
   const workSection = !['overview', 'files', 'resources'].includes(section);
@@ -86,6 +89,9 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
 
   return <>
     {controls && createPortal(<TabNav wide label="项目栏目" items={[...tabs]} selected={section} onChange={select} />, controls)}
+    <PageHeader stacked title={name} actions={headerActions}>
+      <Breadcrumbs items={[{ label: sectionTitle }]} />
+    </PageHeader>
     {workSection && !legacy && section !== 'production' && <div className="iris-work-toolbar">
       <span>当前作品</span><TabSelect label="切换作品" items={(works || []).map(item => ({ value: item.id, label: `${item.id} · ${item.name}` }))}
         selected={currentWork?.id || ''} onChange={value => { setSelectedWork(value); clearPreview(); }} />
@@ -93,7 +99,8 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
     {workSection && !legacy && section !== 'production' && (currentWork
       ? <Result page loading={work.isPending} error={work.error} retry={work.refetch} retrying={work.isFetching} />
       : <section className="panel"><p className="muted">本项目尚未建立作品。</p></section>)}
-    {(!workSection || legacy || section === 'production' || work.data) && <div key={`${section}/${section === 'production' ? '' : currentWork?.id || ''}`} className="iris-project-section">
+    {(!workSection || legacy || section === 'production' || work.data) && <div key={`${section}/${section === 'production' ? '' : currentWork?.id || ''}`}
+      className={section === 'production' ? 'iris-project-section iris-production-section' : 'iris-project-section'}>
       {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} hiddenSections={projectPresentation?.overviewHiddenSections} works={works} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
@@ -104,8 +111,8 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
         </section>}
         {legacy && productionRecords}
       </>}
-      {section === 'resources' && <section className="panel"><ResourceLibrary project={name} baseUrl={baseUrl} /></section>}
-      {section === 'files' && <section className="panel"><h2>全部资料</h2><FileTree items={projectFiles} showStatus={false} />
+      {section === 'resources' && <section className="panel"><ResourceLibrary project={name} baseUrl={baseUrl} listTitle="资源列表" /></section>}
+      {section === 'files' && <section className="panel" aria-label="全部资料"><FileTree items={projectFiles} showStatus={false} />
         {!projectFiles.length && <p className="muted">暂无项目资料。</p>}
       </section>}
       {section === 'delivery' && <IrisDelivery baseUrl={baseUrl} files={files} presentation={presentation}
@@ -166,8 +173,7 @@ function IrisOverview({ baseUrl, files, hiddenSections, works }: { baseUrl: stri
   const failed = queries.filter(query => query.isError);
 
   return <>
-    <section className="panel iris-overview-panel" aria-labelledby="iris-overview-title">
-      <h2 id="iris-overview-title">项目概况</h2>
+    <section className="panel iris-overview-panel" aria-label="项目概况">
       <Result page loading={!loaded.length && queries.some(query => query.isPending)} error={failed[0]?.error ?? null}
         retry={() => Promise.all(failed.map(query => query.refetch()))} retrying={queries.some(query => query.isFetching)} />
       {loaded.length > 0 && <Document key={loaded.map(item => item.path).join('/')}
@@ -237,7 +243,6 @@ function IrisBrief({ baseUrl, files, presentation }: { baseUrl: string; files: F
   </details>;
 
   return <>
-    <div className="section-heading iris-stage-heading"><h2>需求与参考</h2></div>
     <IrisDocumentReading baseUrl={baseUrl} section="brief" label="需求与参考" documents={available} beforeBody={sourceDetails}
       empty={archived.length > 0 ? <>
         <p className="muted">本项目的需求与参考资料保存在历史归档中。</p>
@@ -257,7 +262,6 @@ function IrisReadingStage({ stage, baseUrl, files, presentation }: {
   const archived = presentation?.stageArchives?.[folder] || [];
 
   return <>
-    <div className="section-heading iris-stage-heading"><h2>{label}</h2></div>
     <IrisDocumentReading baseUrl={baseUrl} section={stage} label={label} documents={documents}
       empty={archived.length > 0 ? <>
         <p className="muted">本项目的{label}资料保存在历史归档中。</p>
@@ -286,7 +290,6 @@ function IrisAssets({ baseUrl, files, presentation }: { baseUrl: string; files: 
   const listLabel = historical ? '查看历史资产清单' : '资产清单与制作说明';
 
   return <>
-    <div className="section-heading iris-stage-heading"><h2>资产准备</h2></div>
     <UnderlineTabs label="资产准备视图" items={[
       { value: 'media', label: '已采用素材' }, { value: 'list', label: listLabel },
     ]} selected={view} onChange={setView} />
@@ -322,7 +325,6 @@ function IrisDelivery({ baseUrl, files, presentation, openProduction }: {
   const extras = omitDisplayedFiles(files.filter(item => item.name === '07-返修交接' || item.name === '08-完单复盘'), excluded);
   const archives = files.filter(item => archiveNames.includes(item.name) || item.name === '复盘.md');
   return <>
-    <div className="section-heading iris-stage-heading"><h2>交付与复盘</h2></div>
     <UnderlineTabs label="交付与复盘视图" items={[...deliveryTabs]} selected={view} onChange={setView} />
     {view === 'results' ? <section className="panel iris-delivery-results" aria-label="交付成果">
       {delivery?.status && <h3>{delivery.status}</h3>}

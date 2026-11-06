@@ -91,6 +91,15 @@ try {
     assert.ok(Math.abs(entryBottoms[0] - entryBottoms[1]) <= 1, `${width}px / 展示页入口卡片贴底对齐`);
     await contained(entryCards.first(), `${width}px / 展示页入口卡片`);
     const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
+    const singlePath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '示例当前栏目' });
+    const currentStyle = node => {
+      const style = getComputedStyle(node);
+      return [style.color, style.fontSize, style.fontWeight];
+    };
+    assert.deepEqual(await singlePath.locator('[aria-current="page"]').evaluate(currentStyle),
+      await namingPath.locator('[aria-current="page"]').evaluate(currentStyle));
+    assert.equal(await singlePath.evaluate(node => getComputedStyle(node).marginBottom), '0px');
+    await contained(singlePath, `${width}px / 页头当前位置`);
     assert.match(await namingPath.innerText(), /EP001 · 组件演示集/);
     assert.doesNotMatch(await namingPath.innerText(), /（最终定名）/);
     await contained(namingPath.locator('.episode-title-status.status-green'), `${width}px / 标题集名状态`);

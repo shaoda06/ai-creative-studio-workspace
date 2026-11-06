@@ -400,6 +400,17 @@ try {
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();
   await page.getByText('项目共用说明',{exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).count(),0);
+  const location = page.getByRole('navigation',{name:'当前位置',exact:true});
+  for (const label of await tabs.getByRole('button').allTextContents()) {
+   await tabs.getByRole('button',{name:label,exact:true}).click();
+   const title = location.locator('[aria-current="page"]');
+   assert.equal(await title.textContent(),label);
+   assert.deepEqual(await title.evaluate(element=>{
+    const style=getComputedStyle(element);
+    return [style.color,style.fontSize,style.fontWeight];
+   }),['rgb(37, 113, 99)','22px','600']);
+   assert.equal(await page.getByRole('heading',{name:label,exact:true}).count(),0);
+  }
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

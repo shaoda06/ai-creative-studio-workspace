@@ -138,7 +138,7 @@ try{
   await overview.getByText('等待用户审阅。',{exact:true}).waitFor();
   await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await overview.getByText('这里是项目说明正文。',{exact:true}).waitFor();
-  assert.deepEqual(await overview.getByRole('heading').allTextContents(),['项目概况','项目专用约定','当前决定']);
+  assert.deepEqual(await overview.getByRole('heading').allTextContents(),['项目专用约定','当前决定']);
   assert.equal(await overview.getByText(/隔离(资料链接|附属正文|进度链接)/).count(),0);
   const currentDecision=overview.getByRole('heading',{name:'当前决定',exact:true});
   assert.equal(await currentDecision.evaluate(node=>node.previousElementSibling?.textContent),'这里是项目说明正文。');

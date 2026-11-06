@@ -18,7 +18,7 @@ type Family = { resource_id: string; kind: string; name: string; version_count: 
 type Listing = { items: Family[]; total: number; page_size: number };
 const origins: Record<string, string> = { generated: '生成结果', process: '处理结果', user_upload: '用户上传', import: '导入素材', legacy: '历史资料' };
 
-export function ResourceLibrary({ project, baseUrl = projectUrl(project), active = true }: { project: string; baseUrl?: string; active?: boolean }) {
+export function ResourceLibrary({ project, baseUrl = projectUrl(project), active = true, listTitle = '项目资源' }: { project: string; baseUrl?: string; active?: boolean; listTitle?: string }) {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('');
   const [page, setPage] = useState(1);
@@ -31,7 +31,7 @@ export function ResourceLibrary({ project, baseUrl = projectUrl(project), active
     queryFn: () => get<Family>(`${baseUrl}/resources/${selected}`), enabled: active && !!selected });
   const preview = useContext(PreviewContext);
   return <div className="resource-library">
-    <div className="section-heading"><h2>{selected && detail.data ? detail.data.name : '项目资源'}</h2><div className="resource-library-actions">
+    <div className="section-heading"><h2>{selected && detail.data ? detail.data.name : listTitle}</h2><div className="resource-library-actions">
       {selected && <button onClick={() => setSelected('')}>返回资源列表</button>}
       <button onClick={() => setUpload(selected && detail.data ? detail.data : 'new')}>{selected ? '导入新版本' : '导入参考素材'}</button>
       <button onClick={() => { void listing.refetch(); if (selected) void detail.refetch(); }}>刷新</button>

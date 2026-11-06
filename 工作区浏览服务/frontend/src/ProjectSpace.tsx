@@ -54,12 +54,13 @@ export function FilesProject() {
     ...directories.filter(item => item.name !== '资源').map(item => ({ value: item.name, label: item.name === query.data?.productionSection ? '视频制作' : item.name.replace(/^\d+[-_、.\s]+/, '') })),
     { value: '资源', label: '项目资源' },
     { value: '/', label: '全部资料' }];
+  const returnLink = <Link to={`/spaces/${spaceId}`}>返回项目空间</Link>;
   return <PreviewContext.Provider value={setPreview}><div className="home">
-    <PageHeader title={name} actions={<Link to={`/spaces/${spaceId}`}>返回项目空间</Link>} />
+    {(!iris || !query.data) && <PageHeader title={name} actions={returnLink} />}
     <PageCheckStatus queries={[query]} />
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !workspaces.data && <Result page loading={workspaces.isPending} error={workspaces.error} retry={workspaces.refetch} retrying={workspaces.isFetching} />}
-    {query.data && workspaces.data && (iris ? <IrisProject key={baseUrl} name={name} baseUrl={baseUrl}
+    {query.data && workspaces.data && (iris ? <IrisProject key={baseUrl} name={name} baseUrl={baseUrl} headerActions={returnLink}
       files={files} productionSection={query.data.productionSection} presentation={query.data.irisPresentation} works={query.data.works} clearPreview={() => setPreview(null)} /> : <>
       {controlsRoot && createPortal(<TabNav wide label="项目栏目" items={tabs} selected={selected}
         onChange={value => { setSection(value); setPreview(null); }} />, controlsRoot)}
