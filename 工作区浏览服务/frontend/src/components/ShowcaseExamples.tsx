@@ -129,9 +129,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
           beforeBody={<details><summary>参考资料</summary><p>这里是与示例正文关联的参考资料。</p></details>} />
         <Groups groups={[{ name: '普通分组示例', files: [{ kind: 'document', name: '分组文件', doc: { html: '<p>普通分组中的示例文件。</p>' } }] }]} />
       </ComponentExample>
-      <ComponentExample title="提示词分节与正文" rule="已识别的提示词字段可折叠；正文和状态标签沿用统一排版。" usage="视频提示词、文档正文与资产状态">
+      <ComponentExample title="提示词分节与正文" rule="已识别的提示词字段可折叠。正文中的音视频链接打开播放器，其他附件可查看或下载原文件。" usage="视频提示词、项目资料、制作记录与资产状态">
         <PromptSections language="zh" text={'summary: 示例概述\ndetailed_description: 仅供演示的详细描述\noverall_soundscape: 示例声景'} />
         <Rich html={'<p>示例状态：<span class="status-badge status-gray">待确认</span> <span class="status-badge status-green">已完成</span></p>'} />
+        <Rich html={'<p><a href="/component-samples/video.webm" data-doc="video.webm">正文视频示例</a> · <a href="/component-samples/tone.wav" data-doc="tone.wav">正文音频示例</a> · <a href="/component-samples/image.svg" data-doc="image.svg">正文原文件示例</a></p>'} />
       </ComponentExample>
     </>}
     {category === 'states' && <>

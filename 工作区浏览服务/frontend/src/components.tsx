@@ -29,22 +29,39 @@ function CodeBlock({ text, languages }: { text: string; languages?: LanguageGrou
   const content = selected ? selected.text : text;
   return <div className="code-block"><div className="code-toolbar">{languages && <TabNav label={languages.label} items={languages.items} selected={language} onChange={setLanguage} />}<div className="code-copy"><CopyButton key={language} label="复制" text={content} /></div></div><pre><code>{selected ? content.trim().replace(/\n{3,}/g, '\n\n') : content}</code></pre>{selected?.html && <div className="language-notes" dangerouslySetInnerHTML={{ __html: selected.html }} />}</div>;
 }
+function previewFileKind(path: string) {
+  if (/\.(md|json|txt|log)$/i.test(path)) return 'markdown';
+  if (/\.(png|jpe?g|webp|gif)$/i.test(path)) return 'image';
+  if (/\.(mp4|webm|mov)$/i.test(path)) return 'video';
+  if (/\.(mp3|wav|ogg|flac|m4a)$/i.test(path)) return 'audio';
+  return 'file';
+}
+
 export function Rich({ html = '', languages = {} }: { html?: string; languages?: Record<string, LanguageGroup> }) {
   const preview = useContext(PreviewContext);
-  const blocks = useMemo(() => {
-    if (!html.includes('<pre>') && !html.includes('<pre ')) return null;
+  const content = useMemo(() => {
+    const hasCode = html.includes('<pre>') || html.includes('<pre ');
+    if (!hasCode && !html.includes('data-doc="..')) return { html, blocks: null };
     const document = new DOMParser().parseFromString(html, 'text/html');
-    return Array.from(document.body.children).map(element => ({ html: element.outerHTML, code: element.tagName === 'PRE', text: element.textContent || '', languageGroup: element.getAttribute('data-language-pair') }));
+    for (const link of document.querySelectorAll('a[data-doc=".."],a[data-doc^="../"]')) {
+      if (/^\/api\/(?:workspaces\/[^/]+\/)?projects\/[^/]+\/files\//.test(link.getAttribute('href') || '')) {
+        link.replaceWith(...link.childNodes);
+      }
+    }
+    return { html: document.body.innerHTML, blocks: hasCode ? Array.from(document.body.children).map(element => ({
+      html: element.outerHTML, code: element.tagName === 'PRE', text: element.textContent || '',
+      languageGroup: element.getAttribute('data-language-pair'),
+    })) : null };
   }, [html]);
   return <div className="prose" onClick={event => {
     const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-doc]');
     if (anchor && anchor.target !== '_blank') {
       event.preventDefault();
       const key = anchor.dataset.doc!;
-      const kind = /\.(png|jpe?g|webp|gif)$/i.test(key) ? 'image' : 'markdown';
+      const kind = previewFileKind(key);
       preview({ kind, name: anchor.textContent || '文档', key: key + new URL(anchor.href).hash, url: anchor.href });
     }
-  }} dangerouslySetInnerHTML={blocks ? undefined : { __html: html }}>{blocks?.map((block, index) => {
+  }} dangerouslySetInnerHTML={content.blocks ? undefined : { __html: content.html }}>{content.blocks?.map((block, index) => {
     if (!block.code) return <div className="rich-fragment" key={index} dangerouslySetInnerHTML={{ __html: block.html }} />;
     return <CodeBlock key={index} text={block.text} languages={block.languageGroup ? languages[block.languageGroup] : undefined} />;
   })}</div>;
@@ -195,8 +212,9 @@ export function Preview({ project, item, revision, close, baseUrl = projectUrl(p
   const [openedRevision, setOpenedRevision] = useState(revision);
   const [mediaError, setMediaError] = useState('');
   const kind = item.kind;
-  const text = ['markdown', 'json', 'text', 'log', 'outline'].includes(kind) || /\.(md|json|txt|log)(#.*)?$/i.test(item.key || item.name);
   const key = (item.key || '').split('#')[0];
+  const fileKind = previewFileKind(key || item.name);
+  const text = ['markdown', 'json', 'text', 'log', 'outline'].includes(kind) || fileKind === 'markdown';
   const query = useQuery({ queryKey: ['document', baseUrl, key, openedRevision], queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key)}`), enabled: text && !item.doc });
   useEffect(() => {
     const hash = item.key?.split('#')[1];
@@ -204,9 +222,9 @@ export function Preview({ project, item, revision, close, baseUrl = projectUrl(p
       document.querySelectorAll('dialog [id]').forEach(el => { if (el.id === decodeURIComponent(hash)) el.scrollIntoView(); });
     });
   }, [query.data, item.key]);
-  const image = kind === 'image' || /\.(png|jpe?g|webp|gif)$/i.test(key || item.name);
-  const video = kind === 'video' || /\.(mp4|webm|mov)$/i.test(key || item.name);
-  const audio = kind === 'audio' || /\.(mp3|wav|ogg|flac|m4a)$/i.test(key || item.name);
+  const image = kind === 'image' || fileKind === 'image';
+  const video = kind === 'video' || fileKind === 'video';
+  const audio = kind === 'audio' || fileKind === 'audio';
   return <Dialog title={item.name} close={close}>
     {kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
     {text && !item.doc && revision !== openedRevision && <FloatingMessage>项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></FloatingMessage>}

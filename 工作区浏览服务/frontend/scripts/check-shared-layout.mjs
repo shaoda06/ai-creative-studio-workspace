@@ -338,6 +338,13 @@ try {
     await contained(referenceContent, `${width}px / 文档参考入口`);
     await referenceSummary.click();
     assert.equal(await referenceContent.isVisible(), false);
+    for (const [name, tag] of [['正文视频示例', 'video'], ['正文音频示例', 'audio'], ['正文原文件示例', null]]) {
+      await showcase.getByRole('link', { name, exact: true }).click();
+      const preview = page.getByRole('dialog', { name, exact: true });
+      if (tag) await preview.locator(`${tag}[controls]`).waitFor();
+      else await preview.getByRole('link', { name: /查看/ }).waitFor();
+      await preview.getByRole('button', { name: '关闭', exact: true }).click();
+    }
     const release = showcase.locator('.release-films');
     const releaseCategories = release.getByRole('navigation', { name: '成片交付分类', exact: true });
     assert.deepEqual(await releaseCategories.getByRole('button').allTextContents(), ['片头', '片尾', 'EP003', '其他文件']);

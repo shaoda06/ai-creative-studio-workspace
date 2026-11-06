@@ -80,6 +80,10 @@ try{
     const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2 id="details">项目专用约定</h2><p>这里是项目说明正文。</p>'
         + '<h2>资料入口</h2><p>隔离资料链接。</p><h3>附属条目</h3><p>隔离附属正文。</p><h2>进度入口</h2><p>隔离进度链接。</p>'
       : key==='项目状态.md' ? '<h1>项目状态</h1><h2 id="details">当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
+        + '<p><a data-doc="../README.md" href="'+base+'/files/../README.md">仅本地资料</a>'
+        + '<a data-doc="fixture.webm" href="'+base+'/files/fixture.webm">正文视频</a>'
+        + '<a data-doc="fixture.wav" href="'+base+'/files/fixture.wav">正文音频</a>'
+        + '<a data-doc="fixture.html" href="'+base+'/files/fixture.html">正文附件</a></p>'
         : key===brief ? '<h1>简报封面</h1><h2>制作简报正文</h2><p>这里是现行制作简报。</p>'
           : key===requirement ? '<h1>需求记录</h1><h2>需求正文</h2><p>这里是现行需求。</p>'
             : key===archived ? '<h1>历史简报正文</h1>'
@@ -110,6 +114,7 @@ try{
     return route.fulfill({json:path.endsWith('/export')?saved:saved.notes[`${value.segment}/${value.stage}/${value.run}`]});
    }
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
+   if(path.endsWith('.wav'))return route.fulfill({contentType:'audio/wav',path:frontend+'public/component-samples/tone.wav'});
    if(path.endsWith('fixture.png'))return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jLyoAAAAASUVORK5CYII=','base64')});
    unexpected.push(req.method()+' '+path);return route.abort();
   });
@@ -147,6 +152,19 @@ try{
   assert.ok(await currentDecision.evaluate(node=>node===document.activeElement));
   await overviewChapters.getByText('章节导航',{exact:true}).click();
   await page.screenshot({path:`${out}/${width}-overview.png`});
+  await overview.getByText('仅本地资料',{exact:false}).waitFor();
+  assert.equal(await overview.getByRole('link',{name:'仅本地资料',exact:true}).count(),0);
+  for (const [label, tag] of [['正文视频','video'],['正文音频','audio'],['正文附件',null]]) {
+   await overview.getByRole('link',{name:label,exact:true}).click();
+   const preview=page.getByRole('dialog',{name:label,exact:true});
+   if (tag) await preview.locator(tag+'[controls]').waitFor();
+   else {
+    await preview.getByText('此格式暂不支持页内预览，请打开原文件。',{exact:true}).waitFor();
+    assert.match(await preview.getByRole('link',{name:/查看/}).getAttribute('href'),/\/files\/fixture\.html$/);
+   }
+   assert.equal(await preview.getByText('资料读取失败',{exact:false}).count(),0);
+   await preview.getByRole('button',{name:'关闭',exact:true}).click();
+  }
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['项目概况','需求与参考','创意与音画','分镜与声音','资产准备','视频制作','交付与复盘','全部资料','项目资源']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
