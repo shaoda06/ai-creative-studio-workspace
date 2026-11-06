@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio 社交媒体运营"
+  short_description: "为Nora与Iris项目统一组织账号、视觉物料、发布、复盘与制作反馈"
+  default_prompt: "使用 $studio-social-operations 按实际项目与作品归属处理运营任务，并按实际阶段选择模块。"

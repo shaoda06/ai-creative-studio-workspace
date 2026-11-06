@@ -1,11 +1,11 @@
 # AI Creative Studio Workspace
 
-这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务；Nora连续短剧、Nora社媒运营和Iris商业视频各由其一级业务组织阶段，具体做法由对应二级阶段维护。已有明确项目和阶段时直接接续，不重走全流程。全部业务技能与公共工具统一维护在总目录的 `.agents/skills/` 中。
+这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务；Nora连续短剧、Iris商业视频和Studio社媒运营各由其一级业务组织阶段，具体做法由对应二级阶段维护。已有明确项目和阶段时直接接续，不重走全流程。全部业务技能与公共工具统一维护在总目录的 `.agents/skills/` 中。
 
 ## 工作区结构
 
 - [Nora资料区](<workspaces/Nora Workspace/README.md>)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
-- [Iris资料区](<workspaces/Iris Workspace/README.md>)：保存商业订单，项目位于 `workspaces/Iris Workspace/projects/`。
+- [Iris资料区](<workspaces/Iris Workspace/README.md>)：保存商业订单及所属社媒运营资料，项目位于 `workspaces/Iris Workspace/projects/`。
 
 各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。
 

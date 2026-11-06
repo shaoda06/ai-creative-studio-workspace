@@ -19,7 +19,7 @@ description: 连续短剧D04资料设计阶段，维护人物、场景、道具�
 | 参考音视频和人物声音 | [音视频资料](references/参考音视频管理规范.md) |
 | 图片、状态延伸、机位图、图片提示词及采用 | [图片阶段](../nora-drama-images/SKILL.md) |
 | 首帧、导演表和实际选图需求 | [分镜](../nora-drama-storyboard/SKILL.md)，图片制作回图片阶段 |
-| 运营头像、背景和封面设计 | [运营](../nora-social-operations/SKILL.md) |
+| 运营头像、背景和封面设计 | [运营](../studio-social-operations/SKILL.md) |
 | 指定视频获取与分析 | [视频读取](../studio-video-study/SKILL.md) |
 | 玄幻法术外观 | [玄幻方法](../studio-fantasy-combat/SKILL.md#法术表现的使用路径)，只落实本次静态设计 |
 

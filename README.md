@@ -6,7 +6,7 @@
 
 在Codex中选择本总目录。Nora、Iris是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
 
-统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，运营由[运营一级业务](.agents/skills/nora-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续。
+统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，Nora与Iris共用的运营由[运营一级业务](.agents/skills/studio-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
 2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属Nora/Iris工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
@@ -27,7 +27,7 @@
 | `AGENTS.md` | 工作区约定、默认依赖安装位置及本地Git提交规则 |
 | `.agents/skills/studio-entry/` | 统一业务路由与共用能力登记；H3工作流由studio-h3维护，视频处理工作流由studio-video-processing维护，统一按studio-comfyui中的登记定位 |
 | 一级业务及其二级阶段 | 连续短剧D01–D12、运营六阶段；阶段内仅规则、模板及脚本，不再嵌套业务子技能 |
-| `.agents/skills/nora-social-operations/` | 运营一级路由及六个二级业务阶段，管理账号、个人页、封面、发布包、复盘和制作反馈 |
+| `.agents/skills/studio-social-operations/` | 工作区通用运营一级路由及六个共享二级业务阶段，管理账号、个人页、封面、发布包、复盘和制作反馈 |
 | `studio-combat-methods/`、`studio-fantasy-combat/`、`studio-realistic-combat/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
 | `.agents/skills/studio-comfyui/dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
 | `.agents/skills/studio-krea2-style-library/` | 风格库使用与维护指引 |
@@ -140,4 +140,4 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## 分层README规范
 
-一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[Nora运营项目规范](.agents/skills/nora-operations-setup/references/运营项目README规范.md)或[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)维护。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。
+一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[运营项目规范](.agents/skills/nora-operations-setup/references/运营项目README规范.md)或[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)维护。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。

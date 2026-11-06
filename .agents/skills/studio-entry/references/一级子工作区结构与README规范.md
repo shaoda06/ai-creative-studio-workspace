@@ -30,7 +30,7 @@ README是需要Agent主动读取的业务说明与规则文件，不宣称由Cod
 ## 项目层的维护入口
 
 - Nora连续短剧：项目结构沿定位建档阶段及其引用的业务结构规范，项目README使用该阶段的[规范](../../nora-drama-positioning/references/项目README规范.md)和模板。
-- Nora社媒运营：沿用所属创作项目README；实际独立运营项目按[运营项目规范](../../nora-operations-setup/references/运营项目README规范.md)建档。
+- Studio社媒运营（Nora与Iris共用）：沿用所属创作项目README；实际独立运营项目按[运营项目规范](../../nora-operations-setup/references/运营项目README规范.md)建档。
 - Iris商业视频：项目结构与README由[需求建档阶段](../../iris-commercial-brief/references/项目建档与README规范.md)维护。
 
 新增一级业务必须明确自身项目结构与README的维护入口，不直接套用另一个业务的阶段目录。已有项目专用约定继续在其适用范围内执行。

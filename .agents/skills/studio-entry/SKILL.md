@@ -13,7 +13,7 @@ description: AI创作与制作统一入口，识别业务类型并路由一级�
 | --- | --- |
 | AI连续短剧及其单集制作 | [连续短剧业务](../nora-serial-drama/SKILL.md) |
 | 商业视频订单 | [Iris商业一级业务](../iris-commercial-video/SKILL.md)，不套短剧目录 |
-| 社交媒体运营及发布 | [运营一级业务](../nora-social-operations/SKILL.md) |
+| Nora、Iris及独立项目的社交媒体运营与发布 | [Studio运营一级业务](../studio-social-operations/SKILL.md) |
 | 独立剧情短片或其他视频 | 先确定实际业务及交付范围，已有项目规则优先；不因调用图片工具初始化短剧 |
 
 ## 共用工具登记

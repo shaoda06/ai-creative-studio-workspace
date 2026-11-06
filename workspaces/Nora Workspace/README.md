@@ -7,7 +7,7 @@
 ## 一级业务入口
 
 - [Nora连续短剧](../../.agents/skills/nora-serial-drama/SKILL.md)
-- [Nora社媒运营](../../.agents/skills/nora-social-operations/SKILL.md)
+- [Studio社媒运营](../../.agents/skills/studio-social-operations/SKILL.md)
 
 按实际项目类型和当前阶段进入业务；已有角色资产等项目继续遵循各自README的专用约定。
 

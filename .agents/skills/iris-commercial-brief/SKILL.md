@@ -18,3 +18,5 @@ Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流
 新建订单或维护其项目入口时，按[项目建档与README规范](references/项目建档与README规范.md)使用对应模板；编号和真实范围由本阶段确定，不用短剧目录或工作区README模板替代。
 
 处理前明确 C 项目与 F 作品；本阶段资料和本片状态归作品，客户共用原件及媒体版本归项目。目录与状态分工统一按[建档规范](../iris-commercial-brief/references/项目建档与README规范.md)执行。
+
+涉及社媒运营或已有运营报告时，按[商业与运营接续](../iris-commercial-video/references/流程与交接.md#社媒运营接续)确定实际对象和适用建议；当前阶段仍维护原有内容、采用及状态，不因运营入口创建发布任务。
