@@ -17,6 +17,10 @@
 /.agents/skills/fastapi/
 /.agents/skills/humanizer-zh/
 /.agents/skills/dialogue/
+/.agents/skills/herk-edit-kit/
+/.agents/skills/video-use/
+/.agents/skills/ghost-editor/
+/.agents/skills/video-talkcraft/
 
 # 真实项目和本机过程资料不公开，保留目录用途说明。
 /projects/*
