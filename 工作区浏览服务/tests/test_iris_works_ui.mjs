@@ -21,7 +21,8 @@ try {
   const errors=[],unexpected=[],downloads=[],writes=[];
   page.on('pageerror',error=>errors.push(String(error)));
   const base='/api/workspaces/commercial/projects/隔离多作品';
-  const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片'}];
+  const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片'},
+    {id:'F003',name:'历史片',key:'作品/F003-历史片',readOnly:true}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
   saved.F001.notes['round/2/P001/一采/R002']={...saved.F001.notes['P001/一采/R001'],roundNumber:2,run:'R002'};
@@ -36,7 +37,7 @@ try {
     const key=url.searchParams.get('path');
     return route.fulfill({json:{html:key==='README.md'?'<h1>项目</h1><h2>项目说明</h2><p>项目共用说明</p>':`<h1>正文</h1><h2>作品正文</h2><p>${key.includes('F002')?'品牌片专属正文':'产品片专属正文'}</p>`,url:base+'/files/'+key}});
    }
-   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key}))});
+   if(path===base+'/production-works')return route.fulfill({json:works.map(work=>({kind:'group',name:work.id,title:work.name,key:work.key,readOnly:work.readOnly}))});
    const match=path.match(/\/works\/(F\d{3})(.*)$/);
    if(match) {
     const identity=match[1],suffix=match[2],work=works.find(item=>item.id===identity),key=work.key;
@@ -47,10 +48,20 @@ try {
     }
     if(suffix==='/production-detail') {
      const source=n=>({kind:'document',name:'分镜v0'+n+'.md',key:key+'/分镜-v0'+n+'.md',version:'v0'+n,doc:{html:'<h2>已保存分镜v0'+n+'</h2><p>'+identity+'历史来源</p>'}});
-     const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:false,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:[{id:'SH001',duration:3,html:'<p>'+identity+'实际镜头 '+id+' '+run+'</p>'}],dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
+     const shot=(id,duration)=>({id,duration,html:'<h4>'+id+'</h4><p>隔离镜头 '+id+'</p>'});
+     const video=(id,run,n)=>({key:identity+'/'+id+'-'+run+'.webm',url:identity==='F001'&&id==='P002'&&run==='R002'&&missing?'':base+'/files/'+identity+'-'+id+'-'+run+'.webm',run,stage:'一采',approved:false,candidateNumber:n,fileRevision:identity+id+run,deliveryStatus:'已取回',context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}});
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
-     return route.fulfill({json:{kind:'group',name:identity,title:work.name,scenes:['whole'],episodeRounds:[1,2].map(number=>({number,scenes:['whole']})),sceneRounds:{whole:[round(1),round(2)]},segments:{whole:['P001','P002'].map(segment)},script:source(2),storyboards:{whole:source(2)},directorSheets:{whole:{candidates:[1,2].map(number=>({kind:'image',name:'对应分镜v0'+number+'导演表',key:key+'/导演表-'+number+'.svg',url:'/component-samples/image.svg',page:1,version:'v0'+number,sourceVersion:'v0'+number,candidateNumber:number})),formal:[],record:null}},materials:[],productionComplete:false,productionIssues:[]}});
+     const whole=work.readOnly?'C001':'whole';
+     const scenes=identity==='F002'?['S001','S002']:[whole];
+     const members=identity==='F002'?{whole:['P001','P002'],S001:['P001'],S002:['P002']}:{[whole]:['P001','P002']};
+     const entries=Object.entries(members);
+     const board={candidates:[1,2].map(number=>({kind:'image',name:'对应分镜v0'+number+'导演表',key:key+'/导演表-'+number+'.svg',url:'/component-samples/image.svg',page:1,version:'v0'+number,sourceVersion:'v0'+number,candidateNumber:number})),formal:[],record:null};
+     return route.fulfill({json:{kind:'group',name:identity,title:work.name,readOnly:work.readOnly,scenes:Object.keys(members),
+       episodeRounds:[{number:1,scenes:[whole]},{number:2,scenes}],
+       sceneRounds:Object.fromEntries(entries.map(([scene,ids])=>[scene,[1,2].filter(n=>(n===1?[whole]:scenes).includes(scene)).map(n=>({...round(n),segments:round(n).segments.filter(item=>ids.includes(item.id))}))])),
+       segments:Object.fromEntries(entries.map(([scene,ids])=>[scene,ids.map(segment)])),script:source(2),storyboards:{[whole]:source(2)},
+       directorSheets:{[whole]:board},materials:[],productionComplete:false,productionIssues:[]}});
     }
     if(suffix==='/production-downloads')return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:{count:stage==='一采'?2:0,url:stage==='一采'?base+'/jianying-download?path='+encodeURIComponent(packageKey):null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]))});
     if(suffix==='/production-notes/export') {
@@ -60,7 +71,12 @@ try {
      return route.fulfill({json:saved[identity]});
     }
     if(suffix==='/production')return route.fulfill({json:{issues:[],segments:[{id:'P001',duration:3,scriptHtml:'',videos:[{key:identity+'/P001.mp4',url:base+'/files/'+identity+'.webm',run:'R001',stage:'一采',approved:false,adoptionKnown:false,candidateNumber:1,fileRevision:identity,deliveryStatus:'已取回',context:{scriptHtml:'<p>'+identity+'实际镜头</p>',shots:[],prompts:{english:identity+' actual prompt',chinese:identity+'中文'},references:{common:[],segment:[]},issues:[]}}]}],batches:[{id:'R001',name:'R001-'+work.name,segments:[{id:'P001',stage:'一采',key:identity+'/P001.mp4'}]}]}});
-    if(suffix==='/production-notes') {
+    if(suffix==='/production-notes/archive' && work.readOnly && request.method()==='GET') {
+     const note={segment:'P001',stage:'一采',run:'R001',roundNumber:1,text:'原归档分段意见',fileRevision:'old',updatedAt:'2026-11-06'};
+     return route.fulfill({json:{episode:'EP001',scenes:{C001:{notes:{'round/1/P001/一采/R001':note},rounds:{}}},
+       rounds:{1:{number:1,text:'原归档总体意见',updatedAt:'2026-11-06'}}}});
+    }
+    if(suffix==='/production-notes' && !work.readOnly) {
      if(request.method()==='GET')return route.fulfill({json:saved[identity]});
      writes.push(identity);
      if(failSave){failSave=false;return route.fulfill({status:503,json:{detail:'隔离保存失败'}})}
@@ -149,6 +165,42 @@ try {
   await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(writes.length,3); // The storyboard draft did not write any project file.
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  const firstScene=page.getByRole('button',{name:/^场次 S001/});
+  const secondScene=page.getByRole('button',{name:/^场次 S002/});
+  await firstScene.click();
+  await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
+  const shot=page.getByRole('button',{name:'跳转到SH002，1秒',exact:true});
+  await shot.click();
+  await page.waitForFunction(()=>Math.abs(document.querySelector('.segment-video video').currentTime-1)<.05);
+  assert.equal(await shot.getAttribute('aria-current'),'step');
+  await page.getByText('按计划时码定位，实际切点以画面为准。',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'修改意见',exact:true}).click();
+  await page.getByRole('button',{name:'SH002 本镜通过',exact:true}).click();
+  assert.match(await editor.inputValue(),/00\.01\.0秒，SH002：这个分镜没问题/);
+  await editor.blur();
+  await page.getByText('已保存',{exact:true}).waitFor();
+  await page.getByRole('checkbox',{name:'连续播放',exact:true}).check();
+  await page.locator('.segment-video video').dispatchEvent('ended');
+  await page.waitForFunction(()=>document.querySelector('[aria-label="版本切换"]').getAttribute('data-value')==='F002/P002-R002.webm');
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'2');
+  await secondScene.waitFor();
+  assert.equal(await page.getByRole('button',{name:'SH003',exact:true}).isDisabled(),true);
+  await editor.fill('第二场隔离意见');await editor.blur();
+  await page.getByText('已保存',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
+  await dialog.getByRole('heading',{name:'场次 S001',exact:true}).waitFor();
+  await dialog.getByRole('heading',{name:'场次 S002',exact:true}).waitFor();
+  assert.equal(await dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true}).inputValue(),'品牌片整片意见');
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await choose('F003');
+  const writesBeforeArchive=writes.length;
+  await page.getByRole('button',{name:'查看历史意见',exact:true}).click();
+  assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).inputValue(),'原归档分段意见');
+  assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).getAttribute('readonly'),'');
+  assert.equal(await dialog.getByRole('textbox',{name:'第1轮 整片总体意见',exact:true}).inputValue(),'原归档总体意见');
+  assert.equal(await dialog.getByRole('button',{name:'保存',exact:true}).count(),0);
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  assert.equal(writes.length,writesBeforeArchive);
   await choose('F001');
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const continuous=page.getByRole('checkbox',{name:'连续播放',exact:true});

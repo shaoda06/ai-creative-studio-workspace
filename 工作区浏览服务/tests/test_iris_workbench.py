@@ -55,6 +55,93 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         path.write_bytes(value)
         self.assertTrue(self.detail()['segments']['whole'][0]['videos'][0]['url'])
 
+    def test_versioned_plan_groups_a_whole_film_and_aligns_only_evidenced_shots(self):
+        spec = self.register()
+        key = self.works['F001']
+        plan = '''# 隔离分镜
+
+| 生成段 | 场次 | 请求时长 | 所含原镜号 | 段内Shot及时间 |
+| --- | --- | --- | --- | --- |
+| P001 | S001 | 7秒 | SH001、SH002 | Shot 1：0–3秒；Shot 2：3–7秒 |
+| P002 | S002 | 8秒 | SH003、SH004 | Shot 1：0–4秒；Shot 2：4–8秒 |
+
+### 分段P001｜7秒
+
+#### SH001｜外景
+
+原有镜头内容
+
+#### SH002｜开门
+
+**台词与发声者**：甲：“进来”
+
+### 分段P002｜8秒
+
+#### SH003｜室内
+
+室内动作
+
+#### SH004｜收尾
+
+原有结尾
+'''
+        self.write(spec['storyboard']['file'], plan)
+        path = key + '/06-视频生产/候选/P002-一采.mp4'
+        self.write(path, 'existing second candidate fixture')
+        spec['segments'][0]['duration'] = 7
+        spec['segments'].append({'id': 'P002', 'stage': '一采', 'run': 'R001', 'file': path, 'duration': 8})
+        self.write(key + '/06-视频生产/制作轮次.json', json.dumps({'rounds': [spec]}))
+        record = key + '/06-视频生产/执行记录/R001-一采'
+        journal = self.project / record / '提交任务清单-装配结果.json'
+        data = json.loads(journal.read_text())
+        data['tasks'][0]['outputs'].append({'path': path, 'index': 1})
+        journal.write_text(json.dumps(data))
+        groups = [
+            {'prompt': 'detailed_description:\n[Shot 1]\nExterior\n[Shot 2]\nDoor opens'},
+            {'prompt': 'detailed_description:\n[Shot 1]\ntime: 1-5\nInterior\n[Shot 2]\ntime: 5-8\nEnd'},
+        ]
+        self.write(record + '/请求.json', json.dumps({'prompt': {'1': {
+            'class_type': 'MiniMaxH3Director', 'inputs': {'timeline_data': json.dumps({'segments': groups, 'global': {}})},
+        }}}))
+        data = self.detail()
+        self.assertEqual(data['episodeRounds'], [{'number': 1, 'scenes': ['S001', 'S002']}])
+        for scene, segment, expected in [
+            ('S001', 'P001', ('plan', [('SH001', 0, 3), ('SH002', 3, 4)])),
+            ('S002', 'P002', ('recorded', [('SH003', 1, 4), ('SH004', 5, 3)])),
+        ]:
+            self.assertEqual([entry['id'] for entry in data['sceneRounds'][scene][0]['segments']], [segment])
+            item, = data['segments'][scene]
+            video, = item['videos']
+            context = video['context']
+            self.assertEqual((context['shotTimingSource'], [(shot['id'], shot['start'], shot['duration']) for shot in context['shots']]), expected)
+        self.write(spec['storyboard']['file'], plan.replace('Shot 2：3–7秒', 'Shot 2：4–7秒'))
+        invalid = self.detail()['segments']['S001'][0]['videos'][0]['context']
+        self.assertEqual([(shot['id'], shot['duration']) for shot in invalid['shots']], [('SH001', None), ('SH002', None)])
+        self.assertNotIn('shotTimingSource', invalid)
+
+    def test_archived_notes_are_read_from_the_original_file_and_cannot_be_saved(self):
+        self.register()
+        work = self.works['F001']
+        archive = '归档/原制作'
+        self.write(work + '/06-视频生产/历史执行入口.json', json.dumps({'archives': [archive]}))
+        note = {'segment': 'P001', 'stage': '一采', 'run': 'R001', 'roundNumber': 2,
+                'text': 'SH001：原镜头意见', 'fileRevision': 'original', 'updatedAt': '2026-11-05'}
+        path = self.write(archive + '/09-剧集制作/EP001/其他资料/工作稿/EP001-视频修改意见.json',
+                          json.dumps({'episode': 'EP001', 'notes': {'C001': {'round/2/P001/一采/R001': note}},
+                                      'rounds': {'2': {'number': 2, 'text': '原总体意见', 'updatedAt': '2026-11-05'}}}, ensure_ascii=False))
+        original = path.read_bytes()
+        url = self.api + '/works/F001/production-notes'
+        result = self.client.get(url + '/archive')
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['scenes']['C001']['notes']['round/2/P001/一采/R001']['text'], note['text'])
+        self.assertEqual(result.json()['rounds']['2']['text'], '原总体意见')
+        self.assertEqual(self.client.get(url.replace('F001', 'F002') + '/archive').status_code, 404)
+        change = {key: value for key, value in note.items() if key != 'updatedAt'}
+        self.assertEqual(self.client.put(url, json={**change, 'expectedText': ''}).status_code, 409)
+        self.assertEqual(self.client.put(url + '/archive', json=change).status_code, 405)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertFalse((self.project / work / '06-视频生产/视频修改意见.json').exists())
+
     def test_round_notes_are_separate_and_unknown_combinations_are_rejected(self):
         for identity in self.works:
             self.register(identity)
@@ -96,7 +183,7 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
 
     def test_before_generation_plan_is_visible_without_a_fake_round(self):
         key = '作品/F003-未生成'
-        self.write(key + '/04-分镜声音/分镜与声音制作稿-v01.md', '# 分镜\n### 分段P001｜5秒\n明确计划动作')
+        self.write(key + '/04-分镜声音/分镜与声音制作稿-v01.md', '# 分镜\n### 分段P001｜5秒\n\n#### SH001\n明确计划动作')
         self.write(key + '/作品状态.md', '| 对象 | 当前版本/文件 |\n| --- | --- |\n| 分镜 | ' + key + '/04-分镜声音/分镜与声音制作稿-v01.md |')
         data = self.detail('F003')
         self.assertEqual(data['episodeRounds'], [])
@@ -104,6 +191,7 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertEqual(item['duration'], 5)
         self.assertTrue(item['planned'])
         self.assertEqual(item['videos'], [])
+        self.assertEqual(item['shotIds'], ['SH001'])
         self.assertIn('明确计划动作', item['scriptHtml'])
 
     def test_bad_source_and_unregistered_candidate_are_not_replaced_with_latest(self):

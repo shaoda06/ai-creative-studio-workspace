@@ -35,7 +35,12 @@ def request_context(project, task, index, request, api, sources, bindings, *, re
         timing = re.search(r'(?:^|\n)\s*(?:time|timing):\s*(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)', text, re.I)
         duration = float(timing[2]) - float(timing[1]) if timing else None
         rendered = '<h4>SH' + match[1].zfill(3) + '</h4><p>' + html.escape(text).replace('\n', '<br>') + '</p>'
-        result['shots'].append({'id': 'SH' + match[1].zfill(3), 'duration': duration if duration and duration > 0 else None, 'html': rendered})
+        shot = {'id': 'SH' + match[1].zfill(3), 'duration': duration if duration and duration > 0 else None, 'html': rendered}
+        if shot['duration'] is not None:
+            shot['start'] = float(timing[1])
+        result['shots'].append(shot)
+    if result['shots'] and all(shot['duration'] is not None for shot in result['shots']):
+        result['shotTimingSource'] = 'recorded'
     result['scriptHtml'] = ''.join(shot['html'] for shot in result['shots'])
     for upload in task.get('uploads', []):
         slot = upload.get('json-path', [])

@@ -1032,6 +1032,20 @@ def workspace_production_notes(name: str, request: Request, work: str | None = N
         raise HTTPException(503, '修改意见读取失败：' + str(error)) from error
 
 
+@spaces_router.get('/projects/{name}/works/{work}/production-notes/archive')
+def workspace_archived_production_notes(name: str, work: str, request: Request) -> EpisodeNotes:
+    space = request.state.workspace_space
+    try:
+        archived = production.workbench(space).archive_episode(space.projects.project(name), work)
+        if archived is None:
+            raise FileNotFoundError('本作品没有登记历史制作归档')
+        return EpisodeRevisionNotes(revision_notes).read(*archived)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(503, '历史修改意见读取失败：' + str(error)) from error
+
+
 @spaces_router.get('/projects/{name}/production-context')
 @spaces_router.get('/projects/{name}/works/{work}/production-context')
 def workspace_production_context(name: str, source: str, identity: str, request: Request, work: str | None = None):

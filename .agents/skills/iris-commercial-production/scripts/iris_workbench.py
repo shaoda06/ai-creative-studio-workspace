@@ -1,6 +1,7 @@
 """Iris business projection for the complete shared production page. Read only."""
 from copy import deepcopy
 import json
+from math import isclose
 from pathlib import Path
 import re
 from urllib.parse import quote, unquote
@@ -10,6 +11,9 @@ from backend.parsers.documents import cells
 from backend.services.iris_presentation import table, entries, work_view
 from iris_works import discover_works, work_root
 import iris_browser_production as production
+
+
+SHOT_HEADING = re.compile(r'(?m)^####\s+(SH\d{3,})(?!\d)[^\n]*\n')
 
 
 def document(projects, name, api, key, version=''):
@@ -38,6 +42,67 @@ def segment_text(text, identity):
                 header -= 1
             return '\n\n'.join('**' + label + '**：' + value for label, value in zip(cells(lines[header + 1]), cells(line)))
     return ''
+
+
+def segment_rows(text):
+    rows = list(table(text, '生成段'))
+    field = '生成段' if rows else '段号'
+    if not rows:
+        rows = table(text, field)
+    return {row[field]: row for row in rows if re.fullmatch(r'P\d{3,}', row[field])}
+
+
+def scene_segments(identities, rows):
+    assigned = [rows.get(identity, {}).get('场次', '').strip() for identity in identities]
+    if not any(assigned):
+        return {'whole': identities}
+    scenes = {}
+    previous = None
+    for identity, scene in zip(identities, assigned):
+        if not re.fullmatch(r'S\d{3,}', scene):
+            raise ValueError(f'{identity} 的场次未登记或编号无效（应为 S001 形式）')
+        if scene in scenes and scene != previous:
+            raise ValueError(f'{scene} 的分段在整片轮次中须连续排列')
+        scenes.setdefault(scene, []).append(identity)
+        previous = scene
+    return scenes
+
+
+def listed_shots(row):
+    value = row.get('对应镜号') or row.get('所含原镜号', '')
+    ids = re.split(r'[、,，\s]+', value.strip())
+    return ids if all(re.fullmatch(r'SH\d{3,}', identity) for identity in ids) and len(set(ids)) == len(ids) else []
+
+
+def apply_plan_timing(context, row, duration, business_ids):
+    shots = context['shots']
+    if context.get('shotTimingSource') == 'recorded':
+        return
+    ids = listed_shots(row)
+    declared = row.get('段内Shot及时间', '')
+    if not declared or not ids or len(ids) != len(shots) or (business_ids and ids != business_ids):
+        return
+    spans = []
+    end = 0.0
+    for index, part in enumerate(re.split(r'[；;]', declared), 1):
+        match = re.fullmatch(r'\s*Shot\s+(\d+)\s*[:：]\s*(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*秒\s*', part)
+        if not match or int(match[1]) != index:
+            return
+        start, stop = map(float, match.groups()[1:])
+        if not isclose(start, end, abs_tol=1e-6) or stop <= start:
+            return
+        spans.append((start, stop - start))
+        end = stop
+    if len(spans) != len(shots) or not isclose(end, duration, abs_tol=1e-6):
+        return
+    for index, (shot, (start, planned)) in enumerate(zip(shots, spans), 1):
+        if shot['id'] != f'SH{index:03d}' or (shot['duration'] is not None and (
+                not isclose(shot['duration'], planned, abs_tol=1e-6)
+                or not isclose(shot['start'], start, abs_tol=1e-6))):
+            return
+    for shot, identity, (start, planned) in zip(shots, ids, spans):
+        shot.update(id=identity, start=start, duration=planned)
+    context['shotTimingSource'] = 'plan'
 
 
 def source(projects, name, api, declaration, issues):
@@ -80,9 +145,7 @@ def validate_notes(project, work, identities, changes):
         raise ValueError('意见须对应本作品已有候选及已登记的整片轮次')
 
 
-def legacy_detail(project, api, work):
-    """Keep the archive's native scene/round/source data instead of flattened batch cards."""
-    from backend.parsers.project import build_data
+def archive_episode(project, work):
     sources = production.legacy_sources(project, work)
     if not sources:
         return None
@@ -93,9 +156,19 @@ def legacy_detail(project, api, work):
                 if path.is_dir() and re.fullmatch(r'EP\d{3,}', path.name)]
     if len(episodes) != 1:
         raise ValueError('历史作品须明确对应一集原制作资料')
+    return archive, episodes[0].name
+
+
+def legacy_detail(project, api, work):
+    """Keep the archive's native scene/round/source data instead of flattened batch cards."""
+    archived = archive_episode(project, work)
+    if archived is None:
+        return None
+    from backend.parsers.project import build_data
+    archive, episode = archived
     data = build_data(archive, web_episode_navigation=True, load_scope='09-剧集制作',
-                      episode_id=episodes[0].name, episode_mode='playback')
-    original = next(item for item in data['catalogues']['09-剧集制作']['children'] if item['name'] == episodes[0].name)
+                      episode_id=episode, episode_mode='playback')
+    original = next(item for item in data['catalogues']['09-剧集制作']['children'] if item['name'] == episode)
     archive_key = archive.relative_to(project).as_posix()
     prefix = api + '/files/' + quote(archive_key, safe='/') + '/'
     result = production.legacy_links(deepcopy(original), prefix)
@@ -111,7 +184,7 @@ def legacy_detail(project, api, work):
     for scene, segments in result.get('segments', {}).items():
         for segment in segments:
             for video in segment['videos']:
-                identity = '-'.join((episodes[0].name, scene, segment['id'], video['run'], video['stage']))
+                identity = '-'.join((episode, scene, segment['id'], video['run'], video['stage']))
                 video['contextUrl'] = api + '/works/' + work + '/production-context?source=' + quote(archive_key, safe='') + '&identity=' + quote(identity, safe='')
     result.update(name=work, readOnly=True, productionComplete=False)
     return result
@@ -129,6 +202,7 @@ def detail(projects, name, space_api, work):
     segments = data['segments']
     by_id = {item['id']: item for item in segments}
     rounds = []
+    groups_by_round = {}
     numbers = set()
     for spec in round_spec(project, work):
         number = spec['number']
@@ -140,6 +214,7 @@ def detail(projects, name, space_api, work):
         storyboard = source(projects, name, api, spec.get('storyboard'), issues)
         plan = source(projects, name, api, spec.get('plan') or spec.get('storyboard'), issues)
         plan_text = projects.file(name, plan['key']).read_text('utf-8-sig') if plan else ''
+        rows = segment_rows(plan_text)
         values = []
         for value in spec['segments']:
             identity = value['id']
@@ -153,9 +228,12 @@ def detail(projects, name, space_api, work):
                 issues.append(identity + ' 的指定候选未在原执行记录找到，不换用其他版本')
             text = segment_text(plan_text, identity)
             rendered = production.legacy_links(documents.markdown(text, plan['key']), api + '/files/') if text else ''
+            row = rows.get(identity, {})
+            business_shots = list(SHOT_HEADING.finditer(text))
+            shot_ids = [shot[1] for shot in business_shots] or listed_shots(row)
             item['scriptHtml'] = rendered
             values.append({**{k: value[k] for k in ('id', 'duration', 'stage', 'run')}, 'key': key,
-                           'scriptHtml': rendered, 'scriptUrl': plan['url'] if plan else ''})
+                           'scriptHtml': rendered, 'scriptUrl': plan['url'] if plan else '', 'shotIds': shot_ids})
             if candidate and plan:
                 context = candidate.get('context')
                 if context and not context.get('businessSource'):
@@ -177,12 +255,16 @@ def detail(projects, name, space_api, work):
                         chinese = re.search(r'^##\s+\d*\s*(?:同版)?中文[^\n]*\n(.*?)(?=^##\s|\Z)', prompt.read_text('utf-8-sig'), re.M | re.S)
                         if chinese:
                             context['prompts'].update(chinese=chinese[1].strip().removeprefix('```text').removesuffix('```').strip(), chineseUrl=production.file_url(api, prompt.relative_to(project).as_posix()))
-                    business_shots = list(re.finditer(r'(?m)^####\s+(SH\d+)[^\n]*\n', text))
+                    apply_plan_timing(context, row, value['duration'], [shot[1] for shot in business_shots])
                     if business_shots and len(business_shots) == len(context['shots']):
                         for offset, match in enumerate(business_shots):
                             end = business_shots[offset + 1].start() if offset + 1 < len(business_shots) else len(text)
                             part = text[match.start():end]
                             context['shots'][offset].update(id=match[1], html=production.legacy_links(documents.markdown(part, plan['key']), api + '/files/'))
+                    elif not business_shots and len(shot_ids) == len(context['shots']) and all(
+                            shot['id'] == f'SH{index:03d}' for index, shot in enumerate(context['shots'], 1)):
+                        for shot, shot_id in zip(context['shots'], shot_ids):
+                            shot['id'] = shot_id
                     dialogues = []
                     for shot in business_shots:
                         end = next((other.start() for other in business_shots if other.start() > shot.start()), len(text))
@@ -199,6 +281,7 @@ def detail(projects, name, space_api, work):
             issues.append('本轮缺少计划分段：' + '、'.join(missing))
         if not values:
             raise ValueError('整片轮次至少需要一个明确分段')
+        groups_by_round[number] = scene_segments([item['id'] for item in values], rows)
         rounds.append({'number': number, 'created_at': spec['created_at'], 'note': spec.get('note', ''),
                        'episodeRound': True, 'script': script, 'storyboard': storyboard, 'issues': issues, 'segments': values})
     rounds.sort(key=lambda item: item['number'])
@@ -208,23 +291,42 @@ def detail(projects, name, space_api, work):
     for field, folder in [('script', '03-创意脚本'), ('storyboard', '04-分镜声音')]:
         values = primary.get(folder, [])
         current_sources[field] = document(projects, name, api, values[0], re.search(r'v\d+', values[0])[0] if re.search(r'v\d+', values[0]) else '') if len(values) == 1 else None
+    scene_members = {}
+    scene_rounds = {}
+    episode_rounds = []
+    for round_ in rounds:
+        groups = groups_by_round[round_['number']]
+        episode_rounds.append({'number': round_['number'], 'scenes': list(groups)})
+        entries_by_id = {item['id']: item for item in round_['segments']}
+        for scene, identities in groups.items():
+            scene_members.setdefault(scene, {}).update((identity, by_id[identity]) for identity in identities)
+            scene_rounds.setdefault(scene, []).append({**round_, 'segments': [entries_by_id[identity] for identity in identities]})
     if not rounds and current_sources['storyboard']:
         board = current_sources['storyboard']
         text = projects.file(name, board['key']).read_text('utf-8-sig')
-        # Explicit P headings also give a useful page before the first generated candidate.
-        for match in re.finditer(r'(?m)^#{2,4}\s+(?:分段\s*)?(P\d{3,})[^\n]*', text):
-            identity = match[1]
+        rows = segment_rows(text)
+        headings = {match[1]: match[0] for match in re.finditer(r'(?m)^#{2,4}\s+(?:分段\s*)?(P\d{3,})[^\n]*', text)}
+        planned_ids = list(dict.fromkeys([*rows, *headings]))
+        for identity in planned_ids:
             item = by_id.setdefault(identity, {'id': identity, 'duration': 0, 'videos': []})
             part = segment_text(text, identity)
-            duration = re.search(r'(\d+(?:\.\d+)?)秒', match[0])
+            row = rows.get(identity, {})
+            duration = re.search(r'(\d+(?:\.\d+)?)\s*秒', row.get('请求时长') or row.get('目标时长') or headings.get(identity, ''))
             item.update(planned=not item['videos'], scriptHtml=production.legacy_links(documents.markdown(part, board['key']), api + '/files/'),
-                        scriptUrl=board['url'], duration=float(duration[1]) if duration else item['duration'])
+                        scriptUrl=board['url'], shotIds=SHOT_HEADING.findall(part) or listed_shots(row),
+                        duration=float(duration[1]) if duration else item['duration'])
+        scene_members = {scene: {identity: by_id[identity] for identity in identities}
+                         for scene, identities in scene_segments(planned_ids, rows).items()}
+    assigned_ids = {identity for members in scene_members.values() for identity in members}
+    unassigned = {identity: item for identity, item in by_id.items() if identity not in assigned_ids}
+    if unassigned or not scene_members:
+        scene_members.setdefault('whole', {}).update(unassigned)
     materials = [{**item['media'], 'materialGroup': 'adopted', 'materialStatus': '已采用', 'materialNote': item['title']}
                  for item in view['irisPresentation']['adopted'] if item['media']['kind'] == 'image']
-    return {'kind': 'group', 'name': work, 'title': entry['name'], 'key': entry['key'], 'scenes': ['whole'],
-            'segments': {'whole': sorted(by_id.values(), key=lambda item: item['id'])},
-            'sceneRounds': {'whole': rounds}, 'episodeRounds': [{'number': item['number'], 'scenes': ['whole']} for item in rounds],
-            'script': current_sources['script'], 'storyboards': {'whole': current_sources['storyboard']} if current_sources['storyboard'] else {},
+    return {'kind': 'group', 'name': work, 'title': entry['name'], 'key': entry['key'], 'scenes': list(scene_members),
+            'segments': {scene: list(items.values()) for scene, items in scene_members.items()},
+            'sceneRounds': {scene: scene_rounds.get(scene, []) for scene in scene_members}, 'episodeRounds': episode_rounds,
+            'script': current_sources['script'], 'storyboards': {scene: current_sources['storyboard'] for scene in scene_members} if current_sources['storyboard'] else {},
             'directorSheets': {'whole': director_sheets(projects, name, api, root)},
             'materials': materials, 'productionComplete': False, 'productionIssues': []}
 

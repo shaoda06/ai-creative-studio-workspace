@@ -21,6 +21,7 @@ export function IrisProduction({ project, baseUrl, work, onWorkChange, children 
     scope: (_, unit, scene) => ({ project, episode: unit, scene, label: `${unit}整片`,
       notesUrl: `${baseUrl}/works/${unit}/production-notes`, stateKey: `scene/${baseUrl}/${unit}/${scene}`,
       readOnly: list.data?.find(item => item.name === unit)?.readOnly }),
+    notesSummary: scope => `${baseUrl}/works/${scope.episode}/production-notes/archive`,
     downloads: (_, unit, scene) => `${baseUrl}/works/${unit}/production-downloads?scene=${encodeURIComponent(scene)}`,
     document: (_, path) => `${baseUrl}/document?path=${encodeURIComponent(path)}`,
   }), [baseUrl, project, list.data]);

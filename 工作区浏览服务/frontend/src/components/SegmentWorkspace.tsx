@@ -16,6 +16,7 @@ import { RevisionNoteEditor } from './RevisionNotes';
 import type { NoteScope, NoteShotTimeline } from './RevisionNotes';
 import { useRefreshState } from '../refreshPosition';
 import { SegmentLayout } from './SegmentLayout';
+import { useProductionAccess } from './ProductionAccess';
 import './LatestSelection.css';
 
 function SegmentReferences({ context }: { context?: GenerationContext }) {
@@ -41,10 +42,11 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   tab: string; onTabChange: (tab: string) => void;
   wideVideo: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode;
   repeatControl?: RepeatPlaybackControl;
-  plannedScript?: { html: string; url?: string; label: string }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
+  plannedScript?: { html: string; url?: string; label: string; shotIds?: string[] }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
   cachedSources: Record<string, string>;
   retainSource: (source: string) => () => void;
 }) {
+  const workMode = useProductionAccess().unitKind === 'work';
   const positionKey = `segment/${scope.notesUrl || scope.project}/${scope.episode}/${scope.scene}/${segment}`;
   const [language, setLanguage] = useRefreshState(positionKey + '/language', 'zh');
   const [scriptMode, setScriptMode] = useRefreshState(positionKey + '/scriptMode', 'aligned');
@@ -73,43 +75,56 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     && context?.issues.includes('该次生成的资料关联尚未记录。');
   const prompt = context?.prompts[language === 'zh' ? 'chinese' : 'english'];
   const scriptHtml = context?.scriptHtml || plannedScript?.html || '';
-  const shots = context?.shots || [];
+  const shots: GenerationContext['shots'] = context?.shots.length ? context.shots : workMode ? (plannedScript?.shotIds || []).map(id => ({ id, duration: null, html: '' })) : [];
   const canAlign = !!current?.url && shots.length > 0 && shots.every(shot => shot.duration !== null);
   const time = playback.key === current?.key ? playback.time : 0;
   let plannedDuration = 0;
   const timedShots = canAlign ? shots.map(shot => {
-    const start = plannedDuration;
-    plannedDuration += shot.duration!;
+    const start = workMode ? shot.start ?? plannedDuration : plannedDuration;
+    plannedDuration = start + shot.duration!;
     return { shot, start, end: plannedDuration };
   }) : [];
-  const activeTimedShot = timedShots.find(item => time < item.end) || timedShots[timedShots.length - 1];
+  const lastShot = timedShots.at(-1);
+  const activeTimedShot = timedShots.find(item => (!workMode || time >= item.start) && time < item.end)
+    || (lastShot && (!workMode || time >= lastShot.end) ? lastShot : undefined);
   const activeShot = activeTimedShot?.shot;
   const aligned = scriptMode === 'aligned' && canAlign;
-  const editingNotes = tab === 'notes';
-  const showShotTimeline = canAlign && (tab === 'script' || editingNotes);
+  const editingNotes = tab === 'notes' && !readOnly;
+  const showShotTimeline = (canAlign || (workMode && shots.length > 0)) && (tab === 'script' || editingNotes);
   useEffect(() => {
     scriptContent.current!.scrollTop = 0;
   }, [current?.key, tab, scriptMode, tab === 'script' && aligned ? activeShot?.id : undefined]);
   useEffect(() => {
-    if (!showShotTimeline) return;
+    if (!showShotTimeline || !activeShot) return;
     const container = shotTimeline.current!;
     const title = container.querySelector('[aria-current="step"]')!.getBoundingClientRect();
     const bounds = container.getBoundingClientRect();
     container.scrollBy({ left: title.left < bounds.left ? title.left - bounds.left : Math.max(0, title.right - bounds.right) });
   }, [tab, activeShot?.id, current?.key, showShotTimeline]);
-  const renderShotTimeline = (...[passShot, preserveFocus, disabled]: Partial<Parameters<NoteShotTimeline>>) => showShotTimeline ? <div className="shot-timeline-scroll" ref={shotTimeline}>
-          <div className="shot-timeline" role="group" aria-label="分镜跳转"
-            style={{ gridTemplateColumns: timedShots.map(item => `minmax(90px, ${item.shot.duration}fr)`).join(' '), minWidth: `${timedShots.length * 90}px` }}>
-            {timedShots.map(({ shot, start }) => <div className="shot-timeline-cell" key={shot.id}><button type="button" className="shot-timeline-item" aria-current={shot.id === activeShot!.id ? 'step' : undefined}
-              aria-label={`跳转到${shot.id}，${Number(start.toFixed(3))}秒`} title={`跳转到 ${Number(start.toFixed(3))}秒`} onClick={() => player.current?.seekTo(start)}>
-              <span className="shot-timeline-title">{shot.id.match(/SH\d+$/)?.[0] || shot.id}</span>
-              <span className="shot-timeline-track"><span style={{ transform: `scaleX(${Math.max(0, Math.min(1, (time - start) / shot.duration!))})` }} /></span>
+  const renderShotTimeline = (...[passShot, preserveFocus, disabled]: Partial<Parameters<NoteShotTimeline>>) => showShotTimeline ? <>
+    {workMode && (!canAlign || context?.shotTimingSource) && <p className="muted">{canAlign ? (context?.shotTimingSource === 'plan'
+      ? '按计划时码定位，实际切点以画面为准。' : '按执行记录时码定位。') : current?.url ? '尚无可靠的镜头时码。' : '等待可播放视频。'}</p>}
+    <div className="shot-timeline-scroll" ref={shotTimeline}>
+      <div className="shot-timeline" role="group" aria-label="分镜跳转"
+        style={{ gridTemplateColumns: shots.map(shot => `minmax(90px, ${canAlign ? shot.duration : 1}fr)`).join(' '), minWidth: `${shots.length * 90}px` }}>
+        {shots.map((shot, index) => {
+          const start = timedShots[index]?.start;
+          const label = shot.id.match(/SH\d+$/)?.[0] || shot.id;
+          return <div className="shot-timeline-cell" key={shot.id}>
+            <button type="button" className="shot-timeline-item" aria-current={shot.id === activeShot?.id ? 'step' : undefined}
+              aria-label={start === undefined ? label : `跳转到${shot.id}，${Number(start.toFixed(3))}秒`}
+              title={start === undefined ? '暂无可用时码' : `跳转到 ${Number(start.toFixed(3))}秒`}
+              disabled={start === undefined} onClick={start === undefined ? undefined : () => player.current?.seekTo(start)}>
+              <span className="shot-timeline-title">{label}</span>
+              <span className="shot-timeline-track">{start !== undefined && <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, (time - start) / shot.duration!))})` }} />}</span>
             </button>
-              {passShot && <LinkButton className="shot-timeline-pass" aria-label={`${shot.id.match(/SH\d+$/)?.[0] || shot.id} 本镜通过`} disabled={disabled} onPointerDown={preserveFocus}
-                onClick={() => passShot(shot.id.match(/SH\d+$/)?.[0] || shot.id, start)}>本镜通过</LinkButton>}
-            </div>)}
-          </div>
-        </div> : null;
+            {passShot && start !== undefined && <LinkButton className="shot-timeline-pass" aria-label={`${label} 本镜通过`} disabled={disabled} onPointerDown={preserveFocus}
+              onClick={() => passShot(label, start)}>本镜通过</LinkButton>}
+          </div>;
+        })}
+      </div>
+    </div>
+  </> : null;
   const selectors = <div className="segment-selectors">
       <TabSelect size="toolbar" highlightSelected label="画质选择" selected={stage} onChange={value => onSelectionChange({ stage: value, key: '' })} items={['一采', '二采', '后处理'].map(value => ({ value, label: value }))} />
       <TabSelect size="toolbar" highlightSelected label="版本切换" reselect disabled={!stage} selected={current?.key || ''} onChange={key => onSelectionChange({ stage, key })} items={versions.map(item => ({ value: item.key, label: candidateLabel(item.candidateNumber), badge: item.approved ? '已采用' : undefined }))} />
@@ -123,7 +138,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
           <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current} />
-          {editingNotes && <div className="segment-notes-export">{notesExportControl}</div>}
+          {(editingNotes || readOnly) && <div className="segment-notes-export">{notesExportControl}</div>}
           {!editingNotes && <Original url={tab === 'script' ? (context?.scriptUrl || plannedScript?.url) : context?.prompts[language === 'zh' ? 'chineseUrl' : 'englishUrl']} label="查看原文件" />}
         </div>
         {!editingNotes && renderShotTimeline()}
@@ -138,7 +153,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
             : '还没有实际生成时使用的提示词和素材记录。'}</p>
             : context.issues.length > 0 && <details className="notice generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run} 资料关联提示</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details>}
           {context.source && <p className="muted">生成资料来源：{context.source}</p>}
-          {tab === 'script' ? scriptHtml ? <Rich html={aligned ? activeShot!.html : scriptHtml} /> : <div className="script-placeholder">该次分镜原文尚未关联或已缺失。</div> : <>
+          {tab === 'script' ? scriptHtml ? <Rich html={aligned && activeShot ? activeShot.html : scriptHtml} /> : <div className="script-placeholder">该次分镜原文尚未关联或已缺失。</div> : <>
             <div className="segment-prompt-actions">
               <TabNav compact label="提示词语言" items={[{ value: 'zh', label: '中文' }, { value: 'en', label: '英文' }]} selected={language} onChange={setLanguage} />
               {prompt && <CopyButton label="复制" text={prompt} />}

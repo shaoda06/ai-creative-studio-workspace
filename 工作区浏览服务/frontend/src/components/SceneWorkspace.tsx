@@ -235,15 +235,15 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     {currentSegment && <SegmentWorkspace key={`${displayScope.episode}/${displayScope.scene}/${currentSegment.id}`} scope={displayScope} roundNumber={viewingPrevious || workMode && !viewingRoundRevision ? undefined : productionRound?.number} segment={currentSegment.id} revision={revision} items={currentSegment.videos} selection={chosen} cachedSources={videoCache.sources} retainSource={videoCache.retainSource}
       tab={segmentTab} onTabChange={onSegmentTabChange}
       readOnly={scope.readOnly}
-      plannedScript={viewingRoundRevision ? { html: roundEntry.scriptHtml, url: roundEntry.scriptUrl,
-        label: `第${productionRound!.number}轮保存的分镜${productionRound!.storyboard ? `（${productionRound!.storyboard.version}）` : ''}` } : currentSegment.planned ? { html: currentSegment.scriptHtml, url: currentSegment.scriptUrl, label: '当前分段计划' } : undefined}
+      plannedScript={roundEntry && (viewingRoundRevision || (workMode && !chosen.key)) ? { html: roundEntry.scriptHtml, url: roundEntry.scriptUrl, shotIds: roundEntry.shotIds,
+        label: `第${productionRound!.number}轮保存的分镜${productionRound!.storyboard ? `（${productionRound!.storyboard.version}）` : ''}` } : currentSegment.planned ? { html: currentSegment.scriptHtml, url: currentSegment.scriptUrl, shotIds: currentSegment.shotIds, label: '当前分段计划' } : undefined}
       segmentNavigation={navigation(true)}
       wideVideo={wideVideo} onToggleWide={onToggleWide} repeatControl={repeatControl}
       continuous={continuous}
       continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} disabled={!chosen.stage || !productionRound || !viewingRoundRevision} onChange={event => toggleContinuous(event.target.checked)} />连续播放</label>}
       autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance}
       onSelectionChange={changeSelection}
-      notesExportControl={viewingPrevious ? notesExport.control : scope.readOnly ? undefined : episodeNotesExportControl || notesExport.control} />}
+      notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
     {notesExport.dialog}
     </> : view === 'storyboard' ? <div className="scene-storyboard">
       {!scene ? <p className="muted">本集尚无场次分镜。</p> : <>
