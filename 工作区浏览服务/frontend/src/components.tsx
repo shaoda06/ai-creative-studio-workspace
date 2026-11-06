@@ -107,10 +107,14 @@ export function Groups({ groups = [], chapter = false }: { groups?: Group[]; cha
     {open && <div id={contentId} className="groups-content">{folders}</div>}
   </section> : <details className="groups"><summary>其他资料</summary>{folders}</details>;
 }
-export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, beforeBody }: { value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; beforeBody?: ReactNode }) {
+export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, beforeBody, transformBody }: {
+  value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; beforeBody?: ReactNode;
+  transformBody?: (html: string) => string;
+}) {
   const [value, setValue] = useState(latest);
   const changed = (value.html || value.bodyHtml) !== (latest.html || latest.bodyHtml) || value.headerHtml !== latest.headerHtml;
-  const body = value.bodyHtml || value.contentHtml || value.html || '';
+  const sourceBody = value.bodyHtml || value.contentHtml || value.html || '';
+  const body = useMemo(() => transformBody ? transformBody(sourceBody) : sourceBody, [sourceBody, transformBody]);
   const presentation = useMemo(() => {
     if (body.includes('故事剧本正文')) {
       const document = new DOMParser().parseFromString(body, 'text/html');

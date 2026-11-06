@@ -4,6 +4,26 @@ from pathlib import Path
 import re
 
 
+def work_status_label(lines):
+    for line in lines:
+        match = re.match(r'^(?:-\s*)?制作状态[：:][ \t]*(.+)', line)
+        if match:
+            return match[1].strip()
+    return ''
+
+
+def project_works(projects, name):
+    works = discover_works(projects.project(name))
+    for work in works or []:
+        try:
+            path = projects.file(name, work['key'] + '/作品状态.md')
+            with path.open(encoding='utf-8-sig') as stream:
+                work['statusLabel'] = work_status_label(stream)
+        except FileNotFoundError:
+            continue
+    return works
+
+
 def discover_works(project):
     directory = project / '作品'
     if directory.is_symlink():

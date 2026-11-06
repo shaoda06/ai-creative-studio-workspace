@@ -32,7 +32,7 @@ from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
 from backend.services import production
-from iris_works import discover_works
+from iris_works import project_works
 from backend.services.iris_presentation import presentation as iris_presentation, work_view as iris_work_view
 from backend.services.review_notes import ProjectReviewNotes, ReviewNotes
 from backend.services import node_config
@@ -938,7 +938,7 @@ def workspace_project(name: str, request: Request):
         if space.production_adapter:
             value['productionSection'] = production.adapter(space).production_section(space.projects.project(name))
         if space.view == 'iris-commercial':
-            value['works'] = discover_works(space.projects.project(name))
+            value['works'] = project_works(space.projects, name)
             value['irisPresentation'] = iris_presentation(space.projects, name, space.api, value['files'])
         return value
     except FileNotFoundError as error:

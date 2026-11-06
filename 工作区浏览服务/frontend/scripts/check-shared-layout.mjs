@@ -338,6 +338,15 @@ try {
     await contained(referenceContent, `${width}px / 文档参考入口`);
     await referenceSummary.click();
     assert.equal(await referenceContent.isVisible(), false);
+    const liveDocument = showcase.getByRole('region', { name: '文档内的实时状态', exact: true });
+    await liveDocument.getByText('制作状态：待启动', { exact: true }).waitFor();
+    await liveDocument.getByText('章节导航', { exact: true }).click();
+    await liveDocument.getByRole('button', { name: '切换示例制作状态', exact: true }).click();
+    const changedStatus = liveDocument.getByText('制作状态：待审阅', { exact: true });
+    await changedStatus.waitFor();
+    await liveDocument.getByRole('navigation', { name: '章节导航', exact: true }).waitFor();
+    assert.equal(await showcase.getByRole('button', { name: '读取新版本', exact: true }).count(), 0);
+    await contained(changedStatus, `${width}px / 文档内的实时状态`);
     for (const [name, tag] of [['正文视频示例', 'video'], ['正文音频示例', 'audio'], ['正文原文件示例', null]]) {
       await showcase.getByRole('link', { name, exact: true }).click();
       const preview = page.getByRole('dialog', { name, exact: true });

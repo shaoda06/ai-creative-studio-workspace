@@ -11,7 +11,7 @@ from director_export import submitted_media
 from backend.parsers import documents
 from backend.parsers.documents import cells
 from backend.services.iris_presentation import asset_review, delivery_overview, table, entries, work_view
-from iris_works import discover_works, work_root
+from iris_works import discover_works, work_root, work_status_label
 import iris_browser_production as production
 
 
@@ -40,9 +40,8 @@ def work_status(projects, name, space_api, project, root):
     text = path.read_text('utf-8-sig')
     delivery = delivery_overview(projects, name, space_api, project, text)
     summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
-    stage = re.search(r'(?m)^(?:-\s*)?制作状态[：:][ \t]*([^\n]+)', text)
     records = {row['对象']: row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')}
-    return {'label': stage[1].strip() if stage else '', 'summaryHtml': production.legacy_links(
+    return {'label': work_status_label(text.splitlines()), 'summaryHtml': production.legacy_links(
         documents.markdown(summary[1], ref['key']), api + '/files/'
     ) if summary else '', 'deliverySummary': delivery['summary'], 'record': ref}, delivery, records
 

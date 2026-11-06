@@ -91,6 +91,15 @@ class IrisWorksTests(HttpTestCase):
             self.assertEqual(data['irisPresentation']['primary']['08-完单复盘'], ['08-完单复盘/项目复盘.md'])
             self.assertEqual(data['productionSection'], key + '/06-视频生产')
 
+    def test_project_reads_current_work_status_from_the_work_document(self):
+        key = self.works['F001'] + '/作品状态.md'
+        project_status = self.write('项目状态.md', f'## 作品入口\n\n[作品状态](<{key}>)\n')
+        self.write(key, '# 作品状态\n\n- 制作状态：前期准备\n')
+        self.assertEqual([item['statusLabel'] for item in self.client.get(self.api).json()['works']], ['前期准备', ''])
+        self.write(key, '# 作品状态\n\n制作状态: 待审阅\n')
+        self.assertEqual([item['statusLabel'] for item in self.client.get(self.api).json()['works']], ['待审阅', ''])
+        self.assertIn('[作品状态]', project_status.read_text())
+
     def test_duplicate_segment_and_run_names_keep_notes_and_results_separate(self):
         for identity in self.works:
             api = self.api + '/works/' + identity

@@ -38,6 +38,7 @@ try {
     {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
+  let overviewStatus='待启动';
   saved.F001.notes['round/2/P001/一采/R002']={...saved.F001.notes['P001/一采/R001'],roundNumber:2,run:'R002'};
   const file=key=>({kind:'file',key,name:key.split('/').at(-1),url:base+'/files/'+key});
   await page.route('**/api/**',route=>{
@@ -45,9 +46,17 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[{id:'隔离多作品',name:'隔离多作品'}]}]});
-   if(path===base)return route.fulfill({json:{name:'隔离多作品',works,files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'作品',name:'作品',children:[]}]}});
+   if(path===base)return route.fulfill({json:{name:'隔离多作品',
+    works:works.map(work=>({...work,statusLabel:work.id==='F001'?overviewStatus:work.status})),
+    files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'作品',name:'作品',children:[]}]}});
    if(path===base+'/document') {
     const key=url.searchParams.get('path');
+    if(key==='项目状态.md'){
+     const link=(work,label)=>`<a data-doc="${work.key}/作品状态.md" href="${base}/files/${work.key}/作品状态.md">${label}</a>`;
+     const rows=works.map(work=>`<tr><td>${work.id}</td><td>${work.name}</td><td>${link(work,'作品状态')}</td></tr>`).join('');
+     return route.fulfill({json:{html:`<h1>项目状态</h1><h2>当前状态</h2><p>${link(works[0],'查看 F001')}</p>
+       <h2 id="作品入口">作品入口</h2><div class="table-scroll"><table><thead><tr><th>作品编号</th><th>作品</th><th>状态入口</th></tr></thead><tbody>${rows}</tbody></table></div>`}});
+    }
     if(key.endsWith('生产任务-英文R001.md'))return route.fulfill({json:{title:'现行英文生产任务',html:'<p>隔离英文生产段与输入</p>'}});
     return route.fulfill({json:{html:key==='README.md'?'<h1>项目</h1><h2>项目说明</h2><p>项目共用说明</p>':`<h1>正文</h1><h2>作品正文</h2><p>${key.includes('F002')?'品牌片专属正文':'产品片专属正文'}</p>`,url:base+'/files/'+key}});
    }
@@ -155,6 +164,15 @@ try {
   await page.goto(origin+'/#/spaces/commercial/projects/隔离多作品');
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
   await page.getByText('项目共用说明',{exact:true}).waitFor();
+  const overview=page.getByRole('region',{name:'项目概况',exact:true});
+  const firstRow=overview.getByRole('row',{name:/^F001 /});
+  await firstRow.getByRole('link',{name:'待启动',exact:true}).waitFor();
+  await overview.getByRole('row',{name:/^F003 /}).getByRole('link',{name:'作品状态',exact:true}).waitFor();
+  overviewStatus='待审阅';
+  await firstRow.getByRole('link',{name:'待审阅',exact:true}).click();
+  await page.getByRole('dialog',{name:'待审阅'}).getByText('产品片专属正文',{exact:true}).waitFor();
+  await page.keyboard.press('Escape');
+  await overview.getByRole('link',{name:'查看 F001',exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'切换作品',exact:true}).count(),0);
   await tabs.getByRole('button',{name:'创意与音画',exact:true}).click();
   await page.getByText('产品片专属正文',{exact:true}).waitFor();

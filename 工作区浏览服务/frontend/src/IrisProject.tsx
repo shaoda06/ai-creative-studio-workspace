@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useCallback, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -42,7 +42,7 @@ export interface IrisPresentation {
   };
 }
 
-export interface IrisWork { id: string; name: string; key: string }
+export interface IrisWork { id: string; name: string; key: string; statusLabel?: string }
 
 interface IrisWorkData { files: FileItem[]; productionSection?: string; irisPresentation: IrisPresentation }
 
@@ -94,7 +94,7 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
       ? <Result page loading={work.isPending} error={work.error} retry={work.refetch} retrying={work.isFetching} />
       : <section className="panel"><p className="muted">本项目尚未建立作品。</p></section>)}
     {(!workSection || legacy || section === 'production' || work.data) && <div key={`${section}/${section === 'production' ? '' : currentWork?.id || ''}`} className="iris-project-section">
-      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} hiddenSections={projectPresentation?.overviewHiddenSections} />}
+      {section === 'overview' && <IrisOverview baseUrl={baseUrl} files={projectFiles} hiddenSections={projectPresentation?.overviewHiddenSections} works={works} />}
       {section === 'brief' && <IrisBrief baseUrl={baseUrl} files={files} presentation={presentation} />}
       {Object.hasOwn(readingStages, section) && <IrisReadingStage stage={section as keyof typeof readingStages} baseUrl={baseUrl} files={files} presentation={presentation} />}
       {section === 'assets' && <IrisAssets baseUrl={baseUrl} files={files} presentation={presentation} />}
@@ -121,6 +121,20 @@ function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
 }
 
+function withWorkEntryLabels(html: string, works: IrisWork[]): string {
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  const heading = document.getElementById('overview-项目状态.md-作品入口');
+  const labels = new Map(works.map(work => [work.key + '/作品状态.md', work.statusLabel || '作品状态']));
+  for (let element = heading?.nextElementSibling; element && !['H1', 'H2'].includes(element.tagName); element = element.nextElementSibling) {
+    if (!element.matches('table, .table-scroll')) continue;
+    for (const link of element.querySelectorAll<HTMLAnchorElement>('tbody tr td:last-child a[data-doc]')) {
+      const label = labels.get(link.dataset.doc!);
+      if (label) link.textContent = label;
+    }
+  }
+  return document.body.innerHTML;
+}
+
 function overviewBody(document: RecordData, path: string, hiddenSections: string[] = []): string {
   const body = new DOMParser().parseFromString(withoutLeadingTitle(document).html, 'text/html').body;
   const hidden = new Set(path === 'README.md' ? [...overviewLocalSections, ...hiddenSections] : hiddenSections);
@@ -139,7 +153,8 @@ function overviewBody(document: RecordData, path: string, hiddenSections: string
   return body.innerHTML;
 }
 
-function IrisOverview({ baseUrl, files, hiddenSections }: { baseUrl: string; files: FileItem[]; hiddenSections?: Record<string, string[]> }) {
+function IrisOverview({ baseUrl, files, hiddenSections, works }: { baseUrl: string; files: FileItem[]; hiddenSections?: Record<string, string[]>; works?: IrisWork[] | null }) {
+  const transformBody = useCallback((html: string) => works?.length ? withWorkEntryLabels(html, works) : html, [works]);
   const rootFiles = files.filter(item => item.kind !== 'group');
   const available = overviewDocuments.filter(path => rootFiles.some(file => file.kind === 'file' && file.key === path));
   const queries = useQueries({ queries: available.map(path => ({
@@ -156,7 +171,7 @@ function IrisOverview({ baseUrl, files, hiddenSections }: { baseUrl: string; fil
       <Result page loading={!loaded.length && queries.some(query => query.isPending)} error={failed[0]?.error ?? null}
         retry={() => Promise.all(failed.map(query => query.refetch()))} retrying={queries.some(query => query.isFetching)} />
       {loaded.length > 0 && <Document key={loaded.map(item => item.path).join('/')}
-        value={{ html: loaded.map(item => item.html).join('\n') }} showOriginal={false} chaptersInitiallyOpen={false} />}
+        value={{ html: loaded.map(item => item.html).join('\n') }} showOriginal={false} chaptersInitiallyOpen={false} transformBody={transformBody} />}
       {!available.length && <p className="muted">暂无项目说明或状态记录。</p>}
     </section>
     <Supplement title="其他项目文件" items={rootFiles.filter(item => !overviewDocuments.includes(item.name) && item.name !== '复盘.md')} />

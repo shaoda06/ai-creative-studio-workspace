@@ -47,6 +47,7 @@ const imageRecord = { type: '示例参考图', media: image, version: 'v1.0', st
 const videoRecord: VideoItem = { key: 'sample-video', url: video.url!, stage: '一采', run: 'R001', approved: true, candidateNumber: 1, fileRevision: 'sample-1', deliveryStatus: '已取回', taskStatus: '已完成', checkedAt: '' };
 const segments = [{ id: 'P001', duration: 2, scriptHtml: '', videos: [videoRecord] }, { id: 'P002', duration: 3, scriptHtml: '', videos: [] }];
 const sampleDoc = { html: '<h2 id="sample-text">正文与代码</h2><p>这是一份示例文档。</p><pre><code>可以复制这段示例文字。</code></pre><h2 id="sample-end">附属资料</h2><p>展开下方其他资料查看目录。</p>', headerHtml: '<p>作者：演示</p><p>用途：查看折叠信息</p>', groups: [{ name: '示例附件', files: [{ kind: 'document', name: '附属说明', doc: { html: '<p>仅供演示的附属说明。</p>' } }] }] };
+const liveStatusDoc = { html: '<h2 id="sample-status">示例作品</h2><p>制作状态：作品状态</p>' };
 const retainSample = () => () => {};
 
 export function ShowcaseExamples({ category }: { category: string }) {
@@ -67,6 +68,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [vertical, setVertical] = useState(false);
   const [queueState, setQueueState] = useState('local_queued');
   const [action, setAction] = useState('尚未操作');
+  const [sampleWorkStatus, setSampleWorkStatus] = useState('待启动');
   const [started] = useState(() => new Date().toISOString());
   const playerRef = useRef<SegmentVideoHandle>(null);
   const sound = useAudioPreview(category === 'media', null, 1);
@@ -128,6 +130,11 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <Document value={sampleDoc} showOriginal={false} chaptersInitiallyOpen={false}
           beforeBody={<details><summary>参考资料</summary><p>这里是与示例正文关联的参考资料。</p></details>} />
         <Groups groups={[{ name: '普通分组示例', files: [{ kind: 'document', name: '分组文件', doc: { html: '<p>普通分组中的示例文件。</p>' } }] }]} />
+      </ComponentExample>
+      <ComponentExample title="文档内的实时状态" rule="正文可以显示来自外部资料的实时字段。点击按钮切换本地示例状态，正文直接更新。" usage="Iris 项目概况的作品状态入口">
+        <button type="button" onClick={() => setSampleWorkStatus(status => status === '待启动' ? '待审阅' : '待启动')}>切换示例制作状态</button>
+        <Document value={liveStatusDoc} showOriginal={false} chaptersInitiallyOpen={false}
+          transformBody={html => html.replace('作品状态', sampleWorkStatus)} />
       </ComponentExample>
       <ComponentExample title="提示词分节与正文" rule="已识别的提示词字段可折叠。正文中的音视频链接打开播放器，其他附件可查看或下载原文件。" usage="视频提示词、项目资料、制作记录与资产状态">
         <PromptSections language="zh" text={'summary: 示例概述\ndetailed_description: 仅供演示的详细描述\noverall_soundscape: 示例声景'} />
