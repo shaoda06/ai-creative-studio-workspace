@@ -79,8 +79,11 @@ try{
     }
     const html=key==='README.md' ? '<h1>隔离项目说明</h1><h2 id="details">项目专用约定</h2><p>这里是项目说明正文。</p>'
         + '<h2>目录与资料入口</h2><p>本地目录。</p><h2>进度与版本入口</h2><p>本地进度链接。</p><h2>接续要求</h2><p>本地接续说明。</p>'
+        + '<h2>资料与接续</h2><p>本地资料和接续。</p><h2>历史与特殊事项</h2><p>本地历史原文。</p>'
         + '<h2>资料入口</h2><p>隔离资料链接。</p><h3>附属条目</h3><p>隔离附属正文。</p><h2>进度入口</h2><p>隔离进度链接。</p>'
-      : key==='项目状态.md' ? '<h1>项目状态</h1><h2 id="details">当前决定</h2><p>'+ (historical?'已交付并归档':'等待用户审阅。') +'</p>'
+      : key==='项目状态.md' ? '<h1>项目状态</h1>' + (historical
+        ? '<h2>当前状态</h2><p>已交付并归档</p><h2>作品入口</h2><p>隔离作品</p>'
+        : '<h2 id="details">当前决定</h2><p>等待用户审阅。</p>')
         + '<p><a data-doc="../README.md" href="'+base+'/files/../README.md">仅本地资料</a>'
         + '<a data-doc="fixture.webm" href="'+base+'/files/fixture.webm">正文视频</a>'
         + '<a data-doc="fixture.wav" href="'+base+'/files/fixture.wav">正文音频</a>'
@@ -290,11 +293,11 @@ try{
   await page.goto(origin+'/#/spaces/commercial/projects/历史样片');
   await overview.getByText('已交付并归档',{exact:true}).waitFor();
   await overview.getByRole('heading',{name:'资料入口',exact:true}).waitFor();
-  assert.equal(await overview.getByText(/本地(目录|进度链接|接续说明)/).count(),0);
+  assert.equal(await overview.getByText(/本地(目录|进度链接|接续说明|资料和接续|历史原文)/).count(),0);
   await overview.getByText('章节导航',{exact:true}).click();
   await overview.getByRole('navigation',{name:'章节导航',exact:true}).waitFor();
   assert.deepEqual(await overview.getByRole('navigation',{name:'章节导航',exact:true}).locator('.chapter-link').allTextContents(),
-   ['项目专用约定','资料入口','进度入口','当前决定']);
+   ['项目专用约定','资料入口','进度入口','当前状态','作品入口']);
   await tabs.getByRole('button',{name:'需求与参考',exact:true}).click();
   await page.getByText('查看历史需求与参考',{exact:true}).click();
   await page.getByRole('button',{name:'制作简报.md',exact:true}).click();

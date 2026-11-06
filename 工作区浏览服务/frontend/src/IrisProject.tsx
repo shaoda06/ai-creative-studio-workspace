@@ -115,7 +115,7 @@ export function IrisProject({ name, baseUrl, files: projectFiles, productionSect
 }
 
 const overviewDocuments = ['README.md', '项目状态.md'];
-const overviewLocalSections = ['目录与资料入口', '进度与版本入口', '接续要求'];
+const overviewLocalSections = ['目录与资料入口', '进度与版本入口', '接续要求', '资料与接续', '历史与特殊事项'];
 
 function withoutLeadingTitle(document: RecordData): RecordData {
   return { ...document, html: document.html.replace(/^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/, '') };
