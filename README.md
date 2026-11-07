@@ -1,6 +1,6 @@
 # AI Creative Studio Workspace
 
-`nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、连续短剧与运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。真实短剧项目由使用者在本地创建，不随模板提供。
+`nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、Nora短剧、Iris商业视频、Chloe带货及共用运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。三个业务资料区及真实项目由使用者在本地初始化，不随公共仓库提供。
 
 ## 开始使用
 
@@ -15,6 +15,22 @@
 5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
 
 不需要ComfyUI即可进行策划、剧本和资料整理。执行生成时，使用者须自行准备能够运行配套工作流的ComfyUI服务；本工作区不附带模型权重、不自动安装服务端节点，也不保证任意后端都兼容。随包节点资源的存放、获授权安装及验证按[节点与安装包](.agents/skills/studio-entry/维护规范.md#comfyui节点与安装包)执行；任务核对遵循执行规范。
+
+## 初始化业务工作区
+
+各业务分别维护初始化流程，按需要启用；已有资料区直接接续。命令从本README所在的Studio总目录运行，Python 3.10及以上即可创建骨架，无需启动网页或连接生成服务：
+
+```sh
+python3 .agents/skills/nora-drama-positioning/scripts/workspace_init.py --workspace 'workspaces/Nora Workspace' --register
+python3 .agents/skills/iris-commercial-brief/scripts/workspace_init.py --workspace 'workspaces/Iris Workspace' --register
+python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'workspaces/Chloe Workspace' workspace --register
+```
+
+三个入口分别见[Nora初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)、[Iris初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)、[Chloe初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)。脚本只补缺，不覆盖已有README、业务资料、配置或独立Git。未确定的账号方向保持待确定，不创建示例订单、剧集、视频或媒体。
+
+`--register`接入同一个浏览服务：Nora使用默认目录，Iris与Chloe写入本地空间登记；省略时只建资料区。完成初始化后按服务README安装依赖、构建并启动；初始化本身不启动、重启服务，不提交生成。
+
+旧版使用者先保留自己的项目、提示词、配置和任务库，再按所属业务迁移到实际资料区。Git更新及初始化都不会自动搬迁旧`projects/`或旧提示词库，也不覆盖现有业务决定。
 
 ## 会话组织
 
@@ -126,7 +142,9 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## Git边界
 
-采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。Nora与Chloe资料区的 `projects/` 和总层 `综合资料/` 仅保留各自README，Chloe账号配置与共用素材保留本机，新增项目和过程资料仍自动排除；总层不再保留 `projects/` 兼容链接。可被Git发现不等于自动提交；提交范围按[工作区Git提交规则](AGENTS.md#git-提交与推送)核对，其中公开提示词的新增、修改和删除随正常工作区提交一并归入，隐私提示词继续排除。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
+采用 `.gitignore` 排除清单：通用规则、技能、脚本、模板、源码和获准分发的资源可被Git发现；实际 `workspaces/`、总层综合资料内容、本机配置、运行库、缓存、历史归档及按需安装的外部技能不入库。Nora、Iris、Chloe统一通过各自初始化流程创建本地README和资料目录；Iris已有独立Git仍保持独立，不合并历史。公开提示词的新增、修改和删除按[提交规则](AGENTS.md#git-提交与推送)一并归入，隐私、回收站和临时文件继续排除。
+
+开发记录与测试只分发通用实现、检查结果及独立示例。真实项目、客户订单、台词、账号决定、素材标识、任务和会话ID、个人路径及业务验收明细保存在本地资料中。原始画布及Krea2资源的分发范围沿各自来源与许可说明维护。
 
 每次完成获授权维护并通过检查后，agent按上述规则，将本次任务与公开提示词变更归入同次本地提交；纯讨论和只读检查不提交，推送须另有明确要求。提交前查看差异和暂存清单，不混入并发修改。Git只保存被跟踪且已提交的文件；真实项目需另行安排私有版本管理或备份。
 

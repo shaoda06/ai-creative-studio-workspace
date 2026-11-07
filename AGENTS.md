@@ -4,11 +4,11 @@
 
 ## 工作区结构
 
-- [Nora资料区](<workspaces/Nora Workspace/README.md>)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
-- [Iris资料区](<workspaces/Iris Workspace/README.md>)：保存商业订单及所属社媒运营资料，项目位于 `workspaces/Iris Workspace/projects/`。
-- [Chloe资料区](<workspaces/Chloe Workspace/README.md>)：保存当前自营带货账号、共用资产及单条视频项目，项目位于 `workspaces/Chloe Workspace/projects/`。
+- [Nora资料区初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
+- [Iris资料区初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)：保存商业订单及所属社媒运营资料，项目位于 `workspaces/Iris Workspace/projects/`。
+- [Chloe资料区初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)：保存当前自营带货账号、共用资产及单条视频项目，项目位于 `workspaces/Chloe Workspace/projects/`。
 
-各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。
+各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。公共仓库分发各业务的模板、初始化脚本和流程；实际workspaces资料区及其README均在本地创建和维护，不纳入总仓库。已有资料区不覆盖，Iris独立Git历史保留。
 
 一级子工作区的命名、基础结构和README按[工作区层规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)维护；具体项目结构和README由对应业务及建档阶段维护，不混用两层规范或模板。
 

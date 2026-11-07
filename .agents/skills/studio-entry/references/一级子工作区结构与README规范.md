@@ -12,6 +12,12 @@
 - 技能、业务规范、模板和共用工具统一在总目录`.agents/skills/`维护。资料区不复制技能库、不另启浏览后台或任务监控器。
 - 新建工作区按本规范及[模板](../templates/一级子工作区README模板.md)填写真实名称、业务入口和路径；空间登记及数据库位置按共用浏览服务的[运行资料维护规范](../../studio-workspace-browser/references/任务运行资料维护规范.md)执行。后台自动在总服务内建立独立任务库，不在业务资料区创建服务目录，不把创建资料目录视为已完成登记。
 
+## 初始化与分发
+
+公共仓库提供各业务自己的脚本、README模板和流程；实际workspaces目录全部留本地。Nora按[定位建档初始化](../../nora-drama-positioning/references/工作区与初始化规范.md)，Iris按[需求建档初始化](../../iris-commercial-brief/references/工作区与初始化规范.md)，Chloe按[账号建档初始化](../../chloe-positioning/references/工作区与初始化规范.md)执行。业务目录、内容和建档时机归各业务，共用文件创建及空间登记由studio-workspace-browser/scripts/workspace_setup.py提供。
+
+初始化只补缺失骨架，不覆盖现有README、项目、配置或独立Git。公共模板不预填真实账号、项目清单、历史状态或已采用版本。任务库和凭据由统一后台建立，初始化不复制它们、不启动生成。
+
 ## README固定写法
 
 一级标题为工作区英文名与业务说明。以下六个二级标题按顺序保留；其下可用三级标题展开，已有外部引用的章节锚点继续保留。

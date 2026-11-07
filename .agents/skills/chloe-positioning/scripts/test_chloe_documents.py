@@ -49,7 +49,7 @@ class ChloeDocumentsTest(unittest.TestCase):
     def test_format_drift_and_nonstandard_values_rejected(self):
         p=self.root/'综合资料/账号定位.md'; original=p.read_text()
         changes=[('## 账号方向','## 基本信息'),('| 目标人群 | 待确定 |\n',''),
-                 ('| 发布平台 | 抖音 |','| 发布平台 | 抖音 |\n| 发布平台 | 抖音 |'),
+                 ('| 发布平台 | 待确定 |','| 发布平台 | 待确定 |\n| 发布平台 | 待确定 |'),
                  ('| 内容风格 | 待确定 |','| 内容风格 |  |'),
                  ('| 内容风格 | 待确定 |','| 内容风格 | 甲|乙 |')]
         for before,after in changes:

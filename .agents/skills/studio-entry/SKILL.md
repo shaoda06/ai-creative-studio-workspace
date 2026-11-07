@@ -65,4 +65,4 @@ description: AI创作与制作统一入口，识别业务类型并路由一级�
 
 ## 工作区说明与项目建档
 
-新增一级子工作区时读取[工作区结构与README规范](references/一级子工作区结构与README规范.md)及其模板。业务项目结构和README由对应业务建档入口维护，具体映射见该规范，不在统一入口复制业务细则。后两层README按实际项目主动读取，AI Creative Studio根AGENTS.md保留全局指令。
+首次下载或新增一级子工作区时，按[各业务初始化入口](references/一级子工作区结构与README规范.md#初始化与分发)创建本地资料区；已有工作区直接接续。新增一级子工作区时读取[工作区结构与README规范](references/一级子工作区结构与README规范.md)及其模板。业务项目结构和README由对应业务建档入口维护，具体映射见该规范，不在统一入口复制业务细则。后两层README按实际项目主动读取，AI Creative Studio根AGENTS.md保留全局指令。

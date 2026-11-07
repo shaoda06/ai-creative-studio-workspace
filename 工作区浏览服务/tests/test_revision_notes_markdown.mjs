@@ -7,18 +7,18 @@ const ts = require('typescript');
 const source = await readFile(new URL('../frontend/src/revisionNotesMarkdown.ts', import.meta.url), 'utf8');
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { revisionNotesMarkdown: format } = await import('data:text/javascript;base64,' + Buffer.from(javascript).toString('base64'));
-const review = { project: '我们的AI短剧', episode: 'EP005', episodeTitle: '世界都要没了，你还吃面？', number: 2, history: false, notes: [], rounds: [], combinationHistory: [], legacyRounds: [] };
+const review = { project: '导出示例', episode: 'EP005', episodeTitle: '雨天送伞', number: 2, history: false, notes: [], rounds: [], combinationHistory: [], legacyRounds: [] };
 const note = { scene: 'C001', segment: 'P006', roundNumber: 2, stage: '一采', run: 'R002', text: '', fileRevision: 'fixture', editable: true };
-const edit = { shot: 'EP005-C001-SH018', index: 0, speaker: '女主', original: '走走走！端稳了！', replacement: '快走快走，面端稳！' };
+const edit = { shot: 'EP005-C001-SH018', index: 0, speaker: '女主', original: '拿好伞，我们出发。', replacement: '带上伞，慢慢走。' };
 
 test('本轮按场次、分段、类别导出，汇总与场次同级且不重复候选版本', () => {
- const input = { ...review, notes: [{ ...note, dialogueEdits: [edit], text: '00.04.0秒，SH018：拉男主起身的动作再干脆一点。' },
-  { ...note, scene: 'C003', segment: 'P001', text: '水壶保持一致。', run: 'R007', stage: '二采' }], rounds: [{ number: 2, text: '整体自然一点。' }] };
+ const input = { ...review, notes: [{ ...note, dialogueEdits: [edit], text: '00.04.0秒，SH018：递伞的动作再清楚一点。' },
+  { ...note, scene: 'C003', segment: 'P001', text: '雨伞保持一致。', run: 'R007', stage: '二采' }], rounds: [{ number: 2, text: '整体自然一点。' }] };
  const original = structuredClone(input);
  assert.equal(format(input), `# EP005｜第2轮修改意见
 
-- 项目：我们的AI短剧
-- 本集：世界都要没了，你还吃面？
+- 项目：导出示例
+- 本集：雨天送伞
 
 ## 场次 C001
 
@@ -28,15 +28,15 @@ test('本轮按场次、分段、类别导出，汇总与场次同级且不重�
 
 ##### SH018｜女主
 
-**原台词**：走走走！端稳了！
+**原台词**：拿好伞，我们出发。
 
-**修改为**：快走快走，面端稳！
+**修改为**：带上伞，慢慢走。
 
 #### 普通修改意见
 
 ##### SH018｜00:04.0
 
-拉男主起身的动作再干脆一点。
+递伞的动作再清楚一点。
 
 ## 场次 C003
 
@@ -44,7 +44,7 @@ test('本轮按场次、分段、类别导出，汇总与场次同级且不重�
 
 #### 普通修改意见
 
-水壶保持一致。
+雨伞保持一致。
 
 ## 本轮汇总意见
 

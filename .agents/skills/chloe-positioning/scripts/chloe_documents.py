@@ -245,13 +245,14 @@ def check_relations(root, path, doc):
             for row in records(doc, heading):
                 if row['用途'].split('/', 1)[0] not in image_purposes[path.name]:
                     raise ValueError(path.name+'：'+heading+'图片用途不在固定图种内：'+row['用途'])
-    if path.name == '服装说明.md':
+    if path.name in {'服装说明.md', '场景说明.md'}:
+        label = path.name[:2]
         for row in records(doc, '参考版本'):
-            if row['用途'] not in {'服装参考图', '服装展示图'}:
-                raise ValueError('服装用途须为服装参考图或服装展示图')
+            if row['用途'] not in {label+'参考图', label+'展示图'}:
+                raise ValueError(label+'用途须为'+label+'参考图或'+label+'展示图')
         for row in records(doc, '当前采用'):
-            if row['用途'] != '服装展示图':
-                raise ValueError('服装当前采用只登记服装展示图')
+            if row['用途'] != label+'展示图':
+                raise ValueError(label+'当前采用只登记'+label+'展示图')
     current = {r['字段']:r['内容'] for r in records(doc,'定位与当前进度')}
     if current and current['商品编号'] not in MISSING:
         linked_object(root,path,current['商品编号'],current['商品资料'],'G')

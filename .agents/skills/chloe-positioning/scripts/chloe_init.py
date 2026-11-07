@@ -9,6 +9,7 @@ import sys
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS / 'studio-workspace-browser/scripts'))
 import project_resources as resources
+from workspace_setup import register_workspace
 
 ASSETS = {
     '商品': ('商品资料', 'G', '商品说明.md'),
@@ -30,6 +31,7 @@ def workspace_path(value):
 def write_template(path, skill, template, **fields):
     body = (SKILLS / skill / 'templates' / template).read_text('utf-8')
     fields['skills'] = Path(os.path.relpath(SKILLS, path.parent)).as_posix()
+    fields['studio'] = Path(os.path.relpath(SKILLS.parents[1], path.parent)).as_posix()
     for key, value in fields.items():
         body = body.replace('{{' + key + '}}', str(value))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +114,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, required=True, help='真实或隔离的 Chloe Workspace 目录')
     commands = parser.add_subparsers(dest='action', required=True)
-    commands.add_parser('workspace', help='建立工作区、固定分类和空资源索引；已有正文不覆盖')
+    workspace = commands.add_parser('workspace', help='建立工作区、固定分类和空资源索引；已有正文不覆盖')
+    workspace.add_argument('--register', action='store_true', help='登记到统一浏览服务；不启动服务')
     video = commands.add_parser('video', help='建立一条视频；不生成媒体或新建账号配置')
     video.add_argument('--id', required=True, help='已确定的视频编号，例如 V001')
     video.add_argument('--name', required=True, help='商品与视频主题组成的名称')
@@ -123,6 +126,9 @@ def main():
     args = parser.parse_args()
     if args.action == 'workspace':
         result = initialize_workspace(args.workspace)
+        if args.register:
+            register_workspace(result, identity='chloe', name='Chloe视频带货', view='chloe-commerce',
+                               production_adapter='chloe-production')
     elif args.action == 'video':
         result = initialize_video(args.workspace, args.id, args.name)
     else:

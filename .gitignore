@@ -22,9 +22,7 @@
 /.agents/skills/ghost-editor/
 /.agents/skills/video-talkcraft/
 
-# 真实项目和本机过程资料不公开，保留目录用途说明。
-/projects/*
-!/projects/README.md
+# 总层综合资料留本地，仅保留目录用途说明。
 /综合资料/*
 !/综合资料/README.md
 
@@ -51,17 +49,7 @@
 /提示词库/公开/.trash/
 /提示词库/公开/**/.prompt-*.tmp
 
-# One total workspace; real data, nested Iris repository and legacy path alias stay local.
+# 三个业务资料区均由各自初始化流程在本地创建；模板和脚本随技能分发。
+/workspaces/
+# 旧根项目入口保留忽略，不随公共仓库提供。
 /projects
-/workspaces/Iris Workspace/
-/workspaces/Nora Workspace/projects/*
-!/workspaces/Nora Workspace/projects/README.md
-/workspaces/Nora Workspace/综合资料/*
-/workspaces/Nora Workspace/comfyui-config.json
-/workspaces/Nora Workspace/工作区浏览服务/
-
-# Chloe skills and skeleton are public; account data, assets and actual videos stay local.
-/workspaces/Chloe Workspace/projects/*
-!/workspaces/Chloe Workspace/projects/README.md
-/workspaces/Chloe Workspace/综合资料/*
-/workspaces/Chloe Workspace/comfyui-config.json

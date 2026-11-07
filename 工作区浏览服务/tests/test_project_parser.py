@@ -45,7 +45,7 @@ class ProjectParserTests(unittest.TestCase):
     def test_navigation_only_contains_existing_formal_sections(self):
         for name in portal.FORMAL_SECTIONS:
             self.put(name + '/内容.md', '# 正式栏目')
-        for name in ('projects', '荒院暴富', '10-临时测试', '临时附件', '99-综合资料', '历史版本'):
+        for name in ('projects', '独立示例项目', '10-临时测试', '临时附件', '99-综合资料', '历史版本'):
             self.put(name + '/保留记录.json', '{}')
         data = portal.build_data(self.root)
         self.assertEqual([item['name'] for item in data['directories']], list(portal.FORMAL_SECTIONS))
