@@ -100,6 +100,11 @@ try {
       await namingPath.locator('[aria-current="page"]').evaluate(currentStyle));
     assert.equal(await singlePath.evaluate(node => getComputedStyle(node).marginBottom), '0px');
     await contained(singlePath, `${width}px / 页头当前位置`);
+    const titleRow = showcase.locator('.page-heading-title-row');
+    const titlePositions = await titleRow.evaluate(el => ['h1', '.page-actions'].map(selector => { const r=el.querySelector(selector).getBoundingClientRect(); return {y:r.y,height:r.height}; }));
+    assert.ok(Math.abs(titlePositions[0].y+titlePositions[0].height/2-titlePositions[1].y-titlePositions[1].height/2)<=5, `${width}px / 纵向页头标题与操作同行`);
+    await contained(titleRow, `${width}px / 纵向页头操作区`);
+
     assert.match(await namingPath.innerText(), /EP001 · 组件演示集/);
     assert.doesNotMatch(await namingPath.innerText(), /（最终定名）/);
     await contained(namingPath.locator('.episode-title-status.status-green'), `${width}px / 标题集名状态`);

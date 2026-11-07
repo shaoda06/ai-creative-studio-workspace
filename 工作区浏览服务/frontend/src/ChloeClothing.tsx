@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { get } from './api';
@@ -50,7 +50,6 @@ export function ChloeClothingDetail({ query, workspaceQuery }: { query: UseQuery
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {data && <div className="chloe-model-layout">
-      <div className="chloe-clothing-actions"><Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=clothing`}>返回服装列表</Link></div>
       <div className="chloe-model-detail">
         <div className="chloe-look-detail">
           <section className="panel" aria-label="服装信息"><h2>服装信息</h2>

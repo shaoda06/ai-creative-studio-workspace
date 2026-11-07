@@ -77,9 +77,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
   return <PreviewContext.Provider value={setPreview}>
     {category === 'controls' && <ComponentExample title="下划线链接按钮" rule="LinkButton统一13px字号、下划线、无边框与无悬停底色，保留按钮键盘及禁用行为；此处只更新示例文字。" usage="任务组详情、本镜通过、插入时间及清空"><LinkButton onClick={() => setText('链接示例已点击')}>链接操作示例</LinkButton><LinkButton disabled>禁用链接示例</LinkButton><p role="status">{text}</p></ComponentExample>}
     {category === 'layout' && <>
-      <ComponentExample fullWidth title="标题与路径导航" rule="页面标题可带说明和操作区。纵向布局统一放置栏目路径，路径右侧操作区可换行。点击多层路径可返回上一级。示例下载仅保存固定文本。" usage="Nora 与 Iris 项目栏目、资产、风格库、开发记录">
+      <ComponentExample fullWidth title="标题与路径导航" rule="页面标题可带说明和操作区。纵向布局中操作与标题同行，附属内容及路径位于下方；路径右侧操作区可换行。点击多层路径可返回上一级。示例下载仅保存固定文本。" usage="Nora、Iris、Chloe 项目栏目、资产、风格库、开发记录">
         <PageHeader eyebrow="示例栏目" title="示例页面" description="这里展示公共页面标题。" actions={<button onClick={() => setText('已点击标题操作')}>示例操作</button>} />
-        <PageHeader stacked title="带附属内容的示例标题"><span>示例阶段信息</span><Breadcrumbs items={[{ label: '示例当前栏目' }]} /></PageHeader>
+        <PageHeader stacked title="带附属内容的示例标题" actions={<button onClick={() => setText('已点击标题操作')}>标题同行操作</button>}><span>示例阶段信息</span><Breadcrumbs items={[{ label: '示例当前栏目' }]} /></PageHeader>
         <Breadcrumbs items={[{ label: '示例列表', href: '#/history', onClick: () => setText('已返回示例列表') }, { label: <>EP001 · 组件演示集 <EpisodeTitleStatus status="最终定名" /></> }]} />
         <Breadcrumbs actionsRef={setBreadcrumbActions} items={[{ label: '剧集制作', href: '#/history', onClick: () => setText('已返回示例列表') }, { label: 'EP001 · 下载操作示例' }]} />
         {breadcrumbActions && createPortal(<div className="episode-heading-actions">

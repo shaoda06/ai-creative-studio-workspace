@@ -226,7 +226,7 @@ try {
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
   assert.equal(await page.getByRole('navigation',{name:'造型详情分类'}).count(),0);
   const lookInfo=page.getByRole('region',{name:'造型信息',exact:true});
-  const [navRect,backRect,rowRect]=await page.locator('.chloe-model-navigation').evaluate(el=>[...el.children,el].map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}));
+  const [navRect,backRect,rowRect]=await page.locator('.breadcrumbs').evaluate(el=>[...el.children,el].map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}));
   assert.ok(Math.abs(backRect.y+backRect.height/2-navRect.y-navRect.height/2)<1,JSON.stringify({backRect,navRect,rowRect}));
   assert.ok(Math.abs(backRect.x+backRect.width-rowRect.x-rowRect.width)<1);
   assert.equal(await lookInfo.locator('dl > div').filter({has:page.getByText('造型说明',{exact:true})}).locator('dd').textContent(),'无');
@@ -303,6 +303,13 @@ try {
   await clothingInfo.getByText('无',{exact:true}).waitFor();
   assert.equal(await page.getByText('不显示的服装来源',{exact:true}).count(),0);
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'O001 · 示例外套');
+  assert.equal(await page.locator('.breadcrumb-actions').textContent(),'返回服装列表');
+  const headerRows=await page.locator('.page-heading').evaluate(el=>['h1','.page-actions','.breadcrumbs > div:first-child','.breadcrumb-actions','.breadcrumbs'].map(selector=>{const r=el.querySelector(selector).getBoundingClientRect();return {y:r.y,height:r.height,right:r.right}}));
+  assert.ok(Math.abs(headerRows[0].y+headerRows[0].height/2-headerRows[1].y-headerRows[1].height/2)<=5,JSON.stringify(headerRows));
+  assert.ok(headerRows[2].y>headerRows[0].y+headerRows[0].height);
+  assert.ok(Math.abs(headerRows[2].y+headerRows[2].height/2-headerRows[3].y-headerRows[3].height/2)<1);
+  assert.ok(Math.abs(headerRows[3].right-headerRows[4].right)<1);
+
   const clothingImages=page.getByRole('region',{name:'服装图片',exact:true});
   const clothingTabs=page.getByRole('navigation',{name:'服装图片用途'});
   assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['正面','侧面','背面','细节']);

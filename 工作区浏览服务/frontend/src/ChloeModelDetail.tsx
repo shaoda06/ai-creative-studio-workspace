@@ -1,7 +1,7 @@
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import { FullscreenImage } from './components/FullscreenImage';
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Preview, PreviewContext, Result, Rich } from './components';
@@ -93,7 +93,6 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         const next=new URLSearchParams(params); next.set('modelTab',value); next.delete('ref'); next.delete('look');
         setDocument(null); setParams(next);
       }} />
-      {look && <Link to={lookUrl()}>返回造型列表</Link>}
       </div>
       <div className="chloe-model-detail">
       {tab==='info' && <>

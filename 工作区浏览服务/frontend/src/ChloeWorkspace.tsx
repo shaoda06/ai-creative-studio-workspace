@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -54,6 +54,7 @@ function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery })
 
 export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
   const controls = useContext(HeaderControlsContext);
+  const [breadcrumbActions, setBreadcrumbActions] = useState<HTMLDivElement | null>(null);
   const { spaceId } = useParams();
   const space = workspaceQuery.data?.find(item => item.id === spaceId);
   const [params, setParams] = useSearchParams();
@@ -66,7 +67,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
     <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
-      {current.value === 'assets' && <Breadcrumbs items={[
+      {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
         { label: assetCategory.label, href: modelId || clothingId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
         ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
@@ -74,6 +75,9 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         ...(currentLook ? [{label:`${currentLook.id} · ${currentLook.name}`}] : []),
       ]} />}
     </PageHeader>
+    {breadcrumbActions && (clothingId || currentLook) && createPortal(
+      clothingId ? <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=clothing`}>返回服装列表</Link> :
+        <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
     {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || clothingId ? undefined : 'panel'} aria-label={current.label}>

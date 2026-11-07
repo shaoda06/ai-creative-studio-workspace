@@ -216,4 +216,5 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 .chloe-model-layout{margin-top:28px}
 .chloe-model-navigation{display:flex;justify-content:space-between;align-items:center;gap:24px}
 
-.chloe-clothing-actions{display:flex;justify-content:flex-end}
+
+.page-heading-title-row{display:flex;justify-content:space-between;align-items:center;gap:18px;min-width:0}
