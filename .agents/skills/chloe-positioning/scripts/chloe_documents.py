@@ -422,8 +422,11 @@ def check_relations(root, path, doc):
             raise ValueError('发布文件必须是支持的视频文件，不能引用文本、图片或音频')
         if row['发布方式'] == '定时发布' and row['计划发布时间'] in MISSING:
             raise ValueError('定时发布缺少计划发布时间')
-        if row['发布进展'] == '已发布' and any(row[k] in MISSING for k in ('实际发布时间','平台作品ID','发布链接','授权依据','结果证据')):
-            raise ValueError('已发布记录缺少实际发布字段')
+        if row['发布进展'] == '已发布':
+            if row['授权依据'] in MISSING:
+                raise ValueError('已发布记录缺少实际授权或手动发布反馈依据')
+            if not has_evidence(path, row['结果证据']):
+                raise ValueError('已发布记录的发布结果证据须链接原文件或来源URL')
     if current:
         published = any(r['发布进展'] == '已发布' for r in records(doc,'发布记录'))
         if (current['视频状态'] == '已发布') != published:
@@ -434,13 +437,14 @@ def check_relations(root, path, doc):
             raise ValueError('效果数据引用不存在的发布编号')
         publication = publication_rows[row['发布编号']]
         if (publication['发布进展'] not in {'已发布', '已撤回'} or
-                any(publication[k] in MISSING for k in ('实际发布时间', '平台作品ID', '发布链接', '结果证据'))):
+                any(publication[k] in MISSING for k in ('授权依据', '结果证据'))):
             raise ValueError('效果数据须关联有实际发布依据的记录，撤回后保留历史发布事实')
         if not has_evidence(path, publication['结果证据']):
             raise ValueError('效果数据关联的发布结果证据须链接原文件或来源URL')
         if row['指标值'] not in MISSING and not has_evidence(path, row['来源']):
             raise ValueError('效果数据的实际指标须链接原始来源')
-        if row['采集时间'] not in MISSING and datetime.fromisoformat(row['采集时间']) < datetime.fromisoformat(publication['实际发布时间']):
+        if (row['采集时间'] not in MISSING and publication['实际发布时间'] not in MISSING
+                and datetime.fromisoformat(row['采集时间']) < datetime.fromisoformat(publication['实际发布时间'])):
             raise ValueError('效果数据采集时间不得早于实际发布时间')
     snapshots = {}
     for heading, fields in (

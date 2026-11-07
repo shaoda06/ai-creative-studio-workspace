@@ -118,6 +118,66 @@ class ChloePublicationTests(HttpTestCase):
         path.write_text(path.read_text().replace('#改过的话题','#日常穿搭 #上衣',1).replace('| 待选择 |','| 不合法执行方式 |',1))
         self.assertEqual(self.client.get(self.url).status_code,409)
 
+    def test_manual_and_agent_flow_preserves_materials_and_partial_public_facts(self):
+        film, cover, path = self.prepare()
+        self.assertEqual(self.client.get(self.url).json()['history'], [])
+        self.assertEqual(self.row[13], '待选择')
+        readme = self.project/'README.md'
+        time = '2026-11-08T10:00:00+08:00'
+        evidence = self.project/'执行记录/发布核对.md'
+        evidence.write_text('隔离测试证据：对应账号与作品已公开，商品入口待核实；时间、作品ID和链接未取得。')
+        account = self.root/'综合资料/账号定位.md'
+        self.append(account, '决定与变更', ['B001', time, '发布设置/抖音/示例账号/可见范围',
+                    '无', '公开', '隔离用户决定'])
+        for slot, ref in [('横版', self.row[4]), ('竖版', self.row[5])]:
+            self.append(readme, '当前采用', ['封面/抖音/'+slot, ref, '隔离封面采用决定', time])
+        record = self.project/'制作记录.md'
+        initial_record = record.read_text()
+        initial_readme, initial_material = readme.read_text(), path.read_text()
+        for executor, method, planned in [('用户手动', '立即发布', '未取得'), ('Agent代发', '定时发布', time)]:
+            with self.subTest(executor=executor):
+                readme.write_text(initial_readme.replace('| 视频状态 | 制作中 |', '| 视频状态 | 待发布 |'))
+                record.write_text(initial_record)
+                path.write_text(initial_material.replace('| 待选择 |', '| '+executor+' |'))
+                frozen = path.read_text()
+                row = ['P001', self.row[3], self.row[4], self.row[5], '[Q001](<发布资料.md>)',
+                       self.row[8], self.row[10], self.row[11], planned, '未取得', method, '待提交',
+                       '未取得', '未取得', '隔离授权或用户发布反馈', '未取得']
+                self.append(readme, '发布记录', row)
+                revised = self.row.copy()
+                revised[0], revised[6], revised[8], revised[13] = 'Q002', '适配后的标题', '#上衣', executor
+                revised[14] = '[Q001](<发布资料.md>)；隔离长度调整决定'
+                self.append(path, '发布资料', revised)
+                self.assertIn(frozen.strip(), path.read_text())
+                readme.write_text(readme.read_text().replace('[Q001](<发布资料.md>)', '[Q002](<发布资料.md>)')
+                                 .replace(self.row[8], revised[8]))
+                self.append(readme, '阶段变更', ['B001', time, 'P001/发布资料', '[Q001](<发布资料.md>)',
+                            '[Q002](<发布资料.md>)', '隔离调整决定'])
+                self.assertEqual(check_workspace(self.root)['errors'], [])
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(len(response.json()['history']), 1)
+                self.assertEqual(response.json()['history'][0]['materialId'], 'Q002')
+                if executor == 'Agent代发':
+                    readme.write_text(readme.read_text().replace('| 待提交 |', '| 已提交 |'))
+                    self.assertEqual(check_workspace(self.root)['errors'], [])
+                    self.assertIn('| 视频状态 | 待发布 |', readme.read_text())
+                readme.write_text(readme.read_text().replace('| 视频状态 | 待发布 |', '| 视频状态 | 已发布 |')
+                                 .replace('| 待提交 |', '| 已发布 |').replace('| 已提交 |', '| 已发布 |')
+                                 .replace('隔离授权或用户发布反馈 | 未取得',
+                                          '隔离授权或用户发布反馈 | [发布证据](<执行记录/发布核对.md>)'))
+                self.append(record, '交接与成片核对', ['K001', time, '[P001](<README.md>)',
+                            '公开事实已核实；商品入口待核实', '待核实', '[原证据](<执行记录/发布核对.md>)'])
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, 200, response.text)
+                history = response.json()['history'][0]['fields']
+                self.assertEqual(history['发布进展'], '已发布')
+                self.assertEqual(history['实际发布时间'], '未取得')
+                self.assertEqual(history['平台作品ID'], '未取得')
+                self.assertEqual(check_workspace(self.root)['errors'], [])
+                readme.write_text(readme.read_text().replace('[发布证据](<执行记录/发布核对.md>)', '已公开'))
+                self.assertEqual(self.client.get(self.url).status_code, 409)
+
     def test_draft_missing_fields_and_project_cover(self):
         film, cover, path=self.prepare()
         image=self.base/'local.png';Image.new('RGB',(64,48),'blue').save(image)

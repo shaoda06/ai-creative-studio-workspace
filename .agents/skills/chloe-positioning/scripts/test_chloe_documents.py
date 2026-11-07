@@ -193,7 +193,15 @@ class ChloeDocumentsTest(unittest.TestCase):
         p.write_text(good.replace('[成片](<成片/test.mp4>)','[其他文件](<README.md>)'))
         self.assertTrue(any('发布文件' in e['error'] for e in self.check()['errors']))
         p.write_text(good.replace('| 已发布 | test-platform-id |','| 已发布 | 未取得 |'))
-        self.assertTrue(any('实际发布字段' in e['error'] for e in self.check()['errors']))
+        self.assertEqual(self.check()['errors'],[])
+        partial=good.replace(time+' | 立即发布', '未取得 | 立即发布').replace('test-platform-id', '未取得').replace('https://example.com/post', '未取得')
+        p.write_text(partial)
+        self.assertEqual(self.check()['errors'],[])
+        for before,after,error in [('https://example.com/publication-proof','未取得','发布结果证据'),
+                                   ('https://example.com/publication-proof','已发布','发布结果证据'),
+                                   ('隔离授权示例','未取得','实际授权')]:
+            p.write_text(partial.replace(before,after))
+            self.assertTrue(any(error in e['error'] for e in self.check()['errors']))
         withdrawn=good.replace('| 立即发布 | 已发布 |','| 立即发布 | 已撤回 |')
         p.write_text(withdrawn)
         self.assertTrue(any('视频状态' in e['error'] for e in self.check()['errors']))

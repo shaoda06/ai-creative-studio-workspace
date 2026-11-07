@@ -119,7 +119,7 @@ class ChloeReviewTest(unittest.TestCase):
         self.readme.write_text(withdrawn)
         self.read(self.readme)
         self.readme.write_text(withdrawn.replace('| '+self.time+' | 立即发布', '| 未取得 | 立即发布'))
-        with self.assertRaisesRegex(ValueError, '实际发布依据'): self.read(self.readme)
+        self.read(self.readme)
         for before, after, error in (
             ('[发布结果](<执行记录/证据.md>)', '已看过', '发布结果证据'),
             ('[原始数据](<执行记录/证据.md>)', '未取得', '实际指标须链接'),
