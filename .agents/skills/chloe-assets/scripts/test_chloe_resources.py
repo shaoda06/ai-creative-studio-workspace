@@ -47,7 +47,7 @@ class ChloeResourcesTest(unittest.TestCase):
         self.assertEqual(len(chloe.resources.catalog(self.root / '综合资料')), 1)
         with self.assertRaises(ValueError):
             initialize_video(self.root, 'V001', '不同名称')
-        self.assertEqual(len(list(self.root.rglob('账号运营配置.md'))), 1)
+        self.assertEqual(len(list(self.root.rglob('账号运营配置.md'))), 0)
         self.assertFalse(any('{{' in p.read_text() for p in self.root.rglob('*.md')))
 
     def test_shared_version_reused_by_two_videos_and_old_inputs_stable(self):

@@ -1,4 +1,4 @@
 interface:
   display_name: "Chloe 账号定位与建档"
-  short_description: "为 Chloe 确定账号受众、商品方向和内容风格，维护工作区结构、账号运营接入及固定初始化脚本。"
+  short_description: "为 Chloe 确定发布平台、目标人群和内容风格，维护必要账号方向、工作区结构及固定初始化脚本。"
   default_prompt: "使用 $chloe-positioning 按实际对象、当前阶段与有效授权处理任务。"

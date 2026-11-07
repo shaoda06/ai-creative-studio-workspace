@@ -13,7 +13,7 @@ import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 
 const sections = [
-  { value: 'overview', label: '账号概况', description: '账号定位、账号连接、制作概况与当前事项。' },
+  { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
   { value: 'products', label: '选品与商品', description: '候选选品、商品资料、带货条件与关联视频。' },
   { value: 'assets', label: '共用资产', description: 'AI模特、服装、造型、场景与声音。' },
   { value: 'production', label: '视频制作', description: '单条视频的脚本、参考素材、生成审阅与剪映交接。' },

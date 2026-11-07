@@ -15,10 +15,10 @@ export default function ChloeOverviewExample() {
   const query = useQuery({ queryKey: ['chloe-overview-example', scenario],
     queryFn: () => get<ChloeOverviewData>(`/api/examples/chloe/overview?scenario=${scenario}`) });
   return <div className="home">
-    <PageHeader eyebrow="Chloe · 页面演示" title="账号概况" description="先看账号方向与当前进度，再处理需要确认的事项。"
+    <PageHeader eyebrow="Chloe · 页面演示" title="账号概况" description="只展示账号定位中的必要方向。"
       actions={<Link to="/spaces/chloe?section=overview">返回 Chloe</Link>} />
-    <MessagePanel messages={[{ id: 'demo', content: '以下均为演示资料。账号名称、品类和制作进度仅供看布局，不代表实际账号设置。' }]} />
-    <UnderlineTabs label="账号概况演示状态" items={[{ value: 'working', label: '已有制作的示例' }, { value: 'new', label: '新账号空白状态' }]}
+    <MessagePanel messages={[{ id: 'demo', content: '以下为演示方向，仅供查看布局。' }]} />
+    <UnderlineTabs label="账号概况演示状态" items={[{ value: 'working', label: '已填写方向的示例' }, { value: 'new', label: '新账号空白状态' }]}
       selected={scenario} onChange={value => setParams({ scenario: value })} />
     <PageCheckStatus queries={[query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />

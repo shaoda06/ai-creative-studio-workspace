@@ -28,34 +28,30 @@ class ChloeDocumentsTest(unittest.TestCase):
         end=body.index('\n\n',body.index('| ---',start))
         path.write_text(body[:end]+'\n| '+' | '.join(row)+' |'+body[end:])
 
-    def test_all_fifteen_types_and_reinitialization(self):
+    def test_all_fourteen_types_and_reinitialization(self):
         result=self.check()
-        self.assertEqual(result,{'checked_documents':15,'errors':[]})
-        self.assertEqual(len({source for _,source,_ in docs.documents(self.root)}),15)
-        account = next(e for e in docs.documents(self.root) if e[0].name == '账号运营配置.md')
-        parsed = docs.read_document(self.root, *account)
-        self.assertEqual([s['heading'] for s in parsed['sections']], ['账号身份', '账号接入', '资料映射', '核对与变更', '填写说明'])
-        self.assertEqual([r['字段'] for r in docs.records(parsed, '账号接入')], ['连接状态', '视频发布', '商品挂载', '核对时间'])
+        self.assertEqual(result,{'checked_documents':14,'errors':[]})
+        self.assertEqual(len({source for _,source,_ in docs.documents(self.root)}),14)
+        self.assertFalse((self.root/'综合资料/账号运营配置.md').exists())
+        direction = next(e for e in docs.documents(self.root) if e[0].name == '账号定位.md')
+        parsed = docs.read_document(self.root, *direction)
+        self.assertEqual([r['字段'] for r in docs.records(parsed, '账号方向')], ['发布平台', '目标人群', '内容风格'])
         with self.assertRaises(ValueError):
             initialize_video(self.root,'V002','商品|主题')
         p=self.root/'综合资料/账号定位.md'
-        p.write_text(p.read_text().replace('| 品类范围 | 待确定 |','| 品类范围 | 女装 |'))
+        p.write_text(p.read_text().replace('| 目标人群 | 待确定 |','| 目标人群 | 通勤人群 |'))
         initialize_workspace(self.root)
-        self.assertIn('| 品类范围 | 女装 |',p.read_text())
+        self.assertIn('| 目标人群 | 通勤人群 |',p.read_text())
         self.assertEqual(self.check()['errors'],[])
         for kind,path in self.assets.items():
             self.assertTrue((path/ASSETS[kind][2]).is_file())
 
     def test_format_drift_and_nonstandard_values_rejected(self):
-        p=self.root/'综合资料/账号运营配置.md'; original=p.read_text()
-        changes=[('## 账号身份','## 基本信息'),('| 公开账号名 | 待核实 |\n',''),
-                 ('| 平台 | 抖音 |','| 平台 | 抖音 |\n| 平台 | 抖音 |'),
-                 ('| 连接状态 | 未核实 |','| 连接状态 | 已经登录 |'),
-                 ('| 核对时间 | 未取得 |','| 核对时间 | 今天 |'),
-                 ('| 视频发布 | 待核实 |','| 视频发布 |  |'),
-                 ('| 视频发布 | 待核实 |','| 视频发布 | 已核实 |'),
-                 ('| 商品挂载 | 待核实 |','| 商品挂载 | 已核实 |'),
-                 ('| 公开账号名 | 待核实 |','| 公开账号名 | 甲|乙 |')]
+        p=self.root/'综合资料/账号定位.md'; original=p.read_text()
+        changes=[('## 账号方向','## 基本信息'),('| 目标人群 | 待确定 |\n',''),
+                 ('| 发布平台 | 抖音 |','| 发布平台 | 抖音 |\n| 发布平台 | 抖音 |'),
+                 ('| 内容风格 | 待确定 |','| 内容风格 |  |'),
+                 ('| 内容风格 | 待确定 |','| 内容风格 | 甲|乙 |')]
         for before,after in changes:
             with self.subTest(change=before):
                 p.write_text(original.replace(before,after))

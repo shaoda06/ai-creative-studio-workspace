@@ -36,39 +36,34 @@ try {
         if (fail) return route.fulfill({status:503,json:{detail:'isolated example failure'}});
         const data = structuredClone(samples[url.searchParams.get('scenario')]);
         if (long) {
-          data.identity['公开账号名'] = '超长账号名称'.repeat(18);
+          data.direction['发布平台'] = '抖音、小红书';
           data.direction['目标人群'] = 'LongUnbrokenExample'.repeat(35);
-          data.connection['商品挂载'] = '长段核对说明。'.repeat(30);
-          data.videos[0].progress['下一步'] = 'VeryLongNextStep'.repeat(30);
+          data.direction['内容风格'] = '较长的内容风格描述。'.repeat(30);
         }
         return route.fulfill({json:data});
       }
       unexpected.push(path); return route.fulfill({status:404,json:{detail:'unexpected isolated request'}});
     });
     await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe');
-    await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
-    assert.equal(await page.locator('time').count(),1, 'one footer check status');
-    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
-    assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['视频','当前阶段','制作状态','下一步']);
+    await page.getByRole('heading',{name:'账号方向',exact:true}).waitFor();
+    assert.equal(await page.locator('time').count(),1);
+    assert.deepEqual(await page.locator('.chloe-overview-fields dt').allTextContents(),['发布平台','目标人群','内容风格']);
+    assert.deepEqual(await page.locator('.chloe-overview-fields dd').allTextContents(),['抖音','待确定','待确定']);
+    assert.equal(await page.locator('.chloe-overview h2').count(),1);
     await page.screenshot({path:output+`/${width}-actual-empty.png`,fullPage:true});
     await page.getByRole('link',{name:'查看账号概况演示'}).click();
-    await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
-    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','1','1','0']);
-    assert.equal(await page.locator('.chloe-overview-videos tbody tr').count(),3);
+    await page.getByText(samples.working.direction['目标人群'],{exact:true}).waitFor();
     await page.screenshot({path:output+`/${width}-working.png`,fullPage:true});
     await page.getByRole('button',{name:'新账号空白状态',exact:true}).click();
-    await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
-    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
-    await page.getByText('还没有视频项目。',{exact:false}).waitFor();
-    await page.reload(); await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
-    await page.screenshot({path:output+`/${width}-new.png`,fullPage:true});
-    await page.getByRole('button',{name:'已有制作的示例',exact:true}).click();
-    await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('.chloe-overview-fields')?.textContent.includes('待确定'));
+    await page.reload(); await page.getByRole('heading',{name:'账号方向',exact:true}).waitFor();
+    assert.deepEqual(await page.locator('.chloe-overview-fields dd').allTextContents(),['抖音','待确定','待确定']);
+    await page.getByRole('button',{name:'已填写方向的示例',exact:true}).click();
+    await page.getByText(samples.working.direction['目标人群'],{exact:true}).waitFor();
     long = true; await page.reload();
-    await page.getByRole('heading',{name:'超长账号名称'.repeat(18),exact:true}).waitFor();
-    await page.locator('summary',{hasText:'人物、声音与制作约定'}).click();
+    await page.getByText('抖音、小红书',{exact:true}).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1));
-    for (const element of await page.locator('.chloe-overview, .chloe-overview-fields dd, .chloe-overview-videos').all()) {
+    for (const element of await page.locator('.chloe-overview, .chloe-overview-fields dd').all()) {
       const box = await element.boundingBox(); assert.ok(box.x >= 0 && box.x+box.width <= width+1);
     }
     await page.screenshot({path:output+`/${width}-long.png`,fullPage:true});
@@ -77,11 +72,10 @@ try {
     assert.equal(await page.locator('.chloe-overview').count(),0);
     fail = false; long = false;
     await page.getByRole('button',{name:'重新读取',exact:true}).click();
-    await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
+    await page.getByText(samples.working.direction['目标人群'],{exact:true}).waitFor();
     await page.getByRole('link',{name:'返回 Chloe',exact:true}).click();
-    await page.getByRole('link',{name:'查看账号概况演示'}).waitFor();
-    await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
-    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
+    await page.waitForFunction(()=>location.hash === '#/spaces/chloe?section=overview' && [...document.querySelectorAll('.chloe-overview-fields dd')].map(el=>el.textContent).join('|') === '抖音|待确定|待确定');
+    assert.deepEqual(await page.locator('.chloe-overview-fields dd').allTextContents(),['抖音','待确定','待确定']);
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }

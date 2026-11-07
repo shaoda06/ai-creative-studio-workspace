@@ -52,7 +52,7 @@ def initialize_workspace(value):
         (root / directory).mkdir(parents=True, exist_ok=True)
     write_template(root / 'README.md', 'chloe-positioning', '工作区README模板.md')
     write_template(root / 'projects/README.md', 'chloe-creative', '视频索引说明模板.md')
-    for name in ('账号定位', '账号运营配置', '选品记录', '运营复盘'):
+    for name in ('账号定位', '选品记录', '运营复盘'):
         write_template(root / f'综合资料/{name}.md', 'chloe-positioning', name + '模板.md')
     resource_area(root / '综合资料')
     return root

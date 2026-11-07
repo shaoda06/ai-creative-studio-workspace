@@ -47,14 +47,14 @@ class WorkspaceTests(HttpTestCase):
         fixture = Path(__file__).resolve().parents[1]/'examples/chloe-overview/new'
         shutil.copytree(fixture, self.other, dirs_exist_ok=True)
         url = self.api + '/account-overview'
-        self.assertEqual(self.client.get(url).json()['videos'], [])
-        path = self.other/'综合资料/账号运营配置.md'
-        path.write_text(path.read_text().replace('| 公开账号名 | 待核实 |', '| 公开账号名 | 隔离账号 |'))
-        self.assertEqual(self.client.get(url).json()['identity']['公开账号名'], '隔离账号')
+        self.assertEqual(list(self.client.get(url).json()), ['direction'])
+        path = self.other/'综合资料/账号定位.md'
+        path.write_text(path.read_text().replace('| 目标人群 | 待确定 |', '| 目标人群 | 隔离人群 |'))
+        self.assertEqual(self.client.get(url).json()['direction']['目标人群'], '隔离人群')
         self.assertEqual(self.client.get('/api/workspaces/nora/account-overview').status_code, 404)
         self.assertEqual(self.client.get('/api/workspaces/unknown/account-overview').status_code, 404)
         self.assertEqual(self.client.post(url).status_code, 405)
-        path.write_text(path.read_text().replace('## 账号身份', '## 临时写法'))
+        path.write_text(path.read_text().replace('## 账号方向', '## 临时写法'))
         self.assertEqual(self.client.get(url).status_code, 409)
         path.unlink()
         self.assertEqual(self.client.get(url).status_code, 404)

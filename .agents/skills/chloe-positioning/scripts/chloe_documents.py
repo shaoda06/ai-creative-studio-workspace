@@ -76,7 +76,7 @@ def template(skill, name):
 def documents(root):
     yield root/'README.md', template('chloe-positioning', '工作区README模板.md'), {}
     yield root/'projects/README.md', template('chloe-creative', '视频索引说明模板.md'), {}
-    for name in ('账号定位', '账号运营配置', '选品记录', '运营复盘'):
+    for name in ('账号定位', '选品记录', '运营复盘'):
         yield root/f'综合资料/{name}.md', template('chloe-positioning', name+'模板.md'), {}
     for kind, (folder, prefix, filename) in ASSETS.items():
         parent = root/'综合资料'/folder
