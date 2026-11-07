@@ -155,7 +155,7 @@ try {
   assert.ok((await page.getByRole('heading',{name:/^正面面部图/}).textContent()).includes(expectedRef('正面面部')));
   assert.ok((await page.getByRole('heading',{name:/^基础全身三视图/}).textContent()).includes(expectedRef('全身三视图遮面版')));
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
-  await page.getByRole('heading',{name:'基础全身三视图（16:9） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
   await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
@@ -193,7 +193,7 @@ try {
   assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-faceBox.x)<1 && Math.abs(bodyBox.x+bodyBox.width-headBox.x-headBox.width)<1,'基础全身三视图独占下一整行');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   const bodyCover=await bodyColumn.locator('.cover').boundingBox();
-  assert.ok(Math.abs(bodyCover.width / bodyCover.height - 16 / 9)<.01,'基础全身图区域为16:9');
+  assert.ok(Math.abs(bodyCover.width / bodyCover.height - 4 / 3)<.01,'基础全身图区域为4:3');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await headColumn.locator(selector).boundingBox();

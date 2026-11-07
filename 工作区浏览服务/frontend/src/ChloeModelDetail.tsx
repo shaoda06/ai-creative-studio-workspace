@@ -75,11 +75,11 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     </div>)}</div> : <p className="muted">暂无{purpose}其他版本。</p>;
   };
   const bodyImages = () => <>
-          <h2>{look ? '全身定装三视图' : '基础全身三视图（16:9）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
+          <h2>{look ? '全身定装三视图' : '基础全身三视图（4:3）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
           <div>
             <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
-          <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 16 / 9)}</div>
+          <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 4 / 3)}</div>
           <div>{bodyPurposes.some(value=>otherVersions(value).length > 0) && <details><summary>其他版本</summary>
             <UnderlineTabs label="模特图片用途" items={bodyPurposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             <div className="chloe-assets-content">{references(purpose)}</div>
