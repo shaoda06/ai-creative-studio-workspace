@@ -157,7 +157,6 @@ try {
   const basePanel=page.getByRole('region',{name:'基础全身三视图',exact:true});
   await basePanel.getByText('其他版本',{exact:true}).click();
   assert.equal(await basePanel.getByRole('navigation',{name:'模特图片用途'}).count(),0);
-  assert.equal(await page.getByText('补充细节',{exact:true}).count(),0);
   assert.equal(await basePanel.locator('[aria-label="全身三视图遮面版其他版本"] .asset-media-card').count(),1);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
   await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();

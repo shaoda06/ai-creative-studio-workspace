@@ -236,6 +236,15 @@ def linked_object(root, path, identity, value, prefix):
 
 
 def check_relations(root, path, doc):
+    image_purposes = {
+        '模特说明.md': {'正面面部', '面部三视图', '全身三视图原图', '全身三视图遮面版'},
+        '造型说明.md': {'全身三视图原图', '全身三视图遮面版'},
+    }
+    if path.name in image_purposes:
+        for heading in ('参考版本', '当前采用'):
+            for row in records(doc, heading):
+                if row['用途'].split('/', 1)[0] not in image_purposes[path.name]:
+                    raise ValueError(path.name+'：'+heading+'图片用途不在固定图种内：'+row['用途'])
     if path.name == '服装说明.md':
         for row in records(doc, '参考版本'):
             if row['用途'] not in {'服装参考图', '服装展示图'}:
