@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -44,9 +45,9 @@ const assetCategories = [
 type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
 
 function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
-  const { spaceId } = useParams();
-  const query = useQuery({ queryKey: ['account-overview', spaceId],
-    queryFn: () => get<ChloeOverviewData>(`/api/workspaces/${encodeURIComponent(spaceId!)}/account-overview`),
+  const { api } = useChloeScope();
+  const query = useQuery({ queryKey: ['account-overview', api],
+    queryFn: () => get<ChloeOverviewData>(`${api}/account-overview`),
     refetchInterval: 5000 });
   return <section aria-label="账号概况">
     <PageCheckStatus queries={[workspaceQuery, query]} />
@@ -59,37 +60,38 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const controls = useContext(HeaderControlsContext);
   const [breadcrumbActions, setBreadcrumbActions] = useState<HTMLDivElement | null>(null);
   const { spaceId } = useParams();
+  const { api, page, context, workspacePage } = useChloeScope();
   const space = workspaceQuery.data?.find(item => item.id === spaceId);
   const [params, setParams] = useSearchParams();
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
   const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
   const modelId = current.value === 'assets' && assetCategory.value === 'models' ? params.get('model') : null;
-  const modelQuery = useQuery({queryKey:['chloe-model',spaceId,modelId], queryFn:()=>get<ModelDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(modelId!)}`), enabled:!!modelId, refetchInterval:5000});
+  const modelQuery = useQuery({queryKey:['chloe-model',api,modelId], queryFn:()=>get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}`), enabled:!!modelId, refetchInterval:5000});
   const referenceKind = assetCategory.value in referenceAssetKinds ? assetCategory.value as ReferenceAssetKind : null;
   const referenceConfig = referenceKind ? referenceAssetKinds[referenceKind] : null;
   const referenceId = current.value==='assets' && referenceConfig ? params.get(referenceConfig.parameter) : null;
-  const referenceQuery = useQuery({queryKey:['chloe-reference-detail',referenceKind,spaceId,referenceId],queryFn:()=>get<ReferenceAssetDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/${referenceConfig!.endpoint}/${encodeURIComponent(referenceId!)}`),enabled:!!referenceId,refetchInterval:5000});
+  const referenceQuery = useQuery({queryKey:['chloe-reference-detail',referenceKind,api,referenceId],queryFn:()=>get<ReferenceAssetDetail>(`${api}/${referenceConfig!.endpoint}/${encodeURIComponent(referenceId!)}`),enabled:!!referenceId,refetchInterval:5000});
   const voiceId = current.value==='assets' && assetCategory.value==='voices' ? params.get('voice') : null;
-  const voiceQuery = useQuery({queryKey:['chloe-voice',spaceId,voiceId],queryFn:()=>get<VoiceDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
+  const voiceQuery = useQuery({queryKey:['chloe-voice',api,voiceId],queryFn:()=>get<VoiceDetail>(`${api}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
-    {!['production', 'publication'].includes(current.value) && <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
+    {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked={current.value === 'assets'} actions={<Link to={workspacePage}>返回项目列表</Link>}>
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
-        { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
-        { label: assetCategory.label, href: modelId || referenceId || voiceId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
-        ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
+        { label: '共用资产', href: `#${page}?section=assets` },
+        { label: assetCategory.label, href: modelId || referenceId || voiceId ? `#${page}?section=assets&asset=${assetCategory.value}` : undefined },
+        ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#${page}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
         ...(referenceId ? [{label:referenceQuery.data ? `${referenceId} · ${referenceQuery.data.name}` : referenceId}] : []),
         ...(voiceId ? [{label:voiceQuery.data ? `${voiceId} · ${voiceQuery.data.name}` : voiceId}] : []),
         ...(currentLook ? [{label:`${currentLook.id} · ${currentLook.name}`}] : []),
       ]} />}
     </PageHeader>}
     {breadcrumbActions && (referenceId || currentLook || voiceId) && createPortal(
-      voiceId ? <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=voices`}>返回声音列表</Link> :
-      referenceId ? <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${referenceKind}`}>返回{referenceConfig!.label}列表</Link> :
-        <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
+      voiceId ? <Link to={`${page}?section=assets&asset=voices`}>返回声音列表</Link> :
+      referenceId ? <Link to={`${page}?section=assets&asset=${referenceKind}`}>返回{referenceConfig!.label}列表</Link> :
+        <Link to={`${page}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'publication' ? <ChloePublication title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'publication',video:value} : {section:'publication'})} /> : current.value === 'production' ? <ChloeProduction title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
+    {current.value === 'publication' ? <ChloePublication title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'publication',video:value} : {section:'publication'})} /> : current.value === 'production' ? <ChloeProduction title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
       {(current.value !== 'assets' || !['models','clothing','scenes','voices'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>

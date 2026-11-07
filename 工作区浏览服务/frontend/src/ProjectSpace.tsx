@@ -17,17 +17,17 @@ import { ChloeWorkspace } from './ChloeWorkspace';
 import type { IrisPresentation, IrisWork } from './IrisProject';
 
 export function ProjectSpace() {
-  const { spaceId = '' } = useParams();
+  const { spaceId = '', context } = useParams();
   const [indexOpen, setIndexOpen] = useState(false);
   const query = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
   const space = query.data?.find(item => item.id === spaceId);
   const index = useQuery({ queryKey: ['project-index'], queryFn: () => get<{ title: string; html: string }>('/api/project-index'), enabled: indexOpen });
   return <div className="home">
-    {space?.view !== 'chloe-commerce' && <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />}
+    {(space?.view !== 'chloe-commerce' || (space.project_layout === 'nested' && !context)) && <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />}
     {space?.view !== 'chloe-commerce' && <PageCheckStatus queries={[query]} />}
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !space && <p role="alert">项目空间未登记。</p>}
-    {space && (space.view === 'chloe-commerce' ? <ChloeWorkspace workspaceQuery={query} /> : <>
+    {space && (space.view === 'chloe-commerce' && (space.project_layout !== 'nested' || context) ? <ChloeWorkspace key={`${spaceId}/${context}`} workspaceQuery={query} /> : <>
       <div className="section-heading"><h2>业务项目</h2>{space.view === 'serial-drama' && <button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button>}</div>
       <div className="grid">{space.projects.map((project, index) => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(index + 1).padStart(2, '0')}-${project.name}`} description="查看项目资料与素材" icon="▤" />)}</div>
       {!space.projects.length && <p className="muted">暂无项目。</p>}

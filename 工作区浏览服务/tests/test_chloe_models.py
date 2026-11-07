@@ -7,7 +7,7 @@ import unittest
 from PIL import Image
 
 from backend.chloe_models import model_cards, portrait_file, model_detail, model_file
-from chloe_init import initialize_workspace, initialize_asset, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
 
@@ -17,7 +17,7 @@ class ChloeModelsTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.base = Path(tmp.name)
-        self.root = initialize_workspace(self.base/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.model = initialize_asset(self.root, '模特', 'M001', '示例模特甲')
         self.path = self.model/'模特说明.md'
         self.api = '/api/workspaces/test'

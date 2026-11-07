@@ -61,8 +61,8 @@ class WorkspaceTests(HttpTestCase):
         self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_shared_models_are_readonly_and_scoped(self):
-        from chloe_init import initialize_workspace, initialize_asset
-        root = initialize_workspace(self.root/'Chloe Workspace')
+        from chloe_init import initialize_workspace, initialize_project, initialize_asset
+        root = initialize_project(initialize_workspace(self.root/'Chloe Workspace'), '隔离样例')
         model = initialize_asset(root, '模特', 'M001', '隔离模特')
         space = self.spaces.get('commercial')
         space.root = root

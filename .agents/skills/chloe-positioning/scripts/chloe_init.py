@@ -28,6 +28,22 @@ def workspace_path(value):
     return path
 
 
+def project_name(name):
+    if (not isinstance(name, str) or not name.strip() or name != name.strip()
+            or name in {'待命名', '未命名', '待确定', '没想好', '项目名称', '项目名', '账号名称',
+                        'TODO', 'TBD', 'Untitled', 'projects', '综合资料'}
+            or name.startswith('.') or any(c in name for c in '/\\\n\r\0|<>:"?*')):
+        raise ValueError('必须使用用户明确提供的项目名称、代号或社交媒体账号名称，不能使用占位名称或路径字符')
+    return name
+
+
+def project_path(value):
+    path = Path(value).resolve()
+    workspace_path(path.parent)
+    project_name(path.name)
+    return path
+
+
 def write_template(path, skill, template, **fields):
     body = (SKILLS / skill / 'templates' / template).read_text('utf-8')
     fields['skills'] = Path(os.path.relpath(SKILLS, path.parent)).as_posix()
@@ -50,9 +66,19 @@ def resource_area(owner):
 
 def initialize_workspace(value):
     root = workspace_path(value)
+    write_template(root / 'README.md', 'chloe-positioning', '工作区README模板.md')
+    return root
+
+
+def initialize_project(value, name):
+    root = workspace_path(value) / project_name(name)
+    if root.resolve().parent != workspace_path(value):
+        raise ValueError('项目目录越出工作区')
+    if not (root.parent / 'README.md').is_file():
+        raise ValueError('请先初始化工作区')
     for directory in ('projects', '综合资料', *('综合资料/' + item[0] for item in ASSETS.values())):
         (root / directory).mkdir(parents=True, exist_ok=True)
-    write_template(root / 'README.md', 'chloe-positioning', '工作区README模板.md')
+    write_template(root / 'README.md', 'chloe-positioning', '项目README模板.md', title=name)
     write_template(root / 'projects/README.md', 'chloe-creative', '视频索引说明模板.md')
     for name in ('账号定位', '选品记录', '运营复盘'):
         write_template(root / f'综合资料/{name}.md', 'chloe-positioning', name + '模板.md')
@@ -76,10 +102,10 @@ def named_folder(parent, identity, title, prefix):
 
 
 def initialize_video(value, identity, title):
-    root = workspace_path(value)
+    root = project_path(value)
     owner = root / '综合资料'
     if not resources.enabled(owner) or not (root / 'projects').is_dir():
-        raise ValueError('请先初始化工作区')
+        raise ValueError('请先初始化具名项目')
     with resources.index_lock(owner):
         project = named_folder(root / 'projects', identity, title, 'V')
         for directory in ('资源/图片', '资源/视频', '资源/音频', '剪辑交接', '成片', '执行记录', '历史版本'):
@@ -97,10 +123,10 @@ def initialize_video(value, identity, title):
 
 
 def initialize_asset(value, kind, identity, title):
-    root = workspace_path(value)
+    root = project_path(value)
     owner = root / '综合资料'
     if not resources.enabled(owner):
-        raise ValueError('请先初始化工作区')
+        raise ValueError('请先初始化具名项目')
     directory, prefix, filename = ASSETS[kind]
     with resources.index_lock(owner):
         asset = named_folder(owner / directory, identity, title, prefix)
@@ -114,12 +140,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, required=True, help='真实或隔离的 Chloe Workspace 目录')
     commands = parser.add_subparsers(dest='action', required=True)
-    workspace = commands.add_parser('workspace', help='建立工作区、固定分类和空资源索引；已有正文不覆盖')
+    workspace = commands.add_parser('workspace', help='仅建立工作区入口；不代建项目')
     workspace.add_argument('--register', action='store_true', help='登记到统一浏览服务；不启动服务')
+    project = commands.add_parser('project', help='用用户明确提供的名称建立独立项目；没有名称时禁止初始化')
+    project.add_argument('--name', required=True, help='用户确认的项目名称、代号或社交媒体账号名称；无默认值')
     video = commands.add_parser('video', help='建立一条视频；不生成媒体或新建账号配置')
+    video.add_argument('--project-name', required=True, help='所属已建档项目的准确目录名')
     video.add_argument('--id', required=True, help='已确定的视频编号，例如 V001')
     video.add_argument('--name', required=True, help='商品与视频主题组成的名称')
     asset = commands.add_parser('asset', help='建立商品或共用资产说明；不复制媒体')
+    asset.add_argument('--project-name', required=True, help='所属已建档项目的准确目录名')
     asset.add_argument('--kind', choices=ASSETS, required=True)
     asset.add_argument('--id', required=True, help='G/M/O/L/S/A 加正整数编号，例如 M001')
     asset.add_argument('--name', required=True)
@@ -128,11 +158,13 @@ def main():
         result = initialize_workspace(args.workspace)
         if args.register:
             register_workspace(result, identity='chloe', name='Chloe视频带货', view='chloe-commerce',
-                               production_adapter='chloe-production')
+                               production_adapter='chloe-production', project_layout='nested')
+    elif args.action == 'project':
+        result = initialize_project(args.workspace, args.name)
     elif args.action == 'video':
-        result = initialize_video(args.workspace, args.id, args.name)
+        result = initialize_video(workspace_path(args.workspace) / project_name(args.project_name), args.id, args.name)
     else:
-        result = initialize_asset(args.workspace, args.kind, args.id, args.name)
+        result = initialize_asset(workspace_path(args.workspace) / project_name(args.project_name), args.kind, args.id, args.name)
     print(json.dumps({'path': str(result)}, ensure_ascii=False))
 
 

@@ -26,7 +26,7 @@ python3 .agents/skills/iris-commercial-brief/scripts/workspace_init.py --workspa
 python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'workspaces/Chloe Workspace' workspace --register
 ```
 
-三个入口分别见[Nora初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)、[Iris初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)、[Chloe初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)。脚本只补缺，不覆盖已有README、业务资料、配置或独立Git。未确定的账号方向保持待确定，不创建示例订单、剧集、视频或媒体。
+三个入口分别见[Nora初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)、[Iris初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)、[Chloe初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)。脚本只补缺，不覆盖已有README、业务资料、配置或独立Git。Chloe还需使用project命令建档；项目名称必须由用户提供或明确选定，没有名称时先讨论，不能用待命名跳过。未确定的账号方向保持待确定，不创建示例订单、剧集、视频或媒体。
 
 `--register`接入同一个浏览服务：Nora使用默认目录，Iris与Chloe写入本地空间登记；省略时只建资料区。完成初始化后按服务README安装依赖、构建并启动；初始化本身不启动、重启服务，不提交生成。
 
@@ -53,7 +53,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
 | `workspaces/Nora Workspace/projects/` | Nora真实短剧及角色项目 |
 | `workspaces/Iris Workspace/projects/` | Iris商业订单，原Git历史独立保留 |
-| `workspaces/Chloe Workspace/` | Chloe自营带货账号，综合资料保存共用资产，projects中每条视频一个项目 |
+| `workspaces/Chloe Workspace/` | Chloe具名项目，各项目独立维护综合资料与共用资产，项目内projects保存单条视频 |
 | `综合资料/` | 跨项目资料、未分类资料和本机过程资料，模板仅保留目录说明 |
 
 技能历史版本、真实服务库存、项目、个人配置和工具缓存仍可留在本机，但由 `.gitignore` 排除。不要把它们的本地存在误认为已被Git备份。

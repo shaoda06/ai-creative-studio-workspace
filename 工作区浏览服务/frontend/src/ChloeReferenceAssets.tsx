@@ -1,5 +1,6 @@
+import { useChloeScope } from './chloeScope';
 import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { get } from './api';
@@ -23,13 +24,13 @@ export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
 
 export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: ReferenceAssetKind; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
-  const { spaceId } = useParams();
-  const query = useQuery({queryKey:['chloe-reference-assets',kind,spaceId],queryFn:()=>get<ReferenceAssetCard[]>(`/api/workspaces/${encodeURIComponent(spaceId!)}/${endpoint}`),refetchInterval:5000});
+  const { api, page } = useChloeScope();
+  const query = useQuery({queryKey:['chloe-reference-assets',kind,api],queryFn:()=>get<ReferenceAssetCard[]>(`${api}/${endpoint}`),refetchInterval:5000});
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (query.data.length ? <div className="asset-media-grid">{query.data.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal revision={0}
-      to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
+      to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
       item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />)}</div> : <p className="muted">暂无{label}资料。</p>)}
   </>;
 }
@@ -37,7 +38,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
 export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kind: ReferenceAssetKind; query: UseQueryResult<ReferenceAssetDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, endpoint, ratio} = referenceAssetKinds[kind];
   const purposes = [label+'展示图'];
-  const { spaceId } = useParams();
+  const { api, page } = useChloeScope();
   const [params,setParams] = useSearchParams();
   const [document,setDocument] = useState<FileItem | null>(null);
   const data = query.data;
@@ -82,7 +83,7 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
         <ChloeAssetRecords sections={data.sections} />
       </div>
     </div>}
-    {document ? <Preview project="" item={document} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/${endpoint}/${encodeURIComponent(data!.id)}`} revision={0} close={()=>setDocument(null)} />
+    {document ? <Preview project="" item={document} baseUrl={`${api}/${endpoint}/${encodeURIComponent(data!.id)}`} revision={0} close={()=>setDocument(null)} />
       : preview && <FullscreenImage title={preview.name} src={preview.url!} alt={preview.name} close={()=>select('ref',null)} />}
   </PreviewContext.Provider>;
 }

@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { ChloeModelVoices } from './ChloeModelVoices';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import { FullscreenImage } from './components/FullscreenImage';
@@ -26,6 +27,7 @@ const bodyPurposes = ['全身三视图遮面版', '全身三视图原图'];
 
 export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryResult<ModelDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { spaceId } = useParams();
+  const { api, page } = useChloeScope();
   const [params, setParams] = useSearchParams();
   const [document, setDocument] = useState<FileItem | null>(null);
   const data = query.data;
@@ -44,7 +46,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     next.set('modelTab','looks'); next.delete('ref');
     next.delete('lookTab'); next.delete('purpose'); next.set('view','original');
     if (id) next.set('look',id); else next.delete('look');
-    return `/spaces/${encodeURIComponent(spaceId!)}?${next}`;
+    return `${page}?${next}`;
   };
   const look = tab==='looks' ? data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const asset = look || data;
@@ -137,7 +139,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
       </div>
     </div>}
-    {document ? <Preview project="" item={document} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />
+    {document ? <Preview project="" item={document} baseUrl={`${api}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />
       : preview && <FullscreenImage title={preview.name} src={preview.url!} alt={preview.name} close={() => select('ref',null)} />}
   </PreviewContext.Provider>;
 }

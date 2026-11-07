@@ -6,7 +6,7 @@ import unittest
 import wave
 
 from backend.chloe_reference_assets import VOICES, asset_cards, asset_detail, asset_file
-from chloe_init import initialize_workspace, initialize_asset, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
 
@@ -16,7 +16,7 @@ class ChloeVoicesTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
-        self.root = initialize_workspace(self.base/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.folder = initialize_asset(self.root, '声音', 'A001', '示例声音')
         self.path = self.folder/'声音说明.md'
         self.api = '/api/workspaces/test'

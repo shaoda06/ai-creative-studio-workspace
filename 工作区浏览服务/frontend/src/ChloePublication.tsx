@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -24,9 +25,10 @@ const missing = new Set(['待确定', '待核实', '未取得', '不适用', '�
 export function ChloePublication({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
+  const { workspacePage } = useChloeScope();
   const list = useQuery({ queryKey: ['chloe-publication', baseUrl], queryFn: () => get<Video[]>(`${baseUrl}/publication-videos`), refetchInterval: 5000 });
   return <>
-    <PageHeader stacked title={title} actions={<Link to="/">返回工作区</Link>}>
+    <PageHeader stacked title={title} actions={<Link to={workspacePage}>返回项目列表</Link>}>
       <Breadcrumbs items={[{ label: '成片与发布', onClick: selected ? () => onSelect(null) : undefined }, ...(selected ? [{ label: selected }] : [])]} />
     </PageHeader>
     {selected ? <PublicationDetail key={`${baseUrl}/${selected}`} baseUrl={baseUrl} project={selected} /> : <section className="panel" aria-label="成片与发布">

@@ -8,7 +8,7 @@
 
 - 一级子工作区位于总目录的`workspaces/`，使用英文女生名开头，目录名为`名字 Workspace`。工作区名字确定后，其一级、二级业务技能使用同名英文小写前缀。
 - 工作区根目录使用`README.md`作为定位、独有约定和资料导航入口，不另建工作区级AGENTS.md。AI Creative Studio根AGENTS.md及开发工具自身的局部指令不受此约定替代。
-- `projects/`保存独立业务项目；`综合资料/`保存该工作区跨项目资料，首次需要时建立；业务已规定固定骨架时按其初始化规范建立。已有配置、历史归档及独立Git按实际用途保留，不据此自动创建空目录。
+- 默认由`projects/`保存独立业务项目；Chloe按其建档规范在工作区根目录直接保存具名项目，各项目内部保留自己的`projects/`视频目录；`综合资料/`保存该工作区跨项目资料，首次需要时建立；业务已规定固定骨架时按其初始化规范建立。已有配置、历史归档及独立Git按实际用途保留，不据此自动创建空目录。
 - 技能、业务规范、模板和共用工具统一在总目录`.agents/skills/`维护。资料区不复制技能库、不另启浏览后台或任务监控器。
 - 新建工作区按本规范及[模板](../templates/一级子工作区README模板.md)填写真实名称、业务入口和路径；空间登记及数据库位置按共用浏览服务的[运行资料维护规范](../../studio-workspace-browser/references/任务运行资料维护规范.md)执行。后台自动在总服务内建立独立任务库，不在业务资料区创建服务目录，不把创建资料目录视为已完成登记。
 
@@ -38,6 +38,6 @@ README是需要Agent主动读取的业务说明与规则文件，不宣称由Cod
 - Nora连续短剧：项目结构沿定位建档阶段及其引用的业务结构规范，项目README使用该阶段的[规范](../../nora-drama-positioning/references/项目README规范.md)和模板。
 - Studio社媒运营：项目结构和README由所属业务建档阶段维护；公共运营仅规定[接入信息要求](../../nora-operations-setup/references/运营项目README规范.md)，不选择资料区或创建另一套项目结构。
 - Iris商业视频：项目结构与README由[需求建档阶段](../../iris-commercial-brief/references/项目建档与README规范.md)维护。
-- Chloe视频带货：工作区骨架由[账号定位建档](../../chloe-positioning/references/工作区与初始化规范.md)维护，单条视频结构与README由[视频创意建档](../../chloe-creative/references/视频项目与脚本规范.md)维护。
+- Chloe视频带货：工作区与具名项目骨架由[账号定位建档](../../chloe-positioning/references/工作区与初始化规范.md)维护，单条视频结构与README由[视频创意建档](../../chloe-creative/references/视频项目与脚本规范.md)维护。
 
 新增一级业务必须明确自身项目结构与README的维护入口，不直接套用另一个业务的阶段目录。已有项目专用约定继续在其适用范围内执行。

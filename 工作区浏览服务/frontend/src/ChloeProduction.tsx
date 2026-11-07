@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from './components/PageHeader';
@@ -12,6 +13,7 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
+  const { workspacePage } = useChloeScope();
   const [actions, setActions] = useState<HTMLDivElement | null>(null);
   const [selector, setSelector] = useState<HTMLSpanElement | null>(null);
   const [preview, setPreview] = useState<FileItem | null>(null);
@@ -30,7 +32,7 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
     document: (_, path) => projectUrl(selected!) + '/document?path=' + encodeURIComponent(path),
   }), [baseUrl, selected]);
   return <div><ProductionAccessContext value={access}><BreadcrumbActionsContext value={actions}><BreadcrumbSelectorContext value={selector}><PreviewContext value={setPreview}>
-    <PageHeader stacked title={title} actions={<Link to="/">返回工作区</Link>}>
+    <PageHeader stacked title={title} actions={<Link to={workspacePage}>返回项目列表</Link>}>
     <Breadcrumbs actionsRef={setActions} selectorRef={setSelector} items={[
       { label: '视频制作', onClick: selected ? () => onSelect(null) : undefined },
       ...(selected ? [{ label: selected }] : []),

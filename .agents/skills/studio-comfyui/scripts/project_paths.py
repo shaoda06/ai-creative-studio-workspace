@@ -8,9 +8,17 @@ SHARED_SCOPE = '@shared'
 SHARED_DIRECTORY = '综合资料'
 
 
-def scope_name(root):
+def scope_name(root, workspace=None):
     root = Path(root)
-    return SHARED_SCOPE if root.name == SHARED_DIRECTORY and root.parent.name != 'projects' else root.name
+    name = SHARED_SCOPE if root.name == SHARED_DIRECTORY and root.parent.name != 'projects' else root.name
+    if workspace is not None:
+        owner = scope_workspace(root)
+        workspace = Path(workspace).resolve()
+        if owner != workspace:
+            if owner.parent != workspace or '::' in owner.name:
+                raise ValueError('任务不属于该工作区的具名项目')
+            return owner.name + '::' + name
+    return name
 
 
 def scope_workspace(root):
@@ -25,6 +33,19 @@ def scope_workspace(root):
 def scope_root(workspace, value, *, recorded=False):
     workspace = Path(workspace).resolve()
     spelling = str(value)
+    if '::' in spelling:
+        context, name = spelling.split('::', 1)
+        owner = (workspace / context).resolve()
+        if (not context or context.startswith('.') or '/' in context or '\\' in context
+                or owner.parent != workspace or not (owner / 'README.md').is_file()
+                or not (owner / 'projects').is_dir() or not (owner / SHARED_DIRECTORY).is_dir()):
+            raise ValueError('所属项目不存在或越界')
+        return scope_root(owner, name, recorded=recorded)
+    if Path(spelling).is_absolute():
+        absolute = Path(spelling).resolve()
+        owner = scope_workspace(absolute)
+        if owner.parent == workspace and (owner / 'README.md').is_file():
+            return scope_root(owner, absolute, recorded=False)
     if not recorded and not Path(spelling).is_absolute() and PureWindowsPath(spelling).name != spelling:
         raise ValueError('项目必须是当前工作区内的项目名或绝对路径')
     if spelling == SHARED_SCOPE:

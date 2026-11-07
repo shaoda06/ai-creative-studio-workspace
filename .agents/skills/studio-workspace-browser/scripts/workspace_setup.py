@@ -21,9 +21,10 @@ def write_template(path, skill, template):
             raise
 
 
-def register_workspace(root, *, identity, name, view, production_adapter=None, runtime_id=None):
+def register_workspace(root, *, identity, name, view, production_adapter=None, runtime_id=None, project_layout='flat'):
     root = Path(root).resolve()
-    if root.parent.name != 'workspaces' or not (root / 'projects').is_dir():
+    if (project_layout not in ('flat', 'nested') or root.parent.name != 'workspaces'
+            or not (root / ('README.md' if project_layout == 'nested' else 'projects')).exists()):
         raise ValueError('登记须使用总工作区 workspaces 下已初始化的资料区')
     if identity == 'nora':
         if root.name != 'Nora Workspace':
@@ -34,11 +35,14 @@ def register_workspace(root, *, identity, name, view, production_adapter=None, r
     entries = json.loads(path.read_text('utf-8')) if path.exists() else []
     entry = {'id': identity, 'name': name, 'path': str(root), 'view': view,
              'production_adapter': production_adapter, 'runtime_id': runtime_id or identity}
+    if project_layout != 'flat':
+        entry['project_layout'] = project_layout
     for current in entries:
         if current['id'] == identity or Path(current['path']).resolve() == root:
             if (current['id'] != identity or Path(current['path']).resolve() != root
                     or current.get('view', 'files') != view
                     or current.get('production_adapter') != production_adapter
+                    or current.get('project_layout', 'flat') != project_layout
                     or current.get('runtime_id', identity) != entry['runtime_id']):
                 raise ValueError('已有空间登记与本次初始化不一致，请按运行资料规范处理：' + identity)
             return  # Keep the display name, archive mapping and other local fields.

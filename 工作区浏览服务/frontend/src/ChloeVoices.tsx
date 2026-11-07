@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { AudioReferenceCard } from './components/AudioReferenceCard';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -19,8 +20,9 @@ export interface VoiceDetail { id: string; name: string; description: string; mo
 
 export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {spaceId} = useParams();
+  const { api, page } = useChloeScope();
   const navigate = useNavigate();
-  const query = useQuery({queryKey:['chloe-voices',spaceId],queryFn:()=>get<VoiceCard[]>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-voices`),refetchInterval:5000});
+  const query = useQuery({queryKey:['chloe-voices',api],queryFn:()=>get<VoiceCard[]>(`${api}/shared-voices`),refetchInterval:5000});
   const audio = useAudioPreview(true, spaceId!, 0);
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
@@ -30,12 +32,13 @@ export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult
       const name = `${item.id} · ${item.name}`;
       return <ReferenceMediaCard key={item.id} audio item={{kind:'reference',name,media:item.media ? {...item.media,name} : undefined,approvalHtml:`<span class="status-badge ${item.media ? 'status-green' : 'status-gray'}">${item.media ? '已采用' : '尚未采用声音参考'}</span>`}}
         playing={audio.playingId===item.id} progress={audio.currentId===item.id ? audio.progress : 0}
-        onPlay={()=>audio.toggle(item.id,item.media!.url!)} onSelect={()=>navigate(`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=voices&voice=${encodeURIComponent(item.id)}`)} />;
+        onPlay={()=>audio.toggle(item.id,item.media!.url!)} onSelect={()=>navigate(`${page}?section=assets&asset=voices&voice=${encodeURIComponent(item.id)}`)} />;
     })}</div> : <p className="muted">暂无声音资料。</p>)}
   </>;
 }
 
 export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: VoiceDetail; spaceId: string; onOpen: (file: FileItem)=>void; active?: boolean}) {
+  const { page } = useChloeScope();
   const audio=useAudioPreview(active,data.id,0);
   const current=data.versions.filter(item=>item.adopted && item.purpose==='声音参考');
   const others=data.versions.filter(item=>!item.adopted && item.purpose==='声音参考').reverse().sort((a,b)=>b.version.localeCompare(a.version,undefined,{numeric:true}));
@@ -52,7 +55,7 @@ export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: Voic
         <dl className="chloe-overview-fields">
           <div><dt>声音名称</dt><dd>{data.name}</dd></div>
           <div><dt>声音说明</dt><dd>{data.description}</dd></div>
-          <div><dt>关联模特</dt><dd>{data.models.length ? data.models.map(model=><div key={model.id}><Link to={`/spaces/${encodeURIComponent(spaceId)}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}>{model.name}</Link></div>) : '无'}</dd></div>
+          <div><dt>关联模特</dt><dd>{data.models.length ? data.models.map(model=><div key={model.id}><Link to={`${page}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}>{model.name}</Link></div>) : '无'}</dd></div>
         </dl>
         <section className="chloe-voice-originals" aria-label="原始参考"><h3>原始参考</h3>{originals.length ? <ul>{originals.map((item,index)=><li key={`${item.resource}@${item.version}`}><LinkButton onClick={()=>onOpen(item.media)}>参考 {index+1} · {item.resource}@{item.version}</LinkButton></li>)}</ul> : <p>无</p>}</section>
       </section>
@@ -69,11 +72,12 @@ export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: Voic
 
 export function ChloeVoiceDetail({query,workspaceQuery}: {query: UseQueryResult<VoiceDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]>}) {
   const {spaceId}=useParams();
+  const { api, page } = useChloeScope();
   const [preview,setPreview]=useState<FileItem | null>(null);
   return <PreviewContext.Provider value={setPreview}>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && <ChloeVoiceContent data={query.data} spaceId={spaceId!} onOpen={setPreview} active={!preview} />}
-    {preview && <Preview project="" item={preview} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-voices/${encodeURIComponent(query.data!.id)}`} revision={0} close={()=>setPreview(null)} />}
+    {preview && <Preview project="" item={preview} baseUrl={`${api}/shared-voices/${encodeURIComponent(query.data!.id)}`} revision={0} close={()=>setPreview(null)} />}
   </PreviewContext.Provider>;
 }

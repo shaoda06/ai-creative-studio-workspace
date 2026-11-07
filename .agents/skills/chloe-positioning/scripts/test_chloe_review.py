@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from chloe_init import initialize_workspace, initialize_video, initialize_asset, write_template, ASSETS
+from chloe_init import initialize_workspace, initialize_project, initialize_video, initialize_asset, write_template, ASSETS
 import chloe_documents as docs
 
 
@@ -12,7 +12,7 @@ class ChloeReviewTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.root = initialize_workspace(Path(temp.name)/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(Path(temp.name)/'Chloe Workspace'), '隔离样例')
         self.video = initialize_video(self.root, 'V001', '展示')
         self.readme = self.video/'README.md'
         self.review = self.root/'综合资料/运营复盘.md'
@@ -318,7 +318,7 @@ class ChloeReviewTest(unittest.TestCase):
                 with self.assertRaises(ValueError): self.read(account)
         account.write_text(original)
         self.append(account, '决定与变更', ['B001', self.time, '内容风格', '待确定', '穿搭展示', valid])
-        other = initialize_workspace(self.root.parent/'other'/'Chloe Workspace')
+        other = initialize_project(self.root.parent, '另一项目')
         (other/'综合资料/运营复盘.md').write_text(self.review.read_text())
         foreign = '[T001](<'+Path(os.path.relpath(other/'综合资料/运营复盘.md', account.parent)).as_posix()+'#建议验证>)'
         account.write_text(account.read_text().replace(valid, foreign))

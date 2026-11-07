@@ -8,7 +8,7 @@ from PIL import Image
 
 from functools import partial
 from backend.chloe_reference_assets import CLOTHING, SCENES, asset_cards, asset_detail, asset_file
-from chloe_init import initialize_workspace, initialize_asset, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
 from chloe_documents import check_workspace
@@ -20,7 +20,7 @@ class ChloeClothingTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
-        self.root = initialize_workspace(self.base/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.identity = self.kind.prefix+'001'
         self.folder = initialize_asset(self.root, self.kind.label, self.identity, '示例资产')
         self.cards = partial(asset_cards, kind=self.kind)

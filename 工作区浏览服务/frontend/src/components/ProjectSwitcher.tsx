@@ -10,7 +10,8 @@ export function ProjectSwitcher() {
   const navigate = useNavigate();
   const projects = useQuery({ queryKey: ['workspaces'],
     queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
-  const scopedProject = matchPath('/spaces/:spaceId/projects/:name/*', location.pathname);
+  const scopedProject = matchPath('/spaces/:spaceId/projects/:name/*', location.pathname)
+    || matchPath('/spaces/:spaceId/contexts/:context/*', location.pathname);
   const noraProject = matchPath('/projects/:name/*', location.pathname);
   const projectSpaceId = scopedProject?.params.spaceId || (noraProject ? 'nora' : undefined);
   const space = projects.data?.find(item => item.id === projectSpaceId);

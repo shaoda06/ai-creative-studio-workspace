@@ -41,7 +41,7 @@ async def task_detail(store, key, archive=None):
     if resolution:
         for value in resolution['evidence_files']:
             path = paths.project_file(data.project, value)
-            evidence.append({'name': path.name, 'url': file_info(Path(data.project), path, archive)['url']})
+            evidence.append({'name': path.name, 'url': file_info(Path(data.project), path, archive or (Path(data.project), '/api/projects/' + quote(state['project'], safe='') + '/files/'))['url']})
         for identity in resolution['replacement_task_ids']:
             target = store.rows.get(identity)
             replacements.append({'id': identity, 'title': target['state']['title'] if target else identity,
@@ -72,6 +72,7 @@ def file_info(project, value, archive=None):
 
 def task_files(data, state, events, archive=None):
     project = Path(data.project).resolve()
+    links = archive or (project, '/api/projects/' + quote(state['project'], safe='') + '/files/')
 
     targets = [{'path': item.path, 'identity': None} for item in data.outputs]
     if data.segment_plan:
@@ -93,7 +94,7 @@ def task_files(data, state, events, archive=None):
     for target in targets:
         if any(item['path'] == target['path'] for item in outputs):
             continue
-        info = file_info(project, target['path'], archive)
+        info = file_info(project, target['path'], links)
         downloads = [event for event in events if event['stage'] == 'download' and
                      (event.get('path') == target['path'] or target['identity'] and event.get('identity') == target['identity'])]
         latest = downloads[-1] if downloads else None
@@ -114,7 +115,7 @@ def task_files(data, state, events, archive=None):
                         ('结果收尾报告', '结果收尾报告.json'),
                         ('准备检查报告', '执行检查报告.json'),
                         ('远端执行结果', data.history_name)):
-        info = file_info(project, Path(data.record_dir) / name, archive)
+        info = file_info(project, Path(data.record_dir) / name, links)
         if info['available']:
             records.append({'name': label, **info})
     return {'outputs': outputs, 'records': records}

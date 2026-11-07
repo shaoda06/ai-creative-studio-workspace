@@ -1,3 +1,4 @@
+import { useChloeScope } from './chloeScope';
 import { useModelVoices } from './ChloeModelVoices';
 import { AudioPreviewButton, useAudioPreview } from './components/AudioPreviewButton';
 import { useParams } from 'react-router-dom';
@@ -20,8 +21,9 @@ interface ModelCard {
 
 export function ChloeModels({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { spaceId } = useParams();
-  const query = useQuery({ queryKey: ['chloe-models', spaceId],
-    queryFn: () => get<ModelCard[]>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models`), refetchInterval: 5000 });
+  const { api, page } = useChloeScope();
+  const query = useQuery({ queryKey: ['chloe-models', api],
+    queryFn: () => get<ModelCard[]>(`${api}/shared-models`), refetchInterval: 5000 });
   const voices=useModelVoices(spaceId!);
   const audio=useAudioPreview(true,spaceId!,0);
   return <>
@@ -35,7 +37,7 @@ export function ChloeModels({ workspaceQuery }: { workspaceQuery: UseQueryResult
           ? voices.data.filter(voice=>voice.models.includes(model.id)).map(voice=><AudioPreviewButton key={voice.id} name={`${model.name} · ${voice.name}`} enabled={!!voice.media}
               playing={audio.playingId===voice.id} progress={audio.currentId===voice.id ? audio.progress : 0} onClick={()=>audio.toggle(voice.id,voice.media!.url!)} />)
           : <AudioPreviewButton name={model.name} enabled={false} playing={false} progress={0} onClick={()=>{}} />}
-        to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}
+        to={`${page}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}
         item={{ media: model.media, emptyLabel: '尚未采用正面面部图' }} />)}
     </div> : <p className="muted">暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。</p>)}
   </>;

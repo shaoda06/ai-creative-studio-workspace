@@ -1,5 +1,5 @@
 """Registered project spaces owned by the common browser service."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import re
@@ -18,13 +18,28 @@ class Workspace:
     projects: ProjectFiles
     tasks: object = None
     production_adapter: str | None = None
+    project_layout: str = 'flat'
+    context: str | None = None
 
     @property
     def api(self):
-        return '/api/workspaces/' + self.id
+        return '/api/workspaces/' + self.id + ('/contexts/' + quote(self.context, safe='') if self.context else '')
 
     def public(self):
-        return {'id': self.id, 'name': self.name, 'view': self.view, 'projects': self.projects.discover()}
+        return {'id': self.id, 'name': self.name, 'view': self.view, **({'project_layout': self.project_layout} if self.project_layout != 'flat' else {}),
+                'projects': self.contexts() if self.project_layout == 'nested' else self.projects.discover()}
+
+    def contexts(self):
+        return [{'id': path.name, 'name': path.name} for path in sorted(self.root.iterdir())
+                if not path.name.startswith('.') and not path.is_symlink() and path.is_dir()
+                and (path / 'README.md').is_file() and (path / 'projects').is_dir()
+                and (path / '综合资料').is_dir()]
+
+    def select(self, name):
+        if self.project_layout != 'nested' or name not in {item['id'] for item in self.contexts()}:
+            raise KeyError(name)
+        root = self.root / name
+        return replace(self, root=root, name=name, projects=ProjectFiles(root / 'projects'), context=name)
 
 
 class Workspaces:
@@ -38,7 +53,10 @@ class Workspaces:
             target = Path(item['path']).resolve()
             if not re.fullmatch(r'[a-z][a-z0-9-]*', identity) or identity in self.items:
                 raise ValueError('项目空间ID无效或重复：' + identity)
-            if target in [space.root for space in self.items.values()] or not (target / 'projects').is_dir():
+            layout = item.get('project_layout', 'flat')
+            if layout not in ('flat', 'nested'):
+                raise ValueError('项目目录布局无效：' + identity)
+            if target in [space.root for space in self.items.values()] or not target.is_dir() or (layout == 'flat' and not (target / 'projects').is_dir()):
                 raise ValueError('项目空间目录重复或缺少projects目录：' + identity)
             runtime_id = item.get('runtime_id', identity)
             if not re.fullmatch(r'[a-z][a-z0-9-]*', runtime_id):
@@ -50,7 +68,8 @@ class Workspaces:
             if view not in ('files', 'iris-commercial', 'chloe-commerce'):
                 raise ValueError('项目空间页面类型无效：' + identity)
             self.items[identity] = Workspace(identity, item['name'], target, state, view,
-                ProjectFiles(target / 'projects'), production_adapter=item.get('production_adapter'))
+                ProjectFiles(target / 'projects', nested=layout == 'nested'),
+                production_adapter=item.get('production_adapter'), project_layout=layout)
 
         self.task_history_archives = {}
         for item in registered:

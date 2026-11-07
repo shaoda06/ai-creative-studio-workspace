@@ -6,7 +6,7 @@
 
 - [Nora资料区初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)：保存连续短剧、角色资产项目及所属社媒运营资料，项目位于 `workspaces/Nora Workspace/projects/`。
 - [Iris资料区初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)：保存商业订单及所属社媒运营资料，项目位于 `workspaces/Iris Workspace/projects/`。
-- [Chloe资料区初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)：保存当前自营带货账号、共用资产及单条视频项目，项目位于 `workspaces/Chloe Workspace/projects/`。
+- [Chloe资料区初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)：保存多个具名项目，各项目直接位于 `workspaces/Chloe Workspace/{项目名称}/`，内部保留账号资料、共用资产及 `projects/` 单条视频目录。
 
 各资料区共用总技能库和浏览服务，不需要分别作为Codex启动环境。公共仓库分发各业务的模板、初始化脚本和流程；实际workspaces资料区及其README均在本地创建和维护，不纳入总仓库。已有资料区不覆盖，Iris独立Git历史保留。
 

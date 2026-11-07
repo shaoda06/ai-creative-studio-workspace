@@ -49,7 +49,7 @@ class TaskGroups:
             self.validate_registration(data)
         group_id = str(uuid.uuid4())
         ids = [str(uuid.uuid4()) for _ in inputs]
-        group = dict(id=group_id, title=title.strip(), project=scope_name(inputs[0].project),
+        group = dict(id=group_id, title=title.strip(), project=scope_name(inputs[0].project, self.workspace),
                      thread_id=inputs[0].thread_id, task_ids=ids, created_at=self.client.now())
         # No await until all members and the group are committed. The scheduler
         # cannot see a partial group, including after an HTTP interruption/restart.

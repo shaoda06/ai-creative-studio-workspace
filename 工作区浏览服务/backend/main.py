@@ -908,6 +908,8 @@ def workspace_list(request: Request):
 async def select_workspace(workspace_id: str, request: Request):
     try:
         space = request.app.state.workspaces.get(workspace_id)
+        if 'context' in request.path_params:
+            space = space.select(request.path_params['context'])
     except KeyError as error:
         raise HTTPException(404, '项目空间未登记') from error
     request.state.workspace_space = space
@@ -915,8 +917,7 @@ async def select_workspace(workspace_id: str, request: Request):
     return space
 
 
-spaces_router = APIRouter(prefix='/api/workspaces/{workspace_id}',
-                          dependencies=[Depends(select_workspace)])
+spaces_router = APIRouter(dependencies=[Depends(select_workspace)])
 # The registered spaces use the exact same task handlers and authorization.
 for route in list(app.routes):
     path = getattr(route, 'path', '')
@@ -1165,7 +1166,8 @@ spaces_router.include_router(chloe_models_router)
 spaces_router.include_router(chloe_clothing_router)
 spaces_router.include_router(chloe_asset_router(SCENES))
 spaces_router.include_router(chloe_asset_router(VOICES))
-app.include_router(spaces_router)
+app.include_router(spaces_router, prefix='/api/workspaces/{workspace_id}')
+app.include_router(spaces_router, prefix='/api/workspaces/{workspace_id}/contexts/{context}')
 
 
 app.frontend('/', directory=TOOL / 'frontend/dist', fallback='index.html')

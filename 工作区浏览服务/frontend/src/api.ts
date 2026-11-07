@@ -46,6 +46,6 @@ export function searchTree(items: FileItem[], search: string): FileItem[] {
   });
 }
 
-export interface WorkspaceSpace { id: string; name: string; view: 'serial-drama' | 'iris-commercial' | 'chloe-commerce' | 'files'; projects: { id: string; name: string }[] }
+export interface WorkspaceSpace { project_layout?: 'flat' | 'nested'; id: string; name: string; view: 'serial-drama' | 'iris-commercial' | 'chloe-commerce' | 'files'; projects: { id: string; name: string }[] }
 export const spaceProjectPath = (space: WorkspaceSpace, name: string) => space.view === 'serial-drama'
-  ? `/projects/${encodeURIComponent(name)}` : `/spaces/${space.id}/projects/${encodeURIComponent(name)}`;
+  ? `/projects/${encodeURIComponent(name)}` : space.project_layout === 'nested' ? `/spaces/${space.id}/contexts/${encodeURIComponent(name)}` : `/spaces/${space.id}/projects/${encodeURIComponent(name)}`;

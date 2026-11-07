@@ -38,7 +38,7 @@ function Home() {
   </div>;
 }
 function App() {
-  return <AppShell><Suspense fallback={<Loading page />}><Routes><Route path="/" element={<Home />} /><Route path="/projects/:name" element={<Project />} /><Route path="/spaces/:spaceId" element={<ProjectSpace />} /><Route path="/spaces/:spaceId/projects/:name" element={<FilesProject />} /><Route path="/krea2" element={<Krea />} /><Route path="/workflows" element={<Workflows />} /><Route path="/prompts" element={<Prompts />} /><Route path="/assets/:kind?/:id?" element={<Assets />} /><Route path="/history" element={<History />} /><Route path="*" element={<p>入口不存在。<Link to="/">回到工作区</Link></p>} /></Routes></Suspense></AppShell>;
+  return <AppShell><Suspense fallback={<Loading page />}><Routes><Route path="/" element={<Home />} /><Route path="/projects/:name" element={<Project />} /><Route path="/spaces/:spaceId" element={<ProjectSpace />} /><Route path="/spaces/:spaceId/contexts/:context" element={<ProjectSpace />} /><Route path="/spaces/:spaceId/projects/:name" element={<FilesProject />} /><Route path="/krea2" element={<Krea />} /><Route path="/workflows" element={<Workflows />} /><Route path="/prompts" element={<Prompts />} /><Route path="/assets/:kind?/:id?" element={<Assets />} /><Route path="/history" element={<History />} /><Route path="*" element={<p>入口不存在。<Link to="/">回到工作区</Link></p>} /></Routes></Suspense></AppShell>;
 }
 const router = createHashRouter([{ path: '*', element: <PageBoundary><App /></PageBoundary> }]);
 createRoot(document.getElementById('root')!).render(<PageBoundary><QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider></PageBoundary>);

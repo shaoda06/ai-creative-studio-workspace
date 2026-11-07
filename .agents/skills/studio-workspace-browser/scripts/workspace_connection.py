@@ -17,7 +17,9 @@ def read_connection(workspace):
         return primary
     registered = strict_json((runtime / 'workspaces.json').read_bytes())
     for item in registered:
-        if workspace == Path(item['path']).resolve():
+        root = Path(item['path']).resolve()
+        if workspace == root or (item.get('project_layout') == 'nested' and workspace.parent == root
+                                 and (workspace / 'README.md').is_file() and (workspace / 'projects').is_dir()):
             config = runtime / 'workspaces' / item.get('runtime_id', item['id']) / 'task-service.json'
             return strict_json(config.read_bytes())
     raise ValueError('资料工作区未登记到统一后台：' + str(workspace))

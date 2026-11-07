@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 from backend.chloe_publication import publication, router
-from chloe_init import initialize_workspace, initialize_video, write_template, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_video, write_template, SKILLS
 from chloe_documents import check_workspace, read_document, template
 from tests.http_case import HttpTestCase
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
@@ -25,7 +25,7 @@ class ChloePublicationTests(HttpTestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
-        self.root = initialize_workspace(self.base/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.project = initialize_video(self.root, 'V001', '隔离发布')
         self.api = '/api/workspaces/chloe'
         self.space = SimpleNamespace(root=self.root, api=self.api, view='chloe-commerce')

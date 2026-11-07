@@ -367,7 +367,7 @@ Agent按[同轮次后处理产物](../.agents/skills/nora-drama-production/refer
 [{"id":"commercial","runtime_id":"iris","name":"Iris商业视频制作","path":"/本机商业资料目录"}]
 ```
 
-id使用小写字母、数字和连字符，目录必须有projects。所有任务库与客户端连接集中于总服务runtime/workspaces/{运行标识}/，默认标识为id，runtime_id仅用于显式保留已有API标识的场景。Nora使用nora，Iris保留commercial API并使用iris运行目录。统一进程启动各TaskStore并自动建立缺失的数据库、更新连接配置；不复制或重编号任务，不在资料区创建服务目录。新增空间、备份恢复及退役见[运行资料维护规范](../.agents/skills/studio-workspace-browser/references/任务运行资料维护规范.md)。
+id使用小写字母、数字和连字符。默认平铺资料区须有projects；显式登记`project_layout:"nested"`时，根目录保存具名项目，每个项目内有README.md、projects与综合资料。`/api/workspaces/{id}/contexts/{项目名称}`复用相同接口并限定资料根目录。任务仍只用该工作区原账本，以`项目名称::视频目录`或`项目名称::@shared`区分归属，不按项目复制服务或数据库。所有任务库与客户端连接集中于总服务runtime/workspaces/{运行标识}/，默认标识为id，runtime_id仅用于显式保留已有API标识的场景。Nora使用nora，Iris保留commercial API并使用iris运行目录。统一进程启动各TaskStore并自动建立缺失的数据库、更新连接配置；不复制或重编号任务，不在资料区创建服务目录。新增空间、备份恢复及退役见[运行资料维护规范](../.agents/skills/studio-workspace-browser/references/任务运行资料维护规范.md)。
 
 /api/workspaces公开登记名称、视图和项目索引；/api/workspaces/{id}/projects提供该空间目录与文件，/api/workspaces/{id}/comfy及/internal/comfy复用同一套任务处理和认证。未登记空间返回404，凭据不得跨空间使用。公共资产、提示词、工作流和风格库仍在工作区首页独立访问。实际资料路径与运行配置均排除在分发之外。
 

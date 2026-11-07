@@ -8,7 +8,7 @@ import unittest
 
 from PIL import Image
 import chloe_resources as chloe
-from chloe_init import initialize_workspace, initialize_video, initialize_asset
+from chloe_init import initialize_workspace, initialize_project, initialize_video, initialize_asset
 
 
 class ChloeResourcesTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class ChloeResourcesTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
-        self.root = initialize_workspace(self.base / 'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base / 'Chloe Workspace'), '隔离样例')
         self.one = initialize_video(self.root, 'V001', '商品-细节')
         self.two = initialize_video(self.root, 'V002', '商品-场景')
         self.source = self.base / 'source.png'
@@ -40,7 +40,7 @@ class ChloeResourcesTest(unittest.TestCase):
         chloe.bind_reference(self.root, self.one.name, 'shot/1', ref['resource_id'], ref['version'])
         saved = (self.one / '资源/共用引用.json').read_bytes()
         (self.one / 'README.md').write_text('用户已修改', encoding='utf-8')
-        initialize_workspace(self.root)
+        initialize_project(self.root.parent, self.root.name)
         initialize_video(self.root, 'V001', '商品-细节')
         self.assertEqual((self.one / 'README.md').read_text(), '用户已修改')
         self.assertEqual((self.one / '资源/共用引用.json').read_bytes(), saved)
@@ -49,6 +49,16 @@ class ChloeResourcesTest(unittest.TestCase):
             initialize_video(self.root, 'V001', '不同名称')
         self.assertEqual(len(list(self.root.rglob('账号运营配置.md'))), 0)
         self.assertFalse(any('{{' in p.read_text() for p in self.root.rglob('*.md')))
+
+    def test_sibling_project_cannot_import_or_bind_another_projects_resource(self):
+        ref = self.add()
+        other = initialize_project(self.root.parent, '隔离乙')
+        video = initialize_video(other, 'V001', '展示')
+        with self.assertRaises(ValueError):
+            chloe.import_media(other, ref['absolute_file'], 'cross-project-copy')
+        with self.assertRaises(FileNotFoundError):
+            chloe.bind_reference(other, video.name, 'cross-project-ref', ref['resource_id'], ref['version'])
+        self.assertEqual(chloe.resources.catalog(other / '综合资料'), [])
 
     def test_shared_version_reused_by_two_videos_and_old_inputs_stable(self):
         first = self.add()
@@ -108,7 +118,7 @@ class ChloeResourcesTest(unittest.TestCase):
 
     def test_concurrent_bindings_are_not_lost(self):
         ref = self.add()
-        command = [sys.executable, str(Path(chloe.__file__)), '--workspace', str(self.root), 'bind',
+        command = [sys.executable, str(Path(chloe.__file__)), '--project-root', str(self.root), 'bind',
                    '--project', self.one.name, '--resource-id', ref['resource_id'], '--version', ref['version']]
         processes = [subprocess.Popen(command + ['--key', f'task/{i}/model'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for i in range(4)]
         for process in processes:

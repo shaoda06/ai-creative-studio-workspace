@@ -14,7 +14,12 @@ def workspace_for_project(project):
 
 
 def load_config(workspace, *, missing_ok=False):
-    path = Path(workspace) / 'comfyui-config.json'
+    workspace = Path(workspace)
+    path = workspace / 'comfyui-config.json'
+    if (not path.exists() and (workspace / 'README.md').is_file()
+            and (workspace / 'projects').is_dir() and (workspace.parent / 'README.md').is_file()
+            and (workspace.parent / 'comfyui-config.json').is_file()):
+        path = workspace.parent / 'comfyui-config.json'
     try:
         data = client.strict_json(path.read_bytes())
     except FileNotFoundError:

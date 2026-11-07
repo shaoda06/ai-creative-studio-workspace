@@ -296,7 +296,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             path = Path(value)
             return path.relative_to(project).as_posix() if path.is_relative_to(project) else str(path)
         payload = data.model_dump()
-        payload['project'] = paths.scope_name(project)
+        payload['project'] = paths.scope_name(project, self.workspace)
         payload['record_dir'] = relative(data.record_dir)
         for target in [*payload['outputs'], *((payload['segment_plan'] or {}).get('targets', []))]:
             target['path'] = relative(target['path'])
@@ -392,7 +392,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             checks.check_prepared(self, data)
             key = str(uuid.uuid4())
             self.rows[key] = {'input': data, 'state': {
-                'id': key, 'project': paths.scope_name(project), 'title': data.title, 'task_type': data.task_type,
+                'id': key, 'project': paths.scope_name(project, self.workspace), 'title': data.title, 'task_type': data.task_type,
                 'prompt_id': None, 'client_id': str(uuid.uuid4()), 'status': 'submitting',
                 'preparation_required': True,
                 'content_review_required': True,

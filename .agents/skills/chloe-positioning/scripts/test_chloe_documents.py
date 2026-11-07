@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from PIL import Image
 
-from chloe_init import initialize_workspace, initialize_video, initialize_asset, ASSETS, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_video, initialize_asset, ASSETS, SKILLS
 import chloe_documents as docs
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media, bind_reference
@@ -16,7 +16,7 @@ class ChloeDocumentsTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
-        self.root = initialize_workspace(self.base/'Chloe Workspace')
+        self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.video = initialize_video(self.root,'V001','商品-展示')
         self.assets = {kind:initialize_asset(self.root,kind,data[1]+'001','测试') for kind,data in ASSETS.items()}
 
@@ -46,11 +46,19 @@ class ChloeDocumentsTest(unittest.TestCase):
             initialize_video(self.root,'V002','商品|主题')
         p=self.root/'综合资料/账号定位.md'
         p.write_text(p.read_text().replace('| 目标人群 | 待确定 |','| 目标人群 | 通勤人群 |'))
-        initialize_workspace(self.root)
+        initialize_project(self.root.parent, self.root.name)
         self.assertIn('| 目标人群 | 通勤人群 |',p.read_text())
         self.assertEqual(self.check()['errors'],[])
         for kind,path in self.assets.items():
             self.assertTrue((path/ASSETS[kind][2]).is_file())
+
+    def test_queued_output_reservation_is_not_a_completed_resource(self):
+        ref = docs.resources.reserve(self.video, '资源/视频/pending.mp4', producer='执行记录/E001')
+        self.assertEqual(self.check()['errors'], [])
+        target = self.video / ref['file']
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b'incomplete')
+        self.assertTrue(self.check()['errors'])
 
     def test_format_drift_and_nonstandard_values_rejected(self):
         p=self.root/'综合资料/账号定位.md'; original=p.read_text()

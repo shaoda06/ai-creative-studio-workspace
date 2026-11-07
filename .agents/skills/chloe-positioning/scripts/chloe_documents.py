@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 import re
 import sys
 
-from chloe_init import ASSETS, SKILLS, resources, workspace_path
+from chloe_init import ASSETS, SKILLS, resources, workspace_path, project_path
 
 sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
 from storyboard_fields import read_shots
@@ -74,7 +74,7 @@ def template(skill, name):
 
 
 def documents(root):
-    yield root/'README.md', template('chloe-positioning', '工作区README模板.md'), {}
+    yield root/'README.md', template('chloe-positioning', '项目README模板.md'), {'title': root.name}
     yield root/'projects/README.md', template('chloe-creative', '视频索引说明模板.md'), {}
     for name in ('账号定位', '选品记录', '运营复盘'):
         yield root/f'综合资料/{name}.md', template('chloe-positioning', name+'模板.md'), {}
@@ -543,10 +543,13 @@ def check_system(root, owner):
             raise ValueError('缺少固定资源分类：'+kind)
     for file, ref in index['files'].items():
         target = resources.local(owner,file)
-        info = json.loads((target.parent/'版本信息.json').read_text())
         family = json.loads((target.parent.parent/'资源信息.json').read_text())
         if ref['file'] != file or family['resource_id'] != ref['resource_id']:
             raise ValueError('资源信息与索引不一致')
+        # Queue reservations have an output identity but no version directory yet.
+        if not target.parent.exists() and file in index['outputs'].values():
+            continue
+        info = json.loads((target.parent/'版本信息.json').read_text())
         if any(info[k] != ref[k] for k in ('resource_id','version','file','kind','origin','producer','parent')):
             raise ValueError('版本信息与索引不一致')
         if info['facts']['bytes'] != target.stat().st_size:
@@ -621,9 +624,9 @@ def check_workspace(root, only=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=['check','read'])
-    parser.add_argument('--workspace',required=True,type=Path)
-    parser.add_argument('--file',type=Path,help='相对于工作区的固定文档路径，或绝对路径')
-    args = parser.parse_args(); root=workspace_path(args.workspace)
+    parser.add_argument('--project-root',required=True,type=Path,help='明确选定的 Chloe 具名项目根目录')
+    parser.add_argument('--file',type=Path,help='相对于具名项目根目录的固定文档路径，或绝对路径')
+    args = parser.parse_args(); root=project_path(args.project_root)
     path = (root/args.file).resolve() if args.file else None
     if args.action == 'check':
         result = check_workspace(root,path)

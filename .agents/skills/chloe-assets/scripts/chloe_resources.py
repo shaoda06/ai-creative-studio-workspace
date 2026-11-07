@@ -8,11 +8,11 @@ SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS / 'studio-workspace-browser/scripts'))
 sys.path.insert(0, str(SKILLS / 'chloe-positioning/scripts'))
 import project_resources as resources
-from chloe_init import workspace_path
+from chloe_init import project_path
 
 
 def common_owner(workspace):
-    root = workspace_path(workspace)
+    root = project_path(workspace)
     owner = root / '综合资料'
     if not resources.enabled(owner):
         raise ValueError('共用资源区未初始化')
@@ -22,7 +22,7 @@ def common_owner(workspace):
 def video_root(root, project):
     path = (root / 'projects' / project).resolve()
     if Path(project).name != project or path.parent != (root / 'projects').resolve():
-        raise ValueError('视频项目必须在当前工作区 projects 内')
+        raise ValueError('视频项目必须在当前具名项目的 projects 内')
     if not resources.enabled(path) or not (path / '资源/共用引用.json').is_file():
         raise ValueError('视频项目未通过 Chloe 初始化')
     return path
@@ -44,7 +44,7 @@ def import_media(workspace, source, key, *, project=None, resource_id=None,
     root, common = common_owner(workspace)
     owner = video_root(root, project) if project else common
     source = Path(source).resolve()
-    if source.is_relative_to(root):
+    if source.is_relative_to(root.parent):
         raise ValueError('工作区内已有媒体请引用原版本，不重新导入；实际新处理结果先保存为独立输出')
     if origin in ('generated', 'process') and record is None:
         raise ValueError('生成或处理结果须提供实际执行记录 --record')
@@ -90,7 +90,7 @@ def resolve_reference(workspace, project, key):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--workspace', type=Path, required=True)
+    parser.add_argument('--project-root', type=Path, required=True, help='明确选定的 Chloe 具名项目根目录；共用资源仅属此项目')
     commands = parser.add_subparsers(dest='action', required=True)
     add = commands.add_parser('import', help='导入外部原件或新生成结果；默认存账号共用区')
     add.add_argument('--file', type=Path, required=True)
@@ -112,14 +112,14 @@ def main():
     listing.add_argument('--project')
     args = parser.parse_args()
     if args.action == 'import':
-        result = import_media(args.workspace, args.file, args.key, project=args.project,
+        result = import_media(args.project_root, args.file, args.key, project=args.project,
                               resource_id=args.resource_id, origin=args.origin, record=args.record, parent=args.parent)
     elif args.action == 'bind':
-        result = bind_reference(args.workspace, args.project, args.key, args.resource_id, args.version)
+        result = bind_reference(args.project_root, args.project, args.key, args.resource_id, args.version)
     elif args.action == 'resolve':
-        result = {'file': str(resolve_reference(args.workspace, args.project, args.key))}
+        result = {'file': str(resolve_reference(args.project_root, args.project, args.key))}
     else:
-        root, owner = common_owner(args.workspace)
+        root, owner = common_owner(args.project_root)
         result = resources.catalog(video_root(root, args.project) if args.project else owner)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

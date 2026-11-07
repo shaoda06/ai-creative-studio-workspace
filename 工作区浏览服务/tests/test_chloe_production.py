@@ -10,7 +10,7 @@ from PIL import Image
 from backend.services import production
 from backend.services.project_files import ProjectFiles
 from backend.services.review_notes import ExportChanges, NoteChange, OverallChange, ProjectReviewNotes, NotesChangedError
-from chloe_init import initialize_workspace, initialize_video, resources, SKILLS
+from chloe_init import initialize_workspace, initialize_project, initialize_video, resources, SKILLS
 from chloe_documents import check_workspace
 from chloe_production import state, check
 import chloe_browser_production as browser
@@ -30,7 +30,7 @@ class ChloeProductionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name).resolve()/'Chloe Workspace'
-        initialize_workspace(self.root)
+        self.root = initialize_project(initialize_workspace(self.root), '隔离样例')
         self.project=initialize_video(self.root,'V001','隔离演示')
         self.projects=ProjectFiles(self.root/'projects');self.api='/api/workspaces/chloe'
         self.record=self.project/'制作记录.md'
@@ -290,7 +290,7 @@ class ChloeProductionTests(unittest.TestCase):
         prompt=folder/'提示词.md'
         template=(SKILLS/'chloe-production/templates/视频提示词模板.md').read_text()
         prompt.write_text(template.replace('{{execution}}','E001').replace('{{segment}}','P001')
-            .replace('{{按实际H3模式填写完整英文模型正文；保留原语言对白、歌词和画面文字}}','Prepared wording, not request evidence.')
+            .replace('{{按实际H3模式及真实输入角色填写完整英文模型正文；r2v普通Picture作为视觉参考，不承诺硬首帧；需要固定起始画面时先确认支持模式及相应图像输入。保留原语言对白、歌词和画面文字}}','Prepared wording, not request evidence.')
             .replace('{{逐节对应模型正文；保留章节键、素材标签、镜号、时间及数值}}','[Shot 1]\ntime: 0-5\n动作。'))
         self.record.write_text(self.record.read_text().replace('| H3 | 不适用 |','| H3 | [提示词](<执行记录/E001/提示词.md>) |',1))
         check(self.project)
@@ -310,7 +310,7 @@ class ChloeProductionTests(unittest.TestCase):
         from fastapi.testclient import TestClient
         from backend import main
         from backend.services.workspaces import Workspace
-        app=FastAPI();app.include_router(main.spaces_router)
+        app=FastAPI();app.include_router(main.spaces_router, prefix='/api/workspaces/{workspace_id}')
         space=Workspace('chloe','Chloe',self.root,self.root/'runtime','chloe-commerce',self.projects,production_adapter='chloe-production')
         app.state.workspaces=SimpleNamespace(get=lambda identity:space)
         with TestClient(app) as client:
