@@ -123,10 +123,29 @@ def linked_html(text, source, allowed, base):
     return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
 
 
+def model_looks(root, identity):
+    folder = resources.local(root, '综合资料/共用素材/造型')
+    for path in sorted(folder.glob('L*-*/造型说明.md')):
+        if not path.resolve().is_relative_to(folder):
+            raise ValueError('造型说明越出造型资料目录')
+        look_id, name = path.parent.name.split('-', 1)
+        doc = read_document(root, path, template('chloe-assets', '造型说明模板.md'),
+                            {'identity': look_id, 'title': name})
+        if fields(doc, '造型组合')['模特编号'] == identity:
+            yield look_id, name, path, doc
+
+
+def model_files(root, identity, path, doc):
+    allowed = linked_files(root, path, doc)
+    for _, _, look_path, look_doc in model_looks(root, identity):
+        allowed.update(linked_files(root, look_path, look_doc))
+    return allowed
+
+
 def model_detail(root, identity, api):
     name, path, doc = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
-    allowed = linked_files(root, path, doc)
+    allowed = model_files(root, identity, path, doc)
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -149,7 +168,7 @@ def model_detail(root, identity, api):
                            'execution': row.get('执行编号', '不适用')}
     sections = []
     for section in doc['sections']:
-        if section['heading'] == '填写说明':
+        if section['heading'] in ('填写说明', '资产身份'):
             continue
         text = []
         for table in section['tables']:
@@ -157,13 +176,25 @@ def model_detail(root, identity, api):
             text.extend('| ' + ' | '.join(row) + ' |' for row in table['rows'])
         sections.append({'heading': section['heading'], 'html': linked_html('\n'.join(text), source, allowed, base),
                          'empty': not any(t['rows'] for t in section['tables'])})
-    return {'id': identity, 'name': name, 'images': list(images.values()), 'sections': sections,
+    looks = []
+    for look_id, look_name, look_path, look_doc in model_looks(root, identity):
+        cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图遮面版'), None)
+        media = None
+        if cover:
+            ref = media_reference(root, look_path, cover['资源引用'])
+            media = {'kind': 'image', 'key': ref['file'], 'name': look_name,
+                     'url': base + '/files/' + quote(ref['file'], safe='/')}
+        key = look_path.relative_to(root).as_posix()
+        looks.append({'id': look_id, 'name': look_name, 'media': media,
+                      'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
+                      'url': base + '/files/' + quote(key, safe='/')})
+    return {'id': identity, 'name': name, 'images': list(images.values()), 'sections': sections, 'looks': looks,
             'url': base + '/files/' + quote(source, safe='/')}
 
 
 def model_file(root, identity, key):
     _, path, doc = model_context(root, identity)
-    if key not in linked_files(root, path, doc):
+    if key not in model_files(root, identity, path, doc):
         raise FileNotFoundError('文件未被该模特直接引用')
     return resources.local(root, key)
 
@@ -207,7 +238,7 @@ def linked_document(identity: str, path: str, request: Request):
         file = model_file(space.root, identity, path)
         if file.suffix.lower() == '.md':
             _, source, doc = model_context(space.root, identity)
-            allowed = linked_files(space.root, source, doc)
+            allowed = model_files(space.root, identity, source, doc)
             base = f'{space.api}/shared-models/{quote(identity)}'
             return {'title': file.stem, 'html': linked_html(file.read_text('utf-8-sig'), path, allowed, base)}
         return documents.plain_text_preview(file)[0]

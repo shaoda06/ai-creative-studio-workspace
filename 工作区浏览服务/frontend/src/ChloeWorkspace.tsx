@@ -31,7 +31,6 @@ const sections = [
 const assetCategories = [
   { value: 'models', label: 'AI 模特' },
   { value: 'clothing', label: '服装' },
-  { value: 'looks', label: '造型' },
   { value: 'scenes', label: '场景' },
   { value: 'voices', label: '声音' },
 ];

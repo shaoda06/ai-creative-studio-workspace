@@ -59,6 +59,19 @@ class ChloeDocumentsTest(unittest.TestCase):
         p.write_text(original)
         self.assertFalse(self.check()['errors'])
 
+    def test_model_identity_is_minimal_and_old_fields_are_rejected(self):
+        path = self.assets['模特']/'模特说明.md'
+        original = path.read_text()
+        entry = next(e for e in docs.documents(self.root) if e[0] == path)
+        parsed = docs.read_document(self.root, *entry)
+        self.assertEqual([r['字段'] for r in docs.records(parsed, '资产身份')],
+                         ['资产编号', '资产名称', '来源说明'])
+        for field in ('资产类型', '资产用途', '使用限制'):
+            path.write_text(original.replace('## 人物特征', f'| {field} | 待核实 |\n\n## 人物特征'))
+            self.assertTrue(self.check()['errors'])
+        path.write_text(original)
+        self.assertFalse(self.check()['errors'])
+
     def test_parsed_values_keep_long_content_and_template_fields(self):
         path=self.video/'脚本.md'
         path.write_text(path.read_text().replace('| 开头 | 待确定 |','| 开头 | 第一行<br>第二行&#124;示意 |').replace('| 计划时长秒 | 待确定 |','| 计划时长秒 | 15.5 |'))

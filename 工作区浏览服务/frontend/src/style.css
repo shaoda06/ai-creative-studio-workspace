@@ -200,4 +200,4 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 .chloe-assets-content{margin-top:20px}
 
 .asset-media-card-link{color:inherit;text-decoration:none}.asset-media-card-link .cover{border-radius:7px}
-.chloe-model-detail{display:grid;gap:24px}.chloe-model-current{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:24px;align-items:start}.chloe-model-current>div{min-width:0}.chloe-model-detail>details>summary{font-weight:600;color:var(--green);cursor:pointer}
+.chloe-model-detail{display:grid;gap:24px}.chloe-model-detail>details>summary{font-weight:600;color:var(--green);cursor:pointer}

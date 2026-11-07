@@ -57,9 +57,9 @@ try {
     await nav.getByRole('button',{name:'共用资产',exact:true}).click();
     const assetNav = page.getByRole('navigation',{name:'共用资产分类',exact:true});
     await assetNav.waitFor();
-    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),['AI 模特','服装','造型','场景','声音']);
+    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),['AI 模特','服装','场景','声音']);
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'AI 模特');
-    for (const label of ['AI 模特','服装','造型','场景','声音']) {
+    for (const label of ['AI 模特','服装','场景','声音']) {
       await assetNav.getByRole('button',{name:label,exact:true}).click();
       await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
       const bounds = await assetNav.getByRole('button',{name:label,exact:true}).boundingBox();
@@ -94,5 +94,5 @@ try {
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }
-  console.log('Chloe navigation passed: three desktop sizes, seven tabs and five asset categories, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
+  console.log('Chloe navigation passed: three desktop sizes, seven tabs and four asset categories, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
 } finally { await browser.close(); await server.close(); }

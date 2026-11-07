@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as tmp:
  ref=resources.register(root/'综合资料',image,key='ui-sample',info=resources.facts(image))
  target=resources.local(root/'综合资料',ref['file'])
  path=model/'模特说明.md'
- text=path.read_text().replace('| 资产用途 | 待确定 |','| 资产用途 | 隔离布局示例 |')
+ text=path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不应显示的来源文字 |')
  start=text.index('## 当前采用')
  end=text.index('\\n\\n',text.index('| ---',start))
  row='\\n| 正面面部 | [共用:'+ref['resource_id']+'@'+ref['version']+'](<'+os.path.relpath(target,model)+'>) | 隔离示例采用 | 2026-11-07T12:00:00+08:00 |'
@@ -48,7 +48,11 @@ with tempfile.TemporaryDirectory() as tmp:
   append('参考版本',[purpose,reference,original if key=='masked' else first,'不适用'])
   if key=='views':original=reference
   if key in ('views','masked'):append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
- detail=model_detail(root,'M001','/api/workspaces/chloe')
+ look=initialize_asset(root,'造型','L001','通勤造型')/'造型说明.md'
+ text=look.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |')
+ start=text.index('## 关联资料');end=text.index('\\n\\n',text.index('| ---',start))
+ look.write_text(text[:end]+'\\n| 模特 | M001 | [模特](<../../AI模特/M001-示例模特甲/模特说明.md>) | 穿搭人物 |'+text[end:])
+ detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
  media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']}
  print(json.dumps({'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
@@ -70,7 +74,7 @@ try {
    if(path==='/api/workspaces/chloe/shared-models') {
     if(fail)return route.fulfill({status:409,json:{detail:'isolated invalid document'}});
     const cards=structuredClone(sample.cards);
-    if(long){cards[0].name='LongModelName'.repeat(30);cards[0].identity['资产用途']='较长的模特用途说明。'.repeat(35);}
+    if(long){cards[0].name='LongModelName'.repeat(30);}
     return route.fulfill({json:cards});
    }
    const detail=sample.details.find(item=>path===`/api/workspaces/chloe/shared-models/${item.id}`);
@@ -103,18 +107,23 @@ try {
   const card=page.getByRole('link',{name:'M001 · 示例模特甲',exact:true});
   assert.equal(await card.locator('button,a').count(),0);
   await card.focus(); await page.keyboard.press('Enter');
-  await page.getByRole('heading',{name:'当前采用',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog').count(),0);
   assert.match(page.url(),/model=M001/);
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'M001 · 示例模特甲');
   assert.equal(await page.getByRole('navigation',{name:'当前采用三视图'}).locator('[aria-current="page"]').textContent(),'遮面版');
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
+  await page.getByText('参考版本',{exact:true}).click();
   await page.getByRole('navigation',{name:'模特图片用途'}).getByRole('button',{name:'全身三视图原图',exact:true}).click();
   await page.reload();
-  await page.getByRole('heading',{name:'当前采用',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
   assert.match(page.url(),/view=original/);
-  assert.equal(await page.getByRole('navigation',{name:'模特图片用途'}).locator('[aria-current="page"]').textContent(),'全身三视图原图');
-  await page.getByRole('navigation',{name:'模特图片用途'}).getByRole('button',{name:'正面面部',exact:true}).click();
+  assert.match(page.url(),/purpose=/);
+  const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
+  assert.deepEqual(await detailTabs.getByRole('button').allTextContents(),['模特信息','正面面部图','造型']);
+  assert.equal(await page.getByText('不应显示的来源文字',{exact:true}).count(),0);
+  assert.equal(await page.getByRole('heading',{name:'资产身份',exact:true}).count(),0);
+  await detailTabs.getByRole('button',{name:'正面面部图',exact:true}).click();
   const refs=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'参考版本',exact:true})});
   await refs.locator('.asset-media-card').nth(1).waitFor();
   assert.equal(await refs.locator('.asset-media-card').count(),2);
@@ -123,16 +132,26 @@ try {
   await page.reload(); await page.getByRole('dialog').waitFor();
   assert.equal(await page.getByRole('dialog').locator('img').count(),1);
   await page.keyboard.press('Escape');
-  await page.getByText('关联资料',{exact:true}).click();
-  await page.getByText('暂无关联资料。',{exact:true}).waitFor();
+
   await page.getByText('执行记录',{exact:true}).click();
   await page.getByText('暂无执行记录。',{exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:output+`/${width}-detail.png`,fullPage:true});
+  await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
+  await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).click();
+  await page.getByRole('heading',{name:'L001｜通勤造型 造型说明',exact:true}).waitFor();
+  assert.match(page.url(),/look=L001/);
+  assert.equal(await page.getByRole('dialog').count(),0);
+  await page.reload();
+  await page.getByRole('link',{name:'返回造型列表',exact:true}).click();
+  await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).waitFor();
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
   await page.getByRole('link',{name:'M002 · 示例模特乙',exact:true}).click();
-  await page.getByText('暂无正面面部参考版本。',{exact:true}).waitFor();
-  await page.goBack(); await page.getByRole('link',{name:'M001 · 示例模特甲',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
+  await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'造型',exact:true}).click();
+  await page.getByText('暂无该模特的造型资料。',{exact:true}).waitFor();
+  await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
+  await page.getByRole('link',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   long=true;await page.reload();
   await page.getByRole('heading',{name:'M001 · '+'LongModelName'.repeat(30),exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

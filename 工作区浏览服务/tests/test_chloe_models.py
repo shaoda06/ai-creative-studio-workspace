@@ -96,6 +96,25 @@ class ChloeModelsTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             model_file(self.root, 'M001', linked.relative_to(self.root).as_posix())
 
+    def test_model_looks_are_scoped_without_copying_or_showing_identity(self):
+        initialize_asset(self.root, '模特', 'M002', '另一模特')
+        for model_id, model_name, look_id in [('M001', '示例模特甲', 'L001'), ('M002', '另一模特', 'L002')]:
+            folder = initialize_asset(self.root, '造型', look_id, '测试造型')
+            path = folder/'造型说明.md'
+            text = path.read_text().replace('| 模特编号 | 待确定 |', f'| 模特编号 | {model_id} |')
+            start = text.index('## 关联资料')
+            end = text.index('\n\n', text.index('| ---', start))
+            row = f'\n| 模特 | {model_id} | [说明](<../../AI模特/{model_id}-{model_name}/模特说明.md>) | 造型人物 |'
+            path.write_text(text[:end]+row+text[end:])
+        before = {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        detail = model_detail(self.root, 'M001', self.api)
+        self.assertEqual([x['id'] for x in detail['looks']], ['L001'])
+        self.assertNotIn('资产身份', [x['heading'] for x in detail['sections']])
+        self.assertEqual(model_file(self.root,'M001','综合资料/共用素材/造型/L001-测试造型/造型说明.md').name,'造型说明.md')
+        with self.assertRaises(FileNotFoundError):
+            model_file(self.root,'M001','综合资料/共用素材/造型/L002-测试造型/造型说明.md')
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
     def test_empty_and_invalid_document(self):
         self.path.unlink()
         self.assertEqual(model_cards(self.root, self.api), [])
