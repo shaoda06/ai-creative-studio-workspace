@@ -1,5 +1,15 @@
-.chloe-overview { margin-top: 22px; }
+.chloe-overview { display: grid; gap: 20px; margin-top: 22px; }
+.chloe-overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 0; }
+.chloe-overview-metrics dt { color: var(--muted); }
+.chloe-overview-metrics dd { margin: 0; font-size: 32px; line-height: 1.6; font-weight: 600; color: var(--green); }
 .chloe-overview-fields { display: grid; gap: 14px; margin: 0; }
 .chloe-overview-fields > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; }
 .chloe-overview-fields dt { color: var(--muted); }
 .chloe-overview-fields dd { margin: 0; overflow-wrap: anywhere; }
+.chloe-overview-pending { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.chloe-overview-task { border-left: 3px solid var(--line); padding-left: 18px; overflow-wrap: anywhere; }
+.chloe-overview-videos { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.chloe-overview-videos th { text-align: left; font-weight: 500; color: var(--muted); }
+.chloe-overview-videos th, .chloe-overview-videos td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.chloe-overview-videos th:nth-child(1) { width: 30%; }
+.chloe-overview-videos th:nth-child(2), .chloe-overview-videos th:nth-child(3) { width: 16%; }

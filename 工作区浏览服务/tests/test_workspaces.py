@@ -47,7 +47,7 @@ class WorkspaceTests(HttpTestCase):
         fixture = Path(__file__).resolve().parents[1]/'examples/chloe-overview/new'
         shutil.copytree(fixture, self.other, dirs_exist_ok=True)
         url = self.api + '/account-overview'
-        self.assertEqual(list(self.client.get(url).json()), ['direction'])
+        self.assertEqual(list(self.client.get(url).json()), ['direction', 'videos'])
         path = self.other/'综合资料/账号定位.md'
         path.write_text(path.read_text().replace('| 目标人群 | 待确定 |', '| 目标人群 | 隔离人群 |'))
         self.assertEqual(self.client.get(url).json()['direction']['目标人群'], '隔离人群')
