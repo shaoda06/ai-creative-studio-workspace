@@ -131,8 +131,6 @@ class TaskGroups:
         if not group_id or not self.group_status(group_id)['terminal']:
             return
         ids = self.groups[group_id]['task_ids']
-        if self.group_status(group_id)['status'] == 'completed' and all(self.rows[member]['input'].task_type == 'image-upscale' for member in ids):
-            return
         outcomes = [self.notice_outcome(member) for member in ids]
         if outcomes == self.groups[group_id].get('notified_terminal'):
             return

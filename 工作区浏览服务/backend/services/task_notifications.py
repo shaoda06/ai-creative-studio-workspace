@@ -50,13 +50,6 @@ class TaskNotifications:
                 notice['delivery'] = 'not_required'
                 self.record(key, 'notification', 'already_notified',
                             _changes={'notification': 'not_required', 'notice_wait_reason': None})
-            elif (data.task_type == 'image-upscale' and state['status'] == 'completed'
-                    and state.get('closeout', {}).get('status') == 'completed'
-                    and (not state.get('group_id') or self.group_status(state['group_id'])['status'] == 'completed'
-                         and all(self.rows[member]['input'].task_type == 'image-upscale' for member in self.group_members(key)))):
-                notice['delivery'] = 'not_required'
-                self.record(key, 'notification', 'not_required', message='超分完成并正式保存，正常结果静默',
-                            _changes={'notification': 'not_required', 'notice_wait_reason': None})
             elif (not state.get('group_id') and state.get('reported_outcome') == self.notice_outcome(key)):
                 notice['delivery'] = 'acknowledged'
                 self.record(key, 'notification', 'already_received', message='本次实际结果已通过report读取，不再发送',

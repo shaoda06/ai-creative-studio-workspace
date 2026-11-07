@@ -308,17 +308,17 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text.count('### 审阅-生成记录-001-001'), 1)
         self.assertEqual(result['tasks'][0]['closeout']['display_outputs'][0]['display_path'], self.rel(formal))
 
-    async def test_approved_upscale_notifies_only_when_closeout_fails(self):
+    async def test_approved_upscale_notifies_after_closeout_without_second_approval(self):
         source, formal = self.setup_upscale()
-        with patch.object(self.store, 'desktop_call', AsyncMock()) as send, \
+        with patch.object(self.store, 'desktop_call', AsyncMock(return_value={})) as send, \
                 patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()):
             self.store.queue_notice('task', 'terminal', 'terminal', '超分完成')
             await self.store.notifiers['task']
-            send.assert_not_awaited()
+            self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 1)
         self.assertEqual(formal.read_bytes(), png(8, 6))
         self.assertEqual(source.read_bytes(), png())
         self.assertEqual(self.store.rows['task']['state']['closeout']['status'], 'completed')
-        self.assertEqual(self.store.rows['task']['state']['notification'], 'not_required')
+        self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         text = self.draft.read_text()
         self.assertIn('用户说就用这版', text)
         self.assertIn('- 结论：批准采用', text)

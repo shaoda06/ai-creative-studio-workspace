@@ -1,4 +1,4 @@
-"""Batch image notifications and quiet upscales, with isolated tasks and fake delivery."""
+"""Batch image notifications and upscale continuation, with isolated tasks and fake delivery."""
 import json
 from pathlib import Path
 import unittest
@@ -110,7 +110,7 @@ class ImageNotificationTests(unittest.IsolatedAsyncioTestCase):
         self.store.read_report(new_batch, self.data.thread_id)
         self.assertEqual(state['notification'], 'acknowledged')
 
-    async def test_old_upscale_error_ack_does_not_undo_quiet_success(self):
+    async def test_old_upscale_error_ack_preserves_new_success_notice(self):
         self.task('upscale', batch=None, size=1, task_type='image-upscale', status='collection_failed')
         with patch.object(self.store, 'desktop_call', AsyncMock(return_value={})) as send:
             await self.notify('upscale', 'failure')
@@ -118,11 +118,11 @@ class ImageNotificationTests(unittest.IsolatedAsyncioTestCase):
             batch = state['notices'][0]['batch_id']
             self.complete('upscale')
             await self.notify('upscale', 'recovered')
-            self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 1)
-        self.assertEqual(state['notification'], 'not_required')
+            self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 2)
+        self.assertEqual(state['notification'], 'sent')
         report = self.store.read_report(batch, self.data.thread_id)
         self.assertEqual(report['delivery']['tasks'][0]['task_type'], 'image-upscale')
-        self.assertEqual(state['notification'], 'not_required')
+        self.assertEqual(state['notification'], 'sent')
 
     async def test_batch_wait_survives_restart(self):
         self.task('first'); self.task('second'); self.complete('first')
@@ -183,7 +183,7 @@ class ImageNotificationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({x['id'] for x in self.reports()[-1]['tasks']}, {'first', 'second'})
             self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 2)
 
-    async def test_upscale_finishes_closeout_but_never_sends(self):
+    async def test_upscale_finishes_closeout_then_notifies_once(self):
         self.task('upscale', task_type='image-upscale', batch=None, size=1, status='completed')
         self.store.projects = object()
         async def closeout(store, projects, ids):
@@ -191,14 +191,30 @@ class ImageNotificationTests(unittest.IsolatedAsyncioTestCase):
             self.complete('upscale')
             (Path(self.store.rows['upscale']['input'].record_dir) / '结果收尾报告.json').write_text('{"status":"completed"}')
         with patch('backend.services.result_registration.closeout_tasks', side_effect=closeout) as finish, \
-                patch.object(self.store, 'desktop_call', AsyncMock()) as send:
-            await self.notify('upscale'); finish.assert_awaited_once(); send.assert_not_awaited()
-        self.assertEqual(self.store.rows['upscale']['state']['notification'], 'not_required')
+                patch.object(self.store, 'desktop_call', AsyncMock(return_value={})) as send:
+            await self.notify('upscale'); finish.assert_awaited_once()
+            self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 1)
+        self.assertEqual(self.store.rows['upscale']['state']['notification'], 'sent')
         self.assertFalse(self.store.notification_pending(self.data.thread_id))
-        self.assertFalse(self.reports())
+        self.assertEqual(self.reports()[0]['delivery']['tasks'][0]['task_type'], 'image-upscale')
         await self.store.close(); self.store = t.TaskStore(self.root / 'runtime', self.root)
         with patch.object(self.store, 'desktop_call', AsyncMock()) as send:
             await self.store.notify('upscale'); send.assert_not_awaited()
+
+    async def test_shared_technical_upscale_notifies_agent_with_result(self):
+        self.task('shared-upscale', task_type='image-upscale', batch=None, size=1)
+        row = self.store.rows['shared-upscale']
+        row['input'].project = str(self.root / '综合资料')
+        row['input'].image_plan = {'adapter': 'technical', 'images': []}
+        self.store.save('shared-upscale', project='@shared')
+        self.complete('shared-upscale')
+        with patch.object(self.store, 'desktop_call', AsyncMock(return_value={})) as send:
+            await self.notify('shared-upscale')
+        self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 1)
+        report = self.reports()[0]
+        self.assertEqual(report['tasks'][0]['project'], '@shared')
+        self.assertEqual(report['delivery']['tasks'][0]['task_type'], 'image-upscale')
+        self.assertTrue(report['user_message_ready'])
 
     async def test_upscale_closeout_error_is_not_silenced(self):
         self.task('upscale', task_type='image-upscale', batch=None, size=1, status='completed')
