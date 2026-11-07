@@ -206,7 +206,7 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 
 .chloe-model-images{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);column-gap:24px;row-gap:12px}.chloe-model-image-column{display:grid;grid-template-rows:subgrid;grid-row:span 4;min-width:0}.chloe-model-body-column{grid-column:1 / -1}
 
-.chloe-model-versions{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;max-height:1050px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.chloe-model-versions{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;max-height:1050px;overflow-y:auto;scrollbar-gutter:stable}
 
 .chloe-look-detail{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:24px;align-items:start}
 .chloe-look-images{display:grid;gap:12px}

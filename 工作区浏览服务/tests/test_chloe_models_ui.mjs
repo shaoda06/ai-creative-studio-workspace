@@ -177,6 +177,12 @@ try {
   await page.keyboard.press('Escape');
   await headColumn.getByText('其他版本',{exact:true}).click();
   assert.equal(await headColumn.locator('.chloe-model-versions .asset-media-card').count(),1);
+  const shortVersions=headColumn.locator('.chloe-model-versions');
+  await shortVersions.locator('.cover').hover();
+  const pageBeforeWheel=await page.evaluate(()=>scrollY);
+  await page.mouse.wheel(0,250);
+  await page.waitForFunction(before=>scrollY>before,pageBeforeWheel);
+
   await headColumn.getByText('其他版本',{exact:true}).click();
   assert.equal(await page.getByRole('heading',{name:'当前采用',exact:true}).count(),0);
   const faceView=faceColumn.getByRole('navigation',{name:'正面面部图视图'});
@@ -204,6 +210,17 @@ try {
   const scroll=await refs.locator('.chloe-model-versions').evaluate(el=>({height:el.clientHeight,full:el.scrollHeight,overflow:getComputedStyle(el).overflowY}));
   assert.ok(scroll.height<=1050 && scroll.full>scroll.height);
   assert.equal(scroll.overflow,'auto');
+  const longVersions=refs.locator('.chloe-model-versions');
+  assert.equal(await longVersions.evaluate(el=>getComputedStyle(el).overscrollBehaviorY),'auto');
+  await longVersions.locator('.cover').first().hover();
+  await page.mouse.wheel(0,250);
+  await page.waitForFunction(()=>document.querySelector('[aria-label="正面面部其他版本"]').scrollTop>0);
+  await longVersions.evaluate(el=>el.scrollTop=el.scrollHeight);
+  await longVersions.locator('.cover').last().hover();
+  const boundaryPage=await page.evaluate(()=>scrollY);
+  await page.mouse.wheel(0,250);
+  await page.waitForFunction(before=>scrollY>before,boundaryPage);
+
   await refs.locator('.cover').last().click();
   await page.getByRole('dialog').waitFor(); assert.match(page.url(),/ref=/);
   await page.reload(); await page.getByRole('dialog').waitFor();
