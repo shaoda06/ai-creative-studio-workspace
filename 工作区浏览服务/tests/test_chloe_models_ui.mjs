@@ -118,13 +118,17 @@ try {
   assert.equal(await page.getByRole('link',{name:'查看 ↗',exact:true}).count(),0);
   assert.equal(await page.getByRole('link',{name:'下载',exact:true}).count(),0);
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'模特图片',exact:true}).click();
-  await page.getByRole('heading',{name:'基础全身三视图',exact:true}).waitFor();
+  await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
   assert.equal(await page.getByRole('heading',{name:'人物特征',exact:true}).count(),0);
   assert.equal(await page.getByRole('navigation',{name:'当前采用三视图'}).locator('[aria-current="page"]').textContent(),'遮面版');
+  const expectedRef=purpose=>{const image=sample.details[0].images.find(image=>image.adopted && image.purpose===purpose);return `${image.resource}@${image.version}`;};
+  assert.ok((await page.getByRole('heading',{name:/^正面面部图/}).textContent()).includes(expectedRef('正面面部')));
+  assert.ok((await page.getByRole('heading',{name:/^基础全身三视图/}).textContent()).includes(expectedRef('全身三视图遮面版')));
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
+  await page.getByRole('heading',{name:'基础全身三视图 · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
-  await page.getByRole('heading',{name:'基础全身三视图',exact:true}).waitFor();
+  await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
   assert.match(page.url(),/modelTab=images/);
   assert.match(page.url(),/view=original/);
   const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
@@ -193,9 +197,9 @@ try {
   await page.getByRole('link',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   for(const oldTab of ['face','body']) {
     await page.goto(server.resolvedUrls.local[0]+`#/spaces/chloe?section=assets&asset=models&model=M001&modelTab=${oldTab}`);
-    await page.getByRole('heading',{name:'基础全身三视图',exact:true}).waitFor();
+    await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
     assert.equal(await page.getByRole('navigation',{name:'模特详情分类'}).locator('[aria-current="page"]').textContent(),'模特图片');
-    await page.getByRole('heading',{name:'正面面部图',exact:true}).waitFor();
+    await page.getByRole('heading',{name:/^正面面部图/}).waitFor();
   }
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
   long=true;await page.reload();

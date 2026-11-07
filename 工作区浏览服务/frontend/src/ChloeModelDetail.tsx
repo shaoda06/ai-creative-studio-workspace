@@ -53,6 +53,9 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     return value.empty ? <p className="muted">暂无{heading}。</p> : <Rich html={value.html} fieldTable={heading==='人物特征'} />;
   };
   const adopted = (purpose: string) => data!.images.find(image => image.adopted && image.purpose === purpose);
+  const faceImage = data && adopted('正面面部');
+  const bodyPurpose = view==='masked' ? bodyPurposes[0] : bodyPurposes[1];
+  const bodyImage = data && adopted(bodyPurpose);
   const imageCard = (purpose: string, image?: ModelImage) => <AssetMediaCard title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0}
     item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
   const otherVersions = (purpose: string) => data!.images
@@ -78,17 +81,17 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       </>}
       {tab==='images' && <div className="chloe-model-images">
         <section className="panel chloe-model-image-column" aria-label="正面面部图">
-          <h2>正面面部图</h2>
+          <h2>正面面部图{faceImage && <span className="muted"> · {faceImage.resource}@{faceImage.version}</span>}</h2>
           <div><UnderlineTabs label="正面面部图视图" items={[{value:'original',label:'原图'}]} selected="original" onChange={() => {}} /></div>
-          <div>{imageCard('正面面部',adopted('正面面部'))}</div>
+          <div>{imageCard('正面面部',faceImage)}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
         </section>
         <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
-          <h2>基础全身三视图</h2>
+          <h2>基础全身三视图{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
           <div>
             <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
-          <div>{imageCard(view==='masked' ? bodyPurposes[0] : bodyPurposes[1],adopted(view==='masked' ? bodyPurposes[0] : bodyPurposes[1]))}</div>
+          <div>{imageCard(bodyPurpose,bodyImage)}</div>
           <div>{bodyPurposes.some(value=>otherVersions(value).length > 0) && <details><summary>其他版本</summary>
             <UnderlineTabs label="模特图片用途" items={bodyPurposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             <div className="chloe-assets-content">{references(purpose)}</div>
