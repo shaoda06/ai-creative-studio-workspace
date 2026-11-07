@@ -20,7 +20,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         let divisor = width, remainder = height;
         while (remainder) [divisor, remainder] = [remainder, divisor % remainder];
         setDimensions(`${width} × ${height}（${width / divisor}:${height / divisor}）`);
-      }} /></button> : <p className="muted">{item.emptyLabel || '已登记，图片文件缺失。'}</p>}
+      }} /></button> : <div className="cover asset-media-placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1.5" /><path d="m3 17 6-6 4 4 3-3 5 5" /></svg>
+        <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
+      </div>}
       {!compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{dimensions || '读取中'}</p>}
       {!compact && item.media && !onDetails && <div className="asset-media-field file-entry-main"><span className="field-label">文件：</span><FileActions url={item.media.url} /></div>}
       {version ? <p className="asset-media-field"><span className="field-label">{compact ? '资源版本' : formal ? '采用版本' : '版本'}：</span>{version}</p> : null}

@@ -63,6 +63,13 @@ try {
   assert.equal(await page.locator('.asset-media-card').count(),2);
   assert.equal(await page.locator('.asset-media-card img').count(),1);
   await page.getByText('尚未采用正面面部图',{exact:true}).waitFor();
+  const placeholder=page.locator('.asset-media-placeholder');
+  assert.equal(await placeholder.count(),1);
+  const blankBox=await placeholder.boundingBox(), imageBox=await page.locator('.asset-media-card button.cover').boundingBox();
+  assert.equal(blankBox.height,imageBox.height);
+  assert.ok(Math.abs(blankBox.width-imageBox.width)<=1);
+  assert.equal(await placeholder.getByRole('button').count(),0);
+
   assert.equal(await page.locator('.page-heading .breadcrumbs').count(),1);
   assert.equal(await page.locator('section[aria-label="共用资产"] > h2').count(),0);
   await page.screenshot({path:output+`/${width}-cards.png`,fullPage:true});

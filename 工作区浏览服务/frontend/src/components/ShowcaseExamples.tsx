@@ -155,7 +155,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
     </>}
     {category === 'media' && <>
       {sound.player}
-      <ComponentExample fullWidth title="图片与候选卡片" rule="尺寸来自加载图片的真实像素宽高，网页计算并在括号显示最简比例。点击图片在公共预览中放大，只保留整行居中的下载入口；候选分组按类型展开。图片为随服务提供的示例图形。已登记但尚未生成时可通过emptyLabel说明空态。查看详情固定在底部右侧，生成记录保留左侧；下方记录和详情使用本地示例正文。" usage="人物、场景、道具、封面">
+      <ComponentExample fullWidth title="图片与候选卡片" rule="尺寸来自加载图片的真实像素宽高，网页计算并在括号显示最简比例。点击图片在公共预览中放大，只保留整行居中的下载入口；候选分组按类型展开。图片为随服务提供的示例图形。无图片时保留同高的浅色占位框、图片图标和emptyLabel提示，不提供预览点击。查看详情固定在底部右侧，生成记录保留左侧；下方记录和详情使用本地示例正文。" usage="人物、场景、道具、封面">
         <AssetMedia items={[imageRecord]} revision={1} formal />
         <AssetCandidateMedia items={[imageRecord]} revision={1} />
         <PreviewContext.Provider value={item => setPreview(item.kind === 'markdown' ? { ...item, kind: 'document', doc: { html: '<p>本地示例生成记录。</p>' } } : item)}>
@@ -166,8 +166,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
           </div>
         </PreviewContext.Provider>
       </ComponentExample>
-      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
+      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
         <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />
+        <AssetMediaCard title="A002 · 无图示例" item={{}} revision={1} compact />
       </ComponentExample>
       <ComponentExample title="音视频卡片与试听" rule="试听播放2秒轻提示音，可暂停；视频入口打开公共预览。无音频时按钮禁用。" usage="参考音视频、人物音色">
         <ReferenceMediaCard item={{ kind: 'reference', name: audio.name, media: audio, approvalHtml: '<span class="status-badge status-gray">示例</span>' }} audio playing={sound.playingId === 'sample'} progress={sound.progress} onPlay={() => sound.toggle('sample', audio.url!)} onSelect={() => setPreview(audio)} />

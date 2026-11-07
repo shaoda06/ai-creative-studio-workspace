@@ -306,7 +306,7 @@ try {
     assert.equal((await fullExample.boundingBox()).width, width);
     await fullExample.getByRole('button', { name: '关闭', exact: true }).click();
     await showcase.getByRole('button', { name: '图片与音视频', exact: true }).click();
-    const compactAsset = showcase.locator('.asset-media-card-compact');
+    const compactAsset = showcase.locator('.asset-media-card-compact').filter({ hasText: 'A001 · 已采用示例' });
     await compactAsset.getByText('资源版本：V002', { exact: true }).waitFor();
     await contained(compactAsset, `${width}px / 紧凑图片卡片`);
     assert.equal(await compactAsset.getByRole('link').count(), 0);
@@ -318,6 +318,18 @@ try {
     const pendingCard = detailCards.filter({ hasText: '已登记尚未生成' });
     assert.equal(await pendingCard.getByText('尚未生成图片', { exact: true }).count(), 1);
     assert.equal(await pendingCard.locator('img').count(), 0);
+    const compactEmpty = showcase.locator('.asset-media-card-compact').filter({ hasText: 'A002 · 无图示例' });
+    for (const [emptyCard, filledCard, expectedHeight] of [[pendingCard, detailCards.filter({ hasText: '仅有查看详情' }), 260], [compactEmpty, compactAsset, 180]]) {
+      const empty = emptyCard.locator('.asset-media-placeholder');
+      await contained(empty, `${width}px / 无图占位区域`);
+      assert.equal((await empty.boundingBox()).height, expectedHeight);
+      assert.equal((await filledCard.locator('.cover').boundingBox()).height, expectedHeight);
+      assert.equal(await empty.getByRole('button').count(), 0);
+      assert.equal(await empty.locator('svg[aria-hidden="true"]').count(), 1);
+      assert.equal(await emptyCard.locator('img').count(), 0);
+    }
+    assert.equal(await compactEmpty.getByText('已登记，图片文件缺失。', { exact: true }).count(), 1);
+
     for (const card of await detailCards.all()) {
       const detailButton = card.getByRole('button', { name: '查看详情', exact: true });
       const edges = await detailButton.evaluate(el => ({ button: el.getBoundingClientRect().right, footer: el.parentElement.getBoundingClientRect().right }));
@@ -334,7 +346,7 @@ try {
       await page.getByRole('dialog').getByText('本地图片详情示例。', { exact: true }).waitFor();
       await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     }
-    console.log(`图片卡片：${width}px仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
+    console.log(`图片卡片：${width}px普通／紧凑无图同高占位、默认与自定义提示、仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
     await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
     const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });
     const referenceSummary = sampleDocument.getByText('参考资料', { exact: true });
