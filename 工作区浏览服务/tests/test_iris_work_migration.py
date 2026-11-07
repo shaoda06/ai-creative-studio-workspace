@@ -41,6 +41,7 @@ class WorkMigrationTests(unittest.TestCase):
             self.assertEqual(plan['records'], ['06-视频生产/执行记录'])
             migration.migrate(project, 'F001-隔离片', '隔离片', '按已有脚本制作', apply=True)
             work = project / '作品/F001-隔离片'
+            self.assertTrue((work / '07-返修交接/成片').is_dir())
             self.assertFalse(script_file.exists())
             self.assertEqual(evidence.read_bytes(), original_evidence)
             self.assertEqual((project / '01-客户资料/甲方原稿.md').read_text(), '原文不能改变')

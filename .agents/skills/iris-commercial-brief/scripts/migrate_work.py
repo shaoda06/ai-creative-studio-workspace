@@ -150,6 +150,7 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
     work = project / prefix
     for stage in STAGES:
         (work / stage).mkdir(parents=True, exist_ok=True)
+    (work / '07-返修交接/成片').mkdir(exist_ok=True)
     history = {'records': records, 'archives': list(archives)}
     (work / '06-视频生产/历史执行入口.json').write_text(json.dumps(history, ensure_ascii=False, indent=2) + '\n')
     work_readme = '# ' + folder.split('-', 1)[0] + '｜' + title + '\n\n'
