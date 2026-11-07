@@ -74,7 +74,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     </div>)}</div> : <p className="muted">暂无{purpose}其他版本。</p>;
   };
   const bodyImages = () => <>
-          <h2>{look ? '全身定装三视图' : '基础全身三视图'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
+          <h2>{look ? '全身定装三视图' : '基础全身三视图（16:9）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
           <div>
             <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
@@ -100,7 +100,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       </>}
       {tab==='images' && <div className="chloe-model-images">
         <section className="panel chloe-model-image-column" aria-label="正面面部图">
-          <h2>正面面部图{faceImage && <span className="muted"> · {faceImage.resource}@{faceImage.version}</span>}</h2>
+          <h2>正面面部图（3:4）{faceImage && <span className="muted"> · {faceImage.resource}@{faceImage.version}</span>}</h2>
           <div><UnderlineTabs label="正面面部图视图" items={[{value:'original',label:'原图'}]} selected="original" onChange={() => {}} /></div>
           <div>{imageCard('正面面部',faceImage)}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
