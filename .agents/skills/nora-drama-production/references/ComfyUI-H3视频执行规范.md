@@ -48,7 +48,7 @@
 
 配置选择与询问统一读取[共用H3装配规则](../../studio-h3/references/参数与基准规范.md#标准版配置选择与装配前询问)。Nora项目默认保存于项目`00-项目定位/项目基本定位.md`的“制作规格 → 视频生成默认配置”，记录字段按共用规则填写。
 
-在本次任务清单的`authorization`写明六步配置的确认来源（本次选择或项目默认及其决定入口）及本次执行授权；六步答案通过共用`h3_first_pass`字段装配，脚本写入已有`mapping.baseline.fixed_configuration`，记录实际比例尺寸、步数、戏型、速度、附加LoRA及采样关联；技术参数和执行事实继续由固定工具保存，不新增配置台账。
+在本次任务清单的`authorization`写明六步配置的确认来源（本次选择或项目默认及其决定入口）及本次执行授权；六步答案通过共用`h3_first_pass`字段装配，脚本写入已有`mapping.baseline.fixed_configuration`，记录实际比例尺寸、步数、戏型、速度、附加LoRA及采样关联；二采按[共用分辨率询问](../../studio-h3/references/参数与基准规范.md#二采分辨率询问)接续，h3_second_pass装配结果写入已有mapping.baseline.refine_configuration，保留一采配置事实。技术参数和执行事实继续由固定工具保存，不新增配置台账。
 
 ### 后处理交付规格
 

@@ -67,6 +67,38 @@ def configure_first_pass(canvas, spec):
         'sampling': {'total_steps': steps + tail, 'split_step': steps,
                      'first_pass_with_zero': steps + 1, 'refine_tail_steps': tail}}
 
+def configure_second_pass(canvas, spec):
+    """Change only Refine resolution on the supplied approved first-pass source."""
+    if spec['task_type'] != 'video-second-pass':
+        raise ValueError('h3_second_pass仅用于二采接续')
+    choice = spec['h3_second_pass']
+    if set(choice) != {'width', 'height'}:
+        raise ValueError('h3_second_pass只接受二采width和height，不接受步数或LoRA覆盖')
+    width, height = choice['width'], choice['height']
+    if any(type(v) is not int or v <= 0 or v % 32 for v in (width, height)):
+        raise ValueError('二采宽高须为正整数且为32的整数倍；不自动裁切或取整')
+    nodes = {n['id']: n for n in canvas['nodes']}
+    director = nodes[502]['widgets_values_named']
+    refine = nodes[407]['widgets_values_named']
+    if refine['mode'] != 'upscale' or refine['aspect_ratio'] != '跟随导演台' or not refine['confirm_first_pass']:
+        raise ValueError('分辨率装配需要upscale、跟随导演台比例且开启一采确认的来源工作流')
+    ratio = director['width'] / director['height']
+    # Intersect the pixel-area intervals that round to both requested dimensions.
+    # Width*height gives the standard MP values; small/custom targets may need
+    # an interior area instead because Refine derives both sides from the ratio.
+    lower = max(0 if width == 32 else (width - 16) ** 2 / ratio,
+                0 if height == 32 else (height - 16) ** 2 * ratio)
+    upper = min((width + 16) ** 2 / ratio, (height + 16) ** 2 * ratio)
+    if lower >= upper:
+        raise ValueError('二采尺寸无法按来源比例对齐32得到；请重新选择分辨率，不改一采比例')
+    pixels = width * height
+    if not lower < pixels < upper:
+        pixels = (lower + upper) / 2
+    mp = pixels / 1024 ** 2
+    widget(canvas, nodes[407], width=width, height=height, megapixels=mp)
+    return {'width': width, 'height': height, 'megapixels': mp}
+
+
 def widget(graph, node, **values):
     named = node['widgets_values_named']
     for key, content in values.items():
@@ -127,6 +159,8 @@ def prepare_technical(root, spec, documents):
     canvas = json.loads(project_file(root, spec['canvas']).read_text('utf-8-sig'))
     if 'h3_first_pass' in spec:
         configure_first_pass(canvas, spec)
+    if 'h3_second_pass' in spec:
+        configure_second_pass(canvas, spec)
     api = pairs.Canvas(canvas).api(spec['output_nodes'])
     refs = [{**item, 'file': str(project_file(root, item['file']))} for item in spec.get('references', [])]
     uploads = reference_bindings(api, refs, record.name, spec.get('uploads', []))
