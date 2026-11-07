@@ -106,6 +106,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     .map(item => [item.number, item])).values()].sort((a, b) => b.number - a.number);
   const selectedRound = roundNumberForScene(selectedScene);
   const round = sceneRounds.find(item => item.number === selectedRound);
+  const currentStoryboard = current?.storyboards?.[selectedScene];
   const recordScenes = episodeRounds.find(item => item.number === recordNumber)?.scenes || [selectedScene];
   const recordRounds = recordScenes.flatMap(id => (current?.sceneRounds?.[id] || [])
     .filter(item => item.number === recordNumber).map(item => ({ id, item })));
@@ -121,6 +122,10 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];
   const productionTask = workMode ? current?.productionTask : undefined;
   const roundHistory = workMode ? current?.roundHistory : undefined;
+  const currentFiles = [
+    [contentLabel, current?.script], ['现行分镜', currentStoryboard], ['生成说明', current?.generationPlan],
+    ['生产任务', productionTask], ['历史索引原件', roundHistory],
+  ] as const;
   const continuous = !!playback && playback.episode === current?.name;
   const nextScene = scenes[scenes.indexOf(selectedScene) + 1];
   const nextRoundNumber = continuous ? playback!.rounds[nextScene] : undefined;
@@ -236,11 +241,11 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
           </ul>
         </section>;
       })}
-      <section>
-        {(current.script || current.generationPlan || productionTask || roundHistory) && <h3>现行资料与历史索引</h3>}
-        <ul>{([[contentLabel, current.script], ['生成说明', current.generationPlan], ['生产任务', productionTask], ['历史索引原件', roundHistory]] as const).map(([label, file]) =>
+      {currentFiles.some(([, file]) => file) && <section>
+        <h3>现行资料与历史索引</h3>
+        <ul>{currentFiles.map(([label, file]) =>
           file && <li key={label}><button className="link" onClick={() => openRecordFile(file)}>{label}</button></li>)}</ul>
-      </section>
+      </section>}
     </Dialog>}
     {issues.length > 0 ? <div className="notice episode-data-issues" role="alert">
       <strong>制作资料需要修正</strong>
