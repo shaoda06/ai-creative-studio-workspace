@@ -21,7 +21,7 @@ export interface ModelDetail extends AssetDetail {
   looks: (AssetDetail & {media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
-const bodyPurposes = ['全身三视图遮面版', '全身三视图原图', '补充细节'];
+const bodyPurposes = ['全身三视图遮面版', '全身三视图原图'];
 
 export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryResult<ModelDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { spaceId } = useParams();
@@ -30,11 +30,11 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const data = query.data;
   const requestedTab = params.get('modelTab');
   const tab = requestedTab==='face' || requestedTab==='body' ? 'images' : tabs.find(item=>item.value===requestedTab)?.value || 'info';
-  const purpose = bodyPurposes.includes(params.get('purpose')!) ? params.get('purpose')! : bodyPurposes[tab==='looks' ? 1 : 0];
   const view = params.get('view') === 'original' ? 'original' : params.get('view') === 'masked' ? 'masked' : tab==='looks' ? 'original' : 'masked';
   const select = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
     next.set('modelTab',tab);
+    if (key==='view') next.delete('purpose');
     if (value === null) next.delete(key); else next.set(key, value);
     setParams(next);
   };
@@ -80,9 +80,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
             <UnderlineTabs label="当前采用三视图" items={look ? [{value:'original',label:'原图'},{value:'masked',label:'遮面版'}] : [{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
           <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 4 / 3)}</div>
-          <div>{bodyPurposes.some(value=>otherVersions(value).length > 0) && <details><summary>其他版本</summary>
-            <UnderlineTabs label="模特图片用途" items={bodyPurposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
-            <div className="chloe-assets-content">{references(purpose)}</div>
+          <div>{otherVersions(bodyPurpose).length > 0 && <details><summary>其他版本</summary>
+            <div className="chloe-assets-content">{references(bodyPurpose)}</div>
           </details>}</div>
   </>;
   return <PreviewContext.Provider value={open}>

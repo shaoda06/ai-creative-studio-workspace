@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory() as tmp:
   return '[共用:'+rid+'@'+version+'](<'+os.path.relpath(file,model)+'>)'
  first=label(target,ref['resource_id'],ref['version'])
  append('参考版本',['正面面部',first,'用户提供','不适用'])
- for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('面部三视图','#bbaacc',(600,338),'head'),('面部三视图','#bbddcc',(600,338),'head2'),('全身三视图原图','#bbaabb',(600,300),'views'),('全身三视图遮面版','#444444',(600,300),'masked')]:
+ for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('面部三视图','#bbaacc',(600,338),'head'),('面部三视图','#bbddcc',(600,338),'head2'),('全身三视图原图','#bbaabb',(600,300),'views'),('全身三视图遮面版','#444444',(600,300),'masked'),('全身三视图遮面版','#555555',(600,300),'masked2')]:
   source=Path(tmp)/(key+'.png');Image.new('RGB',size,color).save(source)
   result=import_media(root,source,key,resource_id=ref['resource_id'] if key.startswith('face') else None)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version'])
@@ -154,6 +154,11 @@ try {
   const expectedRef=purpose=>{const image=sample.details[0].images.find(image=>image.adopted && image.purpose===purpose);return `${image.resource}@${image.version}`;};
   assert.ok((await page.getByRole('heading',{name:/^正面面部图/}).textContent()).includes(expectedRef('正面面部')));
   assert.ok((await page.getByRole('heading',{name:/^基础全身三视图/}).textContent()).includes(expectedRef('全身三视图遮面版')));
+  const basePanel=page.getByRole('region',{name:'基础全身三视图',exact:true});
+  await basePanel.getByText('其他版本',{exact:true}).click();
+  assert.equal(await basePanel.getByRole('navigation',{name:'模特图片用途'}).count(),0);
+  assert.equal(await page.getByText('补充细节',{exact:true}).count(),0);
+  assert.equal(await basePanel.locator('[aria-label="全身三视图遮面版其他版本"] .asset-media-card').count(),1);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
   await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
@@ -288,7 +293,7 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state:'detached'});
   await lookPanel.getByText('其他版本',{exact:true}).click();
-  await lookPanel.getByRole('navigation',{name:'模特图片用途'}).getByRole('button',{name:'全身三视图遮面版',exact:true}).click();
+  assert.equal(await lookPanel.getByRole('navigation',{name:'模特图片用途'}).count(),0);
   const lookRefs=lookPanel.locator('.chloe-model-versions');
   await lookRefs.locator('.asset-media-card').first().waitFor();
   assert.equal(await lookRefs.locator('.asset-media-card').count(),4);
@@ -297,6 +302,7 @@ try {
   assert.ok(lookScroll.height<=1050 && lookScroll.full>lookScroll.height);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  assert.equal(await lookPanel.getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
   await page.screenshot({path:output+`/${width}-look.png`,fullPage:true});
