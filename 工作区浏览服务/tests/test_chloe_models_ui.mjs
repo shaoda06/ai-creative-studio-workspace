@@ -351,6 +351,7 @@ try {
   assert.ok(Math.abs(headerRows[3].right-headerRows[4].right)<1);
 
   const clothingImages=page.getByRole('region',{name:'服装图片',exact:true});
+  await clothingImages.getByRole('heading',{name:'服装图片（4:3）',exact:true}).waitFor();
   const clothingTabs=page.getByRole('navigation',{name:'服装图片用途'});
   assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
   const front=sample.clothes[0].images.find(image=>image.purpose==='服装展示图'&&image.adopted);

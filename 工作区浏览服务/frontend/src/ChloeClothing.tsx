@@ -62,7 +62,7 @@ export function ChloeClothingDetail({ query, workspaceQuery }: { query: UseQuery
               </li>)}</ul> : <p>无</p>}
             </section>
           </section>
-          <section className="panel chloe-look-images" aria-label="服装图片"><h2>服装图片</h2>
+          <section className="panel chloe-look-images" aria-label="服装图片"><h2>服装图片（4:3）</h2>
             <UnderlineTabs label="服装图片用途" items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal revision={0} item={{media:image.media,version:image.version}} />)
               : <AssetMediaCard title={purpose} hideTitle formal revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
