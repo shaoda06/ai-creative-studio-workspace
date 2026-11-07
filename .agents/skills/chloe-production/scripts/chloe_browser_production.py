@@ -134,7 +134,8 @@ def script_document(project,api,source):
     path=local(project,source)
     result=ref(project,api,path)
     result['version']=fields(document(project,source),'脚本信息')['脚本版本']
-    result['doc']={'title':path.stem,'html':documents.markdown(path.read_text('utf-8-sig'),source),'url':result['url']}
+    chapter=re.search(r'^## 镜头与分镜\s*\n(.*?)(?=^## |\Z)',path.read_text('utf-8-sig'),re.M|re.S)[1]
+    result['doc']={'title':'分镜脚本','html':documents.markdown(chapter,source),'url':result['url']}
     return result
 
 

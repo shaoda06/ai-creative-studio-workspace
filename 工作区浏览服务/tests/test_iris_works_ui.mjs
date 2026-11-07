@@ -162,6 +162,19 @@ try {
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
   await page.goto(origin+'/#/spaces/commercial/projects/隔离多作品');
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
+  if(process.env.PRODUCTION_TABS_ONLY==='1') {
+   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+   await page.locator('[data-episode=F002]').click();
+   const productionTabs=page.getByRole('navigation',{name:'作品制作内容',exact:true});
+   await productionTabs.waitFor();
+   assert.deepEqual(await productionTabs.getByRole('button').allTextContents(),['分段制作','分镜与声音','导演分镜表','分镜修改','资源下载']);
+   await productionTabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
+   await page.locator('.scene-storyboard').getByRole('heading',{name:'已保存分镜v02',exact:true}).waitFor();
+   await productionTabs.getByRole('button',{name:'分镜修改',exact:true}).click();
+   await page.getByRole('region',{name:'修改场次分镜正文',exact:true}).waitFor();
+   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[]);
+   await page.close();continue;
+  }
   await page.getByText('项目共用说明',{exact:true}).waitFor();
   const overview=page.getByRole('region',{name:'项目概况',exact:true});
   const firstRow=overview.getByRole('row',{name:/^F001 /});
@@ -467,6 +480,6 @@ try {
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }
- console.log('Iris完整共用制作页隔离验收通过',out);
+ console.log(process.env.PRODUCTION_TABS_ONLY==='1'?'Iris制作页默认标签、分镜正文及修改入口三档检查通过':'Iris完整共用制作页隔离验收通过',out);
 } catch(error) {if(activePage&&!activePage.isClosed())await activePage.screenshot({path:out+'/failure.png'});throw error}
 finally {await browser.close();await server.close()}

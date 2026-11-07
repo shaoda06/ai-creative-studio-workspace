@@ -34,9 +34,10 @@ export type EpisodePlayback = {
 
 type ReviewRound = { stage: string; order: string[]; versions: ReviewVersions };
 
-export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'> }) {
+export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view: requestedView, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'> }) {
   const access = useProductionAccess();
   const preview = useContext(PreviewContext);
+  const view = requestedView === 'dialogue' && access.showStoryboardEditor === false ? 'storyboard' : requestedView;
   const workMode = access.unitKind === 'work';
   const { scene } = scope;
   const productionRound = sceneRounds.find(item => item.number === selectedRound);
@@ -213,7 +214,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     </p></PointerTooltip>;
   return <>
     <div className="scene-workspace-tabs">
-      <UnderlineTabs label={workMode ? "作品制作内容" : "场次内容"} items={[{ value: 'segments', label: '分段制作' }, { value: 'storyboard', label: workMode ? '分镜与声音' : '场次分镜' }, { value: 'director-sheets', label: '导演分镜表' }, ...(!scope.readOnly ? [{ value: 'dialogue', label: '分镜修改' }] : []), { value: 'downloads', label: '资源下载' }]} selected={view} onChange={value => { setAutoPlay(false); onViewChange(value); }} />
+      <UnderlineTabs label={workMode ? "作品制作内容" : "场次内容"} items={[{ value: 'segments', label: '分段制作' }, { value: 'storyboard', label: access.storyboardLabel ?? (workMode ? '分镜与声音' : '场次分镜') }, { value: 'director-sheets', label: '导演分镜表' }, ...(!scope.readOnly && access.showStoryboardEditor !== false ? [{ value: 'dialogue', label: '分镜修改' }] : []), { value: 'downloads', label: '资源下载' }]} selected={view} onChange={value => { setAutoPlay(false); onViewChange(value); }} />
     </div>
     <div className="episode-scene-content" aria-label={workMode && scene === 'whole' ? '整片制作内容' : scene ? `场次 ${scene} 内容` : '场次内容'}>
     {view === 'segments' && <>

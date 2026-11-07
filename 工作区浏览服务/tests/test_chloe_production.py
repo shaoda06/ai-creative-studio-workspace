@@ -84,16 +84,20 @@ class ChloeProductionTests(unittest.TestCase):
     def test_script_document_before_generation_and_round_source(self):
         self.plan()
         script=self.project/'脚本.md'
-        script.write_text(script.read_text().replace('| 脚本版本 | v01 |','| 脚本版本 | v02 |').replace('## 内容与声音','当前稿专属说明\n\n## 内容与声音'))
+        script.write_text(script.read_text().replace('| 脚本版本 | v01 |','| 脚本版本 | v02 |').replace('## 内容与声音','当前稿专属说明\n\n## 内容与声音').replace('隔离镜头','当前镜头'))
         before=set(self.project.rglob('*'))
         detail=browser.detail(self.projects,self.project.name,self.api,'V001')
         current=detail['storyboards']['whole']
         self.assertEqual(current['version'],'v02')
         self.assertEqual(current['key'],'脚本.md')
-        self.assertIn('当前稿专属说明',current['doc']['html'])
-        self.assertIn('内容与声音',current['doc']['html'])
+        self.assertNotIn('当前稿专属说明',current['doc']['html'])
+        self.assertNotIn('内容与声音',current['doc']['html'])
+        self.assertNotIn('脚本信息',current['doc']['html'])
+        self.assertNotIn('修订记录',current['doc']['html'])
+        self.assertNotIn('填写说明',current['doc']['html'])
         self.assertIn('SH001',current['doc']['html'])
         self.assertIn('SH002',current['doc']['html'])
+        self.assertIn('当前镜头',current['doc']['html'])
         self.assertEqual(current['doc']['url'],detail['script']['url'])
         self.assertEqual(detail['episodeRounds'],[])
         self.assertTrue(all(not item['videos'] for item in detail['segments']['whole']))
@@ -104,7 +108,7 @@ class ChloeProductionTests(unittest.TestCase):
         recorded=detail['sceneRounds']['whole'][0]['storyboard']
         self.assertEqual(recorded['version'],'v01')
         self.assertEqual(recorded['key'],'历史版本/脚本-v01.md')
-        self.assertNotIn('当前稿专属说明',recorded['doc']['html'])
+        self.assertNotIn('当前镜头',recorded['doc']['html'])
         self.assertIn('SH001',recorded['doc']['html'])
 
     def test_complete_round_partial_revision_and_approval_not_inferred(self):

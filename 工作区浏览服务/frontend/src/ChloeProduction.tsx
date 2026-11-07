@@ -17,7 +17,7 @@ export function ChloeProduction({ baseUrl, selected, onSelect }: {
   const projectUrl = (unit: string) => `${baseUrl}/projects/${encodeURIComponent(unit)}`;
   const workUrl = (unit: string) => `${projectUrl(unit)}/works/${encodeURIComponent(unit.split('-')[0])}`;
   const access = useMemo<ProductionAccess>(() => ({
-    unitKind: 'work', namespace: () => baseUrl,
+    unitKind: 'work', storyboardLabel: '分镜脚本', showStoryboardEditor: false, namespace: () => baseUrl,
     detail: (_, unit) => workUrl(unit) + '/production-detail',
     scope: (_, unit, scene) => ({ project: unit, episode: unit, scene, label: `${unit}整片`,
       notesUrl: workUrl(unit) + '/production-notes', stateKey: `${baseUrl}/${unit}/${scene}` }),
