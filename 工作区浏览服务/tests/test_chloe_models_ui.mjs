@@ -184,7 +184,7 @@ try {
   assert.equal(await faceView.locator('[aria-current="page"]').textContent(),'原图');
   const faceBox=await faceColumn.boundingBox(),bodyBox=await bodyColumn.boundingBox(),headBox=await headColumn.boundingBox();
   assert.ok(faceBox.x+faceBox.width<headBox.x && Math.abs(faceBox.y-headBox.y)<1,'面部图与面部三视图左右排列');
-  assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-headBox.x)<1 && Math.abs(bodyBox.width-headBox.width)<1,'基础全身三视图下移且保持右列宽度');
+  assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-faceBox.x)<1 && Math.abs(bodyBox.x+bodyBox.width-headBox.x-headBox.width)<1,'基础全身三视图独占下一整行');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
