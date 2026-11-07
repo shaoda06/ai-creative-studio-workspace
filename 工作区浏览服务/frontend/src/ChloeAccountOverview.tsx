@@ -48,7 +48,7 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
         </details>
       </section>
       <section className="panel" aria-labelledby="chloe-connection-heading">
-        <h2 id="chloe-connection-heading">{identity['平台']}账号接入</h2>
+        <h2 id="chloe-connection-heading">账号接入</h2>
         <Fields values={connection} names={['连接状态', '视频发布', '商品挂载']} />
         <small>最近核对：{connection['核对时间'] === '未取得' ? '尚未核对' : connection['核对时间']}</small>
       </section>
