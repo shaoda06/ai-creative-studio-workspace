@@ -171,6 +171,38 @@ def state(project):
             'executions':executions,'candidates':candidates,'rounds':rounds}
 
 
+def prompt_sections(value, row):
+    """Read both languages by P identity from the single execution prompt file."""
+    execution=row['执行编号']
+    prompt=row['提示词或正文']
+    if not re.fullmatch(r'\[[^\]]+\]\(<[^>]+>\)', prompt):
+        raise ValueError(execution+' 视频生成提示词须使用Markdown文件链接，不直接填写正文')
+    path=link_path(value['project'],prompt)
+    if path.suffix!='.md' or not path.is_file():
+        raise ValueError(execution+' 提示词须引用存在的Markdown文件')
+    text=path.read_text('utf-8-sig')
+    segments=sorted((v for v in value['candidates'].values() if v['execution']==execution),key=lambda v:v['index'])
+    ids=[v['id'] for v in segments]
+    result={}
+    for heading in ('模型提示词正文','中文提示词参考版'):
+        sections=re.findall(r'^## '+heading+r'[^\S\n]*\n(.*?)(?=^## |\Z)',text,re.M|re.S)
+        if len(sections)!=1 or not sections[0].strip() or '{{' in sections[0]:
+            raise ValueError(execution+' 提示词缺少唯一且已填写的章节：'+heading)
+        body=sections[0].strip()
+        blocks=list(re.finditer(r'^### (共用|P\d{3,})[^\S\n]*\n',body,re.M))
+        if not blocks and len(ids)<=1:
+            result[heading]={identity:body for identity in ids}
+            continue
+        names=[m[1] for m in blocks]
+        if names not in (ids,['共用',*ids]) or body[:blocks[0].start()].strip():
+            raise ValueError(execution+' '+heading+' 分段标题须按模型分段序号对应：'+','.join(ids))
+        parts={m[1]:body[m.end():blocks[i+1].start() if i+1<len(blocks) else len(body)].strip() for i,m in enumerate(blocks)}
+        if any(not part for part in parts.values()):
+            raise ValueError(execution+' '+heading+' 分段正文不能为空')
+        result[heading]={identity:'\n\n'.join(p for p in (parts.get('共用',''),parts[identity]) if p) for identity in ids}
+    return result
+
+
 def check_handoffs(value):
     project, root = value['project'], value['root']
     readme = document(project, 'README.md')
@@ -237,16 +269,7 @@ def check(project):
             if row['执行状态'] in ('已提交', '执行中', '已完成') or row['任务ID'] not in MISSING:
                 raise ValueError(execution+' 视频生成缺少中英文提示词文件')
             continue
-        if not re.fullmatch(r'\[[^\]]+\]\(<[^>]+>\)', prompt):
-            raise ValueError(execution+' 视频生成提示词须使用Markdown文件链接，不直接填写正文')
-        path = link_path(value['project'], prompt)
-        if path.suffix != '.md' or not path.is_file():
-            raise ValueError(execution+' 提示词须引用存在的Markdown文件')
-        text = path.read_text('utf-8-sig')
-        for heading in ('模型提示词正文', '中文提示词参考版'):
-            sections = re.findall(r'^## '+heading+r'[^\S\n]*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
-            if len(sections) != 1 or not sections[0].strip() or '{{' in sections[0]:
-                raise ValueError(execution+' 提示词缺少唯一且已填写的章节：'+heading)
+        prompt_sections(value,row)
     sys.path.insert(0,str(SKILLS.parent.parent/'工作区浏览服务'))
     from backend.services.review_notes import ProjectReviewNotes
     notes=ProjectReviewNotes().read(value['project']/'视频修改意见.json')

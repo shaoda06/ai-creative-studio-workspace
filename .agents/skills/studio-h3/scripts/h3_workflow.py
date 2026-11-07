@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scr
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
 from video_workflow import configure_postprocess
 import workflow_graph as pairs
-from project_paths import project_file
+from project_paths import project_file, input_file
 
 def configure_first_pass(canvas, spec):
     """Apply explicit six-step answers to a fresh standard H3 first-pass task."""
@@ -167,7 +167,7 @@ def prepare_technical(root, spec, documents):
     if 'h3_second_pass' in spec:
         configure_second_pass(canvas, spec)
     api = pairs.Canvas(canvas).api(spec['output_nodes'])
-    refs = [{**item, 'file': str(project_file(root, item['file']))} for item in spec.get('references', [])]
+    refs = [{**item, 'file': str(input_file(root, item['file']))} for item in spec.get('references', [])]
     uploads = reference_bindings(api, refs, record.name, spec.get('uploads', []))
     documents.new_json(record / '任务.workflow.json', canvas)
     documents.new_json(record / '任务.api.json', api)

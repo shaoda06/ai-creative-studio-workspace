@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
-from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES
+from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES, prompt_sections
 from chloe_documents import records, media_reference, MISSING
 from backend.parsers import documents
 from backend.services.workspaces import jianying_links
@@ -12,6 +12,7 @@ import execution_records as recordio
 from project_paths import input_file, input_key
 from director_export import submitted_media
 from h3_browser_context import request_context, empty_context
+from prepared_documents import read_journal
 
 
 def check_work(project, work):
@@ -49,11 +50,13 @@ def task_for(project, row):
     if row['参数记录'] in MISSING:
         return None
     path=link_path(project,row['参数记录'])
-    manifest=json.loads(path.read_text('utf-8-sig'))
-    if len(manifest['tasks']) != 1:
-        raise ValueError('视频执行参数清单每个 E 编号对应一个真实任务')
-    task=manifest['tasks'][0]
-    record=local(project,task['record_dir'])
+    journal=path.with_name(path.stem+'-装配结果.json')
+    manifest=read_journal(journal) if journal.is_file() else json.loads(path.read_text('utf-8-sig'))
+    record=local(project,'执行记录/'+row['执行编号'])
+    matches=[task for task in manifest['tasks'] if local(project,task['record_dir'])==record]
+    if len(matches) != 1:
+        raise ValueError(row['执行编号']+' 参数清单须按执行目录对应唯一任务')
+    task=matches[0]
     return task,record
 
 
@@ -92,10 +95,9 @@ def context_for(data, api, candidate, active=None):
     result['prompts']['englishUrl']=file_url(api,(record/task.get('request_name','请求.json')).relative_to(data['project']).as_posix())
     if row['提示词或正文'] not in MISSING:
         prompt=link_path(data['project'],row['提示词或正文'])
-        text=prompt.read_text('utf-8-sig')
-        chinese=re.search(r'^## 中文提示词参考版\s*\n(.*?)(?=^## |\Z)',text,re.M|re.S)
-        if chinese:
-            result['prompts'].update(chinese=chinese[1].strip(),chineseUrl=file_url(api,prompt.relative_to(data['project']).as_posix()))
+        sections=prompt_sections(data,row)
+        result['prompts'].update(chinese=sections['中文提示词参考版'][candidate['id']],
+                                chineseUrl=file_url(api,prompt.relative_to(data['project']).as_posix()))
     return result
 
 
