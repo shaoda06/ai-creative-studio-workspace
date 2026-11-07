@@ -53,6 +53,31 @@ try {
     await page.getByRole('region',{name:'账号概况',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await page.screenshot({path:output+`/${width}.png`,fullPage:true});
+    await nav.getByRole('button',{name:'共用资产',exact:true}).click();
+    const assetNav = page.getByRole('navigation',{name:'共用资产分类',exact:true});
+    await assetNav.waitFor();
+    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),['AI 模特','服装','造型','场景','声音']);
+    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'AI 模特');
+    for (const label of ['AI 模特','服装','造型','场景','声音']) {
+      await assetNav.getByRole('button',{name:label,exact:true}).click();
+      await page.getByRole('heading',{name:label,exact:true}).waitFor();
+      const bounds = await assetNav.getByRole('button',{name:label,exact:true}).boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
+    }
+    assert.ok(page.url().endsWith('section=assets&asset=voices'));
+    await page.reload(); await assetNav.waitFor();
+    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'声音');
+    await page.goBack();
+    await page.getByRole('heading',{name:'场景',exact:true}).waitFor();
+    await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading',{name:'AI 模特',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
+    await page.screenshot({path:output+`/${width}-assets.png`,fullPage:true});
+    await nav.getByRole('button',{name:'账号概况',exact:true}).click();
+    await page.getByRole('heading',{name:'定位与当前进度',exact:true}).waitFor();
+    assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','定位与当前进度']);
+    assert.equal(await assetNav.count(),0);
     await page.getByRole('link',{name:'返回工作区',exact:true}).click();
     await nav.waitFor({state:'detached'});
     assert.equal(await page.getByRole('navigation',{name:'Chloe栏目'}).count(),0);
@@ -62,5 +87,5 @@ try {
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }
-  console.log('Chloe navigation passed: three desktop sizes, seven tabs, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
+  console.log('Chloe navigation passed: three desktop sizes, seven tabs and five asset categories, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
 } finally { await browser.close(); await server.close(); }

@@ -11,6 +11,7 @@ import { ChloeAccountOverview } from './ChloeAccountOverview';
 import type { ChloeOverviewData } from './ChloeAccountOverview';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
+import { UnderlineTabs } from './components/UnderlineTabs';
 
 const sections = [
   { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
@@ -20,6 +21,14 @@ const sections = [
   { value: 'publication', label: '成片与发布', description: '人工成片、封面文案、关联商品与发布记录。' },
   { value: 'review', label: '运营复盘', description: '单条表现、跨视频结论与调整验证。' },
   { value: 'resources', label: '资源库', description: '共用及视频专属的图片、视频、音频与具体版本。' },
+];
+
+const assetCategories = [
+  { value: 'models', label: 'AI 模特' },
+  { value: 'clothing', label: '服装' },
+  { value: 'looks', label: '造型' },
+  { value: 'scenes', label: '场景' },
+  { value: 'voices', label: '声音' },
 ];
 
 type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
@@ -41,14 +50,22 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const controls = useContext(HeaderControlsContext);
   const [params, setParams] = useSearchParams();
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
+  const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
   return <>
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
     {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className="panel" aria-label={current.label}>
       <PageCheckStatus queries={[workspaceQuery]} />
       <h2>{current.label}</h2>
-      <p>{current.description}</p>
-      <p className="muted">当前为栏目预览，具体内容随后补充。</p>
+      {current.value === 'assets' ? <>
+        <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
+          onChange={value => setParams({ section: 'assets', asset: value })} />
+        <h3>{assetCategory.label}</h3>
+        <p className="muted">该分类的展示内容待下一步确定。</p>
+      </> : <>
+        <p>{current.description}</p>
+        <p className="muted">当前为栏目预览，具体内容随后补充。</p>
+      </>}
     </section>}
   </>;
 }
