@@ -149,7 +149,8 @@ class ChloeDocumentsTest(unittest.TestCase):
         manifest=self.video/'剪辑交接/test.jianying.json'
         spec={'name':'隔离清单','media':[{'file':'成片/fixture.mp4','member':'01.mp4','timeline':True}]}
         manifest.write_text(json.dumps(spec))
-        self.assertEqual(self.check()['errors'],[])
+        docs.check_manifest(self.video,manifest)
+        self.assertTrue(any('缺少README交接记录' in e['error'] for e in self.check()['errors']))
         spec['media'][0]['timeline']=False;manifest.write_text(json.dumps(spec))
         self.assertTrue(any('时间线' in e['error'] for e in self.check()['errors']))
         del spec['media'][0]['timeline'];manifest.write_text(json.dumps(spec))
@@ -247,6 +248,19 @@ class ChloeDocumentsTest(unittest.TestCase):
                         (time,'未取得'),('| 定时发布 |','| 已定时 |')]:
             p.write_text(good.replace(old,new))
             self.assertTrue(self.check()['errors'])
+        for suffix in ('.txt','.png','.wav','.json'):
+            with self.subTest(non_video=suffix):
+                target=self.video/('成片/non-video'+suffix)
+                target.write_bytes(b'isolated non-video fixture')
+                p.write_text(good.replace('成片/test.mp4','成片/'+target.name))
+                result=docs.check_workspace(self.root,p)
+                self.assertTrue(any('发布文件必须是支持的视频文件' in e['error'] for e in result['errors']))
+        for suffix in ('.MP4','.mov','.webm'):
+            with self.subTest(video_type=suffix):
+                target=self.video/('成片/video'+suffix)
+                target.write_bytes(b'path-only fixture, decoding checked during publication prep')
+                p.write_text(good.replace('成片/test.mp4','成片/'+target.name))
+                self.assertEqual(docs.check_workspace(self.root,p)['errors'],[])
         outside=self.root/'综合资料/outside.mp4'; outside.write_bytes(b'outside')
         (self.video/'成片/link.mp4').symlink_to(outside)
         p.write_text(good.replace('成片/test.mp4','成片/link.mp4'))

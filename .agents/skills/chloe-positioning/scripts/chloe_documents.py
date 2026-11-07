@@ -346,6 +346,8 @@ def check_relations(root, path, doc):
         target = (path.parent/match[2]).resolve()
         if not target.is_relative_to(owner/'成片') or not target.is_file():
             raise ValueError('发布文件必须直接链接本视频成片目录的实际文件')
+        if target.suffix.lower() not in resources.KINDS['视频']:
+            raise ValueError('发布文件必须是支持的视频文件，不能引用文本、图片或音频')
         if row['发布方式'] == '定时发布' and row['计划发布时间'] in MISSING:
             raise ValueError('定时发布缺少计划发布时间')
         if row['发布进展'] == '已发布' and any(row[k] in MISSING for k in ('实际发布时间','平台作品ID','发布链接','授权依据','结果证据')):

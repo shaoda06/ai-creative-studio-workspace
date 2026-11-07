@@ -289,7 +289,7 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertIn('/production-files/',context['references']['segment'][0]['url'])
         prompt=folder/'提示词.md'
         template=(SKILLS/'chloe-production/templates/视频提示词模板.md').read_text()
-        prompt.write_text(template.replace('{{execution}}','E001')
+        prompt.write_text(template.replace('{{execution}}','E001').replace('{{segment}}','P001')
             .replace('{{按实际H3模式填写完整英文模型正文；保留原语言对白、歌词和画面文字}}','Prepared wording, not request evidence.')
             .replace('{{逐节对应模型正文；保留章节键、素材标签、镜号、时间及数值}}','[Shot 1]\ntime: 0-5\n动作。'))
         self.record.write_text(self.record.read_text().replace('| H3 | 不适用 |','| H3 | [提示词](<执行记录/E001/提示词.md>) |',1))
@@ -328,7 +328,7 @@ class ChloeProductionTests(unittest.TestCase):
             self.assertEqual(client.get(self.api+'/production-files/综合资料/账号定位.md').status_code,404)
             self.assertEqual(client.get(self.api+'/production-files/%2e%2e/secret.png').status_code,404)
 
-    def test_postprocess_provenance_adoption_and_handoff(self):
+    def prepare_handoff(self):
         self.plan()
         self.candidate('P001','E001');self.candidate('P002','E002')
         self.candidate('P001','E003',stage='二采');self.candidate('P002','E004',stage='二采')
@@ -344,6 +344,11 @@ class ChloeProductionTests(unittest.TestCase):
             add_row(self.project/'README.md','当前采用',[identity+'/后处理',reference,'隔离的二采批准与技术核对','2026-11-07T12:00:00+08:00'])
         manifest={'name':'隔离剪映','media':[{'file':path.relative_to(self.project).as_posix(),'member':str(i)+'.mp4','timeline':True} for i,path in enumerate((first,second))]}
         (self.project/'剪辑交接/交接.jianying.json').write_text(json.dumps(manifest))
+        add_row(self.project/'README.md','剪映交接',['J001','2026-11-07T12:10:00+08:00','[清单](<剪辑交接/交接.jianying.json>)','可下载','本次整片采用组合已确认'])
+        return manifest
+
+    def test_postprocess_provenance_adoption_and_handoff(self):
+        self.prepare_handoff()
         detail=browser.detail(self.projects,self.project.name,self.api,'V001')
         self.assertTrue(all(p['videos'][-1]['approved'] for p in detail['segments']['whole']))
         download=browser.downloads(self.projects,self.project.name,self.api,'V001')
@@ -352,6 +357,61 @@ class ChloeProductionTests(unittest.TestCase):
         body=self.record.read_text().replace('| E005 | 视频处理 | E003 |','| E005 | 视频处理 | E001 |')
         self.record.write_text(body)
         with self.assertRaisesRegex(ValueError,'二采执行'):state(self.project)
+
+    def test_handoff_rejects_missing_duplicate_reordered_and_wrong_versions(self):
+        manifest=self.prepare_handoff()
+        path=self.project/'剪辑交接/交接.jianying.json'
+        unused,_,_=self.resource(key='unused')
+        for label,media in (
+            ('missing',manifest['media'][:1]),
+            ('duplicate',[manifest['media'][0],{**manifest['media'][0],'member':'duplicate.mp4'}]),
+            ('reordered',list(reversed(manifest['media']))),
+            ('wrong version',[{**manifest['media'][0],'file':unused.relative_to(self.project).as_posix()},manifest['media'][1]]),
+        ):
+            with self.subTest(case=label):
+                path.write_text(json.dumps({**manifest,'media':media}))
+                with self.assertRaisesRegex(ValueError,'完整匹配片段版本与顺序'):
+                    check(self.project)
+        path.write_text(json.dumps({**manifest,'media':manifest['media']+[{'file':unused.relative_to(self.project).as_posix(),'member':'candidate.mp4','timeline':False}]}))
+        self.assertEqual(check_workspace(self.root)['errors'],[])
+
+    def test_handoff_requires_record_and_adoption_at_handoff_time(self):
+        self.prepare_handoff()
+        path=self.project/'README.md';good=path.read_text()
+        for label,bad,error in (
+            ('no record','\n'.join(line for line in good.splitlines() if not line.startswith('| J001 |')),'缺少README交接记录'),
+            ('no adoption','\n'.join(line for line in good.splitlines() if not line.startswith('| P00')),'尚未采用'),
+            ('future adoption',good.replace('隔离的二采批准与技术核对 | 2026-11-07T12:00','隔离的二采批准与技术核对 | 2026-11-07T12:20'),'尚未采用'),
+            ('no basis',good.replace('| 本次整片采用组合已确认 |','| 无 |'),'交接时间与采用依据'),
+            ('missing manifest',good.replace('交接.jianying.json','不存在.jianying.json'),'文件链接不存在'),
+        ):
+            with self.subTest(case=label):
+                path.write_text(bad)
+                self.assertTrue(any(error in item['error'] for item in check_workspace(self.root)['errors']))
+        path.write_text(good)
+
+    def test_old_handoff_preserves_adoption_history_after_replacement_or_cancellation(self):
+        self.prepare_handoff()
+        path=self.project/'README.md'
+        from chloe_documents import records
+        from chloe_production import document
+        adopted=records(document(self.project,'README.md'),'当前采用')
+        for number,row in enumerate(adopted,1):
+            add_row(path,'采用变更',['B00'+str(number),'2026-11-07T12:00:00+08:00',row['用途'],'无',row['资源引用'],'原采用依据'])
+        body=path.read_text()
+        path.write_text('\n'.join(line for line in body.splitlines() if not line.startswith('| P00'))+'\n')
+        add_row(path,'采用变更',['B003','2026-11-07T12:20:00+08:00','P001/后处理',adopted[0]['资源引用'],'无','取消该采用'])
+        self.assertEqual(check_workspace(self.root)['errors'],[])
+        old=path.read_text()
+        path.write_text(old.replace('| J001 | 2026-11-07T12:10','| J001 | 2026-11-07T12:30'))
+        with self.assertRaisesRegex(ValueError,'已取消采用'):
+            check(self.project)
+        path.write_text(old)
+        # A newer valid candidate and current adoption must not rewrite the old package.
+        _,new_ref,_=self.candidate('P001','E007',run='R002',stage='后处理')
+        self.record.write_text(self.record.read_text().replace('| E007 | 视频处理 | 不适用 |','| E007 | 视频处理 | E003 |'))
+        add_row(path,'当前采用',['P001/后处理',new_ref,'新采用','2026-11-07T12:30:00+08:00'])
+        self.assertEqual(check_workspace(self.root)['errors'],[])
 
 
 from tests import test_comfy_tasks as task_fixtures

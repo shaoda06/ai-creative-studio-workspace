@@ -9,7 +9,7 @@ import sys
 
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS/'chloe-positioning/scripts'))
-from chloe_documents import records, media_reference, MISSING, read_document, template
+from chloe_documents import records, media_reference, MISSING, read_document, template, check_manifest
 from chloe_init import resources
 
 STAGES = ('一采', '二采', '后处理')
@@ -171,8 +171,64 @@ def state(project):
             'executions':executions,'candidates':candidates,'rounds':rounds}
 
 
+def check_handoffs(value):
+    project, root = value['project'], value['root']
+    readme = document(project, 'README.md')
+    manifests = list((project/'剪辑交接').glob('*.jianying.json'))
+    if not manifests and not records(readme, '剪映交接'):
+        return
+    handoffs = {}
+    for row in records(readme, '剪映交接'):
+        if row['清单文件'] in MISSING and row['交接状态'] == '待核对':
+            continue
+        path = link_path(project, row['清单文件'])
+        if path.parent != project/'剪辑交接' or not path.name.endswith('.jianying.json') or not path.is_file():
+            raise ValueError('剪映交接须引用剪辑交接目录内的实际清单')
+        if path in handoffs:
+            raise ValueError('同一剪映清单不能重复登记交接')
+        if row['记录时间'] in MISSING or row['依据'] in MISSING:
+            raise ValueError('剪映交接须填写交接时间与采用依据')
+        handoffs[path] = row
+    # Existing adoption events preserve the exact choices at each handoff time.
+    adoptions = {}
+    for row in records(readme, '采用变更'):
+        purpose = row['变更范围']
+        if re.fullmatch(r'P\d{3,}/(一采|二采|后处理)', purpose):
+            if row['记录时间'] in MISSING or row['依据'] in MISSING:
+                raise ValueError('片段采用变更须填写时间和依据')
+            ref = None if row['新值或新版本'] in MISSING else media_reference(root, project/'README.md', row['新值或新版本'])
+            adoptions.setdefault(purpose, []).append((datetime.fromisoformat(row['记录时间']), ref))
+    for row in records(readme, '当前采用'):
+        if re.fullmatch(r'P\d{3,}/(一采|二采|后处理)', row['用途']):
+            ref = media_reference(root, project/'README.md', row['资源引用'])
+            adoptions.setdefault(row['用途'], []).append((datetime.fromisoformat(row['采用时间']), ref))
+    for path in manifests:
+        check_manifest(project, path)
+        if path not in handoffs:
+            raise ValueError('剪映清单缺少README交接记录：'+path.name)
+        when = datetime.fromisoformat(handoffs[path]['记录时间'])
+        media = json.loads(path.read_text('utf-8'))['media']
+        timeline = [local(project, item['file']) for item in media if item['timeline']]
+        matching = [row for row in value['rounds'].values()
+                    if all(v['ref'] for v in row['values']) and
+                    [root/v['ref']['file'] for v in row['values']] == timeline and
+                    datetime.fromisoformat(row['created_at']) <= when]
+        if not matching:
+            raise ValueError('剪映时间线须按交接轮次完整匹配片段版本与顺序，不得遗漏、重复或乱序')
+        for round_row in matching:
+            for segment in round_row['values']:
+                events = [(date, ref) for date, ref in adoptions.get(segment['id']+'/'+segment['stage'], []) if date <= when]
+                if not events or sorted(events, key=lambda event: event[0])[-1][1] != segment['ref']:
+                    break
+            else:
+                break
+        else:
+            raise ValueError('剪映时间线含交接时尚未采用或已取消采用的片段版本')
+
+
 def check(project):
     value = state(project)
+    check_handoffs(value)
     for execution, row in value['executions'].items():
         if row['执行类型'] != '视频生成':
             continue
