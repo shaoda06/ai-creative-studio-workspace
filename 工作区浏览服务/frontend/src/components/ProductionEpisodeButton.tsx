@@ -23,6 +23,7 @@ export function ProductionEpisodeButton({ item, project, revision, onSelect }: {
   return <>
     <EpisodeButton item={access.unitKind === 'work' && !item.readOnly && episode?.statusHtml
       ? { ...item, statusHtml: episode.statusHtml } : item} onSelect={onSelect}
+      displayName={access.unitDisplayName?.(item.name)}
       duration={detail.isPending ? '读取中…' : detail.isError ? '时长读取失败' : formatProductionDuration(durations.total)} />
     {detail.isError ? <FloatingMessage tone="error">{item.name}时长读取失败：{detail.error.message}。<button className="link" onClick={() => void detail.refetch()}>重新读取</button></FloatingMessage>
       : durations.failed > 0 && <FloatingMessage tone="error">{item.name}有{durations.failed}段视频时长读取失败，暂用计划时长（*）。<button className="link" onClick={durations.retry}>重新读取</button></FloatingMessage>}

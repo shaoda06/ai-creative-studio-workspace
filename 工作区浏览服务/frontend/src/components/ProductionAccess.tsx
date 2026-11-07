@@ -6,6 +6,7 @@ import type { NoteScope } from './RevisionNotes';
 // Business adapters supply addresses and terms; the complete reviewer stays shared.
 export interface ProductionAccess {
   unitKind: 'episode' | 'work';
+  unitDisplayName?: (unit: string) => string;
   storyboardLabel?: string;
   sourceDocumentLabel?: string;
   showStoryboardEditor?: boolean;

@@ -54,6 +54,9 @@ try {
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('轮次示例'));
   await page.getByRole('button', { name: '剧集制作', exact: true }).click();
+  const episodeCard=page.locator('[data-episode=EP001]');
+  await episodeCard.waitFor();
+  assert.equal(await episodeCard.evaluate(el=>el.getBoundingClientRect().height),48);
   await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
   const choose = page.getByRole('combobox', { name: '修改轮次', exact: true });
   const scene = id => page.getByRole('button', { name: new RegExp('^场次 ' + id + ' ·') });

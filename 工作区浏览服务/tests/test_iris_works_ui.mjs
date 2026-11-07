@@ -164,6 +164,9 @@ try {
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
   if(process.env.PRODUCTION_TABS_ONLY==='1') {
    await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+   const workCard=page.locator('[data-episode=F002]');
+   await workCard.waitFor();
+   assert.equal(await workCard.evaluate(el=>el.getBoundingClientRect().height),48);
    await page.locator('[data-episode=F002]').click();
    const productionTabs=page.getByRole('navigation',{name:'作品制作内容',exact:true});
    await productionTabs.waitFor();

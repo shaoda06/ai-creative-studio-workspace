@@ -56,7 +56,10 @@ try {
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=production');
   await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failList=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  const card=page.locator('[data-episode="V001-隔离演示"]');await card.waitFor();await card.click();
+  const card=page.locator('[data-episode="V001-隔离演示"]');await card.waitFor();
+  assert.equal(await card.locator('strong').innerText(),'V001');
+  assert.equal(await card.evaluate(el=>el.getBoundingClientRect().height),48);
+  await card.click();
   await page.locator('.episode-detail').waitFor();
   assert.ok(page.url().includes('video='));
   const tabs=page.getByRole('navigation',{name:'作品制作内容'});
