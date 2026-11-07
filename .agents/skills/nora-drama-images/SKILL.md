@@ -30,3 +30,5 @@ Agent理解任务，确定图种及布局、写作并核对实际提示词，选
 按[业务能力选择](references/图片提示词规范.md#当前参考图生成选型)进入[Imagegen](../studio-imagegen/SKILL.md)或[Qwen](../studio-qwen-image/SKILL.md)，获批后调用[图片处理](../studio-image-processing/SKILL.md)。[浏览后台](../studio-workspace-browser/SKILL.md)提供执行及展示，不替本阶段决定图种或采用。已备提示词只做原样执行，不由脚本重新创作。
 
 技术完成、业务登记、网页同步和用户采用分别记录。文件核对不等于画面已符合目标，查看范围沿[媒体查看边界](../nora-serial-drama/references/业务工作约定.md#看图能力调用边界)。恢复只处理失败步骤，不重复生成。修改本阶段及资源时按[维护规范](../studio-entry/维护规范.md)完成适用复查。
+
+收到后台图片或超分结果时，进入[本阶段结果接续](references/进度查询与结果处理规范.md)及[超分业务接续](references/ComfyUI-任务监控规范.md#超分结果业务接续)，落实候选展示和正式采用。

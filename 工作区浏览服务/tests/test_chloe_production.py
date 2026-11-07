@@ -12,7 +12,7 @@ from backend.services.project_files import ProjectFiles
 from backend.services.review_notes import ExportChanges, NoteChange, OverallChange, ProjectReviewNotes, NotesChangedError
 from chloe_init import initialize_workspace, initialize_video, resources, SKILLS
 from chloe_documents import check_workspace
-from chloe_production import state
+from chloe_production import state, check
 import chloe_browser_production as browser
 from project_paths import input_file, input_key, RecordPaths, PreparationPaths, project_file
 from backend.services import execution_checks
@@ -234,6 +234,43 @@ class ChloeProductionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'意见必须'):browser.validate_notes(self.project,'V001',identities,changes)
         self.assertTrue(first.exists())
 
+    def test_video_prompt_file_validation(self):
+        self.plan();self.candidate('P001','E001')
+        original=self.record.read_text()
+        check(self.project)  # A draft may be awaiting its prompt, but cannot be submitted yet.
+        self.record.write_text(original.replace('| 准备中 |', '| 已取消 |'))
+        check(self.project)  # Cancellation before submission does not invent a prompt.
+        self.record.write_text(original.replace('| 准备中 |', '| 已提交 |'))
+        with self.assertRaisesRegex(ValueError,'缺少中英文提示词文件'):
+            check(self.project)
+        def set_prompt(value):
+            self.record.write_text(original.replace('| H3 | 不适用 |', '| H3 | '+value+' |'))
+        set_prompt('Action in English')
+        with self.assertRaisesRegex(ValueError,'Markdown文件链接'):
+            check(self.project)
+        folder=self.project/'执行记录/E001';folder.mkdir()
+        prompt=folder/'提示词.md'
+        set_prompt('[提示词](<执行记录/E001/提示词.md>)')
+        with self.assertRaisesRegex(ValueError,'文件链接不存在'):
+            check(self.project)
+        prompt.write_text('## 模型提示词正文\nAction.\n')
+        with self.assertRaisesRegex(ValueError,'中文提示词参考版'):
+            check(self.project)
+        prompt.write_text('## 模型提示词正文\nAction.\n## 中文提示词参考版\n\n')
+        with self.assertRaisesRegex(ValueError,'中文提示词参考版'):
+            check(self.project)
+        body='## 模型提示词正文\nAction.\n## 中文提示词参考版\n动作。\n'
+        prompt.write_text(body+'## 中文提示词参考版\n重复内容。\n')
+        with self.assertRaisesRegex(ValueError,'唯一'):
+            check(self.project)
+        template=(SKILLS/'chloe-production/templates/视频提示词模板.md').read_text()
+        prompt.write_text(template)
+        with self.assertRaisesRegex(ValueError,'已填写'):
+            check(self.project)
+        prompt.write_text(body)
+        self.record.write_text(self.record.read_text().replace('| 准备中 |', '| 已提交 |'))
+        self.assertEqual(check(self.project)['candidates'],1)
+
     def test_shared_request_context_and_native_pack_refer_original(self):
         self.plan();self.candidate('P001','E001');self.candidate('P002','E002')
         actual,reference,ref=self.resource(kind='image',shared=True)
@@ -250,6 +287,19 @@ class ChloeProductionTests(unittest.TestCase):
         value=browser.production_data(self.project,self.api+'/projects/'+self.project.name,'V001')
         context=value['segments'][0]['videos'][0]['context']
         self.assertIn('/production-files/',context['references']['segment'][0]['url'])
+        prompt=folder/'提示词.md'
+        template=(SKILLS/'chloe-production/templates/视频提示词模板.md').read_text()
+        prompt.write_text(template.replace('{{execution}}','E001')
+            .replace('{{按实际H3模式填写完整英文模型正文；保留原语言对白、歌词和画面文字}}','Prepared wording, not request evidence.')
+            .replace('{{逐节对应模型正文；保留章节键、素材标签、镜号、时间及数值}}','[Shot 1]\ntime: 0-5\n动作。'))
+        self.record.write_text(self.record.read_text().replace('| H3 | 不适用 |','| H3 | [提示词](<执行记录/E001/提示词.md>) |',1))
+        check(self.project)
+        context=browser.production_data(self.project,self.api+'/projects/'+self.project.name,'V001')['segments'][0]['videos'][0]['context']
+        self.assertEqual(context['prompts']['chinese'],'[Shot 1]\ntime: 0-5\n动作。')
+        self.assertIn('Action.',context['prompts']['english'])
+        self.assertNotIn('Prepared wording',context['prompts']['english'])
+        self.assertIn('E001/',context['prompts']['chineseUrl'])
+        self.assertEqual(list(folder.glob('*.md')),[prompt])
         self.assertIn('Action.',context['prompts']['english'])
         pack=browser.execution_director_spec(self.projects,self.project.name,'V001','E001')
         self.assertIn(key,pack['media'].values())

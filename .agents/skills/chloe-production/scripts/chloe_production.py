@@ -173,6 +173,24 @@ def state(project):
 
 def check(project):
     value = state(project)
+    for execution, row in value['executions'].items():
+        if row['执行类型'] != '视频生成':
+            continue
+        prompt = row['提示词或正文']
+        if prompt in MISSING:
+            if row['执行状态'] in ('已提交', '执行中', '已完成') or row['任务ID'] not in MISSING:
+                raise ValueError(execution+' 视频生成缺少中英文提示词文件')
+            continue
+        if not re.fullmatch(r'\[[^\]]+\]\(<[^>]+>\)', prompt):
+            raise ValueError(execution+' 视频生成提示词须使用Markdown文件链接，不直接填写正文')
+        path = link_path(value['project'], prompt)
+        if path.suffix != '.md' or not path.is_file():
+            raise ValueError(execution+' 提示词须引用存在的Markdown文件')
+        text = path.read_text('utf-8-sig')
+        for heading in ('模型提示词正文', '中文提示词参考版'):
+            sections = re.findall(r'^## '+heading+r'[^\S\n]*\n(.*?)(?=^## |\Z)', text, re.M | re.S)
+            if len(sections) != 1 or not sections[0].strip() or '{{' in sections[0]:
+                raise ValueError(execution+' 提示词缺少唯一且已填写的章节：'+heading)
     sys.path.insert(0,str(SKILLS.parent.parent/'工作区浏览服务'))
     from backend.services.review_notes import ProjectReviewNotes
     notes=ProjectReviewNotes().read(value['project']/'视频修改意见.json')
