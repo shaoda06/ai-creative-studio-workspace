@@ -305,6 +305,12 @@ try {
     assert.equal(await fullExample.locator(':scope > header').count(), 0, '展示页使用真实无顶部栏规格');
     assert.equal((await fullExample.boundingBox()).width, width);
     await fullExample.getByRole('button', { name: '关闭', exact: true }).click();
+    await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const fieldTable=showcase.getByRole('region',{name:'字段表格',exact:true}).locator('table');
+    const fieldRatio=await fieldTable.evaluate(table=>table.querySelector('th').getBoundingClientRect().width/table.getBoundingClientRect().width);
+    assert.ok(Math.abs(fieldRatio-.4)<.005,'字段表格左列固定40%');
+    assert.equal(await fieldTable.evaluate(table=>table.scrollWidth<=table.clientWidth+1),true,'长正文在表格内换行');
+    await contained(fieldTable,`${width}px / 字段表格`);
     await showcase.getByRole('button', { name: '图片与音视频', exact: true }).click();
     const compactAsset = showcase.locator('.asset-media-card-compact').filter({ hasText: 'A001 · 已采用示例' });
     await compactAsset.getByText('资源版本：V002', { exact: true }).waitFor();

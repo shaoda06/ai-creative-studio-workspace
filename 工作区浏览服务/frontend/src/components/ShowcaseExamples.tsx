@@ -136,6 +136,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <Document value={liveStatusDoc} showOriginal={false} chaptersInitiallyOpen={false}
           transformBody={html => html.replace('作品状态', sampleWorkStatus)} />
       </ComponentExample>
+      <ComponentExample title="字段表格" rule="Rich的fieldTable规格用于两列字段表：左列40%、右列60%，长文字换行；未启用时保持原表格排版。" usage="Chloe模特人物特征">
+        <Rich fieldTable html={'<div class="table-scroll"><table><thead><tr><th>字段</th><th>内容</th></tr></thead><tbody><tr><td>体型与头身比例</td><td>待确定</td></tr><tr><td>长字段名称示例</td><td>'+'连续长内容LongUnbrokenText'.repeat(20)+'</td></tr></tbody></table></div>'} />
+      </ComponentExample>
       <ComponentExample title="提示词分节与正文" rule="已识别的提示词字段可折叠。正文中的音视频链接打开播放器，其他附件可查看或下载原文件。" usage="视频提示词、项目资料、制作记录与资产状态">
         <PromptSections language="zh" text={'summary: 示例概述\ndetailed_description: 仅供演示的详细描述\noverall_soundscape: 示例声景'} />
         <Rich html={'<p>示例状态：<span class="status-badge status-gray">待确认</span> <span class="status-badge status-green">已完成</span></p>'} />

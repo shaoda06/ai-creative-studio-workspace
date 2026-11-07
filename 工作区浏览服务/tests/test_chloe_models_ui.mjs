@@ -108,6 +108,9 @@ try {
   assert.equal(await card.locator('button,a').count(),0);
   await card.focus(); await page.keyboard.press('Enter');
   await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
+  const featureTable=page.locator('.prose-field-table table');
+  const featureRatio=await featureTable.evaluate(table=>table.querySelector('th').getBoundingClientRect().width/table.getBoundingClientRect().width);
+  assert.ok(Math.abs(featureRatio-.4)<.005,'人物特征表格左40%、右60%');
   assert.equal(await page.getByRole('dialog').count(),0);
   assert.match(page.url(),/model=M001/);
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'M001 · 示例模特甲');

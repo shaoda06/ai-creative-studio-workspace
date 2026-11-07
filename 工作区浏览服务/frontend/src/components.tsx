@@ -37,7 +37,7 @@ function previewFileKind(path: string) {
   return 'file';
 }
 
-export function Rich({ html = '', languages = {} }: { html?: string; languages?: Record<string, LanguageGroup> }) {
+export function Rich({ html = '', languages = {}, fieldTable = false }: { html?: string; languages?: Record<string, LanguageGroup>; fieldTable?: boolean }) {
   const preview = useContext(PreviewContext);
   const content = useMemo(() => {
     const hasCode = html.includes('<pre>') || html.includes('<pre ');
@@ -53,7 +53,7 @@ export function Rich({ html = '', languages = {} }: { html?: string; languages?:
       languageGroup: element.getAttribute('data-language-pair'),
     })) : null };
   }, [html]);
-  return <div className="prose" onClick={event => {
+  return <div className={fieldTable ? "prose prose-field-table" : "prose"} onClick={event => {
     const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-doc]');
     if (anchor && anchor.target !== '_blank') {
       event.preventDefault();

@@ -48,7 +48,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const section = (heading: string) => {
     const value = data!.sections.find(section => section.heading === heading)!;
-    return value.empty ? <p className="muted">暂无{heading}。</p> : <Rich html={value.html} />;
+    return value.empty ? <p className="muted">暂无{heading}。</p> : <Rich html={value.html} fieldTable={heading==='人物特征'} />;
   };
   const adopted = (purpose: string) => data!.images.find(image => image.adopted && image.purpose === purpose);
   const imageCard = (purpose: string, image?: ModelImage) => <AssetMediaCard title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal revision={0}
