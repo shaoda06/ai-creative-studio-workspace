@@ -183,7 +183,7 @@ def model_detail(root, identity, api):
     content = asset_content(root, path, doc, allowed, base)
     looks = []
     for look_id, look_name, look_path, look_doc in model_looks(root, identity):
-        cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图遮面版'), None)
+        cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图原图'), None)
         media = None
         if cover:
             ref = media_reference(root, look_path, cover['资源引用'])

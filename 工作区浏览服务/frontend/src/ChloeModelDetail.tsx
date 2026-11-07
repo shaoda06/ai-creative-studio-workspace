@@ -30,8 +30,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const data = query.data;
   const requestedTab = params.get('modelTab');
   const tab = requestedTab==='face' || requestedTab==='body' ? 'images' : tabs.find(item=>item.value===requestedTab)?.value || 'info';
-  const purpose = bodyPurposes.includes(params.get('purpose')!) ? params.get('purpose')! : bodyPurposes[0];
-  const view = params.get('view') === 'original' ? 'original' : 'masked';
+  const purpose = bodyPurposes.includes(params.get('purpose')!) ? params.get('purpose')! : bodyPurposes[tab==='looks' ? 1 : 0];
+  const view = params.get('view') === 'original' ? 'original' : params.get('view') === 'masked' ? 'masked' : tab==='looks' ? 'original' : 'masked';
   const select = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
     next.set('modelTab',tab);
@@ -41,7 +41,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const lookUrl = (id?: string) => {
     const next = new URLSearchParams(params);
     next.set('modelTab','looks'); next.delete('ref');
-    next.delete('lookTab'); next.delete('purpose'); next.set('view','masked');
+    next.delete('lookTab'); next.delete('purpose'); next.set('view','original');
     if (id) next.set('look',id); else next.delete('look');
     return `/spaces/${encodeURIComponent(spaceId!)}?${next}`;
   };
@@ -77,7 +77,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const bodyImages = () => <>
           <h2>{look ? '全身定装三视图（4:3）' : '基础全身三视图（4:3）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
           <div>
-            <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
+            <UnderlineTabs label="当前采用三视图" items={look ? [{value:'original',label:'原图'},{value:'masked',label:'遮面版'}] : [{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
           <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 4 / 3)}</div>
           <div>{bodyPurposes.some(value=>otherVersions(value).length > 0) && <details><summary>其他版本</summary>
@@ -131,7 +131,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         </div>
       </> : <section className="panel">
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}
-          to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图遮面版'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
+          to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图原图'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
       {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
       </div>

@@ -118,16 +118,19 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertEqual([x['id'] for x in detail['looks']], ['L001'])
         look = detail['looks'][0]
         self.assertEqual(len(look['images']), 2)
-        self.assertEqual(look['media']['key'], Path(second['absolute_file']).relative_to(self.root).as_posix())
+        self.assertEqual(look['media']['key'], Path(first['absolute_file']).relative_to(self.root).as_posix())
         self.assertEqual(detail['images'], [])
         self.assertIn('造型信息', [x['heading'] for x in look['sections']])
         self.assertNotIn('资产身份', [x['heading'] for x in look['sections']])
-        self.assertEqual(model_file(self.root, 'M001', look['media']['key']), Path(second['absolute_file']))
+        self.assertEqual(model_file(self.root, 'M001', look['media']['key']), Path(first['absolute_file']))
         self.assertNotIn('资产身份', [x['heading'] for x in detail['sections']])
         self.assertEqual(model_file(self.root,'M001','综合资料/共用素材/造型/L001-测试造型/造型说明.md').name,'造型说明.md')
         with self.assertRaises(FileNotFoundError):
             model_file(self.root,'M001','综合资料/共用素材/造型/L002-测试造型/造型说明.md')
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        text=look_path.read_text()
+        look_path.write_text('\n'.join(line for line in text.splitlines() if not line.startswith('| 全身三视图原图 |'))+'\n')
+        self.assertIsNone(model_detail(self.root,'M001',self.api)['looks'][0]['media'])
 
     def test_look_clothing_inputs_keep_exact_versions_and_multiple_references(self):
         folder = initialize_asset(self.root, '造型', 'L001', '测试造型')

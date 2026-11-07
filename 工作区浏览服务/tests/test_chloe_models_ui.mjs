@@ -250,6 +250,8 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:output+`/${width}-detail.png`,fullPage:true});
   await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
+  const lookOriginal=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图原图');
+  assert.ok((await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).locator('img').getAttribute('src')).includes(lookOriginal.resource));
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).click();
   await page.getByRole('heading',{name:'造型信息',exact:true}).waitFor();
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
@@ -273,6 +275,11 @@ try {
   await page.getByRole('dialog').waitFor({state:'detached'});
   const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
   assert.deepEqual(await lookPanel.locator('.asset-media-card').first().locator('.field-label').allTextContents(),['尺寸：']);
+  assert.deepEqual(await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button').allTextContents(),['原图','遮面版']);
+  await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  const noView=new URL(page.url()); noView.hash=noView.hash.replace('&view=original',''); await page.goto(noView.toString());
+  await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'遮面版',exact:true}).click();
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
   await lookPanel.locator(':scope > div > .asset-media-card .cover').click();
@@ -281,13 +288,14 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state:'detached'});
   await lookPanel.getByText('其他版本',{exact:true}).click();
+  await lookPanel.getByRole('navigation',{name:'模特图片用途'}).getByRole('button',{name:'全身三视图遮面版',exact:true}).click();
   const lookRefs=lookPanel.locator('.chloe-model-versions');
+  await lookRefs.locator('.asset-media-card').first().waitFor();
   assert.equal(await lookRefs.locator('.asset-media-card').count(),4);
   assert.deepEqual((await lookRefs.locator('h3').allTextContents()).map(title=>title.split('@')[1]),['V005','V004','V003','V002']);
   const lookScroll=await lookRefs.evaluate(el=>({height:el.clientHeight,full:el.scrollHeight}));
   assert.ok(lookScroll.height<=1050 && lookScroll.full>lookScroll.height);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
-  const lookOriginal=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图原图');
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
   await page.reload();
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
