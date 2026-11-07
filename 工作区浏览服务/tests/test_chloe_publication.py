@@ -50,13 +50,17 @@ class ChloePublicationTests(HttpTestCase):
     def prepare(self):
         film = self.project/'成片/最终成片.webm'
         store_media(self.project, film, source=Path(__file__).parents[1]/'frontend/public/component-samples/video.webm')
-        image = self.base/'封面.png'
-        Image.new('RGB', (90, 160), 'teal').save(image)
+        image = self.base/'横版封面.png'
+        Image.new('RGB', (160, 120), 'teal').save(image)
         cover = import_media(self.root, image, 'shared-cover')
         label = f'[共用:{cover["resource_id"]}@{cover["version"]}](<{Path(os.path.relpath(cover["absolute_file"],self.project)).as_posix()}>)'
+        portrait = self.base/'竖版封面.png'
+        Image.new('RGB', (120, 160), 'purple').save(portrait)
+        self.portrait = import_media(self.root, portrait, 'portrait-cover', project=self.project.name)
+        portrait_label = f'[本视频:{self.portrait["resource_id"]}@{self.portrait["version"]}](<{Path(self.portrait["absolute_file"]).relative_to(self.project).as_posix()}>)'
         path = self.project/'发布资料.md'
         write_template(path, 'chloe-handoff', '发布资料模板.md', identity='V001', title='隔离发布')
-        self.row = ['Q001','抖音','示例账号','[成片](<成片/最终成片.webm>)',label,'一件上衣的日常搭配',
+        self.row = ['Q001','抖音','示例账号','[成片](<成片/最终成片.webm>)',label,portrait_label,'一件上衣的日常搭配',
                     '领口和面料细节。<br>第二行保留换行与竖线&#124;。','#日常穿搭 #上衣','示例上衣','蓝色 M码',
                     'https://example.com/product?id=1&sku=blue','未取得','待选择','实际成片与商品资料']
         self.append(path, '发布资料', self.row)
@@ -73,7 +77,7 @@ class ChloePublicationTests(HttpTestCase):
         self.assertEqual(material['fields']['正文'],'领口和面料细节。\n第二行保留换行与竖线|。')
         self.assertEqual(data['history'],[])
         self.assertEqual(publication.listing(self.root,self.api)[0]['finalCount'],1)
-        for media, original in [(material['film'],film),(material['cover'],Path(cover['absolute_file']))]:
+        for media, original in [(material['film'],film),(material['covers'][0]['media'],Path(cover['absolute_file'])), (material['covers'][1]['media'],Path(self.portrait['absolute_file']))]:
             downloaded = self.client.get(media['url']+'?download=true')
             self.assertEqual(downloaded.content, original.read_bytes())
             self.assertIn('attachment', downloaded.headers['content-disposition'])
@@ -100,10 +104,10 @@ class ChloePublicationTests(HttpTestCase):
 
     def test_bound_publication_history_and_material_edits(self):
         film, cover, path = self.prepare()
-        self.row[0]='Q002';self.row[1]='小红书';self.row[5]='另一平台标题'
+        self.row[0]='Q002';self.row[1]='小红书';self.row[6]='另一平台标题'
         self.append(path,'发布资料',self.row)
         readme=self.project/'README.md'
-        self.append(readme,'发布记录',['P001',self.row[3],self.row[4],'[Q001](<发布资料.md>)',self.row[7],self.row[9],self.row[10],
+        self.append(readme,'发布记录',['P001',self.row[3],self.row[4],self.row[5],'[Q001](<发布资料.md>)',self.row[8],self.row[10],self.row[11],
                                       '未取得','未取得','立即发布','待提交','未取得','未取得','示例安排','未取得'])
         data=publication.detail(self.root,self.project.name,self.api)
         self.assertEqual([m['id'] for m in data['materials']],['Q001','Q002'])
@@ -116,16 +120,33 @@ class ChloePublicationTests(HttpTestCase):
 
     def test_draft_missing_fields_and_project_cover(self):
         film, cover, path=self.prepare()
-        image=self.base/'local.png';Image.new('RGB',(32,48),'blue').save(image)
+        image=self.base/'local.png';Image.new('RGB',(64,48),'blue').save(image)
         local=import_media(self.root,image,'local-cover',project=self.project.name)
         self.row[0]='Q002';self.row[3]='未取得'
         self.row[4]=f'[本视频:{local["resource_id"]}@{local["version"]}](<{Path(local["absolute_file"]).relative_to(self.project).as_posix()}>)'
         self.append(path,'发布资料',self.row)
         data=publication.detail(self.root,self.project.name,self.api)
         self.assertIsNone(data['materials'][1]['film'])
-        self.assertEqual(self.client.get(data['materials'][1]['cover']['url']).content,image.read_bytes())
+        self.assertEqual(self.client.get(data['materials'][1]['covers'][0]['media']['url']).content,image.read_bytes())
         path.write_text(path.read_text().replace('https://example.com/product?id=1&sku=blue','javascript:alert(1)',1))
         self.assertEqual(self.client.get(self.url).status_code,409)
+
+    def test_missing_orientation_and_actual_upload_selection(self):
+        film, cover, path = self.prepare()
+        original = path.read_text()
+        path.write_text(original.replace(self.row[5], '未取得'))
+        data = publication.detail(self.root, self.project.name, self.api)
+        self.assertIsNotNone(data['materials'][0]['covers'][0]['media'])
+        self.assertIsNone(data['materials'][0]['covers'][1]['media'])
+        path.write_text(original)
+        readme = self.project/'README.md'
+        # Only the portrait is uploaded; the prepared landscape stays available.
+        self.append(readme, '发布记录', ['P001', self.row[3], '不适用', self.row[5], '[Q001](<发布资料.md>)',
+                    self.row[8], self.row[10], self.row[11], '未取得', '未取得', '立即发布', '待提交',
+                    '未取得', '未取得', '示例安排', '未取得'])
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        readme.write_text(readme.read_text().replace(self.row[5], self.row[4]))
+        self.assertEqual(self.client.get(self.url).status_code, 409)
 
 
 if __name__=='__main__':unittest.main()

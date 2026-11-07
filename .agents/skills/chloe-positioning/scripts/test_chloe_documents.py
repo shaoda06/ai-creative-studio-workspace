@@ -184,7 +184,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         time='2026-11-07T10:00:00+08:00'
         p.write_text(p.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
-        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','测试文案','不适用','不适用','不适用','不适用',time,'立即发布','已发布','test-platform-id','https://example.com/post','隔离授权示例','https://example.com/publication-proof'])
+        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','不适用','测试文案','不适用','不适用','不适用','不适用',time,'立即发布','已发布','test-platform-id','https://example.com/post','隔离授权示例','https://example.com/publication-proof'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'播放量','10','次','平台显示','https://example.com/metrics'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'净增粉丝','-2','人','平台显示','https://example.com/metrics'])
         self.append(p,'单条复盘',['R001','D001','样本不足','未取得','隔离示例','继续观察'])
@@ -200,7 +200,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         p.write_text(withdrawn.replace('| 视频状态 | 已发布 |','| 视频状态 | 待发布 |'))
         self.assertEqual(self.check()['errors'],[])
         p.write_text(good)
-        self.append(p,'发布记录',['P002','[成片](<成片/test.mp4>)','不适用','重发文案','不适用','不适用','不适用',time,'未取得','定时发布','已提交','未取得','未取得','隔离授权','未取得'])
+        self.append(p,'发布记录',['P002','[成片](<成片/test.mp4>)','不适用','不适用','重发文案','不适用','不适用','不适用',time,'未取得','定时发布','已提交','未取得','未取得','隔离授权','未取得'])
         self.assertEqual(self.check()['errors'],[])
 
     def test_content_only_review_requires_no_capture_but_rejects_unknown_ids(self):
@@ -217,7 +217,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         path=self.video/'README.md';time='2026-11-07T10:00:00+08:00'
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         path.write_text(path.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
-        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,time,'定时发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
+        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','不适用','文案','不适用','不适用','不适用',time,time,'定时发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
         for identity in ('D001','D002'):
             self.append(path,'效果数据',[identity,'P001',time,time,time,'指标','1','次','隔离口径','https://example.com/metrics'])
         self.append(path,'单条复盘',['R001','D001、D002','内容观察','仅说明样本变化','隔离样本','继续观察'])
@@ -230,7 +230,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         path=self.video/'README.md'
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         path.write_text(path.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
-        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用','不适用','2026-11-07T10:00:00+08:00','立即发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
+        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','不适用','文案','不适用','不适用','不适用','不适用','2026-11-07T10:00:00+08:00','立即发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
         original=path.read_text()
         for start,end,collected,error in (
             ('2026-11-08T09:00:00+08:00','2026-11-08T10:00:00+08:00','2026-11-08T11:00:00+08:00',False),
@@ -318,7 +318,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         p.write_text(p.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 待发布 |'))
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         time='2026-11-07T10:00:00+08:00'
-        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,'未取得','定时发布','待提交','未取得','未取得','隔离授权','未取得'])
+        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','不适用','文案','不适用','不适用','不适用',time,'未取得','定时发布','待提交','未取得','未取得','隔离授权','未取得'])
         good=p.read_text()
         for progress in ('待提交','已提交','审核中','失败','已撤回','待核实'):
             p.write_text(good.replace('| 待提交 |','| '+progress+' |'))

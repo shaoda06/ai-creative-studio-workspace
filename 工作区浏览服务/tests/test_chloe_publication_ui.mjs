@@ -24,17 +24,19 @@ try:
  from PIL import Image
  from pathlib import Path
  store_media(x.project,x.project/'成片/第二版成片.webm',source=film)
- second=x.base/'第二封面.png';Image.new('RGB',(120,160),'navy').save(second)
+ second=x.base/'第二封面.png';Image.new('RGB',(200,150),'navy').save(second)
  ref=import_media(x.root,second,'second-cover',project=x.project.name)
  x.row[3]='[成片](<成片/第二版成片.webm>)'
  x.row[4]=f'[本视频:{ref["resource_id"]}@{ref["version"]}](<{Path(ref["absolute_file"]).relative_to(x.project).as_posix()}>)'
- x.row[0]='Q002';x.row[1]='小红书';x.row[5]='另一平台的长标题'+('细节展示'*18)
+ x.row[0]='Q002';x.row[1]='小红书';x.row[6]='另一平台的长标题'+('细节展示'*18)
  x.append(path,'发布资料',x.row)
- print(json.dumps({'list':publication.listing(x.root,x.api),'detail':publication.detail(x.root,x.project.name,x.api),'image':base64.b64encode(Path(cover['absolute_file']).read_bytes()).decode(),'secondImage':base64.b64encode(second.read_bytes()).decode()}))
+ detail=publication.detail(x.root,x.project.name,x.api)
+ images={c['media']['url']:base64.b64encode((x.root/c['media']['key']).read_bytes()).decode() for m in detail['materials'] for c in m['covers']}
+ print(json.dumps({'list':publication.listing(x.root,x.api),'detail':detail,'images':images}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
 const video=await readFile(frontend+'public/component-samples/video.webm');
-const image=Buffer.from(fixture.image,'base64'),secondImage=Buffer.from(fixture.secondImage,'base64');
+const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeURIComponent(url),Buffer.from(bytes,'base64')]));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
@@ -43,7 +45,7 @@ try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false;
+  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
@@ -52,9 +54,9 @@ try {
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:fixture.list});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:fixture.detail});
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:fixture.detail});
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
-   if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:path===decodeURIComponent(fixture.detail.materials[1].cover.url)?secondImage:image});
+   if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
    unexpected.push(path);return route.fulfill({status:404,body:'unexpected isolated request'});
   });
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');
@@ -68,16 +70,18 @@ try {
   }
   await page.getByRole('button',{name:'复制挂品信息',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
-  for(const [label,bytes,filename] of [['下载成片',video,'第二版成片.webm'],['下载封面',secondImage,null]]){
+  for(const [label,bytes,filename] of [['下载成片',video,'第二版成片.webm'],...fixture.detail.materials[1].covers.map(c=>['下载'+c.label,images.get(decodeURIComponent(c.media.url)),c.media.name])]){
    const event=page.waitForEvent('download');await page.getByRole('button',{name:label,exact:true}).click();
    const download=await event;if(filename)assert.equal(download.suggestedFilename(),filename);
    const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
    assert.deepEqual(await readFile(destination),bytes);await download.delete();
   }
-  await page.getByRole('region',{name:'发布封面'}).locator('button.cover').click();
-  await page.getByRole('dialog').waitFor();
-  await page.waitForFunction(()=>document.querySelector('dialog img')?.naturalWidth===120);
-  await page.keyboard.press('Escape');
+  for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
+   await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
+   await page.getByRole('dialog').waitFor();
+   await page.waitForFunction(width=>document.querySelector('dialog img')?.naturalWidth===width,width);
+   await page.keyboard.press('Escape');
+  }
   const player=page.locator('video');await player.evaluate(el=>el.play());
   await page.waitForFunction(()=>document.querySelector('video')?.currentTime>0);
   await player.evaluate(el=>el.pause());
@@ -86,10 +90,14 @@ try {
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
   assert.equal(await page.locator('video').getAttribute('aria-label'),'最终成片.webm');
-  await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===90);
+  await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   if(process.env.CHLOE_UI_SCREENSHOT && width===1366){await page.getByRole('button',{name:'关闭提示',exact:true}).evaluateAll(buttons=>buttons.forEach(button=>button.click()));await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:process.env.CHLOE_UI_SCREENSHOT,fullPage:true});}
-  noMaterial=true;await page.reload();await page.getByText('成片目录内暂无视频',{exact:false}).waitFor();
+  missingPortrait=true;await page.reload();
+  await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
+  assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
+  missingPortrait=false;noMaterial=true;await page.reload();await page.getByText('成片目录内暂无视频',{exact:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();

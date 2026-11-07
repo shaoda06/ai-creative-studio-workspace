@@ -196,8 +196,10 @@ def read_document(root, path, source, substitutions):
                         raise ValueError(field+'与目录不符')
                     if field == '资产类型' and value != dict(base['rows'])[field]:
                         raise ValueError('资产类型与模板不符')
-                    if field in ('资源引用','封面引用') and value not in MISSING:
-                        media_reference(root, path, value)
+                    if field in ('资源引用','横版封面引用','竖版封面引用') and value not in MISSING:
+                        ref = media_reference(root, path, value)
+                        if field.endswith('封面引用') and Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
+                            raise ValueError(field+'必须引用准确图片版本')
                     elif value.startswith(('[共用:', '[本视频:')):
                         media_reference(root, path, value)
                     for _, href in LINK.findall(value):
@@ -380,10 +382,6 @@ def check_relations(root, path, doc):
             target = (path.parent/match[2]).resolve()
             if not target.is_relative_to(owner/'成片') or not target.is_file() or target.suffix.lower() not in resources.KINDS['视频']:
                 raise ValueError('成片文件必须链接本视频成片目录的实际视频')
-        if row['封面引用'] not in MISSING:
-            ref = media_reference(root, path, row['封面引用'])
-            if Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
-                raise ValueError('发布封面必须引用准确图片版本')
         if row['挂品链接'] not in MISSING and not re.match(r'^https?://[^\s]+$', row['挂品链接']):
             raise ValueError('挂品链接须为HTTP(S)原始链接')
     for row in records(doc,'发布记录'):
@@ -394,9 +392,12 @@ def check_relations(root, path, doc):
             material = next((r for r in records(prepared, '发布资料') if r['资料编号'] == copy_link[1]), None)
             if material is None:
                 raise ValueError('发布记录引用不存在的发布资料编号')
-            for actual, source in [('发布文件','成片文件'),('封面引用','封面引用'),('标签','话题'),('款式或SKU','款式或SKU'),('挂品链接','挂品链接')]:
+            for actual, source in [('发布文件','成片文件'),('标签','话题'),('款式或SKU','款式或SKU'),('挂品链接','挂品链接')]:
                 if row[actual] != material[source]:
                     raise ValueError('发布记录与所引用资料不一致：'+actual)
+            for field in ('横版封面引用', '竖版封面引用'):
+                if row[field] != '不适用' and row[field] != material[field]:
+                    raise ValueError('发布记录与所引用资料不一致：'+field)
         match = LINK.fullmatch(row['发布文件'])
         if not match:
             raise ValueError('发布文件必须直接链接本视频成片目录的实际文件')

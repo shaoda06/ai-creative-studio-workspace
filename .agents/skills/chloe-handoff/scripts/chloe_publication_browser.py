@@ -71,11 +71,14 @@ def detail(root, name, api):
     materials = []
     for row in rows:
         film = None if row['成片文件'] in MISSING else media((project/LINK.fullmatch(row['成片文件'])[2]).resolve(), 'video')
-        cover = None
-        if row['封面引用'] not in MISSING:
-            ref = media_reference(root, project/'发布资料.md', row['封面引用'])
-            cover = media(resources.local(root, ref['file']), 'image')
-        materials.append({'id': row['资料编号'], 'fields': {k: plain(v) for k,v in row.items()}, 'film': film, 'cover': cover})
+        covers = []
+        for label in ('横版封面', '竖版封面'):
+            image = None
+            if row[label+'引用'] not in MISSING:
+                ref = media_reference(root, project/'发布资料.md', row[label+'引用'])
+                image = media(resources.local(root, ref['file']), 'image')
+            covers.append({'label': label, 'media': image})
+        materials.append({'id': row['资料编号'], 'fields': {k: plain(v) for k,v in row.items()}, 'film': film, 'covers': covers})
     history = []
     for row in records(doc, '发布记录'):
         link = LINK.fullmatch(row['文案'])
@@ -95,11 +98,12 @@ def media_file(root, name, key):
     for source, rows in [(project/'发布资料.md', preparations(root, project, identity, title)),
                          (project/'README.md', records(doc, '发布记录'))]:
         for row in rows:
-            if row['封面引用'] not in MISSING:
-                ref = media_reference(root, source, row['封面引用'])
-                path = resources.local(root, ref['file'])
-                if path.suffix.lower() in resources.KINDS['图片']:
-                    allowed.add(path)
+            for field in ('横版封面引用', '竖版封面引用'):
+                if row[field] not in MISSING:
+                    ref = media_reference(root, source, row[field])
+                    path = resources.local(root, ref['file'])
+                    if path.suffix.lower() in resources.KINDS['图片']:
+                        allowed.add(path)
     target = resources.local(root, key)
     if target not in allowed:
         raise FileNotFoundError('不是本视频成片或已引用的发布封面')

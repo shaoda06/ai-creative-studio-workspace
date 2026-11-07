@@ -16,7 +16,7 @@ import { DownloadButton } from './components/DownloadButton';
 import './ChloePublication.css';
 
 type Video = { project: string; id: string; title: string; status: string; finalCount: number };
-type Material = { id: string; fields: Record<string, string>; film: FileItem | null; cover: FileItem | null };
+type Material = { id: string; fields: Record<string, string>; film: FileItem | null; covers: { label: string; media: FileItem | null }[] };
 type Publication = { project: string; id: string; title: string; finals: FileItem[]; materials: Material[];
   history: { fields: Record<string, string>; materialId: string | null; url: string | null }[] };
 const missing = new Set(['待确定', '待核实', '未取得', '不适用', '无']);
@@ -71,11 +71,11 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
                 <DownloadButton url={material.film.url!} filename={material.film.name} label="下载成片" title={material.film.name} />
               </> : <p className="muted">尚未指定本次发布使用的成片。</p>}
             </section>
-            <section aria-label="发布封面" className="chloe-publication-cover">
-              <h2>封面</h2>
-              <AssetMediaCard title="发布封面" hideTitle item={{ media: material.cover, emptyLabel: '尚未准备封面图片。' }} revision={0} showVersion={false} showFileActions={false} />
-              {material.cover && <DownloadButton url={material.cover.url!} filename={material.cover.name} label="下载封面" title={material.cover.name} />}
-            </section>
+            <div className="chloe-publication-covers">{material.covers.map(cover => <section key={cover.label} aria-label={cover.label} className="chloe-publication-cover">
+              <h2>{cover.label}</h2>
+              <AssetMediaCard key={cover.media?.url || cover.label} title={cover.label} hideTitle item={{ media: cover.media, emptyLabel: `尚未准备${cover.label}。` }} revision={0} showVersion={false} showFileActions={false} />
+              <DownloadButton url={cover.media?.url || null} filename={cover.media?.name} label={`下载${cover.label}`} title={cover.media?.name || cover.label} />
+            </section>)}</div>
           </div>
           <div className="chloe-publication-copy">{['标题', '正文', '话题'].map(field => <section key={field} aria-label={field}>
             <div className="chloe-publication-toolbar"><h2>{field}</h2>
