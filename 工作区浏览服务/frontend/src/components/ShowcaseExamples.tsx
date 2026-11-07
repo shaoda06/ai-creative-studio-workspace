@@ -138,6 +138,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <Document value={liveStatusDoc} showOriginal={false} chaptersInitiallyOpen={false}
           transformBody={html => html.replace('作品状态', sampleWorkStatus)} />
       </ComponentExample>
+      <ComponentExample title="分镜章节留白" rule="spacedHeadings为后续二、三级标题增加40px上间距，首标题和段落行距不变。" usage="三个工作区的视频制作分镜正文">
+        <Document spacedHeadings showOriginal={false} chaptersInitiallyOpen={false} value={{html:'<h3>SH001｜展示全貌</h3><p>镜头动作及构图说明。</p><p>下一镜继续展示细节。</p><h3>SH002｜展示细节</h3><p>后续镜头与上一镜之间保留明显留白。</p>'}} />
+      </ComponentExample>
       <ComponentExample title="字段表格" rule="Rich的fieldTable规格用于两列字段表：左列40%、右列60%，长文字换行；未启用时保持原表格排版。" usage="Chloe模特人物特征">
         <Rich fieldTable html={'<div class="table-scroll"><table><thead><tr><th>字段</th><th>内容</th></tr></thead><tbody><tr><td>体型与头身比例</td><td>待确定</td></tr><tr><td>长字段名称示例</td><td>'+'连续长内容LongUnbrokenText'.repeat(20)+'</td></tr></tbody></table></div>'} />
       </ComponentExample>

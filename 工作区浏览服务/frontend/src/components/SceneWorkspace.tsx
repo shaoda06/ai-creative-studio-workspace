@@ -255,7 +255,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
     {notesExport.dialog}
     </> : view === 'storyboard' ? <div className="scene-storyboard">
-      {storyboardDocument || (!productionRound && storyboard.data) ? <Document key={productionRound?.number || 'current'} value={storyboardDocument || storyboard.data!} />
+      {storyboardDocument || (!productionRound && storyboard.data) ? <Document key={productionRound?.number || 'current'} showOriginal={false} chaptersInitiallyOpen={false} spacedHeadings value={storyboardDocument || storyboard.data!} />
         : scene && storyboardPath && !productionRound && (storyboard.isFetching || (storyboard.error && !('status' in storyboard.error && storyboard.error.status === 404))) ? <Result loading={storyboard.isPending} error={storyboard.error} retry={storyboard.refetch} retrying={storyboard.isFetching} />
         : !productionRound && <div className="scene-empty" role="status"><h3>尚未登记分镜</h3></div>}
     </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} />

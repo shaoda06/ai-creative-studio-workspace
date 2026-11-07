@@ -180,6 +180,12 @@ try {
    assert.deepEqual(await productionTabs.getByRole('button').allTextContents(),['分段制作','分镜与声音','导演分镜表','分镜修改','资源下载']);
    await productionTabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
    await page.locator('.scene-storyboard').getByRole('heading',{name:'已保存分镜v02',exact:true}).waitFor();
+  assert.equal(await page.locator('.scene-storyboard .file-action-links').count(),0);
+  assert.equal(await page.locator('.scene-storyboard details.chapters').getAttribute('open'),null);
+  await page.locator('.scene-storyboard details.chapters > summary').click();
+  await page.locator('.scene-storyboard nav[aria-label="章节导航"] button.chapter-link').first().click();
+  assert.equal(await page.locator('.scene-storyboard .prose :focus').count(),1);
+
    await productionTabs.getByRole('button',{name:'分镜修改',exact:true}).click();
    await page.getByRole('region',{name:'修改场次分镜正文',exact:true}).waitFor();
    assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[]);

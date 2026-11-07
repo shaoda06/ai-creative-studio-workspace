@@ -82,6 +82,16 @@ try {
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const script=page.locator('.scene-storyboard');
   await script.getByRole('heading',{name:/SH001/}).waitFor();
+  assert.equal(await script.locator('.prose h3').nth(1).evaluate(el=>getComputedStyle(el).marginTop),'40px');
+  assert.notEqual(await script.locator('.prose h3').first().evaluate(el=>getComputedStyle(el).marginTop),'40px');
+  assert.equal(await script.locator('.prose p').first().evaluate(el=>getComputedStyle(el).marginTop),'13px');
+
+  assert.equal(await page.locator('.scene-storyboard .file-action-links').count(),0);
+  assert.equal(await page.locator('.scene-storyboard details.chapters').getAttribute('open'),null);
+  await page.locator('.scene-storyboard details.chapters > summary').click();
+  await page.locator('.scene-storyboard nav[aria-label="章节导航"] button.chapter-link').first().click();
+  assert.equal(await page.locator('.scene-storyboard .prose :focus').count(),1);
+
   assert.equal(await script.getByRole('heading',{name:'脚本信息',exact:true}).count(),0);
   assert.equal(await script.getByRole('heading',{name:'内容与声音',exact:true}).count(),0);
   assert.equal(await script.getByRole('heading',{name:'修订记录',exact:true}).count(),0);

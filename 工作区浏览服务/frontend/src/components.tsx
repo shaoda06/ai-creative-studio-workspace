@@ -37,7 +37,7 @@ function previewFileKind(path: string) {
   return 'file';
 }
 
-export function Rich({ html = '', languages = {}, fieldTable = false }: { html?: string; languages?: Record<string, LanguageGroup>; fieldTable?: boolean }) {
+export function Rich({ html = '', languages = {}, fieldTable = false, spacedHeadings = false }: { html?: string; languages?: Record<string, LanguageGroup>; fieldTable?: boolean; spacedHeadings?: boolean }) {
   const preview = useContext(PreviewContext);
   const content = useMemo(() => {
     const hasCode = html.includes('<pre>') || html.includes('<pre ');
@@ -53,7 +53,7 @@ export function Rich({ html = '', languages = {}, fieldTable = false }: { html?:
       languageGroup: element.getAttribute('data-language-pair'),
     })) : null };
   }, [html]);
-  return <div className={fieldTable ? "prose prose-field-table" : "prose"} onClick={event => {
+  return <div className={`prose${fieldTable ? ' prose-field-table' : ''}${spacedHeadings ? ' prose-spaced-headings' : ''}`} onClick={event => {
     const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-doc]');
     if (anchor && anchor.target !== '_blank') {
       event.preventDefault();
@@ -107,8 +107,8 @@ export function Groups({ groups = [], chapter = false }: { groups?: Group[]; cha
     {open && <div id={contentId} className="groups-content">{folders}</div>}
   </section> : <details className="groups"><summary>其他资料</summary>{folders}</details>;
 }
-export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, beforeBody, transformBody }: {
-  value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; beforeBody?: ReactNode;
+export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, spacedHeadings = false, beforeBody, transformBody }: {
+  value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; spacedHeadings?: boolean; beforeBody?: ReactNode;
   transformBody?: (html: string) => string;
 }) {
   const [value, setValue] = useState(latest);
@@ -203,7 +203,7 @@ export function Document({ value: latest, showOriginal = true, showChapters = tr
     {value.headerHtml && <DocumentInformation><Rich html={value.headerHtml} /></DocumentInformation>}
     {showChapters && <ChapterNavigation headings={headings} initiallyOpen={chaptersInitiallyOpen} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />}
     {beforeBody}
-    <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} /><Groups groups={latest.groups} chapter /></div>
+    <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} spacedHeadings={spacedHeadings} /><Groups groups={latest.groups} chapter /></div>
   </div>;
 }
 export function Dialog({ title, children, close, headerActions, size = "default", showHeader = true, closeDisabled = false }: { title: string; children: ReactNode; close: () => void; headerActions?: ReactNode; size?: "default" | "compact" | "fullscreen"; showHeader?: boolean; closeDisabled?: boolean }) {

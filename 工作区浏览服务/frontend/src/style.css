@@ -218,3 +218,5 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 
 
 .page-heading-title-row{display:flex;justify-content:space-between;align-items:center;gap:18px;min-width:0}
+
+.prose-spaced-headings :is(h2,h3) ~ :is(h2,h3){margin-top:40px}

@@ -15,7 +15,7 @@ let missing = false;
 const unexpected = [], writes = [];
 const video = (scene, run) => ({ key: `${scene}-${run}`, run, stage: '一采', url: missing && run === 'R003' ? '' : `/fixture/${scene}-${run}.mp4`, candidateNumber: Number(run.slice(1)), approved: false,
   fileRevision: '', deliveryStatus: '已取回', taskStatus: '成功', checkedAt: '', context: { scriptHtml: `<p>${scene}-${run}</p>`, shots: [], prompts: {}, references: { common: [], segment: [] }, issues: [] } });
-const doc = title => ({ kind: 'document', key: title + '.md', name: title, version: 'v01', doc: { title, html: `<p>${title}的正文</p>` } });
+const doc = title => ({ kind: 'document', key: title + '.md', name: title, version: 'v01', doc: { title, url: `/fixture/${title}.md`, html: `<h2>镜头正文</h2><p>${title}的正文</p>` } });
 const round = (scene, number, run, shared = true) => ({ number, episodeRound: shared, created_at: '2026-10-26T00:00:00+08:00', script: doc('剧本' + number), storyboard: doc(scene + '分镜' + number), issues: [],
   segments: [{ id: 'P001', duration: 2, stage: '一采', run, scriptHtml: `<p>${scene}-${run}分镜</p>` }] });
 const episode = name => ({ kind: 'group', name, title: '轮次示例', children: [], materials: [], previousEpisode: null, warnings: [], productionIssues: [], script: doc('当前剧本'), scenes: ['C001', 'C002'],
@@ -72,6 +72,14 @@ try {
   }), ['rgb(255, 255, 255)', '10px', '23px', '20px', '12px 20px', '20px', true, '0px']);
 
   assert.equal(await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).count(), 0);
+  await page.getByRole('navigation',{name:'场次内容',exact:true}).getByRole('button',{name:'场次分镜',exact:true}).click();
+  await page.locator('.scene-storyboard details.chapters').waitFor();
+  assert.equal(await page.locator('.scene-storyboard .file-action-links').count(),0);
+  assert.equal(await page.locator('.scene-storyboard details.chapters').getAttribute('open'),null);
+  await page.locator('.scene-storyboard details.chapters > summary').click();
+  await page.locator('.scene-storyboard nav[aria-label="章节导航"] button.chapter-link').first().click();
+  assert.equal(await page.locator('.scene-storyboard .prose :focus').count(),1);
+  await page.getByRole('navigation',{name:'场次内容',exact:true}).getByRole('button',{name:'分段制作',exact:true}).click();
   const repeat = page.getByRole('checkbox', { name: '重复播放', exact: true });
   const wide = () => page.getByRole('button', { name: /^(宽屏显示|恢复布局)$/ });
   await repeat.check(); await wide().click();

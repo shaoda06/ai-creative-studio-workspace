@@ -82,6 +82,12 @@ try {
     await checkSharedDownloads(page, width);
     await checkSharedInputs(page, width, selfTest);
     const showcase = page.getByTestId('showcase'), business = page.getByTestId('business');
+    await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const spacedDocument = showcase.getByRole('region', { name: '分镜章节留白', exact: true });
+    assert.equal(await spacedDocument.locator('.prose h3').nth(1).evaluate(el => getComputedStyle(el).marginTop), '40px');
+    assert.notEqual(await spacedDocument.locator('.prose h3').first().evaluate(el => getComputedStyle(el).marginTop), '40px');
+    assert.equal(await spacedDocument.locator('.prose p').first().evaluate(el => getComputedStyle(el).marginTop), '13px');
+
     await showcase.getByRole('button', { name: '布局与搜索', exact: true }).click();
     await showcase.getByRole('searchbox', { name: '搜索示例入口', exact: true }).fill('');
     const entryCards = showcase.getByRole('region', { name: '入口卡片与搜索' }).getByRole('link');
