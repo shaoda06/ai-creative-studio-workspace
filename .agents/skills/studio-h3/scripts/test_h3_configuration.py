@@ -22,17 +22,17 @@ from drama_video_plans import build_video
 class ConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.canvas = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow').read_text())
-        self.choice = dict(aspect_ratio='16:9', width=1024, height=576, steps=8,
+        self.choice = dict(aspect_ratio='16:9', width=1024, height=576, steps=8, refine_steps=4,
                            scene_type='dialogue', speed=3.0, loras=[])
 
     def test_six_answers_reach_both_output_branches(self):
-        for portrait, combat, loras in itertools.product((False, True), (False, True), ([], [1], [2], [1, 2])):
-            with self.subTest(portrait=portrait, combat=combat, loras=loras):
+        for portrait, combat, loras, refine_steps in itertools.product((False, True), (False, True), ([], [1], [2], [1, 2]), (4, 6)):
+            with self.subTest(portrait=portrait, combat=combat, loras=loras, refine_steps=refine_steps):
                 canvas = copy.deepcopy(self.canvas)
                 choice = {**self.choice, 'aspect_ratio': '9:16' if portrait else '16:9',
                           'width': 576 if portrait else 1024, 'height': 1024 if portrait else 576,
                           'scene_type': 'combat' if combat else 'dialogue',
-                          'speed': 4.0 if combat else 3.0, 'loras': loras}
+                          'speed': 4.0 if combat else 3.0, 'loras': loras, 'refine_steps': refine_steps}
                 configure_first_pass(canvas, dict(task_type='video-first-pass', h3_first_pass=choice))
                 for output in (504, 506):
                     api = Canvas(canvas).api(output)
@@ -43,7 +43,7 @@ class ConfigurationTests(unittest.TestCase):
                     self.assertEqual(timeline['output']['mode'], 'fixed')
                     self.assertEqual(timeline['output']['longEdge'], 1024)
                     self.assertEqual(timeline['output']['megapixels'], .5625)
-                    self.assertEqual(api['261']['inputs']['steps'], 14 if combat else 12)
+                    self.assertEqual(api['261']['inputs']['steps'], 8 + refine_steps)
                     self.assertEqual(api['289']['inputs']['step'], 8)
                     self.assertEqual(director['sigmas'], ['289', 0])
                     self.assertEqual(api['407']['inputs']['sigmas'], ['289', 1])
@@ -60,7 +60,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_custom_values_override_presets_without_changing_content_or_timing(self):
         original = next(n for n in self.canvas['nodes'] if n['id'] == 502)['widgets_values_named']
         before = json.loads(original['timeline_data'])
-        choice = dict(aspect_ratio='1:1', width=768, height=768, steps=12,
+        choice = dict(aspect_ratio='1:1', width=768, height=768, steps=12, refine_steps=7,
                       scene_type='combat', speed=-1.5, loras=[2])
         record = configure_first_pass(self.canvas, dict(task_type='video-first-pass', h3_first_pass=choice))
         api = Canvas(self.canvas).api([403, 504, 506])
@@ -68,8 +68,9 @@ class ConfigurationTests(unittest.TestCase):
         timeline = json.loads(director['timeline_data'])
         self.assertEqual((director['width'], director['height'], director['steps']), (768, 768, 12))
         self.assertEqual(timeline['output']['aspectRatio'], '1:1')
-        self.assertEqual((api['261']['inputs']['steps'], api['289']['inputs']['step']), (18, 12))
+        self.assertEqual((api['261']['inputs']['steps'], api['289']['inputs']['step']), (19, 12))
         self.assertEqual(record['sampling']['first_pass_with_zero'], 13)
+        self.assertEqual(record['sampling']['refine_tail_steps'], 7)
         self.assertEqual(api['343']['inputs']['strength_model'], -1.5)
         self.assertNotIn('128', api)
         self.assertEqual(api['507']['inputs']['strength_model'], .8)
@@ -81,7 +82,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_invalid_answers_and_later_stages_fail_before_mutation(self):
         cases = [dict(width=1000), dict(width=1024, height=1024), dict(steps=0),
-                 dict(steps=2.5), dict(speed=11), dict(speed=float('nan')),
+                 dict(steps=2.5), dict(refine_steps=0), dict(refine_steps=2.5), dict(speed=11), dict(speed=float('nan')),
                  dict(loras=[0, 1]), dict(loras=[3]), dict(loras=[1, 1]),
                  dict(aspect_ratio='0:9'), dict(scene_type='unknown')]
         for change in cases:
@@ -93,6 +94,9 @@ class ConfigurationTests(unittest.TestCase):
         for stage in ('video-second-pass', 'video-postprocess'):
             with self.assertRaisesRegex(ValueError, '仅用于新一采'):
                 configure_first_pass(self.canvas, dict(task_type=stage, h3_first_pass=self.choice))
+        missing = {k: v for k, v in self.choice.items() if k != 'refine_steps'}
+        with self.assertRaisesRegex(ValueError, '二采refine_steps'):
+            configure_first_pass(self.canvas, dict(task_type='video-first-pass', h3_first_pass=missing))
 
     def test_real_technical_and_drama_preparation_use_shared_configuration(self):
         for adapter in ('technical', 'drama'):
@@ -102,7 +106,7 @@ class ConfigurationTests(unittest.TestCase):
                 original = json.dumps(self.canvas, ensure_ascii=False)
                 source.write_text(original)
                 documents = Documents(root)
-                choice = {**self.choice, 'steps': 10, 'speed': 4.0, 'loras': [1, 2]}
+                choice = {**self.choice, 'steps': 10, 'refine_steps': 6, 'speed': 4.0, 'loras': [1, 2]}
                 spec = dict(task_type='video-first-pass', title='isolated assembly test',
                             canvas=source.name, record_dir='execution', output_nodes=[403, 504, 506],
                             h3_first_pass=choice, video_plan={'adapter': 'technical'},
@@ -114,8 +118,9 @@ class ConfigurationTests(unittest.TestCase):
                     with patch('drama_video_records.prepare_records'):
                         result = build_video(root, spec, documents)
                     mapping = json.loads(documents.read(root / 'execution/输入映射.json'))
-                    self.assertEqual(mapping['baseline']['fixed_configuration']['sampling']['total_steps'], 14)
-                self.assertEqual(result['workflow']['261']['inputs']['steps'], 14)
+                    self.assertEqual(mapping['baseline']['fixed_configuration']['sampling']['total_steps'], 16)
+                    self.assertEqual(mapping['baseline']['fixed_configuration']['refine_steps'], 6)
+                self.assertEqual(result['workflow']['261']['inputs']['steps'], 16)
                 self.assertEqual(result['workflow']['343']['inputs']['strength_model'], 4.0)
                 self.assertEqual(result['workflow']['507']['inputs']['model'], ['128', 0])
                 saved = json.loads(documents.read(root / 'execution/任务.api.json'))

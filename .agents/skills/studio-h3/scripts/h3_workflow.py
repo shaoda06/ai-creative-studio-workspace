@@ -13,12 +13,13 @@ def configure_first_pass(canvas, spec):
     choice = spec['h3_first_pass']
     if spec['task_type'] != 'video-first-pass':
         raise ValueError('h3_first_pass仅用于新一采；二采及后处理保留来源配置')
-    required = {'aspect_ratio', 'width', 'height', 'steps', 'scene_type', 'speed', 'loras'}
+    required = {'aspect_ratio', 'width', 'height', 'steps', 'refine_steps', 'scene_type', 'speed', 'loras'}
     if set(choice) != required:
-        raise ValueError('h3_first_pass须完整提供比例、宽高、步数、文戏/打戏、速度及附加LoRA')
+        raise ValueError('h3_first_pass须完整提供比例、宽高、一采steps、二采refine_steps、文戏/打戏、速度及附加LoRA')
     width, height, steps = choice['width'], choice['height'], choice['steps']
-    if any(type(v) is not int or v <= 0 for v in (width, height, steps)):
-        raise ValueError('宽、高及归零前步数须为正整数')
+    tail = choice['refine_steps']
+    if any(type(v) is not int or v <= 0 for v in (width, height, steps, tail)):
+        raise ValueError('宽、高及一采、二采步数须为正整数')
     if width % 32 or height % 32:
         raise ValueError('一采宽高须为32的整数倍；请确认尺寸，不自动取整')
     ratio = choice['aspect_ratio']
@@ -38,7 +39,6 @@ def configure_first_pass(canvas, spec):
         raise ValueError('附加LoRA使用不重复的编号1、2；不启用时传空列表')
     nodes = {n['id']: n for n in canvas['nodes']}
     combat = scene == 'combat'
-    tail = 6 if combat else 4
     widget(canvas, nodes[261], steps=steps + tail)
     widget(canvas, nodes[289], step=steps)
     # The external SIGMAS link remains authoritative; do not disconnect it.
