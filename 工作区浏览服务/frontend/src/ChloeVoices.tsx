@@ -47,14 +47,14 @@ export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: Voic
   };
   return <div className="chloe-model-detail">
     {audio.player}
-    <div className="chloe-look-detail">
+    <div className="chloe-look-detail chloe-voice-detail">
       <section className="panel" aria-label="声音信息"><h2>声音信息</h2>
         <dl className="chloe-overview-fields">
           <div><dt>声音名称</dt><dd>{data.name}</dd></div>
           <div><dt>声音说明</dt><dd>{data.description}</dd></div>
           <div><dt>关联模特</dt><dd>{data.models.length ? data.models.map(model=><div key={model.id}><Link to={`/spaces/${encodeURIComponent(spaceId)}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}>{model.name}</Link></div>) : '无'}</dd></div>
         </dl>
-        <section aria-label="原始参考"><h3>原始参考</h3>{originals.length ? <ul>{originals.map((item,index)=><li key={`${item.resource}@${item.version}`}><LinkButton onClick={()=>onOpen(item.media)}>参考 {index+1} · {item.resource}@{item.version}</LinkButton></li>)}</ul> : <p>无</p>}</section>
+        <section className="chloe-voice-originals" aria-label="原始参考"><h3>原始参考</h3>{originals.length ? <ul>{originals.map((item,index)=><li key={`${item.resource}@${item.version}`}><LinkButton onClick={()=>onOpen(item.media)}>参考 {index+1} · {item.resource}@{item.version}</LinkButton></li>)}</ul> : <p>无</p>}</section>
       </section>
       <section className="panel" aria-label="声音参考"><h2>声音参考</h2>
         {current.length ? current.map(recording) : <p className="muted">尚未采用声音参考。</p>}
