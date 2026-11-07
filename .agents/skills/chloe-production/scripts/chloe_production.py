@@ -56,6 +56,18 @@ def plan(project, source='脚本.md'):
     return doc, result
 
 
+def director_slot(value):
+    if not value.startswith('导演表/'):
+        return None
+    match = re.fullmatch(r'导演表/脚本(v\d+)/图表(v\d+)/候选([1-9]\d*)/第([1-9]\d*)页', value)
+    if match:
+        return {'sourceVersion':match[1], 'version':match[2], 'candidateNumber':int(match[3]), 'page':int(match[4])}
+    legacy = re.fullmatch(r'导演表/(v\d+)/第([1-9]\d*)页', value)
+    if legacy:
+        return {'sourceVersion':'', 'version':legacy[1], 'page':int(legacy[2])}
+    raise ValueError('导演表输出槽位须明确脚本版本、图表版本、候选编号和页码')
+
+
 def state(project):
     project = Path(project).resolve()
     root = project.parent.parent
@@ -63,6 +75,21 @@ def state(project):
     doc = document(project, '制作记录.md')
     executions = {row['执行编号']: row for row in records(doc, '执行记录')}
     outputs = {(row['执行编号'], row['输出槽位']): row for row in records(doc, '输出记录')}
+    director_versions = {}; director_pages = set()
+    for row in records(doc, '输出记录'):
+        sheet = director_slot(row['输出槽位'])
+        if sheet is None:
+            continue
+        reference = media_reference(root, project/'制作记录.md', row['资源引用'])
+        if row['执行编号'] not in executions or reference['owner'] != project.relative_to(root).as_posix() or not reference['resource_id'].startswith('IMG-'):
+            raise ValueError('导演表须关联原执行及本视频准确图片版本')
+        version = sheet['version']; page = (version, sheet['page'])
+        origin = (sheet['sourceVersion'], sheet.get('candidateNumber'))
+        if version in director_versions and director_versions[version] != origin:
+            raise ValueError('同一图表版本不能混用来源脚本版本或候选编号')
+        if page in director_pages:
+            raise ValueError('同一图表版本的页码重复')
+        director_versions[version] = origin; director_pages.add(page)
     candidates = {}
     for row in records(doc, '视频分段执行'):
         identity, stage, run, execution, slot = (row[key] for key in ('分段编号','制作阶段','候选版本','执行编号','输出槽位'))

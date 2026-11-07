@@ -1,5 +1,6 @@
 """Real temporary files exercise Iris's full-page projection and review writes."""
 import json
+from pathlib import Path
 from unittest.mock import patch
 from fastapi.responses import Response
 
@@ -28,6 +29,21 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         response = self.client.get(self.api + '/works/' + identity + '/production-detail')
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
+
+    def test_director_registration_template_projects_exact_versions_once(self):
+        key = self.works['F001'] + '/04-分镜声音/导演表/'
+        template = Path(__file__).resolve().parents[2] / '.agents/skills/iris-commercial-storyboard/templates/导演表内容.md'
+        text = template.read_text().replace('| --- | --- | --- | --- | --- | --- | --- |', '| --- | --- | --- | --- | --- | --- | --- |\n| 1 | SH001 | v02 | v04／3 | [候选](候选/第1页.png) | [采用](采用/第1页.png) | 隔离批准 |')
+        self.write(key + '导演表来源与登记.md', text)
+        self.write(key + '候选/第1页.png', 'candidate fixture')
+        self.write(key + '采用/第1页.png', 'adopted fixture')
+        before = set(self.project.rglob('*'))
+        sheets = self.detail()['directorSheets']['whole']
+        self.assertEqual(len(sheets['candidates']), 1)
+        self.assertEqual(len(sheets['formal']), 1)
+        item = sheets['candidates'][0]
+        self.assertEqual((item['sourceVersion'], item['version'], item['candidateNumber']), ('v02', 'v04', 3))
+        self.assertEqual(before, set(self.project.rglob('*')))
 
     def test_exact_round_sources_and_candidates_keep_work_identity(self):
         for identity in self.works:

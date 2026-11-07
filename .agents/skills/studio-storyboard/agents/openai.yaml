@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 共用分镜"
-  short_description: "统一短剧、商业视频和带货视频的逐镜写法、模板及连续性核对"
+  short_description: "统一短剧、商业视频和带货视频的逐镜写法、导演分镜表模板及来源分页核对"
   default_prompt: "使用 $studio-storyboard 按当前业务依据编写或修订分镜，采用共用逐镜模板并核对前后接续。"

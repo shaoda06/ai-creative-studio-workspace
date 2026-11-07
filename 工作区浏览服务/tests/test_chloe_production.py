@@ -81,6 +81,39 @@ class ChloeProductionTests(unittest.TestCase):
         initialize_video(self.root,'V001','隔离演示')
         self.assertEqual(state(self.project)['rounds'],{})
 
+    def test_director_sheet_separate_source_chart_and_candidate(self):
+        add_row(self.record,'执行记录',['E001','图片生成','不适用','Imagegen','不适用','不适用','隔离授权','未取得','未取得','未取得','准备中','无'])
+        _,reference,_=self.resource(kind='image')
+        add_row(self.record,'输出记录',['E001','导演表/脚本v02/图表v04/候选3/第1页',reference])
+        add_row(self.project/'README.md','当前采用',['导演表/第1页',reference,'隔离批准','2026-11-07T12:00:00+08:00'])
+        before={p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()}
+        sheets=browser.director_sheets(state(self.project),self.api)
+        item=sheets['candidates'][0]
+        self.assertEqual((item['sourceVersion'],item['version'],item['candidateNumber'],item['page']),('v02','v04',3,1))
+        self.assertEqual(sheets['formal'],[item])
+        self.assertEqual(before,{p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()})
+
+    def test_legacy_director_sheet_does_not_infer_source_or_candidate(self):
+        add_row(self.record,'执行记录',['E001','图片生成','不适用','Imagegen','不适用','不适用','隔离授权','未取得','未取得','未取得','准备中','无'])
+        _,reference,_=self.resource(kind='image')
+        add_row(self.record,'输出记录',['E001','导演表/v01/第1页',reference])
+        item=browser.director_sheets(state(self.project),self.api)['candidates'][0]
+        self.assertEqual(item['sourceVersion'],'')
+        self.assertEqual(item['version'],'v01')
+        self.assertNotIn('candidateNumber',item)
+
+    def test_director_sheet_rejects_ambiguous_versions_and_duplicate_pages(self):
+        add_row(self.record,'执行记录',['E001','图片生成','不适用','Imagegen','不适用','不适用','隔离授权','未取得','未取得','未取得','准备中','无'])
+        _,reference,_=self.resource(kind='image')
+        add_row(self.record,'输出记录',['E001','导演表/脚本v02/图表v01/候选1/第1页',reference])
+        original=self.record.read_text()
+        for slot in ['导演表/脚本v03/图表v01/候选1/第2页','导演表/脚本v02/图表v01/候选2/第2页',
+                     '导演表/脚本v02/图表v01/候选1/第1页','导演表/脚本v02/图表v01/候选0/第2页']:
+            with self.subTest(slot=slot):
+                self.record.write_text(original)
+                add_row(self.record,'输出记录',['E001',slot,reference])
+                with self.assertRaises(ValueError):state(self.project)
+
     def test_script_document_before_generation_and_round_source(self):
         self.plan()
         script=self.project/'脚本.md'

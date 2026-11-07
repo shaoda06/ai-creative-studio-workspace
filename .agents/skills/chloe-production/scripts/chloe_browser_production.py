@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
-from chloe_production import state, local, link_path, fields, document, plan, STAGES
+from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES
 from chloe_documents import records, media_reference, MISSING
 from backend.parsers import documents
 from backend.services.workspaces import jianying_links
@@ -223,14 +223,14 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
 
 def director_sheets(data,api):
     result={'formal':[],'candidates':[],'record':None}
-    adopted={row['资源引用'] for row in records(document(data['project'],'README.md'),'当前采用')}
+    adopted={(row['用途'],row['资源引用']) for row in records(document(data['project'],'README.md'),'当前采用')}
     for row in records(data['doc'],'输出记录'):
-        match=re.fullmatch(r'导演表/v(\d+)/第(\d+)页',row['输出槽位'])
-        if not match:
+        sheet=director_slot(row['输出槽位'])
+        if sheet is None:
             continue
         reference=media_reference(data['root'],data['project']/'制作记录.md',row['资源引用'])
         item={'kind':'image','name':reference['resource_id'],'url':resource_file(data,api,reference),
-              'version':'v'+match[1],'sourceVersion':'v'+match[1],'page':int(match[2]),'adopted':row['资源引用'] in adopted}
+              **sheet,'adopted':(f"导演表/第{sheet['page']}页",row['资源引用']) in adopted}
         result['candidates'].append(item)
         if item['adopted']:result['formal'].append(item)
     if result['candidates']:result['record']=ref(data['project'],api,data['project']/'制作记录.md')
