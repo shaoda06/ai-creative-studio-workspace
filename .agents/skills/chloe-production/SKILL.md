@@ -5,6 +5,8 @@ description: Chloe 带货视频整片制作阶段，组织 H3 一采与二采审
 
 # Chloe 视频制作
 
+接续本条生成、返修或资产补缺时，按[会话组织与接续](../chloe-commerce-video/references/会话组织与接续规范.md)确定视频会话及相关资产入口。
+
 读取当前工作区 README、本视频 README、脚本及制作记录。固定写法按[资料规范](../chloe-positioning/references/固定资料写法规范.md)，分段、轮次、审阅、恢复、采用及网页映射按[视频制作流程与记录](references/视频制作流程与记录.md)。
 
 视频生成提示词按[固定文件规范](references/视频制作流程与记录.md#视频提示词文件)及[模板](templates/视频提示词模板.md)保存模型正文与中文参考，制作记录只链接原件。
