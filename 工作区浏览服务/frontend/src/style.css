@@ -203,3 +203,5 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 .chloe-model-detail{display:grid;gap:24px}.chloe-model-detail>details>summary{font-weight:600;color:var(--green);cursor:pointer}
 
 .prose.prose-field-table table{display:table;table-layout:fixed;min-width:0}.prose-field-table th:first-child,.prose-field-table td:first-child{width:40%}.prose-field-table th,.prose-field-table td{overflow-wrap:anywhere}
+
+.chloe-model-images{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:24px;align-items:start}.chloe-model-image-column{display:grid;gap:24px;min-width:0}
