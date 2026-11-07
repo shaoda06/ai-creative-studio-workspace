@@ -77,25 +77,10 @@ try {
     assert.equal(await page.locator('section[aria-label="共用资产"] > h2').count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await page.screenshot({path:output+`/${width}-assets.png`,fullPage:true});
-    await page.getByRole('link',{name:'查看占位模特卡',exact:true}).click();
-    await page.getByRole('heading',{name:'DEMO-M001 · 示例模特',exact:true}).waitFor();
-    assert.equal(await page.locator('.asset-media-card').count(),1);
-    await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===600);
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-    await page.screenshot({path:output+`/${width}-model-example.png`,fullPage:true});
-    await page.getByRole('button',{name:'查看详情',exact:true}).click();
-    await page.getByRole('dialog').getByRole('heading',{name:'人物特征',exact:true}).waitFor();
-    await page.keyboard.press('Escape');
-    await page.locator('.asset-media-card .cover').click();
-    await page.getByRole('dialog').waitFor();
-    assert.equal(await page.getByRole('dialog').locator('img').count(),1);
-    await page.keyboard.press('Escape');
-    await page.reload();
-    await page.getByRole('heading',{name:'DEMO-M001 · 示例模特',exact:true}).waitFor();
-    await page.getByRole('link',{name:'退出示例，返回实际模特',exact:true}).click();
+    assert.equal(await page.getByRole('link',{name:'查看占位模特卡',exact:true}).count(),0);
+    await page.goto(server.resolvedUrls.local[0]+'#/spaces/account-demo?section=assets&asset=models&example=model-card');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
     assert.equal(await page.locator('.asset-media-card').count(),0);
-
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
     await page.getByRole('heading',{name:'定位与当前进度',exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','定位与当前进度']);

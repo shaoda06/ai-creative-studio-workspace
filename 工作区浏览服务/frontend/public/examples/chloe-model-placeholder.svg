@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
-<rect width="600" height="800" fill="#edf3f0"/>
-<ellipse cx="300" cy="282" rx="104" ry="132" fill="#b2c6be"/>
-<path d="M188 300C155 115 439 91 412 309L388 254C371 228 348 213 322 195C294 226 249 247 210 254Z" fill="#78988b"/>
-<path d="M256 392H344V454L405 484L468 682H132L195 484L256 454Z" fill="#b2c6be"/>
-<path d="M200 476L260 438L300 487L340 438L400 476L468 682H132Z" fill="#78988b"/>
-<text x="300" y="745" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#527165">人物剪影 · 仅作占位</text>
-</svg>
