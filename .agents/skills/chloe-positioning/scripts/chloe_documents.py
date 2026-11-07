@@ -254,6 +254,7 @@ def review_record(root, path, value, prefixes):
         raise ValueError('复盘来源引用不存在的'+field+'：'+identity)
     if identity.startswith('D') and all(row['指标值'] in MISSING for row in rows):
         raise ValueError('复盘来源的采集记录尚无实际指标值')
+    return rows
 
 
 def linked_object(root, path, identity, value, prefix):
@@ -457,12 +458,19 @@ def check_relations(root, path, doc):
             raise ValueError('跨视频结论须链接实际采集或单条复盘记录')
         for source in sources:
             review_record(root, path, source, 'DR')
-    conclusions = {r['复盘编号'] for r in records(doc,'跨视频结论')}
+    conclusions = {r['复盘编号']: r for r in records(doc,'跨视频结论')}
     for row in records(doc,'建议验证'):
         if LINK.fullmatch(row['复盘编号']):
-            review_record(root, path, row['复盘编号'], 'R')
+            source = review_record(root, path, row['复盘编号'], 'R')[0]
         elif row['复盘编号'] not in conclusions:
             raise ValueError('建议验证引用不存在的复盘编号')
+        else:
+            source = conclusions[row['复盘编号']]
+        if source['调整建议'] in MISSING:
+            raise ValueError('建议验证的来源复盘尚无具体调整建议')
+        for _, href in LINK.findall(row['验证对象']):
+            if not re.fullmatch(r'https?://[^\s]+', href) and not (path.parent/href.split('#')[0]).is_file():
+                raise ValueError('验证对象须链接具体文件，不能只链接目录')
         has_result = bool(row['验证结果'].strip()) and row['验证结果'] not in MISSING
         if row['采用状态'] == '采用':
             if not row['采用依据'].strip() or row['采用依据'] in MISSING:

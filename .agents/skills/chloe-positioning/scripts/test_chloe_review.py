@@ -36,9 +36,14 @@ class ChloeReviewTest(unittest.TestCase):
 
     def metrics(self):
         self.readme.write_text(self.readme.read_text().replace('| 视频状态 | 制作中 |', '| 视频状态 | 已发布 |'))
-        self.append(self.readme, '发布记录', ['P001', '[成片](<成片/test.mp4>)', '不适用', '文案',
-                    '不适用', '不适用', '不适用', '不适用', self.time, '立即发布', '已发布',
-                    'post-id', 'https://example.com/post', '用户确认', '[发布结果](<执行记录/证据.md>)'])
+        section = next(s for s in docs.parse(self.readme.read_text())['sections'] if s['heading'] == '发布记录')
+        columns = section['tables'][0]['columns']
+        publication = {field: '不适用' for field in columns}
+        publication.update({'发布编号': 'P001', '发布文件': '[成片](<成片/test.mp4>)', '文案': '文案',
+                            '实际发布时间': self.time, '发布方式': '立即发布', '发布进展': '已发布',
+                            '平台作品ID': 'post-id', '发布链接': 'https://example.com/post',
+                            '授权依据': '用户确认', '结果证据': '[发布结果](<执行记录/证据.md>)'})
+        self.append(self.readme, '发布记录', [publication[field] for field in columns])
         self.append(self.readme, '效果数据', ['D001', 'P001', self.time, self.time, self.time,
                     '播放量', '10', '次', '平台原值', '[原始数据](<执行记录/证据.md>)'])
 
@@ -149,6 +154,67 @@ class ChloeReviewTest(unittest.TestCase):
         self.readme.write_text(self.readme.read_text().replace('| 播放量 | 10 |', '| 播放量 | 未取得 |'))
         with self.assertRaisesRegex(ValueError, '单条复盘引用的采集记录尚无实际指标值'):
             self.read(self.readme)
+
+    def test_verification_source_must_contain_a_suggestion(self):
+        self.content_review()
+        original = self.readme.read_text()
+        baseline = self.review.read_text()
+        for missing in docs.MISSING:
+            self.readme.write_text(original.replace('| 调整开场 |', '| '+missing+' |'))
+            self.review.write_text(baseline)
+            self.append(self.review, '建议验证', ['T001', self.source, '待决定', '未取得', '未取得', '未取得', '未取得', '未取得'])
+            with self.assertRaisesRegex(ValueError, '尚无具体调整建议'): self.read(self.review)
+        self.readme.write_text(original)
+        self.review.write_text(baseline)
+        self.append(self.review, '跨视频结论', ['R001', self.time, self.time, self.time,
+                    self.source, '同类内容', '仅观察', '样本不足', '无'])
+        self.append(self.review, '建议验证', ['T001', 'R001', '待决定', '未取得', '未取得', '未取得', '未取得', '未取得'])
+        with self.assertRaisesRegex(ValueError, '尚无具体调整建议'): self.read(self.review)
+
+    def test_verification_targets_require_files_not_directories(self):
+        self.content_review()
+        baseline = self.review.read_text()
+        file = f'[作品](<../projects/{self.video.name}/README.md>)'
+        folder = f'[目录](<../projects/{self.video.name}/>)'
+        for target in (folder, file+'、'+folder):
+            self.review.write_text(baseline)
+            self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认', target, '核对开场', '未取得', '未取得'])
+            with self.assertRaisesRegex(ValueError, '不能只链接目录'): self.read(self.review)
+        for target in (file, file+'、[原记录](<https://example.com/record>)'):
+            self.review.write_text(baseline)
+            self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认', target, '核对开场', '未取得', '未取得'])
+            self.read(self.review)
+
+    def test_suggestion_adoption_implementation_and_next_trial_keep_original_records(self):
+        self.content_review()
+        target = initialize_video(self.root, 'V002', '下一条展示')
+        baseline = self.review.read_text()
+        row = ['T001', self.source, '待决定', '未取得', '未取得', '未取得', '未取得', '未取得']
+        self.append(self.review, '建议验证', row)
+        self.read(self.review)
+        row[2:6] = ['采用', '用户确认用于下一条同类作品',
+                    f'[目标作品](<../projects/{target.name}/README.md>)', '先核对开场搭配是否完整入镜；同口径数据取得后再比较']
+        self.review.write_text(baseline)
+        self.append(self.review, '建议验证', row)
+        adopted = docs.records(self.read(self.review), '建议验证')
+        self.assertEqual(adopted[0]['验证结果'], '未取得')
+        evidence = target/'执行记录/开场核对.md'
+        evidence.write_text('隔离核对：原成片已完整展示搭配，仅核对内容，未取得效果数据。来源T001。')
+        row[6:] = ['内容调整已落实，效果未取得', f'[原核对](<../projects/{target.name}/执行记录/开场核对.md>)']
+        self.review.write_text(baseline)
+        self.append(self.review, '建议验证', row)
+        first = docs.records(self.read(self.review), '建议验证')[0]
+        next_trial = ['T002', self.source, '待决定', '未取得', '未取得', '未取得', '未取得', '未取得']
+        self.append(self.review, '建议验证', next_trial)
+        result = self.read(self.review)
+        trials = docs.records(result, '建议验证')
+        self.assertEqual(len(trials), 2)
+        self.assertEqual(trials[0], first)
+        self.assertEqual(trials[1]['复盘编号'], first['复盘编号'])
+        self.assertEqual(docs.records(result, '跨视频结论'), [])
+        self.assertEqual(docs.records(self.read(self.readme), '效果数据'), [])
+        self.append(self.review, '建议验证', next_trial)
+        with self.assertRaisesRegex(ValueError, '记录身份重复'): self.read(self.review)
 
 
 if __name__ == '__main__':
