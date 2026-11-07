@@ -87,11 +87,15 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   return <PreviewContext.Provider value={open}>
     <PageCheckStatus queries={[workspaceQuery, query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {data && <div className="chloe-model-detail">
+    {data && <div className="chloe-model-layout">
+      <div className="chloe-model-navigation">
       <UnderlineTabs label="模特详情分类" items={tabs} selected={tab} onChange={value=>{
         const next=new URLSearchParams(params); next.set('modelTab',value); next.delete('ref'); next.delete('look');
         setDocument(null); setParams(next);
       }} />
+      {look && <Link to={lookUrl()}>返回造型列表</Link>}
+      </div>
+      <div className="chloe-model-detail">
       {tab==='info' && <>
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
       </>}
@@ -107,7 +111,6 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         </section>
       </div>}
       {tab==='looks' && (look ? <>
-        <Link to={lookUrl()}>返回造型列表</Link>
         <div className="chloe-look-detail">
           <section className="panel" aria-label="造型信息"><h2>造型信息</h2>
             <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div><div><dt>造型说明</dt><dd>{look.description}</dd></div></dl>
@@ -128,6 +131,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         {['关联资料','当前采用','采用变更'].map(heading=><details key={heading}><summary>{heading==='当前采用' ? '采用依据与时间' : heading}</summary>{section(heading)}</details>)}
         <details><summary>执行记录</summary>{executionSections.map(heading=><section key={heading}>{heading!=='执行记录' && <h3>{heading}</h3>}{section(heading)}</section>)}</details>
       </details>}
+      </div>
     </div>}
     {document ? <Preview project="" item={document} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />
       : preview && <FullscreenImage title={preview.name} src={preview.url!} alt={preview.name} close={() => select('ref',null)} />}

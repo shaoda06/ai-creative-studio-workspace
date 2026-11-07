@@ -147,6 +147,8 @@ try {
   assert.match(page.url(),/view=original/);
   const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
   assert.deepEqual(await detailTabs.getByRole('button').allTextContents(),['模特信息','模特图片','造型']);
+  const tabRect=await detailTabs.boundingBox(),crumbRect=await page.locator('.breadcrumbs').boundingBox(),contentRect=await page.locator('.chloe-model-images').boundingBox();
+  assert.ok(tabRect.y-(crumbRect.y+crumbRect.height)>contentRect.y-(tabRect.y+tabRect.height));
   assert.equal(await page.getByText('不应显示的来源文字',{exact:true}).count(),0);
   assert.equal(await page.getByRole('heading',{name:'资产身份',exact:true}).count(),0);
   const faceColumn=page.getByRole('region',{name:'正面面部图',exact:true});
@@ -208,6 +210,9 @@ try {
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
   assert.equal(await page.getByRole('navigation',{name:'造型详情分类'}).count(),0);
   const lookInfo=page.getByRole('region',{name:'造型信息',exact:true});
+  const [navRect,backRect,rowRect]=await page.locator('.chloe-model-navigation').evaluate(el=>[...el.children,el].map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}));
+  assert.ok(Math.abs(backRect.y+backRect.height/2-navRect.y-navRect.height/2)<1,JSON.stringify({backRect,navRect,rowRect}));
+  assert.ok(Math.abs(backRect.x+backRect.width-rowRect.x-rowRect.width)<1);
   assert.equal(await lookInfo.locator('dl > div').filter({has:page.getByText('造型说明',{exact:true})}).locator('dd').textContent(),'无');
   assert.equal(await lookInfo.getByText('服装来源类型',{exact:true}).count(),0);
   const layout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}}));
