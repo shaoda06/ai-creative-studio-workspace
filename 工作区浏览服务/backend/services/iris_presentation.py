@@ -26,6 +26,7 @@ CUSTOMER_FOLDER = '01-客户资料'
 BRIEF_FOLDER = '02-参考分析'
 ASSET_FOLDER = '05-资产'
 PROCESS_FOLDERS = {'其他资料', '历史版本', '工作稿', '执行记录'}
+FILM_EXPORT_FOLDER = '07-返修交接/成片'
 STAGE_ARCHIVE_FOLDERS = {
     '03-创意脚本': {'03-创意脚本', '03-创意与脚本', '02-剧集剧本'},
     '04-分镜声音': {'04-分镜声音', '04-分镜与视觉方案', '03-分镜脚本'},
@@ -261,6 +262,21 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
             for item in group['children']
             if item['kind'] == 'file' and re.fullmatch(rf'{asset_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)
         ]
+    delivery = delivery_overview(projects, project, api, root, status_text)
+    if work_directory:
+        delivery['exportFolder'] = FILM_EXPORT_FOLDER
+        handoff_name, exports_name = FILM_EXPORT_FOLDER.split('/')
+        handoff = next((group for group in files if group['name'] == handoff_name and group['kind'] == 'group'), None)
+        if handoff:
+            exports = next((group['children'] for group in handoff['children']
+                            if group['name'] == exports_name and group['kind'] == 'group'), [])
+            registered = {item['file']['key'] for item in delivery['items']}
+            delivery['items'][:0] = [
+                {'title': Path(file['name']).stem, 'type': '剪辑导出', 'version': '', 'purpose': '',
+                 'file': {**file, 'kind': 'video'}}
+                for file in exports if file['kind'] == 'file' and resources.media_kind(file['name']) == '视频'
+                and file['key'] not in registered
+            ]
     return {
         'overviewHiddenSections': overview_hidden_sections(projects, project) if work_directory is None else {},
         'primary': primary,
@@ -269,7 +285,7 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
         'brief': {'sources': sources, 'archived': [] if has_current_brief else archived_documents(
             archived_files, {CUSTOMER_FOLDER, '01-甲方资料', BRIEF_FOLDER}, r'制作简报(?:-v\d+(?:\.\d+)*)?\.md')},
         'stageArchives': stage_archives,
-        'delivery': delivery_overview(projects, project, api, root, status_text),
+        'delivery': delivery,
     }
 
 

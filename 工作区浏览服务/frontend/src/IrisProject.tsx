@@ -41,6 +41,7 @@ export interface IrisPresentation {
   stageArchives?: Record<string, FileItem[]>;
   delivery?: {
     status: string; summary: string; archivedHandoff: string | null;
+    exportFolder?: string;
     items: { title: string; type: string; version: string; purpose: string; file: FileItem }[];
   };
 }
@@ -348,6 +349,7 @@ function IrisDelivery({ baseUrl, files, presentation, openProduction }: {
   return <>
     <UnderlineTabs label="交付与复盘视图" items={[...deliveryTabs]} selected={view} onChange={setView} />
     {view === 'results' ? <section className="panel iris-delivery-results" aria-label="交付成果">
+      {delivery?.exportFolder && <p className="muted">把视频导出到本作品的「{delivery.exportFolder}」，这里会自动显示。</p>}
       {delivery?.status && <h3>{delivery.status}</h3>}
       {delivery?.summary && <p className="muted">{delivery.summary}</p>}
       {delivery?.items.length ? delivery.items.map(({ title, type, version, purpose, file }) =>

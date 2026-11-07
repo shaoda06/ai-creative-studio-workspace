@@ -135,6 +135,30 @@ class IrisWorksTests(HttpTestCase):
         self.assertTrue(unquote(video['taskStateUrl']).endswith('/旧执行记录/R001-一采/后台任务状态.json'))
         self.assertEqual(len(self.client.get(self.api + '/works/F002/production').json()['segments']), 1)
 
+    def test_work_export_appears_without_registration_and_keeps_declared_delivery(self):
+        folder = self.works['F001'] + '/07-返修交接/成片'
+        clip = folder + '/客户剪辑 最终版.MP4'
+        endpoint = self.api + '/works/F001'
+        self.assertEqual(len(self.client.get(endpoint).json()['irisPresentation']['delivery']['items']), 1)
+        self.write(clip, 'isolated editing export')
+        self.write(folder + '/片名.txt', 'notes')
+        self.write(folder + '/旧版/样片.mp4', 'archived export')
+        self.write(self.works['F001'] + '/07-返修交接/过程视频.mp4', 'process')
+        delivery = self.client.get(endpoint).json()['irisPresentation']['delivery']
+        exported, draft = delivery['items']
+        self.assertEqual((exported['title'], exported['type'], exported['file']['key']),
+                         ('客户剪辑 最终版', '剪辑导出', clip))
+        self.assertEqual(self.client.get(exported['file']['url']).content, b'isolated editing export')
+        self.assertEqual(draft['type'], '剪映草稿')
+        self.assertEqual(delivery['status'], '')
+        other = self.client.get(self.api + '/works/F002').json()['irisPresentation']['delivery']
+        self.assertEqual([item['type'] for item in other['items']], ['剪映草稿'])
+
+        state = self.project / self.works['F001'] / '作品状态.md'
+        state.write_text(state.read_text() + f'| 正式交付版 | 成片 | [成片](<{clip}>) | v01 | 交付 |\n')
+        items = self.client.get(endpoint).json()['irisPresentation']['delivery']['items']
+        self.assertEqual([item['type'] for item in items], ['剪映草稿', '成片'])
+
     def test_only_user_download_calls_package_script_with_project_scoped_media(self):
         with patch.object(episode_downloads.jianying_export, 'export_archive') as export:
             for identity in self.works:
