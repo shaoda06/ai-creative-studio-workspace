@@ -61,6 +61,16 @@ try {
   const chooseRound = async n => { if (await choose.getAttribute('data-value') === String(n)) return; await choose.click(); await page.getByRole('option', { name: new RegExp(`^第${n}轮(?:当前)?$`) }).click(); };
   const waitRun = async run => page.waitForFunction(run => document.querySelector('[aria-label="版本切换"]')?.getAttribute('data-value')?.endsWith(run), run);
   await choose.waitFor(); assert.equal(await choose.getAttribute('data-value'), '9');
+  assert.deepEqual(await page.locator('.episode-detail').evaluate(detail => {
+   const panel = getComputedStyle(detail.closest('.panel'));
+   const tabs = getComputedStyle(detail.querySelector('.scene-workspace-tabs'));
+   const content = getComputedStyle(detail.querySelector('.episode-scene-content'));
+   const breadcrumb = document.querySelector('.breadcrumbs');
+   return [panel.backgroundColor, panel.borderRadius, panel.padding,
+    tabs.marginTop, tabs.gap, content.paddingTop,
+    Boolean(breadcrumb.closest('.page-heading-stacked')), getComputedStyle(breadcrumb).marginBottom];
+  }), ['rgb(255, 255, 255)', '10px', '23px', '20px', '12px 20px', '20px', true, '0px']);
+
   assert.equal(await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).count(), 0);
   const repeat = page.getByRole('checkbox', { name: '重复播放', exact: true });
   const wide = () => page.getByRole('button', { name: /^(宽屏显示|恢复布局)$/ });

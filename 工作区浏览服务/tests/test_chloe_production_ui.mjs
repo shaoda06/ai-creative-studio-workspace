@@ -61,6 +61,16 @@ try {
   assert.ok(page.url().includes('video='));
   const tabs=page.getByRole('navigation',{name:'作品制作内容'});
   await tabs.waitFor();
+  assert.deepEqual(await page.locator('.episode-detail').evaluate(detail => {
+   const panel = getComputedStyle(detail.closest('.panel'));
+   const tabs = getComputedStyle(detail.querySelector('.scene-workspace-tabs'));
+   const content = getComputedStyle(detail.querySelector('.episode-scene-content'));
+   const breadcrumb = document.querySelector('.breadcrumbs');
+   return [panel.backgroundColor, panel.borderRadius, panel.padding,
+    tabs.marginTop, tabs.gap, content.paddingTop,
+    Boolean(breadcrumb.closest('.page-heading-stacked')), getComputedStyle(breadcrumb).marginBottom];
+  }), ['rgb(255, 255, 255)', '10px', '23px', '20px', '12px 20px', '20px', true, '0px']);
+
   assert.deepEqual(await tabs.getByRole('button').allTextContents(),['分段制作','分镜脚本','导演分镜表','资源下载']);
   await page.addInitScript(()=>sessionStorage.setItem('nora-auto-refresh-position',JSON.stringify({href:location.href,scrollY:0,values:{'project//api/workspaces/chloe/production/V001-隔离演示/scene-view':'dialogue'}})));
   await page.reload();

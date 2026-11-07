@@ -167,6 +167,16 @@ try {
    await page.locator('[data-episode=F002]').click();
    const productionTabs=page.getByRole('navigation',{name:'作品制作内容',exact:true});
    await productionTabs.waitFor();
+  assert.deepEqual(await page.locator('.episode-detail').evaluate(detail => {
+   const panel = getComputedStyle(detail.closest('.panel'));
+   const tabs = getComputedStyle(detail.querySelector('.scene-workspace-tabs'));
+   const content = getComputedStyle(detail.querySelector('.episode-scene-content'));
+   const breadcrumb = document.querySelector('.breadcrumbs');
+   return [panel.backgroundColor, panel.borderRadius, panel.padding,
+    tabs.marginTop, tabs.gap, content.paddingTop,
+    Boolean(breadcrumb.closest('.page-heading-stacked')), getComputedStyle(breadcrumb).marginBottom];
+  }), ['rgb(255, 255, 255)', '10px', '23px', '20px', '12px 20px', '20px', true, '0px']);
+
    assert.deepEqual(await productionTabs.getByRole('button').allTextContents(),['分段制作','分镜与声音','导演分镜表','分镜修改','资源下载']);
    await productionTabs.getByRole('button',{name:'分镜与声音',exact:true}).click();
    await page.locator('.scene-storyboard').getByRole('heading',{name:'已保存分镜v02',exact:true}).waitFor();
