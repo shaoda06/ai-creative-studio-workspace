@@ -226,6 +226,36 @@ def records(doc, heading):
     return [dict(zip(t['columns'], row)) for t in section['tables'] for row in t['rows']] if section else []
 
 
+def has_evidence(path, value):
+    """Evidence must name a source URL or an existing original file."""
+    if re.fullmatch(r'https?://[^\s]+', value):
+        return True
+    return any(re.fullmatch(r'https?://[^\s]+', href) or
+               (path.parent/href.split('#')[0]).is_file() for _, href in LINK.findall(value))
+
+
+def review_record(root, path, value, prefixes):
+    match = LINK.fullmatch(value)
+    if not match or not re.fullmatch('['+prefixes+r']\d{3,}', match[1]):
+        raise ValueError('复盘来源须用D或R编号链接原视频README中的记录')
+    identity, href = match.groups()
+    filename, _, anchor = href.partition('#')
+    target = (path.parent/filename).resolve()
+    if (target.name != 'README.md' or target.parent.parent != root/'projects' or
+            not re.fullmatch(r'V\d{3,}-.+', target.parent.name) or not target.is_file()):
+        raise ValueError('复盘来源须链接本工作区实际视频README')
+    heading, field = ('效果数据', '采集编号') if identity.startswith('D') else ('单条复盘', '复盘编号')
+    if anchor and anchor != heading:
+        raise ValueError('复盘来源章节与记录编号不一致')
+    video, title = target.parent.name.split('-', 1)
+    source = read_document(root, target, template('chloe-creative', '视频README模板.md'), {'identity': video, 'title': title})
+    rows = [row for row in records(source, heading) if row[field] == identity]
+    if not rows:
+        raise ValueError('复盘来源引用不存在的'+field+'：'+identity)
+    if identity.startswith('D') and all(row['指标值'] in MISSING for row in rows):
+        raise ValueError('复盘来源的采集记录尚无实际指标值')
+
+
 def linked_object(root, path, identity, value, prefix):
     match = LINK.fullmatch(value)
     if not re.fullmatch(prefix+r'\d{3,}', identity) or not match:
@@ -355,7 +385,6 @@ def check_relations(root, path, doc):
                 raise ValueError('发布封面必须引用准确图片版本')
         if row['挂品链接'] not in MISSING and not re.match(r'^https?://[^\s]+$', row['挂品链接']):
             raise ValueError('挂品链接须为HTTP(S)原始链接')
-    publications = {r['发布编号'] for r in records(doc,'发布记录')}
     for row in records(doc,'发布记录'):
         copy_link = LINK.fullmatch(row['文案'])
         if copy_link and copy_link[2] == '发布资料.md':
@@ -383,9 +412,20 @@ def check_relations(root, path, doc):
         published = any(r['发布进展'] == '已发布' for r in records(doc,'发布记录'))
         if (current['视频状态'] == '已发布') != published:
             raise ValueError('视频状态与实际已发布记录不一致')
+    publication_rows = {r['发布编号']: r for r in records(doc, '发布记录')}
     for row in records(doc,'效果数据'):
-        if row['发布编号'] not in publications:
+        if row['发布编号'] not in publication_rows:
             raise ValueError('效果数据引用不存在的发布编号')
+        publication = publication_rows[row['发布编号']]
+        if (publication['发布进展'] not in {'已发布', '已撤回'} or
+                any(publication[k] in MISSING for k in ('实际发布时间', '平台作品ID', '发布链接', '结果证据'))):
+            raise ValueError('效果数据须关联有实际发布依据的记录，撤回后保留历史发布事实')
+        if not has_evidence(path, publication['结果证据']):
+            raise ValueError('效果数据关联的发布结果证据须链接原文件或来源URL')
+        if row['指标值'] not in MISSING and not has_evidence(path, row['来源']):
+            raise ValueError('效果数据的实际指标须链接原始来源')
+        if row['采集时间'] not in MISSING and datetime.fromisoformat(row['采集时间']) < datetime.fromisoformat(publication['实际发布时间']):
+            raise ValueError('效果数据采集时间不得早于实际发布时间')
     snapshots = {}
     for heading, fields in (
         ('效果数据', ('统计起始时间', '统计结束时间', '采集时间')),
@@ -405,9 +445,23 @@ def check_relations(root, path, doc):
     for row in records(doc,'单条复盘'):
         if row['采集编号'] != '不适用' and not set(row['采集编号'].split('、')) <= captures:
             raise ValueError('单条复盘引用不存在的采集编号')
+        if row['采集编号'] != '不适用':
+            for capture in row['采集编号'].split('、'):
+                if not any(r['采集编号'] == capture and r['指标值'] not in MISSING for r in records(doc, '效果数据')):
+                    raise ValueError('单条复盘引用的采集记录尚无实际指标值')
+        if row['采集编号'] == '不适用' and not has_evidence(path, row['内容判断']+' '+row['局限']):
+            raise ValueError('纯内容复盘须在内容判断或局限中链接实际成片或原分析记录')
+    for row in records(doc, '跨视频结论'):
+        sources = [m.group() for m in LINK.finditer(row['视频与证据'])]
+        if not sources:
+            raise ValueError('跨视频结论须链接实际采集或单条复盘记录')
+        for source in sources:
+            review_record(root, path, source, 'DR')
     conclusions = {r['复盘编号'] for r in records(doc,'跨视频结论')}
     for row in records(doc,'建议验证'):
-        if row['复盘编号'] not in conclusions:
+        if LINK.fullmatch(row['复盘编号']):
+            review_record(root, path, row['复盘编号'], 'R')
+        elif row['复盘编号'] not in conclusions:
             raise ValueError('建议验证引用不存在的复盘编号')
         has_result = bool(row['验证结果'].strip()) and row['验证结果'] not in MISSING
         if row['采用状态'] == '采用':
@@ -418,7 +472,7 @@ def check_relations(root, path, doc):
                 raise ValueError('建议验证：采用或填写结果时须链接实际验证对象')
             if not row['验证方法'].strip() or row['验证方法'] in MISSING:
                 raise ValueError('建议验证：采用或填写结果时须有验证方法')
-        if has_result and not LINK.search(row['结果证据']):
+        if has_result and (not LINK.search(row['结果证据']) or not has_evidence(path, row['结果证据'])):
             raise ValueError('建议验证：填写验证结果时须链接结果证据')
 
 

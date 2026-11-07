@@ -28,6 +28,12 @@ class ChloeDocumentsTest(unittest.TestCase):
         end=body.index('\n\n',body.index('| ---',start))
         path.write_text(body[:end]+'\n| '+' | '.join(row)+' |'+body[end:])
 
+    def content_review(self):
+        (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
+        self.append(self.video/'README.md','单条复盘',
+                    ['R001','不适用','[原成片](<成片/test.mp4>)开场构图','不适用','仅做内容分析','调整开场'])
+        return f'[R001](<../projects/{self.video.name}/README.md#单条复盘>)'
+
     def test_all_fourteen_types_and_reinitialization(self):
         result=self.check()
         self.assertEqual(result,{'checked_documents':14,'errors':[]})
@@ -178,7 +184,7 @@ class ChloeDocumentsTest(unittest.TestCase):
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         time='2026-11-07T10:00:00+08:00'
         p.write_text(p.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
-        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','测试文案','不适用','不适用','不适用','不适用',time,'立即发布','已发布','test-platform-id','https://example.com/post','隔离授权示例','隔离结果示例'])
+        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','测试文案','不适用','不适用','不适用','不适用',time,'立即发布','已发布','test-platform-id','https://example.com/post','隔离授权示例','https://example.com/publication-proof'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'播放量','10','次','平台显示','https://example.com/metrics'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'净增粉丝','-2','人','平台显示','https://example.com/metrics'])
         self.append(p,'单条复盘',['R001','D001','样本不足','未取得','隔离示例','继续观察'])
@@ -199,7 +205,8 @@ class ChloeDocumentsTest(unittest.TestCase):
 
     def test_content_only_review_requires_no_capture_but_rejects_unknown_ids(self):
         path=self.video/'README.md'
-        self.append(path,'单条复盘',['R001','不适用','分析用户提供的成片构图','不适用','没有运营数据，仅做内容分析','调整开场构图'])
+        (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
+        self.append(path,'单条复盘',['R001','不适用','分析[原成片](<成片/test.mp4>)构图','不适用','没有运营数据，仅做内容分析','调整开场构图'])
         valid=path.read_text()
         self.assertEqual(self.check()['errors'],[])
         for value in ('D999','未取得','不适用、D001'):
@@ -209,9 +216,10 @@ class ChloeDocumentsTest(unittest.TestCase):
     def test_data_review_accepts_only_registered_captures(self):
         path=self.video/'README.md';time='2026-11-07T10:00:00+08:00'
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
-        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,'未取得','定时发布','待提交','未取得','未取得','隔离授权','未取得'])
+        path.write_text(path.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
+        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,time,'定时发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
         for identity in ('D001','D002'):
-            self.append(path,'效果数据',[identity,'P001',time,time,time,'指标','1','次','隔离口径','隔离证据'])
+            self.append(path,'效果数据',[identity,'P001',time,time,time,'指标','1','次','隔离口径','https://example.com/metrics'])
         self.append(path,'单条复盘',['R001','D001、D002','内容观察','仅说明样本变化','隔离样本','继续观察'])
         valid=path.read_text()
         self.assertEqual(self.check()['errors'],[])
@@ -221,7 +229,8 @@ class ChloeDocumentsTest(unittest.TestCase):
     def test_statistics_times_follow_order_across_timezones_and_unknowns(self):
         path=self.video/'README.md'
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
-        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用','不适用','未取得','立即发布','待提交','未取得','未取得','隔离授权','未取得'])
+        path.write_text(path.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
+        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用','不适用','2026-11-07T10:00:00+08:00','立即发布','已发布','post-id','https://example.com/post','隔离授权','https://example.com/proof'])
         original=path.read_text()
         for start,end,collected,error in (
             ('2026-11-08T09:00:00+08:00','2026-11-08T10:00:00+08:00','2026-11-08T11:00:00+08:00',False),
@@ -235,12 +244,13 @@ class ChloeDocumentsTest(unittest.TestCase):
         ):
             with self.subTest(start=start,end=end,collected=collected):
                 path.write_text(original)
-                self.append(path,'效果数据',['D001','P001',collected,start,end,'播放量','10','次','隔离口径','隔离证据'])
+                self.append(path,'效果数据',['D001','P001',collected,start,end,'播放量','10','次','隔离口径','https://example.com/metrics'])
                 result=docs.check_workspace(self.root,path)
                 if error:self.assertTrue(any('不得晚于' in item['error'] for item in result['errors']))
                 else:self.assertEqual(result['errors'],[])
 
     def test_cross_video_observation_window_precedes_record_time(self):
+        source=self.content_review()
         path=self.root/'综合资料/运营复盘.md';original=path.read_text()
         for start,end,recorded,error in (
             ('2026-11-07T10:00:00+08:00','2026-11-08T10:00:00+08:00','2026-11-08T11:00:00+08:00',False),
@@ -250,18 +260,19 @@ class ChloeDocumentsTest(unittest.TestCase):
         ):
             with self.subTest(start=start,end=end,recorded=recorded):
                 path.write_text(original)
-                self.append(path,'跨视频结论',['R001',recorded,start,end,'未取得','同类内容','待验证假设','样本不足','调整开场'])
+                self.append(path,'跨视频结论',['R001',recorded,start,end,source,'同类内容','待验证假设','样本不足','调整开场'])
                 result=docs.check_workspace(self.root,path)
                 if error:self.assertTrue(any('跨视频结论' in item['error'] and '不得晚于' in item['error'] for item in result['errors']))
                 else:self.assertEqual(result['errors'],[])
 
     def test_review_adoption_and_result_require_traceable_object_method_and_evidence(self):
+        source=self.content_review()
         path=self.root/'综合资料/运营复盘.md'
         time='2026-11-08T10:00:00+08:00'
         evidence=self.video/'执行记录/验证结果.md';evidence.write_text('隔离核对结果：按既定方法观察开头变化，样本不足，暂不能判断效果。')
         target=f'[本条视频](<../projects/{self.video.name}/README.md>)'
         proof=f'[原核对结果](<../projects/{self.video.name}/执行记录/验证结果.md>)'
-        self.append(path,'跨视频结论',['R001',time,time,time,target,'同类内容','待验证假设','样本不足','调整开场'])
+        self.append(path,'跨视频结论',['R001',time,time,time,source,'同类内容','待验证假设','样本不足','调整开场'])
         original=path.read_text()
         valid=['T001','R001','采用','用户确认用于本条作品',target,'对照开场修改及同口径表现','未取得','未取得']
         cases=[('adopted pending',{},None),
@@ -274,6 +285,7 @@ class ChloeDocumentsTest(unittest.TestCase):
                ('no method',{5:'无'},'须有验证方法'),
                ('no result evidence',{6:'已验证有效'},'链接结果证据'),
                ('evidence is vague text',{6:'已验证有效',7:'已经看过'},'链接结果证据'),
+               ('evidence is a directory',{6:'已验证有效',7:f'[目录](<../projects/{self.video.name}/执行记录/>)'},'链接结果证据'),
                ('missing evidence file',{6:'样本不足',7:'[证据](<不存在.md>)'},'文件链接不存在'),
                ('recorded result',{6:'样本不足，暂不能判断效果',7:proof},None),
                ('external evidence',{6:'样本不足',7:'[原平台记录](<https://example.com/evidence>)'},None),
