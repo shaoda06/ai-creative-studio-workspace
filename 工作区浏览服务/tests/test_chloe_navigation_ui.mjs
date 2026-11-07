@@ -25,6 +25,7 @@ try {
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
+      if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
@@ -60,7 +61,7 @@ try {
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'AI 模特');
     for (const label of ['AI 模特','服装','造型','场景','声音']) {
       await assetNav.getByRole('button',{name:label,exact:true}).click();
-      await page.getByRole('heading',{name:label,exact:true}).waitFor();
+      await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
       const bounds = await assetNav.getByRole('button',{name:label,exact:true}).boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
     }
@@ -68,10 +69,12 @@ try {
     await page.reload(); await assetNav.waitFor();
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'声音');
     await page.goBack();
-    await page.getByRole('heading',{name:'场景',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='场景');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
-    await page.getByRole('heading',{name:'AI 模特',exact:true}).waitFor();
+    await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
+    assert.equal(await page.locator('.page-heading .breadcrumbs').count(),1);
+    assert.equal(await page.locator('section[aria-label="共用资产"] > h2').count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await page.screenshot({path:output+`/${width}-assets.png`,fullPage:true});
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();

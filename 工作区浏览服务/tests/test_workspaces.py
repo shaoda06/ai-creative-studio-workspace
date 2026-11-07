@@ -59,6 +59,41 @@ class WorkspaceTests(HttpTestCase):
         path.unlink()
         self.assertEqual(self.client.get(url).status_code, 404)
 
+    def test_shared_models_are_readonly_and_scoped(self):
+        from chloe_init import initialize_workspace, initialize_asset
+        root = initialize_workspace(self.root/'Chloe Workspace')
+        model = initialize_asset(root, '模特', 'M001', '隔离模特')
+        space = self.spaces.get('commercial')
+        space.root = root
+        space.view = 'chloe-commerce'
+        url = self.api + '/shared-models'
+        self.assertEqual(self.client.get(url).json()[0]['name'], '隔离模特')
+        from PIL import Image
+        import os
+        image = self.root/'portrait.png'
+        Image.new('RGB', (20, 30), 'green').save(image)
+        ref = resources.register(root/'综合资料', image, key='portrait-test', info=resources.facts(image))
+        original = resources.local(root/'综合资料', ref['file'])
+        relative = Path(os.path.relpath(original, model)).as_posix()
+        path = model/'模特说明.md'
+        text = path.read_text()
+        start = text.index('## 当前采用')
+        end = text.index('\n\n', text.index('| ---', start))
+        row = f'\n| 正面面部 | [共用:{ref["resource_id"]}@{ref["version"]}](<{relative}>) | 隔离采用 | 2026-11-07T12:00:00+08:00 |'
+        path.write_text(text[:end]+row+text[end:])
+        media = self.client.get(url).json()[0]['media']
+        self.assertEqual(self.client.get(media['url']).content, image.read_bytes())
+        self.assertEqual(self.client.get(media['url']).headers['content-type'], 'image/png')
+        self.assertIn('attachment', self.client.get(media['url'], params={'download': True}).headers['content-disposition'])
+
+        self.assertEqual(self.client.get('/api/workspaces/nora/shared-models').status_code, 404)
+        self.assertEqual(self.client.get('/api/workspaces/unknown/shared-models').status_code, 404)
+        self.assertEqual(self.client.post(url).status_code, 405)
+        self.assertEqual(self.client.get(url+'/M001/portrait/IMG-other/V001').status_code, 404)
+        path = model/'模特说明.md'
+        path.write_text(path.read_text().replace('## 人物特征', '## 自拟字段'))
+        self.assertEqual(self.client.get(url).status_code, 409)
+
     def test_iris_overview_config_is_optional_and_leaves_source_readable(self):
         self.spaces.get('commercial').view = 'iris-commercial'
         root = self.other / 'projects/同名项目'

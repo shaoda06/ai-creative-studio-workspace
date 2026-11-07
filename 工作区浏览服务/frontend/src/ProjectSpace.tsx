@@ -23,7 +23,7 @@ export function ProjectSpace() {
   const space = query.data?.find(item => item.id === spaceId);
   const index = useQuery({ queryKey: ['project-index'], queryFn: () => get<{ title: string; html: string }>('/api/project-index'), enabled: indexOpen });
   return <div className="home">
-    <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />
+    {space?.view !== 'chloe-commerce' && <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />}
     {space?.view !== 'chloe-commerce' && <PageCheckStatus queries={[query]} />}
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !space && <p role="alert">项目空间未登记。</p>}

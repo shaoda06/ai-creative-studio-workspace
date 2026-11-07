@@ -12,6 +12,9 @@ import type { ChloeOverviewData } from './ChloeAccountOverview';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 import { UnderlineTabs } from './components/UnderlineTabs';
+import { Breadcrumbs } from './components/Breadcrumbs';
+import { PageHeader } from './components/PageHeader';
+import { ChloeModels } from './ChloeModels';
 
 const sections = [
   { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
@@ -48,20 +51,28 @@ function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery })
 
 export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
   const controls = useContext(HeaderControlsContext);
+  const { spaceId } = useParams();
+  const space = workspaceQuery.data?.find(item => item.id === spaceId);
   const [params, setParams] = useSearchParams();
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
   const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
   return <>
+    <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
+      {current.value === 'assets' && <Breadcrumbs items={[
+        { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
+        { label: assetCategory.label },
+      ]} />}
+    </PageHeader>
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
     {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className="panel" aria-label={current.label}>
-      <PageCheckStatus queries={[workspaceQuery]} />
-      <h2>{current.label}</h2>
+      {(current.value !== 'assets' || assetCategory.value !== 'models') && <PageCheckStatus queries={[workspaceQuery]} />}
+      {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'assets' ? <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
-        <h3>{assetCategory.label}</h3>
-        <p className="muted">该分类的展示内容待下一步确定。</p>
+        {assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
+          <p className="muted">该分类的展示内容待下一步确定。</p>}
       </> : <>
         <p>{current.description}</p>
         <p className="muted">当前为栏目预览，具体内容随后补充。</p>
