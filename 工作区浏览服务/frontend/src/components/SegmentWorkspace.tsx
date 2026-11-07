@@ -11,6 +11,7 @@ import { candidateLabel, latestVideo, missingVideoState, SegmentVideo } from './
 import type { SegmentVideoHandle, RepeatPlaybackControl } from './SegmentVideo';
 import { CopyButton } from './CopyButton';
 import { LinkButton } from './LinkButton';
+import { PointerTooltip } from './PointerTooltip';
 import { PromptSections } from './PromptSections';
 import { RevisionNoteEditor } from './RevisionNotes';
 import type { NoteScope, NoteShotTimeline } from './RevisionNotes';
@@ -91,6 +92,9 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const aligned = scriptMode === 'aligned' && canAlign;
   const editingNotes = tab === 'notes' && !readOnly;
   const showShotTimeline = (canAlign || (workMode && shots.length > 0)) && (tab === 'script' || editingNotes);
+  const shotTimingHint = workMode && context?.shotTimingSource
+    ? context.shotTimingSource === 'plan' ? '按计划时码定位，实际切点以画面为准。' : '按执行记录时码定位。'
+    : '';
   useEffect(() => {
     scriptContent.current!.scrollTop = 0;
   }, [current?.key, tab, scriptMode, tab === 'script' && aligned ? activeShot?.id : undefined]);
@@ -102,22 +106,24 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     container.scrollBy({ left: title.left < bounds.left ? title.left - bounds.left : Math.max(0, title.right - bounds.right) });
   }, [tab, activeShot?.id, current?.key, showShotTimeline]);
   const renderShotTimeline = (...[passShot, preserveFocus, disabled]: Partial<Parameters<NoteShotTimeline>>) => showShotTimeline ? <>
-    {workMode && (!canAlign || context?.shotTimingSource) && <p className="muted">{canAlign ? (context?.shotTimingSource === 'plan'
-      ? '按计划时码定位，实际切点以画面为准。' : '按执行记录时码定位。') : current?.url ? '尚无可靠的镜头时码。' : '等待可播放视频。'}</p>}
+    {workMode && !canAlign && <p className="muted">{current?.url ? '尚无可靠的镜头时码。' : '等待可播放视频。'}</p>}
     <div className="shot-timeline-scroll" ref={shotTimeline}>
       <div className="shot-timeline" role="group" aria-label="分镜跳转"
         style={{ gridTemplateColumns: shots.map(shot => `minmax(90px, ${canAlign ? shot.duration : 1}fr)`).join(' '), minWidth: `${shots.length * 90}px` }}>
         {shots.map((shot, index) => {
           const start = timedShots[index]?.start;
           const label = shot.id.match(/SH\d+$/)?.[0] || shot.id;
+          const jumpText = start === undefined ? '暂无可用时码' : `跳转到 ${Number(start.toFixed(3))}秒`;
+          const tooltip = start !== undefined && shotTimingHint ? `${jumpText}。${shotTimingHint}` : jumpText;
           return <div className="shot-timeline-cell" key={shot.id}>
-            <button type="button" className="shot-timeline-item" aria-current={shot.id === activeShot?.id ? 'step' : undefined}
-              aria-label={start === undefined ? label : `跳转到${shot.id}，${Number(start.toFixed(3))}秒`}
-              title={start === undefined ? '暂无可用时码' : `跳转到 ${Number(start.toFixed(3))}秒`}
-              disabled={start === undefined} onClick={start === undefined ? undefined : () => player.current?.seekTo(start)}>
-              <span className="shot-timeline-title">{label}</span>
-              <span className="shot-timeline-track">{start !== undefined && <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, (time - start) / shot.duration!))})` }} />}</span>
-            </button>
+            <PointerTooltip text={tooltip}>
+              <button type="button" className="shot-timeline-item" aria-current={shot.id === activeShot?.id ? 'step' : undefined}
+                aria-label={start === undefined ? label : `跳转到${shot.id}，${Number(start.toFixed(3))}秒`}
+                disabled={start === undefined} onClick={start === undefined ? undefined : () => player.current?.seekTo(start)}>
+                <span className="shot-timeline-title">{label}</span>
+                <span className="shot-timeline-track">{start !== undefined && <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, (time - start) / shot.duration!))})` }} />}</span>
+              </button>
+            </PointerTooltip>
             {passShot && start !== undefined && <LinkButton className="shot-timeline-pass" aria-label={`${label} 本镜通过`} disabled={disabled} onPointerDown={preserveFocus}
               onClick={() => passShot(label, start)}>本镜通过</LinkButton>}
           </div>;

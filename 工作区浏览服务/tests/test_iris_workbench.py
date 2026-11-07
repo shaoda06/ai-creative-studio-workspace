@@ -99,6 +99,7 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
                                  ('plan', 'SH002', 0, duration))
                 self.assertIn('<h4>SH002</h4>', shot['html'])
                 self.assertIn('[Shot 1]', context['prompts']['english'])
+                self.assertNotIn('source', context)
 
     def test_versioned_plan_groups_a_whole_film_and_aligns_only_evidenced_shots(self):
         spec = self.register()

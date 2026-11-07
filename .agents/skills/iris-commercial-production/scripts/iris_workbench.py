@@ -337,7 +337,6 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
                     if rendered:
                         context['scriptHtml'] = rendered
                         context['scriptUrl'] = plan['url']
-                        context['source'] = '分镜按已登记的业务依据；提示词来自' + context.get('source', '实际执行记录')
                         context['issues'] = [issue for issue in context['issues'] if issue != '执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。']
                     for label, link in entries(text):
                         if label == '中文':

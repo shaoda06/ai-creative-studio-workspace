@@ -71,7 +71,8 @@ try {
       }]:undefined;
       return {key,url:unavailable?'':mediaUrl,run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,
        fileRevision:unavailable?'':identity+id+run,deliveryStatus:unavailable?'未取回':'已取回',taskStatus:oldFailure?'needs_attention':'completed',products,
-       context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},issues:[]}};
+       context:{scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'实际镜头 '+id+' '+run+'</p>',shots:identity==='F002'?(id==='P001'?[shot('SH001',1),shot('SH002',1)]:[shot('SH003',null)]):[shot('SH001',3)],shotTimingSource:identity==='F002'&&id==='P001'?'plan':undefined,dialogues:[{shot:'SH001',index:0,speaker:'角色',original:identity+'原台词'}],prompts:{english:identity+' actual prompt '+run,chinese:identity+'中文 '+run},references:{common:[],segment:[]},
+        source:identity==='F001'&&id==='P001'&&run==='R001'?'沿用原视频的生成记录':undefined,issues:[]}};
      };
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
@@ -260,6 +261,8 @@ try {
   await page.getByRole('combobox',{name:'版本切换',exact:true}).click();
   await page.getByRole('option',{name:/^候选一/}).click();
   assert.equal(await roundSelector.getAttribute('data-value'),'1');
+  await page.getByRole('button',{name:'提示词',exact:true}).click();
+  await page.getByText('生成资料来源：沿用原视频的生成记录',{exact:true}).waitFor();
   await page.getByRole('button',{name:/^分段 P002/}).click();
   assert.match(await page.getByRole('link',{name:/^查看视频原文件/}).getAttribute('href'),/F001-P002-R001\.webm$/);
   await page.getByRole('button',{name:'切换到最新修改轮次',exact:true}).click();
@@ -302,13 +305,22 @@ try {
   const firstScene=page.getByRole('button',{name:/^场次 S001/});
   const secondScene=page.getByRole('button',{name:/^场次 S002/});
   await firstScene.click();
+  await page.getByRole('button',{name:'提示词',exact:true}).click();
+  assert.equal(await page.getByText(/^生成资料来源：/).count(),0);
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const shot=page.getByRole('button',{name:'跳转到SH002，1秒',exact:true});
+  const timingHint='按计划时码定位，实际切点以画面为准。';
+  const timingTooltip=page.getByRole('tooltip').filter({hasText:timingHint});
+  assert.equal(await page.getByText(timingHint,{exact:true}).count(),0);
+  await shot.hover();
+  await timingTooltip.waitFor();
   await shot.click();
   await page.waitForFunction(()=>Math.abs(document.querySelector('.segment-video video').currentTime-1)<.05);
   assert.equal(await shot.getAttribute('aria-current'),'step');
-  await page.getByText('按计划时码定位，实际切点以画面为准。',{exact:true}).waitFor();
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
+  assert.equal(await page.getByText(timingHint,{exact:true}).count(),0);
+  await shot.hover();
+  await timingTooltip.waitFor();
   await page.getByRole('button',{name:'SH002 本镜通过',exact:true}).click();
   assert.match(await editor.inputValue(),/00\.01\.0秒，SH002：这个分镜没问题/);
   await editor.blur();

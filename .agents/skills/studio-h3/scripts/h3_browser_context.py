@@ -26,7 +26,6 @@ def request_context(project, task, index, request, api, sources, bindings, *, re
                          (common.get('prompt', ''), group.get('prompt', '')) if text.strip())
     result = empty_context('执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。')
     result['prompts']['english'] = prompt
-    result['source'] = '实际提交请求'
     # Only recorded shot times enable alignment. Never guess timings from prose.
     body = re.split(r'(?m)^detailed_description:\s*', prompt)[-1]
     body = re.split(r'(?m)^(?:overall_soundscape|non_diegetic_music):', body)[0]
