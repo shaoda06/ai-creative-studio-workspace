@@ -62,7 +62,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const faceViewsImage = data && adopted('面部三视图');
   const bodyPurpose = view==='masked' ? bodyPurposes[0] : bodyPurposes[1];
   const bodyImage = data && adopted(bodyPurpose);
-  const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number) => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={tab !== 'images'} showVersion={tab !== 'images'}
+  const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number) => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
     item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
   const otherVersions = (purpose: string) => asset!.images
     .filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose)
@@ -75,7 +75,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     </div>)}</div> : <p className="muted">暂无{purpose}其他版本。</p>;
   };
   const bodyImages = () => <>
-          <h2>{look ? '全身定装三视图' : '基础全身三视图（4:3）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
+          <h2>{look ? '全身定装三视图（4:3）' : '基础全身三视图（4:3）'}{bodyImage && <span className="muted"> · {bodyImage.resource}@{bodyImage.version}</span>}</h2>
           <div>
             <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>

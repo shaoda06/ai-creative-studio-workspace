@@ -272,8 +272,9 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state:'detached'});
   const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
+  assert.deepEqual(await lookPanel.locator('.asset-media-card').first().locator('.field-label').allTextContents(),['尺寸：']);
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
-  await page.getByRole('heading',{name:`全身定装三视图 · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
+  await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
   await lookPanel.locator(':scope > div > .asset-media-card .cover').click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(lookMasked.resource));
@@ -287,9 +288,9 @@ try {
   assert.ok(lookScroll.height<=1050 && lookScroll.full>lookScroll.height);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
   const lookOriginal=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图原图');
-  await page.getByRole('heading',{name:`全身定装三视图 · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
   await page.reload();
-  await page.getByRole('heading',{name:`全身定装三视图 · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
   await page.screenshot({path:output+`/${width}-look.png`,fullPage:true});
   assert.match(page.url(),/look=L001/);
   assert.equal(await page.getByRole('dialog').count(),0);
