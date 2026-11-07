@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from backend.services import episode_downloads
+from project_paths import input_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3/scripts'))
 import director_export
@@ -40,7 +41,10 @@ def spec_response(projects, name, spec):
         raise ValueError('导演包清单须提供不含目录的.mmxpack.zip文件名')
     root = projects.project(name)
     # Resolve all project file boundaries before contacting ComfyUI.
-    media = {key: projects.file(name, value) for key, value in spec['media'].items()}
+    media = {key: input_file(root, value) if value.startswith('@shared/') else projects.file(name, value)
+             for key, value in spec['media'].items()}
+    if any(not path.is_file() for path in media.values()):
+        raise FileNotFoundError('导演包引用的原素材不存在')
     api = projects.file(name, spec['api']) if 'api' in spec else None
     files = {**{value: media[key] for key, value in spec['media'].items()},
              **({spec['api']: api} if api is not None else {})}

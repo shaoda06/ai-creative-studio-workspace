@@ -4,7 +4,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from project_paths import project_file, recorded_paths, PreparationPaths
+from project_paths import input_file, input_key, input_reference, project_file, recorded_paths, PreparationPaths
 
 from backend.services.video_tasks import business as business_video
 
@@ -79,7 +79,7 @@ def sources(data, extra=(), mapping=None, *, observed=None, composition=None):
     if mapping is None:
         mapping = read_mapping(data)
     files.update(associated_sources(data, mapping, composition))
-    return {path.relative_to(data.project).as_posix(): list(_file_stamp(path, observed)) for path in sorted(files)}
+    return {input_key(data.project, path): list(_file_stamp(path, observed)) for path in sorted(files)}
 
 
 def read_report(data):
@@ -130,7 +130,7 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
     for name, stamp in report['sources'].items():
         if bound and name.endswith(('.api.json', '.workflow.json')):
             continue  # The upload binder owns and validates these actual path changes.
-        path = project_file(data.project, name)
+        path = input_file(data.project, name)
         try:
             current = _file_stamp(path, observed)
         except FileNotFoundError:
@@ -142,7 +142,7 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
             raise ValueError('新任务准备报告缺少资料关联检查；请使用--prepare-only补齐准备')
         try:
             extra = context_checks(store, data, segment_plan_checked=data.segment_plan is not None)
-            added_sources = {path.relative_to(data.project).as_posix(): list(_file_stamp(path, observed))
+            added_sources = {input_key(data.project, path): list(_file_stamp(path, observed))
                              for path in map(Path, extra)}
         except (ValueError, OSError, KeyError, IndexError, TypeError, store.client.ClientError) as error:
             report.update(ok=False, error='旧报告缺项检查失败：' + str(error), context_checked_during='execution')
@@ -169,7 +169,7 @@ def fixed_input_checks(store, data):
             raise ValueError('上传映射字段不完整或类型不正确')
         if 'resource' in item:
             import project_resources
-            ref = project_resources.reference(data.project, item['file'])
+            ref = input_reference(data.project, item['file'])
             if ref is None or item['resource'] != {key: ref[key] for key in ('resource_id', 'version')}:
                 raise ValueError('上传资源版本与实际输入文件不符')
         if 'json-path' in item and (not isinstance(item['json-path'], list) or not item['json-path']

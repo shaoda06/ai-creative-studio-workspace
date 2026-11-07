@@ -25,7 +25,9 @@ try {
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
+      if (path === '/api/workspaces/account-demo/production-videos') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
+      if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});

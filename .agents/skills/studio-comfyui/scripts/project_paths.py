@@ -43,6 +43,42 @@ def scope_root(workspace, value, *, recorded=False):
     return path
 
 
+def input_file(project, value, *, recorded=False):
+    """Read an exact registered shared resource, or a file in the owning project."""
+    project = Path(project).resolve()
+    spelling = str(value)
+    if not spelling.startswith('@shared/') and (not Path(spelling).is_absolute() or Path(spelling).resolve().is_relative_to(project)):
+        return project_file(project, value, recorded=recorded)
+    shared = scope_workspace(project) / SHARED_DIRECTORY
+    candidate = shared / spelling[len('@shared/'):] if spelling.startswith('@shared/') else Path(spelling)
+    if candidate.is_absolute() and candidate.resolve().is_relative_to(shared / '资源') and shared != project:
+        import project_resources as resources
+        path = candidate.resolve()
+        reference = resources.reference(shared, path)
+        if reference is None or path != resources.version_file(shared, reference['resource_id'], reference['version']):
+            raise ValueError('共用输入必须引用已登记的准确资源版本')
+        if not path.is_file() or not (path.parent / '版本信息.json').is_file():
+            raise ValueError('共用输入尚未完整保存')
+        return path
+    return _project_file(project, value, recorded=recorded)
+
+
+def input_key(project, value):
+    project = Path(project).resolve()
+    path = input_file(project, value, recorded=True)
+    if path.is_relative_to(project):
+        return path.relative_to(project).as_posix()
+    return '@shared/' + path.relative_to(scope_workspace(project) / SHARED_DIRECTORY).as_posix()
+
+
+def input_reference(project, value):
+    import project_resources as resources
+    project = Path(project).resolve()
+    path = input_file(project, value)
+    owner = project if path.is_relative_to(project) else scope_workspace(project) / SHARED_DIRECTORY
+    return resources.reference(owner, path)
+
+
 def project_file(project, value, *, recorded=False):
     project = Path(project).resolve()
     return _project_file(project, value, recorded=recorded)
@@ -50,6 +86,8 @@ def project_file(project, value, *, recorded=False):
 
 def _project_file(project, value, *, recorded=False):
     spelling = str(value).replace('\\', '/')
+    if spelling.startswith('@shared/'):
+        raise ValueError('输出或项目文件路径越出项目；共用资源仅可作为输入')
     path = Path(spelling)
     windows = PureWindowsPath(spelling)
     absolute = path.is_absolute() or windows.is_absolute()
@@ -100,26 +138,32 @@ class RecordPaths:
             raise ValueError('记录转换需要已解析的项目根目录')
         for value in files:
             path = Path(value)
-            if not path.is_absolute() or '..' in path.parts or not path.is_relative_to(self.project):
+            if not path.is_absolute() or '..' in path.parts or (not path.is_relative_to(self.project) and input_file(self.project, path, recorded=True) != path.resolve()):
                 raise ValueError('文件路径越出项目：' + str(value))
             self._remember(path)
         return self
 
     def _remember(self, path):
         self._files[path.as_posix()] = path
-        self._files[path.relative_to(self.project).as_posix()] = path
+        self._files[self._key(path)] = path
+
+    def _key(self, path):
+        # Only called with a path already checked at the IO boundary.
+        if path.is_relative_to(self.project):
+            return path.relative_to(self.project).as_posix()
+        return '@shared/' + path.relative_to(self.project.parent.parent / SHARED_DIRECTORY).as_posix()
 
     def file(self, value):
         spelling = str(value).replace('\\', '/')
         path = self._files.get(spelling)
         if path is None:
-            path = _project_file(self.project, spelling, recorded=True)
+            path = input_file(self.project, spelling, recorded=True)
             self._remember(path)
             self._files[spelling] = path
         return path
 
     def relative_file(self, value):
-        return self.file(value).relative_to(self.project).as_posix()
+        return self._key(self.file(value))
 
     def convert(self, document, *, relative=False, field=''):
         if field == 'error_details':
@@ -130,12 +174,12 @@ class RecordPaths:
             return [self.convert(value, relative=relative, field=field) for value in document]
         if isinstance(document, str) and document and field in LOCAL_FIELDS:
             spelling = document.replace('\\', '/')
-            if (Path(spelling).is_absolute() or PureWindowsPath(spelling).is_absolute()) and (
+            if spelling not in self._files and (Path(spelling).is_absolute() or PureWindowsPath(spelling).is_absolute()) and (
                     not spelling.casefold().startswith(self.project.as_posix().casefold() + '/')
                     and ('/projects/' + self.project.name + '/').casefold() not in spelling.casefold()):
                 return document  # Preserve remote evidence and external tool paths.
             path = self.file(spelling)
-            return path.relative_to(self.project).as_posix() if relative else str(path)
+            return self._key(path) if relative else str(path)
         return document
 
 
@@ -152,7 +196,7 @@ class PreparationPaths(RecordPaths):
     def io_file(self, value):
         spelling = str(value).replace('\\', '/')
         previous = self._files.get(spelling)
-        actual = _project_file(self.project, spelling, recorded=True)
+        actual = input_file(self.project, spelling, recorded=True)
         if previous is not None and previous != actual:
             raise ValueError('准备资料路径发生变化：' + str(value))
         self._remember(actual)

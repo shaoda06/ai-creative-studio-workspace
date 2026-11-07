@@ -406,6 +406,10 @@ def check_workspace(root, only=None):
         for owner in owners:
             try:
                 check_system(root,owner)
+                if owner.parent == root/'projects':
+                    sys.path.insert(0, str(SKILLS/'chloe-production/scripts'))
+                    from chloe_production import check
+                    check(owner)
             except (ValueError, KeyError, TypeError, OSError) as error:
                 errors.append({'file':str(owner/'资源'),'error':str(error)})
     return {'checked_documents':len(results)+len([e for e in errors if e['file'].endswith('.md')]),'errors':errors}

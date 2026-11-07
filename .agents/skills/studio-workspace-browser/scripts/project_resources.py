@@ -330,6 +330,11 @@ def refs_in(project, document):
             for child in value:
                 visit(child)
         elif isinstance(value, str) and media_kind(value):
+            if value.startswith('@shared/'):
+                from project_paths import input_reference
+                ref = input_reference(project, value)
+                found['@shared/' + label(ref)] = {**ref, 'file': value, 'scope': '@shared'}
+                return
             path = Path(value)
             root = Path(project).resolve()
             if not (path if path.is_absolute() else root / path).resolve().is_relative_to(root):
@@ -375,8 +380,9 @@ def route_task(project, payload):
         renamed[old] = ref
     for upload in payload.get('uploads', []):
         if isinstance(upload.get('file'), str):
-            upload['file'] = str(resolve_file(project, upload['file']))
-            ref = reference(project, upload['file'])
+            from project_paths import input_file, input_reference
+            upload['file'] = str(input_file(project, upload['file']))
+            ref = input_reference(project, upload['file'])
             if ref:
                 upload['resource'] = {key: ref[key] for key in ('resource_id', 'version')}
     if plan:

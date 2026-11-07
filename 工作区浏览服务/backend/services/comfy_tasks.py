@@ -114,6 +114,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             self.resolve_input(data, recorded=True)
             self.rows[key] = {'input': data, 'state': json.loads(state)}
             self.rows[key]['state'] = self.record_paths(key).convert(self.rows[key]['state'])
+            if not resourceio.enabled(data.project):
+                self.rows[key]['_resource_association_input'] = data
         self.workers = {}
         self.notifiers = {}
         self.session_readers = {}
@@ -266,7 +268,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                 raise ValueError('成果必须位于所属项目内，且不得写入执行附件目录')
         for upload in data.uploads:
             if isinstance(upload.get('file'), str):
-                upload['file'] = local(upload['file'])
+                upload['file'] = str(paths.input_file(project, upload['file'], recorded=recorded))
         if data.image_plan is not None:
             plan = data.image_plan
             def portable(value):
@@ -303,7 +305,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                     target.pop(field)
         for upload in payload['uploads']:
             if isinstance(upload.get('file'), str):
-                upload['file'] = relative(upload['file'])
+                path = Path(upload['file'])
+                upload['file'] = relative(path) if path.is_relative_to(project) else '@shared/' + path.relative_to(project.parent.parent / paths.SHARED_DIRECTORY).as_posix()
         return payload
 
     def validate_registration(self, data):

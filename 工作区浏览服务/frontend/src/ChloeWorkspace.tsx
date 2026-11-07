@@ -16,6 +16,7 @@ import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
 import { ChloeClothing, ChloeClothingDetail } from './ChloeClothing';
 import type { ClothingDetail } from './ChloeClothing';
+import { ChloeProduction } from './ChloeProduction';
 import { ChloeModels } from './ChloeModels';
 import { ChloeModelDetail } from './ChloeModelDetail';
 import type { ModelDetail } from './ChloeModelDetail';
@@ -80,7 +81,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || clothingId ? undefined : 'panel'} aria-label={current.label}>
+    {current.value === 'production' ? <ChloeProduction baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || clothingId ? undefined : 'panel'} aria-label={current.label}>
       {(current.value !== 'assets' || !['models','clothing'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'assets' ? modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : clothingId ? <ChloeClothingDetail key={`${spaceId}/${clothingId}`} query={clothingQuery} workspaceQuery={workspaceQuery} /> : <>

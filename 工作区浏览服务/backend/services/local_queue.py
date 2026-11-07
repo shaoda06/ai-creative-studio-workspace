@@ -7,6 +7,7 @@ from functools import partial
 import json
 import hashlib
 from pathlib import Path
+import project_paths as paths
 import time
 import uuid
 import execution_records as recordio
@@ -53,13 +54,14 @@ class LocalQueue:
         row = self.rows[key]
         directory = Path(row['input'].record_dir)
         directory.mkdir(parents=True, exist_ok=True)
-        if row.get('_resource_association_input') is not row['input'] and resourceio.enabled(row['input'].project):
-            payload = self.portable_input(row['input'])
-            refs = {'inputs': resourceio.refs_in(row['input'].project, payload['uploads']),
-                    'outputs': resourceio.refs_in(row['input'].project, [payload['outputs'], payload.get('segment_plan')])}
-            association = directory / '资源关联.json'
-            if not recordio.exists(association) or recordio.read(association) != refs:
-                recordio.write(association, refs, compact=False if association.is_file() else row['input'].record_format == 'compact')
+        if row.get('_resource_association_input') is not row['input']:
+            if resourceio.enabled(row['input'].project):
+                payload = self.portable_input(row['input'])
+                refs = {'inputs': resourceio.refs_in(row['input'].project, payload['uploads']),
+                        'outputs': resourceio.refs_in(row['input'].project, [payload['outputs'], payload.get('segment_plan')])}
+                association = directory / '资源关联.json'
+                if not recordio.exists(association) or recordio.read(association) != refs:
+                    recordio.write(association, refs, compact=False if association.is_file() else row['input'].record_format == 'compact')
             row['_resource_association_input'] = row['input']
         if row['input'].record_format == 'compact':
             # Live progress stays in SQLite. Keep a portable terminal snapshot;
@@ -416,7 +418,7 @@ class LocalQueue:
             if final_stamps[str(source)] != stamp:
                 raise ValueError('本机素材已不同于上传／核验时，请返回准备阶段')
         phase_files = {name: stamp for name, stamp in final_stamps.items()
-                       if Path(name).relative_to(data.project).as_posix() not in report['sources']
+                       if paths.input_key(data.project, name) not in report['sources']
                        or name.endswith(('.api.json', '.workflow.json'))}
         row['_prepared_run'] = {'workflow': workflow, 'files': phase_files}
         self.record(key, 'preflight', 'success', _changes={'prepared_files': {

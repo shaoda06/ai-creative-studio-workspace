@@ -1,0 +1,170 @@
+"""Chloe production records: references only; never submit, copy media or infer approval."""
+import argparse
+from datetime import datetime
+import json
+from pathlib import Path
+import re
+import math
+import sys
+
+SKILLS = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(SKILLS/'chloe-positioning/scripts'))
+from chloe_documents import records, media_reference, MISSING, read_document, template
+from chloe_init import resources
+
+STAGES = ('一采', '二采', '后处理')
+
+
+def local(project, value):
+    return resources.local(project, value)
+
+
+def link_path(project, value):
+    match = re.fullmatch(r'\[[^\]]+\]\(<([^>]+)>\)', value)
+    return local(project, match[1] if match else value)
+
+
+def document(project, name):
+    filename=Path(name).name
+    kind='视频README模板.md' if filename=='README.md' else '制作记录模板.md' if filename=='制作记录.md' else '脚本模板.md'
+    identity,title=project.name.split('-',1)
+    return read_document(project.parent.parent,project/name,template('chloe-creative',kind),{'identity':identity,'title':title})
+
+
+def fields(doc, heading):
+    return {row['字段']: row['内容'] for row in records(doc, heading)}
+
+
+def plan(project, source='脚本.md'):
+    doc = document(project, source)
+    result = {}
+    body=(project/source).read_text('utf-8-sig')
+    available=set(re.findall(r'^#{3,4} (SH\d{3,})(?:｜|\s)',body,re.M))
+    for row in records(doc, '分段计划'):
+        identity = row['分段编号']
+        if not re.fullmatch(r'P\d{3,}', identity) or identity in result:
+            raise ValueError('分段编号无效或重复：'+identity)
+        shots = row['镜头编号'].split('、')
+        if any(not re.fullmatch(r'SH\d{3,}', shot) for shot in shots) or len(shots) != len(set(shots)):
+            raise ValueError('镜头编号须用顿号分隔且不重复')
+        if not set(shots)<=available:
+            raise ValueError('分段计划引用了不存在的镜头')
+        duration = float(row['时长秒'])
+        if not math.isfinite(duration) or duration <= 0:
+            raise ValueError('分段时长必须大于零')
+        result[identity] = {'id': identity, 'duration': duration, 'shotIds': shots}
+    return doc, result
+
+
+def state(project):
+    project = Path(project).resolve()
+    root = project.parent.parent
+    script, planned = plan(project)
+    doc = document(project, '制作记录.md')
+    executions = {row['执行编号']: row for row in records(doc, '执行记录')}
+    outputs = {(row['执行编号'], row['输出槽位']): row for row in records(doc, '输出记录')}
+    candidates = {}
+    for row in records(doc, '视频分段执行'):
+        identity, stage, run, execution, slot = (row[key] for key in ('分段编号','制作阶段','候选版本','执行编号','输出槽位'))
+        if not re.fullmatch(r'P\d{3,}', identity) or stage not in STAGES or not re.fullmatch(r'R\d{3,}', run):
+            raise ValueError('视频分段执行的分段、阶段或候选版本无效')
+        key = (identity, execution, slot)
+        if key in candidates or any((identity, stage, run) == (v['id'],v['stage'],v['run']) for v in candidates.values()):
+            raise ValueError('视频分段执行重复')
+        if execution not in executions or int(row['模型分段序号']) < 0:
+            raise ValueError('视频分段执行缺少原执行或模型分段序号无效')
+        output = outputs.get((execution, slot))
+        ref = media_reference(root, project/'制作记录.md', output['资源引用']) if output else None
+        if ref and (ref['owner'] != project.relative_to(root).as_posix() or not ref['resource_id'].startswith('VID-')):
+            raise ValueError('视频产出须引用本视频资源区准确视频版本')
+        candidates[key] = {'id':identity,'stage':stage,'run':run,'execution':execution,'slot':slot,
+                           'index':int(row['模型分段序号']),'ref':ref,'record':executions[execution]}
+    spec = json.loads((project/'制作轮次.json').read_text('utf-8'))
+    if set(spec) != {'format','rounds'} or spec['format'] != 1:
+        raise ValueError('制作轮次必须使用 format 1 和 rounds')
+    rounds = {}; seen = set()
+    for item in spec['rounds']:
+        required = {'number','created_at','note','script','segments'}
+        if not required <= item.keys() or set(item)-required-{'base_round','changed_segments','review_outputs'}:
+            raise ValueError('制作轮次字段不符合规范')
+        number = item['number']
+        if type(number) is not int or number != len(rounds)+1:
+            raise ValueError('整片轮次从1起连续递增且不可重复')
+        if datetime.fromisoformat(item['created_at']).tzinfo is None:
+            raise ValueError('轮次时间须包含时区')
+        source = local(project, item['script'])
+        if source.parent != project/'历史版本' or not source.is_file():
+            raise ValueError('轮次脚本须引用历史版本中的准确稿件')
+        _, row_plan = plan(project, item['script'])
+        ids = []; values = []
+        for segment in item['segments']:
+            if set(segment) != {'id','execution','slot'}:
+                raise ValueError('轮次分段仅保存 id、execution、slot 引用')
+            key = (segment['id'], segment['execution'], segment['slot'])
+            if key not in candidates:
+                raise ValueError('轮次引用不存在的分段执行：'+str(key))
+            ids.append(segment['id']); values.append({**candidates[key], **row_plan[segment['id']], 'carried':key in seen})
+        if not ids or ids != list(row_plan):
+            raise ValueError('轮次必须按脚本计划保存完整且唯一的分段顺序')
+        base = item.get('base_round')
+        if base is not None:
+            if base not in rounds:
+                raise ValueError('来源轮次不存在')
+            previous = {v['id']:(v['execution'],v['slot']) for v in rounds[base]['values']}
+            changed = {v['id'] for v in values if previous.get(v['id']) != (v['execution'],v['slot'])} | (previous.keys()-set(ids))
+            if set(item.get('changed_segments', [])) != changed:
+                raise ValueError('changed_segments 必须对应实际变化的分段')
+        elif 'changed_segments' in item:
+            raise ValueError('changed_segments 必须有 base_round')
+        for output in item.get('review_outputs', []):
+            if set(output) != {'label','resource'}:
+                raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
+            media_reference(root, project/'制作记录.md', output['resource'])
+        seen.update((v['id'],v['execution'],v['slot']) for v in values)
+        rounds[number] = {**item, 'values':values}
+    for value in candidates.values():
+        execution=value['record']
+        if execution['执行状态']=='已完成' and not value['ref']:
+            raise ValueError('已完成的视频分段缺少准确输出引用')
+        if value['stage'] in ('二采','后处理'):
+            source=next((v for v in candidates.values() if v['execution']==execution['上游执行'] and v['id']==value['id']),None)
+            expected='一采' if value['stage']=='二采' else '二采'
+            if not source or source['stage']!=expected:
+                raise ValueError(value['stage']+'须关联同一分段的'+expected+'执行')
+    for row in records(document(project,'README.md'),'当前采用'):
+        match=re.fullmatch(r'(P\d{3,})/(一采|二采|后处理)',row['用途'])
+        if match:
+            reference=media_reference(root,project/'README.md',row['资源引用'])
+            if not any(v['id']==match[1] and v['stage']==match[2] and v['ref']==reference for v in candidates.values()):
+                raise ValueError('当前采用未对应同一分段和阶段的真实输出')
+    notes = json.loads((project/'视频修改意见.json').read_text('utf-8'))
+    if set(notes) != {'notes','rounds'}:
+        raise ValueError('视频修改意见须使用公共 notes、rounds 结构')
+    return {'project':project,'root':root,'script':script,'plan':planned,'doc':doc,
+            'executions':executions,'candidates':candidates,'rounds':rounds}
+
+
+def check(project):
+    value = state(project)
+    sys.path.insert(0,str(SKILLS.parent.parent/'工作区浏览服务'))
+    from backend.services.review_notes import ProjectReviewNotes
+    notes=ProjectReviewNotes().read(value['project']/'视频修改意见.json')
+    identities={(v['id'],v['stage'],v['run']) for v in value['candidates'].values()}
+    rounds={n:{(v['id'],v['stage'],v['run']) for v in row['values']} for n,row in value['rounds'].items()}
+    if any(note.number not in rounds for note in notes.rounds.values()) or any(
+            (note.segment,note.stage,note.run) not in identities or note.roundNumber is not None and
+            (note.segment,note.stage,note.run) not in rounds.get(note.roundNumber,set()) for note in notes.notes.values()):
+        raise ValueError('修改意见引用了不存在的候选或轮次')
+    return {'project':str(value['project']),'rounds':len(value['rounds']),'candidates':len(value['candidates'])}
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=['check'])
+    parser.add_argument('--project', required=True, type=Path, help='单条 V 视频项目的绝对目录；只读校验，不生成或写入资料')
+    args=parser.parse_args()
+    print(json.dumps(check(args.project), ensure_ascii=False, indent=2))
+
+
+if __name__ == '__main__':
+    main()

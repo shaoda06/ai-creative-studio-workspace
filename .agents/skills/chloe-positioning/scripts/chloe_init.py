@@ -80,11 +80,13 @@ def initialize_video(value, identity, title):
         raise ValueError('请先初始化工作区')
     with resources.index_lock(owner):
         project = named_folder(root / 'projects', identity, title, 'V')
-        for directory in ('资源/图片', '资源/视频', '资源/音频', '剪辑交接', '成片'):
+        for directory in ('资源/图片', '资源/视频', '资源/音频', '剪辑交接', '成片', '执行记录', '历史版本'):
             (project / directory).mkdir(parents=True, exist_ok=True)
         for filename, template in [('README.md', '视频README模板.md'), ('脚本.md', '脚本模板.md'),
                                    ('制作记录.md', '制作记录模板.md')]:
             write_template(project / filename, 'chloe-creative', template, identity=identity, title=title)
+        for name in ('制作轮次', '视频修改意见'):
+            write_template(project / (name+'.json'), 'chloe-production', name+'模板.json')
         resource_area(project)
         references = project / '资源/共用引用.json'
         if not references.exists():
