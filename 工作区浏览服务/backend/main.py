@@ -41,6 +41,7 @@ from backend.routes.prompts import create_router as prompt_router
 from backend.services.assets import AssetLibrary
 from backend.routes.assets import create_router as asset_router
 from backend.routes.project_resources import create_router as resource_router
+from backend.chloe_overview import router as chloe_examples_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -271,6 +272,7 @@ def queue_write(request: Request):
         raise HTTPException(403, '仅允许工作台同源管理操作')
 
 
+app.include_router(chloe_examples_router)
 app.include_router(prompt_router(prompt_library, queue_write))
 app.include_router(asset_router(AssetLibrary(PUBLIC_ROOT / '综合资料/资产管理'), queue_write))
 app.include_router(resource_router(lambda request: store, queue_write))

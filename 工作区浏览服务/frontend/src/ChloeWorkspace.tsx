@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 
@@ -25,6 +25,7 @@ export function ChloeWorkspace() {
       <h2>{current.label}</h2>
       <p>{current.description}</p>
       <p className="muted">当前为栏目预览，具体内容随后补充。</p>
+      {current.value === 'overview' && <Link to="/examples/chloe/overview">查看账号概况演示</Link>}
     </section>
   </>;
 }
