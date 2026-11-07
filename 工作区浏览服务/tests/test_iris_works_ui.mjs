@@ -76,6 +76,8 @@ try {
      const segment=id=>({id,duration:3,scriptHtml:'<h4>SH001</h4><p><strong>动作</strong>：'+identity+'原始动作</p>',videos:[video(id,'R001',1),video(id,'R002',2)]});
      const round=n=>({number:n,created_at:'2026-11-06',episodeRound:true,script:source(n),storyboard:source(n),issues:[],segments:['P001','P002'].map(id=>({id,duration:3,stage:'一采',run:'R00'+n,key:identity+'/'+id+'-R00'+n+'.webm',scriptHtml:segment(id).scriptHtml}))});
      const whole=archive?'C001':'whole';
+     const history=file(key+'/06-视频生产/视频历史.md');
+     const historicalScript=source(1);
      const scenes=identity==='F002'?['S001','S002']:[whole];
      const members=identity==='F002'?{whole:['P001','P002'],S001:['P001'],S002:['P002']}:{[whole]:['P001','P002']};
      const entries=Object.entries(members);
@@ -87,6 +89,8 @@ try {
      })):[];
      return route.fulfill({json:{kind:'group',name:identity,title:work.name,readOnly:archive,scenes:Object.keys(members),
        productionTask:work.hasArchive && !archive ? file(key+'/06-视频生产/生产任务-英文R001.md') : null,
+       roundHistory:identity==='F001'?{...history,kind:'document',name:'轮次记录',doc:{html:
+         `<h2>隔离轮次记录</h2><p><a href="${base}/files/${historicalScript.key}" data-doc="${historicalScript.key}">第 1 轮 · 制作脚本 v01</a></p>`}}:null,
        episodeRounds:[{number:1,scenes:[whole]},{number:2,scenes}],
        sceneRounds:Object.fromEntries(entries.map(([scene,ids])=>[scene,[1,2].filter(n=>(n===1?[whole]:scenes).includes(scene)).map(n=>({...round(n),segments:round(n).segments.filter(item=>ids.includes(item.id))}))])),
        segments:Object.fromEntries(entries.map(([scene,ids])=>[scene,ids.map(segment)])),script:source(2),storyboards:{[whole]:source(2)},
@@ -218,6 +222,15 @@ try {
   await page.getByRole('button',{name:'重试保存',exact:true}).click();
   await page.getByText('已保存',{exact:true}).waitFor();
   await choose('F001');
+  await page.getByRole('button',{name:'轮次记录',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'查看制作脚本',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'查看生产任务',exact:true}).count(),0);
+  const historyDialog=page.getByRole('dialog',{name:'轮次记录'});
+  await historyDialog.getByRole('heading',{name:'隔离轮次记录'}).waitFor();
+  await historyDialog.getByRole('link',{name:'第 1 轮 · 制作脚本 v01'}).click();
+  const scriptDialog=page.getByRole('dialog',{name:'第 1 轮 · 制作脚本 v01'});
+  await scriptDialog.getByText('产品片专属正文',{exact:true}).waitFor();
+  await scriptDialog.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
   await editor.waitFor();
   assert.equal(await editor.inputValue(),'产品片原意见');

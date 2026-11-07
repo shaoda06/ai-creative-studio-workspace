@@ -55,6 +55,26 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         path.write_bytes(value)
         self.assertTrue(self.detail()['segments']['whole'][0]['videos'][0]['url'])
 
+    def test_round_history_links_the_script_used_by_the_historical_round(self):
+        first = self.register()
+        key = self.works['F001']
+        history = key + '/06-视频生产/视频历史.md'
+        current_script = first['script']['file'].replace('v01', 'v02')
+        self.write(history, '# 视频历史\n\n- 第 1 轮审阅')
+        self.write(current_script, '# 现行脚本')
+        state = self.project / key / '作品状态.md'
+        state.write_text(state.read_text().replace(first['script']['file'], current_script)
+                         + f'| 轮次记录 | {history} |\n')
+        second = {**first, 'number': 2, 'script': {'file': current_script, 'version': 'v02'}}
+        self.write(key + '/06-视频生产/制作轮次.json', json.dumps({'rounds': [first, second]}, ensure_ascii=False))
+        data = self.detail()
+        self.assertIsNone(data['productionTask'])
+        self.assertEqual(data['roundHistory']['key'], history)
+        html = data['roundHistory']['doc']['html']
+        self.assertIn('第 1 轮审阅', html)
+        self.assertIn(f'data-doc="{first["script"]["file"]}">第 1 轮 · 制作脚本 v01</a>', html)
+        self.assertNotIn('制作脚本 v02', html)
+
     def test_legacy_single_shot_and_plan_timing_use_business_ids(self):
         spec = self.register()
         key = self.works['F001']

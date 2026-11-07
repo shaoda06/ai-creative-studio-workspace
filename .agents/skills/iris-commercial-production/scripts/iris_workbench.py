@@ -30,6 +30,20 @@ def document(projects, name, api, key, version=''):
     return {**ref, 'version': version, 'doc': {'title': path.stem, 'html': html, 'url': ref['url']}}
 
 
+def round_history_document(projects, name, api, key, rounds, current_script):
+    history = document(projects, name, api, key)
+    current_key = current_script['key'] if current_script else None
+    links = []
+    for item in rounds:
+        script = item['script']
+        if script and script['key'] != current_key:
+            label = f"第 {item['number']} 轮 · 制作脚本 {script['version']}".rstrip()
+            links.append(f'<li><a href="{escape(script["url"])}" data-doc="{escape(script["key"])}">{escape(label)}</a></li>')
+    if links:
+        history['doc']['html'] += '\n<h2 id="各轮脚本版本">各轮脚本版本</h2><ul>' + ''.join(links) + '</ul>'
+    return {**history, 'name': '轮次记录'}
+
+
 def work_status(projects, name, space_api, project, root):
     path = root / '作品状态.md'
     if not path.is_file():
@@ -371,18 +385,20 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
     primary = presentation['primary']
     registered = {}
     for field, folder in [('制作脚本', '03-创意脚本'), ('分镜与声音', '04-分镜声音'),
-                          ('资产清单', '05-资产'), ('生产任务', '06-视频生产')]:
+                          ('资产清单', '05-资产'), ('生产任务', '06-视频生产'), ('轮次记录', '06-视频生产')]:
         key = records.get(field, '')
         if Path(key).suffix.lower() == '.md':
             path = projects.file(name, key)
             if not path.is_relative_to(root / folder):
                 raise ValueError('现行制作资料须位于本作品对应阶段：' + key)
-            registered[folder] = path.relative_to(project).as_posix()
+            registered[field] = path.relative_to(project).as_posix()
     current_sources = {}
-    for field, folder in [('script', '03-创意脚本'), ('storyboard', '04-分镜声音')]:
-        values = [registered[folder]] if folder in registered else primary.get(folder, [])
+    for field, label, folder in [('script', '制作脚本', '03-创意脚本'), ('storyboard', '分镜与声音', '04-分镜声音')]:
+        values = [registered[label]] if label in registered else primary.get(folder, [])
         current_sources[field] = document(projects, name, api, values[0], re.search(r'v\d+', values[0])[0] if re.search(r'v\d+', values[0]) else '') if len(values) == 1 else None
-    production_task = document_ref(project, api, project / registered['06-视频生产']) if '06-视频生产' in registered else None
+    production_task = document_ref(project, api, project / registered['生产任务']) if '生产任务' in registered else None
+    round_history = (round_history_document(projects, name, api, registered['轮次记录'], rounds, current_sources['script'])
+                     if '轮次记录' in registered else None)
     scene_members = {}
     scene_rounds = {}
     episode_rounds = []
@@ -413,7 +429,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
     unassigned = {identity: item for identity, item in by_id.items() if identity not in assigned_ids}
     if unassigned or not scene_members:
         scene_members.setdefault('whole', {}).update(unassigned)
-    listing = [registered['05-资产']] if '05-资产' in registered else primary.get('05-资产', [])
+    listing = [registered['资产清单']] if '资产清单' in registered else primary.get('05-资产', [])
     material_record = document_ref(project, api, project / listing[0]) if len(listing) == 1 else None
     review = asset_review(projects, name, space_api, listing[0]) if listing and listing != primary.get('05-资产') else presentation['assetReview']
     materials = [{**item['media'], 'materialGroup': item['group'], 'materialStatus': item['status'],
@@ -427,7 +443,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
             'sceneRounds': {scene: scene_rounds.get(scene, []) for scene in scene_members}, 'episodeRounds': episode_rounds,
             'script': current_sources['script'], 'storyboards': {scene: current_sources['storyboard'] for scene in scene_members} if current_sources['storyboard'] else {},
             'directorSheets': {'whole': director_sheets(projects, name, api, root)},
-            'materials': materials, 'materialRecord': material_record, 'productionTask': production_task,
+            'materials': materials, 'materialRecord': material_record, 'productionTask': production_task, 'roundHistory': round_history,
             'workStatus': status, 'statusHtml': status_html,
             'productionComplete': False, 'productionIssues': []}
 
