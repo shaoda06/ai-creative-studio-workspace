@@ -253,6 +253,22 @@ def check_relations(root, path, doc):
         for row in records(doc, '当前采用'):
             if row['用途'] != label+'展示图':
                 raise ValueError(label+'当前采用只登记'+label+'展示图')
+    if path.name == '声音说明.md':
+        for heading in ('参考版本', '当前采用'):
+            for row in records(doc, heading):
+                purpose = row['用途']
+                if purpose not in {'声音原始参考', '声音参考'}:
+                    raise ValueError('声音用途须为声音原始参考或声音参考')
+                if heading == '当前采用' and purpose != '声音参考':
+                    raise ValueError('声音当前采用只登记声音参考')
+                ref = media_reference(root, path, row['资源引用'])
+                suffix = Path(ref['file']).suffix.lower()
+                allowed = resources.KINDS['音频'] if purpose == '声音参考' else resources.KINDS['音频'] | resources.KINDS['视频']
+                if suffix not in allowed:
+                    raise ValueError('声音参考须为音频，原始参考须为音频或视频')
+        for row in records(doc, '关联资料'):
+            if row['关系'] == '模特' and not re.fullmatch(r'M\d{3,}', row['对象编号']):
+                raise ValueError('关联模特须使用M编号')
     current = {r['字段']:r['内容'] for r in records(doc,'定位与当前进度')}
     if current and current['商品编号'] not in MISSING:
         linked_object(root,path,current['商品编号'],current['商品资料'],'G')

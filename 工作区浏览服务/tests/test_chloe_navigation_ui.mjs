@@ -27,6 +27,7 @@ try {
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
       if (path === '/api/workspaces/account-demo/production-videos') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
+      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});

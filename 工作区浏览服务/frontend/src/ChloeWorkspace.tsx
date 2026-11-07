@@ -16,6 +16,8 @@ import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
 import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceAssets';
+import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
+import type { VoiceDetail } from './ChloeVoices';
 import { ChloeProduction } from './ChloeProduction';
 import { ChloeModels } from './ChloeModels';
 import { ChloeModelDetail } from './ChloeModelDetail';
@@ -67,30 +69,34 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const referenceConfig = referenceKind ? referenceAssetKinds[referenceKind] : null;
   const referenceId = current.value==='assets' && referenceConfig ? params.get(referenceConfig.parameter) : null;
   const referenceQuery = useQuery({queryKey:['chloe-reference-detail',referenceKind,spaceId,referenceId],queryFn:()=>get<ReferenceAssetDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/${referenceConfig!.endpoint}/${encodeURIComponent(referenceId!)}`),enabled:!!referenceId,refetchInterval:5000});
+  const voiceId = current.value==='assets' && assetCategory.value==='voices' ? params.get('voice') : null;
+  const voiceQuery = useQuery({queryKey:['chloe-voice',spaceId,voiceId],queryFn:()=>get<VoiceDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
     {current.value !== 'production' && <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
-        { label: assetCategory.label, href: modelId || referenceId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
+        { label: assetCategory.label, href: modelId || referenceId || voiceId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
         ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
         ...(referenceId ? [{label:referenceQuery.data ? `${referenceId} · ${referenceQuery.data.name}` : referenceId}] : []),
+        ...(voiceId ? [{label:voiceQuery.data ? `${voiceId} · ${voiceQuery.data.name}` : voiceId}] : []),
         ...(currentLook ? [{label:`${currentLook.id} · ${currentLook.name}`}] : []),
       ]} />}
     </PageHeader>}
-    {breadcrumbActions && (referenceId || currentLook) && createPortal(
+    {breadcrumbActions && (referenceId || currentLook || voiceId) && createPortal(
+      voiceId ? <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=voices`}>返回声音列表</Link> :
       referenceId ? <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${referenceKind}`}>返回{referenceConfig!.label}列表</Link> :
         <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'production' ? <ChloeProduction title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId ? undefined : 'panel'} aria-label={current.label}>
-      {(current.value !== 'assets' || !['models','clothing','scenes'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
+    {current.value === 'production' ? <ChloeProduction title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
+      {(current.value !== 'assets' || !['models','clothing','scenes','voices'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
-      {current.value === 'assets' ? modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>
+      {current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
         <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> : referenceKind ? <ChloeReferenceAssets kind={referenceKind} key={`${spaceId}/${referenceKind}`} workspaceQuery={workspaceQuery} /> :
-          <p className="muted">该分类的展示内容待下一步确定。</p>}</div>
+          <ChloeVoices key={spaceId} workspaceQuery={workspaceQuery} />}</div>
       </> : <>
         <p>{current.description}</p>
         <p className="muted">当前为栏目预览，具体内容随后补充。</p>

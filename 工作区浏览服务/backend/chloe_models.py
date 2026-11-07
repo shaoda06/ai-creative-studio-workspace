@@ -142,7 +142,7 @@ def model_files(root, identity, path, doc):
     return allowed
 
 
-def asset_content(root, path, doc, allowed, base):
+def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -152,14 +152,16 @@ def asset_content(root, path, doc, allowed, base):
     # Retain candidates and originals even when they are not currently adopted.
     for row in records(doc, '参考版本') + records(doc, '当前采用'):
         ref = media_reference(root, path, row['资源引用'])
-        if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
-            raise ValueError('参考版本必须为PNG、JPEG或WebP图片')
+        suffix = Path(ref['file']).suffix.lower()
+        media_kind = 'image' if suffix in {'.png', '.jpg', '.jpeg', '.webp'} else 'audio' if suffix in resources.KINDS['音频'] else 'video' if suffix in resources.KINDS['视频'] else None
+        if media_kind not in media_kinds:
+            raise ValueError('参考版本媒体类型不符合本资产要求')
         key = ref['resource_id'] + '@' + ref['version']
         slot = (row['用途'], key)
         if slot not in images:
             images[slot] = {'purpose': row['用途'], 'resource': ref['resource_id'], 'version': ref['version'],
                            'adopted': slot in adopted,
-                           'media': {'kind': 'image', 'name': row['用途'] + ' · ' + key, 'key': ref['file'],
+                           'media': {'kind': media_kind, 'name': row['用途'] + ' · ' + key, 'key': ref['file'],
                                      'url': base + '/files/' + quote(ref['file'], safe='/')},
                            'sourceHtml': linked_html(row.get('来源或原图引用', '未取得'), source, allowed, base),
                            'execution': row.get('执行编号', '不适用')}

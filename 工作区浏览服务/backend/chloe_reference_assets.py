@@ -1,14 +1,15 @@
 """Shared read-only clothing and scene records; media stay in their original versioned files."""
+import json
 from dataclasses import dataclass
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from backend.chloe_models import asset_content, linked_files, linked_html, request_space
+from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
 from backend.parsers import documents
-from chloe_documents import read_document, template
+from chloe_documents import read_document, records, template
 import project_resources as resources
 
 @dataclass
@@ -20,6 +21,7 @@ class AssetKind:
 
 CLOTHING = AssetKind('服装', 'O', 'shared-clothing')
 SCENES = AssetKind('场景', 'S', 'shared-scenes')
+VOICES = AssetKind('声音', 'A', 'shared-voices')
 
 
 def asset_documents(root, kind):
@@ -47,18 +49,28 @@ def asset_context(root, identity, kind):
 def asset_detail(root, identity, api, kind):
     _, name, path, doc = asset_context(root, identity, kind)
     base = f'{api}/{kind.endpoint}/{quote(identity)}'
+    content = asset_content(root, path, doc, linked_files(root, path, doc), base,
+                            ('audio', 'video') if kind == VOICES else ('image',))
+    if kind == VOICES:
+        content['versions'] = content.pop('images')
+        for item in content['versions']:
+            info = json.loads((resources.local(root, item['media']['key']).parent/'版本信息.json').read_text())
+            item['duration'] = info['facts'].get('duration_seconds')
+        content['models'] = [{'id': row['对象编号'], 'name': row['对象编号']+' · '+model_context(root, row['对象编号'])[0]}
+                             for row in records(doc, '关联资料') if row['关系'] == '模特']
     return {'id': identity, 'name': name, 'description': fields(doc, kind.label+'信息')[kind.label+'说明'],
-            **asset_content(root, path, doc, linked_files(root, path, doc), base),
-            'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
+            **content, 'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 
 def asset_cards(root, api, kind):
     cards = []
     for identity, name, path, doc in asset_documents(root, kind):
         base = f'{api}/{kind.endpoint}/{quote(identity)}'
-        content = asset_content(root, path, doc, linked_files(root, path, doc), base)
+        content = asset_content(root, path, doc, linked_files(root, path, doc), base,
+                                ('audio', 'video') if kind == VOICES else ('image',))
+        purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
         cover = next((image['media'] for image in content['images']
-                      if image['adopted'] and image['purpose'] == kind.label+'展示图'), None)
+                      if image['adopted'] and image['purpose'] == purpose), None)
         cards.append({'id': identity, 'name': name, 'media': cover})
     return cards
 
@@ -100,7 +112,7 @@ def asset_router(kind):
         space = request_space(request)
         try:
             path = asset_file(space.root, identity, key, kind)
-            inline = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
+            inline = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'} | resources.KINDS['音频'] | resources.KINDS['视频']
             return FileResponse(path, filename=path.name if download or not inline else None,
                                 headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
         except FileNotFoundError as error:
