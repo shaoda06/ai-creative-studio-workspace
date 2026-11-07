@@ -1,12 +1,15 @@
 """Read Chloe model cards from their sole documents and adopted portrait versions."""
+import html
+import re
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from backend.chloe_overview import fields
-from chloe_documents import media_reference, read_document, records, template
+from backend.parsers import documents
+from chloe_documents import LINK, media_reference, read_document, records, template
 import project_resources as resources
 
 router = APIRouter(prefix='/shared-models')
@@ -76,6 +79,138 @@ def portrait(identity: str, resource_id: str, version: str, request: Request, do
         path = portrait_file(space.root, identity, resource_id, version)
         return FileResponse(path, filename=path.name if download else None,
                             headers={'X-Content-Type-Options': 'nosniff'})
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+def model_context(root, identity):
+    for model_id, name, doc, _ in model_documents(root):
+        if model_id == identity:
+            path = root/'综合资料/共用素材/AI模特'/f'{model_id}-{name}'/'模特说明.md'
+            return name, path, doc
+    raise FileNotFoundError('模特资料不存在：' + identity)
+
+
+def linked_files(root, path, doc):
+    """Only files directly referenced by this model's business tables are exposed."""
+    allowed = {path.relative_to(root).as_posix()}
+    for section in doc['sections']:
+        for table in section['tables']:
+            for row in table['rows']:
+                for cell in row:
+                    for _, href in LINK.findall(cell):
+                        target = urlsplit(href)
+                        if target.scheme or target.netloc:
+                            continue
+                        file = (path.parent / unquote(target.path)).resolve()
+                        if file.is_relative_to(root/'综合资料') and file.is_file():
+                            allowed.add(file.relative_to(root).as_posix())
+    return allowed
+
+
+def linked_html(text, source, allowed, base):
+    rendered = documents.markdown(text, source)
+    def replace(match):
+        href, key, label = match.groups()
+        key = html.unescape(key)
+        if key not in allowed:
+            return label
+        fragment = urlsplit(html.unescape(href)).fragment
+        url = base + '/files/' + quote(key, safe='/') + ('#' + fragment if fragment else '')
+        return f'<a href="{html.escape(url, quote=True)}" data-doc="{html.escape(key, quote=True)}">{label}</a>'
+    return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
+
+
+def model_detail(root, identity, api):
+    name, path, doc = model_context(root, identity)
+    base = f'{api}/shared-models/{quote(identity)}'
+    allowed = linked_files(root, path, doc)
+    source = path.relative_to(root).as_posix()
+    adopted = set()
+    for row in records(doc, '当前采用'):
+        ref = media_reference(root, path, row['资源引用'])
+        adopted.add((row['用途'], ref['resource_id'] + '@' + ref['version']))
+    images = {}
+    # Retain candidates and originals even when they are not currently adopted.
+    for row in records(doc, '参考版本') + records(doc, '当前采用'):
+        ref = media_reference(root, path, row['资源引用'])
+        if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+            raise ValueError('模特参考版本必须为PNG、JPEG或WebP图片')
+        key = ref['resource_id'] + '@' + ref['version']
+        slot = (row['用途'], key)
+        if slot not in images:
+            images[slot] = {'purpose': row['用途'], 'resource': ref['resource_id'], 'version': ref['version'],
+                           'adopted': slot in adopted,
+                           'media': {'kind': 'image', 'name': row['用途'] + ' · ' + key, 'key': ref['file'],
+                                     'url': base + '/files/' + quote(ref['file'], safe='/')},
+                           'sourceHtml': linked_html(row.get('来源或原图引用', '未取得'), source, allowed, base),
+                           'execution': row.get('执行编号', '不适用')}
+    sections = []
+    for section in doc['sections']:
+        if section['heading'] == '填写说明':
+            continue
+        text = []
+        for table in section['tables']:
+            text.extend(['| ' + ' | '.join(table['columns']) + ' |', '| ' + ' | '.join(['---']*len(table['columns'])) + ' |'])
+            text.extend('| ' + ' | '.join(row) + ' |' for row in table['rows'])
+        sections.append({'heading': section['heading'], 'html': linked_html('\n'.join(text), source, allowed, base),
+                         'empty': not any(t['rows'] for t in section['tables'])})
+    return {'id': identity, 'name': name, 'images': list(images.values()), 'sections': sections,
+            'url': base + '/files/' + quote(source, safe='/')}
+
+
+def model_file(root, identity, key):
+    _, path, doc = model_context(root, identity)
+    if key not in linked_files(root, path, doc):
+        raise FileNotFoundError('文件未被该模特直接引用')
+    return resources.local(root, key)
+
+
+def request_space(request):
+    space = request.state.workspace_space
+    if space.view != 'chloe-commerce':
+        raise HTTPException(404, '该空间未接入带货共用模特')
+    return space
+
+
+@router.get('/{identity}')
+def detail(identity: str, request: Request):
+    space = request_space(request)
+    try:
+        return model_detail(space.root, identity, space.api)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@router.get('/{identity}/files/{key:path}')
+def linked_file(identity: str, key: str, request: Request, download: bool = False):
+    space = request_space(request)
+    try:
+        path = model_file(space.root, identity, key)
+        inline_image = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
+        return FileResponse(path, filename=path.name if download or not inline_image else None,
+                            headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@router.get('/{identity}/document')
+def linked_document(identity: str, path: str, request: Request):
+    space = request_space(request)
+    try:
+        file = model_file(space.root, identity, path)
+        if file.suffix.lower() == '.md':
+            _, source, doc = model_context(space.root, identity)
+            allowed = linked_files(space.root, source, doc)
+            base = f'{space.api}/shared-models/{quote(identity)}'
+            return {'title': file.stem, 'html': linked_html(file.read_text('utf-8-sig'), path, allowed, base)}
+        return documents.plain_text_preview(file)[0]
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

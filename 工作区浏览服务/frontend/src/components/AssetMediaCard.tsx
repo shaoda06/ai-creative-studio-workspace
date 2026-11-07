@@ -1,10 +1,11 @@
+import { Link } from 'react-router-dom';
 import { PointerTooltip } from './PointerTooltip';
 import { useContext, useState } from 'react';
 import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; onDetails?: () => void }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, to, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; to?: string; onDetails?: () => void }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -12,15 +13,18 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         preview({ kind: 'markdown', name: item.generation || '生成记录', key: decodeURIComponent(item.recordUrl.split('/files/')[1]), url: item.recordUrl });
       }}>{formal ? '生成记录' : item.generation}</a> : null;
   const version = formal ? item.version?.match(/v\d+(?:\.\d+)*/i)?.[0] : item.version || item.media?.key.match(/(?:候选|草稿)-(v\d+(?:\.\d+)*)/i)?.[1];
-  return <article className={`asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}`}>
+  const linked = entry && to;
+  const Cover = linked ? 'div' : 'button';
+  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}`;
+  const content = <>
     <PointerTooltip text={title}><h3 >{title}</h3></PointerTooltip>
     <div className="asset-media-item">
-      {item.media ? <button className="cover" onClick={() => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
+      {item.media ? <Cover className="cover" onClick={linked ? undefined : () => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         let divisor = width, remainder = height;
         while (remainder) [divisor, remainder] = [remainder, divisor % remainder];
         setDimensions(`${width} × ${height}（${width / divisor}:${height / divisor}）`);
-      }} /></button> : <div className="cover asset-media-placeholder">
+      }} /></Cover> : <div className="cover asset-media-placeholder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1.5" /><path d="m3 17 6-6 4 4 3-3 5 5" /></svg>
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}
@@ -36,5 +40,6 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       </>}
       </>}
     </div>
-  </article>;
+  </>;
+  return linked ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className}>{content}</article>;
 }

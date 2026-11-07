@@ -15,6 +15,8 @@ import { UnderlineTabs } from './components/UnderlineTabs';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
 import { ChloeModels } from './ChloeModels';
+import { ChloeModelDetail } from './ChloeModelDetail';
+import type { ModelDetail } from './ChloeModelDetail';
 
 const sections = [
   { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
@@ -56,19 +58,22 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const [params, setParams] = useSearchParams();
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
   const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
+  const modelId = current.value === 'assets' && assetCategory.value === 'models' ? params.get('model') : null;
+  const modelQuery = useQuery({queryKey:['chloe-model',spaceId,modelId], queryFn:()=>get<ModelDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(modelId!)}`), enabled:!!modelId, refetchInterval:5000});
   return <>
     <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
       {current.value === 'assets' && <Breadcrumbs items={[
         { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
-        { label: assetCategory.label },
+        { label: assetCategory.label, href: modelId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models` : undefined },
+        ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId}] : []),
       ]} />}
     </PageHeader>
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className="panel" aria-label={current.label}>
+    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId ? undefined : 'panel'} aria-label={current.label}>
       {(current.value !== 'assets' || assetCategory.value !== 'models') && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
-      {current.value === 'assets' ? <>
+      {current.value === 'assets' ? modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
         <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :

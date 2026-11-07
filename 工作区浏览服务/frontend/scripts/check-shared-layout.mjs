@@ -324,6 +324,9 @@ try {
     }
     assert.equal(await entryImageCards.locator('img').count(),1);
     assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),1);
+    const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
+    assert.equal(await entryLink.getAttribute('href'),'/');
+    assert.equal(await entryLink.locator('button,a').count(),0);
     await entryImageCards.getByRole('button').click();
     await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();

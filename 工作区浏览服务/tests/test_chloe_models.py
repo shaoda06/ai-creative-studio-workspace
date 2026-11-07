@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from PIL import Image
 
-from backend.chloe_models import model_cards, portrait_file
+from backend.chloe_models import model_cards, portrait_file, model_detail, model_file
 from chloe_init import initialize_workspace, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
@@ -58,6 +58,43 @@ class ChloeModelsTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             portrait_file(self.root, 'M001', second['resource_id'], second['version'])
         self.assertEqual(sorted(str(p) for p in self.root.rglob('*')), before)
+
+    def test_detail_keeps_candidates_and_exact_originals(self):
+        first, first_label = self.add_image('red', 'first')
+        second, second_label = self.add_image('blue', 'second', first['resource_id'])
+        original, original_label = self.add_image('green', 'original')
+        masked, masked_label = self.add_image('black', 'masked', original['resource_id'])
+        for purpose, label, parent in [('正面面部', first_label, '用户提供'), ('正面面部', second_label, first_label),
+                                      ('全身三视图原图', original_label, first_label), ('全身三视图遮面版', masked_label, original_label)]:
+            self.append('参考版本', [purpose, label, parent, '不适用'])
+        self.append('当前采用', ['正面面部', first_label, '用户选定', '2026-11-07T12:00:00+08:00'])
+        self.append('当前采用', ['全身三视图遮面版', masked_label, '用户选定', '2026-11-07T12:00:00+08:00'])
+        before = {str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        value = model_detail(self.root, 'M001', self.api)
+        self.assertEqual(len(value['images']), 4)
+        self.assertEqual(sum(i['adopted'] for i in value['images']), 2)
+        candidate = next(i for i in value['images'] if i['purpose'] == '正面面部' and i['version'] == second['version'])
+        self.assertFalse(candidate['adopted'])
+        self.assertIn('/shared-models/M001/files/', candidate['sourceHtml'])
+        self.assertEqual(model_cards(self.root, self.api)[0]['version'], first['version'])
+        self.assertEqual(model_file(self.root, 'M001', Path(second['absolute_file']).relative_to(self.root).as_posix()), Path(second['absolute_file']))
+        self.assertEqual({str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}, before)
+        unlinked, _ = self.add_image('yellow', 'unlinked')
+        with self.assertRaises(FileNotFoundError):
+            model_file(self.root, 'M001', unlinked['file'])
+        with self.assertRaises(FileNotFoundError):
+            model_detail(self.root, 'M999', self.api)
+
+    def test_linked_files_do_not_expose_external_documents(self):
+        outside = self.base/'private.md'
+        outside.write_text('private')
+        linked = self.model/'outside.md'
+        linked.symlink_to(outside)
+        self.path.write_text(self.path.read_text().replace('| 来源说明 | 待核实 |', '| 来源说明 | [外部](<outside.md>) |'))
+        value = model_detail(self.root, 'M001', self.api)
+        self.assertNotIn('/outside.md', str(value))
+        with self.assertRaises(FileNotFoundError):
+            model_file(self.root, 'M001', linked.relative_to(self.root).as_posix())
 
     def test_empty_and_invalid_document(self):
         self.path.unlink()
