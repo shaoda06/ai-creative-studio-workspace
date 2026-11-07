@@ -18,7 +18,7 @@ MEDIA = re.compile(r'\[(共用|本视频):((?:IMG|VID|AUD)-[a-zA-Z0-9-]+)@(V[0-9
 PREFIXES = {'事项编号': 'I', '记录编号': 'B', '事实编号': 'F', '条件编号': 'C', '卖点编号': 'S',
             '执行编号': 'E', '审阅编号': 'R', '返修编号': 'X', '交接编号': 'J',
             '发布编号': 'P', '采集编号': 'D', '复盘编号': 'R', '验证编号': 'T', '修订编号': 'U',
-            '核对编号': 'K', '镜头编号': 'SH'}
+            '核对编号': 'K', '镜头编号': 'SH', '资料编号': 'Q'}
 
 
 def parse(text):
@@ -94,6 +94,9 @@ def documents(root):
         identity, title = item.name.split('-', 1)
         for name, source in [('README.md','视频README模板.md'),('脚本.md','脚本模板.md'),('制作记录.md','制作记录模板.md')]:
             yield item/name, template('chloe-creative', source), {'identity': identity, 'title': title}
+
+        if (item/'发布资料.md').is_file():
+            yield item/'发布资料.md', template('chloe-handoff', '发布资料模板.md'), {'identity': identity, 'title': title}
 
 
 def enums():
@@ -338,8 +341,32 @@ def check_relations(root, path, doc):
                 raise ValueError('实际共用输入与共用引用表不一致')
         elif row['共用引用键'] != '不适用':
             raise ValueError('非视频共用输入的引用键须为不适用')
+    for row in records(doc, '发布资料'):
+        if row['成片文件'] not in MISSING:
+            match = LINK.fullmatch(row['成片文件'])
+            if not match or Path(match[2]).is_absolute():
+                raise ValueError('成片文件必须链接本视频成片目录的实际视频')
+            target = (path.parent/match[2]).resolve()
+            if not target.is_relative_to(owner/'成片') or not target.is_file() or target.suffix.lower() not in resources.KINDS['视频']:
+                raise ValueError('成片文件必须链接本视频成片目录的实际视频')
+        if row['封面引用'] not in MISSING:
+            ref = media_reference(root, path, row['封面引用'])
+            if Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
+                raise ValueError('发布封面必须引用准确图片版本')
+        if row['挂品链接'] not in MISSING and not re.match(r'^https?://[^\s]+$', row['挂品链接']):
+            raise ValueError('挂品链接须为HTTP(S)原始链接')
     publications = {r['发布编号'] for r in records(doc,'发布记录')}
     for row in records(doc,'发布记录'):
+        copy_link = LINK.fullmatch(row['文案'])
+        if copy_link and copy_link[2] == '发布资料.md':
+            identity, title = owner.name.split('-', 1)
+            prepared = read_document(root, owner/'发布资料.md', template('chloe-handoff', '发布资料模板.md'), {'identity': identity, 'title': title})
+            material = next((r for r in records(prepared, '发布资料') if r['资料编号'] == copy_link[1]), None)
+            if material is None:
+                raise ValueError('发布记录引用不存在的发布资料编号')
+            for actual, source in [('发布文件','成片文件'),('封面引用','封面引用'),('标签','话题'),('款式或SKU','款式或SKU'),('挂品链接','挂品链接')]:
+                if row[actual] != material[source]:
+                    raise ValueError('发布记录与所引用资料不一致：'+actual)
         match = LINK.fullmatch(row['发布文件'])
         if not match:
             raise ValueError('发布文件必须直接链接本视频成片目录的实际文件')

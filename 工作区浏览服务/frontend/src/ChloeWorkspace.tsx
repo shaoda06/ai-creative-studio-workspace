@@ -19,6 +19,7 @@ import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceA
 import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
 import type { VoiceDetail } from './ChloeVoices';
 import { ChloeProduction } from './ChloeProduction';
+import { ChloePublication } from './ChloePublication';
 import { ChloeModels } from './ChloeModels';
 import { ChloeModelDetail } from './ChloeModelDetail';
 import type { ModelDetail } from './ChloeModelDetail';
@@ -72,7 +73,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const voiceQuery = useQuery({queryKey:['chloe-voice',spaceId,voiceId],queryFn:()=>get<VoiceDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
-    {current.value !== 'production' && <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
+    {!['production', 'publication'].includes(current.value) && <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
         { label: assetCategory.label, href: modelId || referenceId || voiceId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
@@ -88,7 +89,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         <Link to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'production' ? <ChloeProduction title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
+    {current.value === 'publication' ? <ChloePublication title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'publication',video:value} : {section:'publication'})} /> : current.value === 'production' ? <ChloeProduction title={space!.name} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}`} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
       {(current.value !== 'assets' || !['models','clothing','scenes','voices'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>

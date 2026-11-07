@@ -43,6 +43,7 @@ from backend.routes.assets import create_router as asset_router
 from backend.routes.project_resources import create_router as resource_router
 from backend.chloe_overview import account_overview
 from backend.chloe_production import router as chloe_production_router
+from backend.chloe_publication import router as chloe_publication_router
 from backend.chloe_models import router as chloe_models_router
 from backend.chloe_clothing import router as chloe_clothing_router
 from backend.chloe_reference_assets import SCENES, VOICES, asset_router as chloe_asset_router
@@ -1159,6 +1160,7 @@ def workspace_file(name: str, path: str, request: Request, v: str | None = None,
 spaces_router.include_router(resource_router(lambda request: request.state.workspace_space.projects, queue_write,
                                             prefix='/projects/{name}/resources'))
 spaces_router.include_router(chloe_production_router)
+spaces_router.include_router(chloe_publication_router)
 spaces_router.include_router(chloe_models_router)
 spaces_router.include_router(chloe_clothing_router)
 spaces_router.include_router(chloe_asset_router(SCENES))
