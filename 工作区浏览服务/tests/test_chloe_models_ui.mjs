@@ -202,6 +202,7 @@ try {
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
   assert.equal(await page.getByRole('navigation',{name:'造型详情分类'}).count(),0);
   const lookInfo=page.getByRole('region',{name:'造型信息',exact:true});
+  assert.equal(await lookInfo.locator('dl > div').filter({has:page.getByText('造型说明',{exact:true})}).locator('dd').textContent(),'无');
   assert.equal(await lookInfo.getByText('服装来源类型',{exact:true}).count(),0);
   const layout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}}));
   assert.equal(layout[0].y,layout[1].y);

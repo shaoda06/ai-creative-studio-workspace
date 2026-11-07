@@ -109,8 +109,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <Link to={lookUrl()}>返回造型列表</Link>
         <div className="chloe-look-detail">
           <section className="panel" aria-label="造型信息"><h2>造型信息</h2>
-            <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div></dl>
-            {!['无','待确定','不适用','待核实','未取得'].includes(look.description) && <p>{look.description}</p>}
+            <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div><div><dt>造型说明</dt><dd>{look.description}</dd></div></dl>
           </section>
           <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>
         </div>
