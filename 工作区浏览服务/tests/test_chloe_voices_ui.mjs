@@ -20,13 +20,13 @@ const detail={id:'A001',name:'声音甲',description:'轻柔、自然的普通�
 ]};
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
-  const page=await browser.newPage({viewport:{width,height}}); const errors=[],unexpected=[];let empty=false,failed=false;
+  const page=await browser.newPage({viewport:{width,height}}); const errors=[],unexpected=[];let empty=false,failed=false,noReference=false;
   page.on('pageerror',error=>errors.push(String(error)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
    if(route.request().method()!=='GET') unexpected.push(route.request().method()+' '+path);
    if(path==='/api/workspaces/test/shared-voices') return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:empty?[]:[{id:'A001',name:'声音甲',media},{id:'A002',name:'声音乙',media:null}]});
-   if(path==='/api/workspaces/test/shared-voices/A001') return route.fulfill({json:detail});
+   if(path==='/api/workspaces/test/shared-voices/A001') return route.fulfill({json:noReference ? {...detail,versions:[]} : detail});
    if(path==='/api/workspaces/test/shared-models') return route.fulfill({json:[]});
    if(path==='/api/service') return route.fulfill({json:{version,ready:true}});
    if(path==='/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
@@ -63,9 +63,8 @@ try {
   empty=true;await page.reload();await page.getByText('暂无声音资料。',{exact:true}).waitFor();
   failed=true;await page.reload();await page.getByText('资料读取失败，请点击重新读取。',{exact:false}).waitFor();
   failed=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();await page.getByText('暂无声音资料。',{exact:true}).waitFor();
-  await page.getByRole('link',{name:'查看声音页面演示'}).click();
-  await page.getByRole('heading',{name:'声音信息',exact:true}).waitFor();
-  await page.getByRole('button',{name:'无参考',exact:true}).click();
+  assert.equal(await page.getByRole('link',{name:/演示/}).count(),0);
+  noReference=true; empty=false; await page.goto(url+'&voice=A001');
   await page.getByText('尚未采用声音参考。',{exact:true}).waitFor();
   assert.equal(await page.getByText('其他版本',{exact:true}).count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);

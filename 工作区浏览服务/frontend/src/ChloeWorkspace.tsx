@@ -51,7 +51,6 @@ function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery })
     <PageCheckStatus queries={[workspaceQuery, query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && <ChloeAccountOverview data={query.data} />}
-    <p><Link to="/examples/chloe/overview">查看账号概况演示</Link></p>
   </section>;
 }
 

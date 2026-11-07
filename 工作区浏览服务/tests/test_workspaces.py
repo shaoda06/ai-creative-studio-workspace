@@ -44,7 +44,7 @@ class WorkspaceTests(HttpTestCase):
 
     def test_account_overview_uses_registered_root_and_reports_invalid_documents(self):
         self.spaces.get('commercial').view = 'chloe-commerce'
-        fixture = Path(__file__).resolve().parents[1]/'examples/chloe-overview/new'
+        fixture = Path(__file__).resolve().parent/'fixtures/chloe-overview/new'
         shutil.copytree(fixture, self.other, dirs_exist_ok=True)
         url = self.api + '/account-overview'
         self.assertEqual(list(self.client.get(url).json()), ['direction', 'videos'])
@@ -54,6 +54,7 @@ class WorkspaceTests(HttpTestCase):
         self.assertEqual(self.client.get('/api/workspaces/nora/account-overview').status_code, 404)
         self.assertEqual(self.client.get('/api/workspaces/unknown/account-overview').status_code, 404)
         self.assertEqual(self.client.post(url).status_code, 405)
+        self.assertEqual(self.client.get('/api/examples/chloe/overview').status_code, 404)
         path.write_text(path.read_text().replace('## 账号方向', '## 临时写法'))
         self.assertEqual(self.client.get(url).status_code, 409)
         path.unlink()

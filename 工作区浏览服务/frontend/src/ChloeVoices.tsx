@@ -31,7 +31,6 @@ export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult
         playing={audio.playingId===item.id} progress={audio.currentId===item.id ? audio.progress : 0}
         onPlay={()=>audio.toggle(item.id,item.media!.url!)} onSelect={()=>navigate(`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=voices&voice=${encodeURIComponent(item.id)}`)} />;
     })}</div> : <p className="muted">暂无声音资料。</p>)}
-    <p><Link to="/examples/chloe/voices">查看声音页面演示</Link></p>
   </>;
 }
 

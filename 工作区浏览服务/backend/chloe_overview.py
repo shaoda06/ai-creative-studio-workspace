@@ -1,9 +1,6 @@
-"""Read-only projection of Chloe's fixed documents; demo routes use isolated fixtures."""
+"""Read-only projection of Chloe's fixed documents."""
 from pathlib import Path
 import sys
-from typing import Literal
-
-from fastapi import APIRouter
 
 TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL.parent / '.agents/skills/chloe-positioning/scripts'))
@@ -24,11 +21,3 @@ def account_overview(root: Path):
 
 def fields(doc, heading):
     return {row['字段']: row['内容'] for row in records(doc, heading)}
-
-
-router = APIRouter(prefix='/api/examples/chloe')
-
-
-@router.get('/overview')
-def example_overview(scenario: Literal['new', 'working'] = 'working'):
-    return account_overview(TOOL/'examples/chloe-overview'/scenario)

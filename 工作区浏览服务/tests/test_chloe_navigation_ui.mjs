@@ -10,7 +10,7 @@ const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
 const frontend = fileURLToPath(new URL('../frontend/', import.meta.url));
 const version = JSON.parse(await readFile(frontend+'package.json', 'utf8')).version;
 const tool = fileURLToPath(new URL('../', import.meta.url));
-const emptyOverview = JSON.parse(execFileSync(tool+'.venv/bin/python', ['-c', 'import json; from backend.chloe_overview import example_overview; print(json.dumps(example_overview("new")))'], {cwd:tool,encoding:'utf8'}));
+const emptyOverview = JSON.parse(execFileSync(tool+'.venv/bin/python', ['-c', 'import json; from pathlib import Path; from backend.chloe_overview import account_overview; print(json.dumps(account_overview(Path("tests/fixtures/chloe-overview/new"))))'], {cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp('/private/tmp/chloe-navigation-');
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],
   define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
