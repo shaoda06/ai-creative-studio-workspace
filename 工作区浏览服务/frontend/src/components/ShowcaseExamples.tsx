@@ -179,6 +179,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="外层已命名的采用图" item={imageRecord} revision={1} formal hideTitle />
         <AssetMediaCard title="外层已命名的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle />
       </ComponentExample>
+      <ComponentExample title="只显示尺寸的图片卡片" rule="showFileActions与showVersion默认开启，可分别关闭文件操作与版本字段；尺寸与图片预览不受影响。" usage="Chloe模特图片页当前采用图">
+        <AssetMediaCard title="仅保留尺寸的采用图" item={{media:image,version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
+        <AssetMediaCard title="仅保留尺寸的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
+      </ComponentExample>
       <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。默认卡片不变；entry传入to时整卡作为链接，图片不再单独打开预览，未传to时有图仍可预览。" usage="Chloe模特列表">
         <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...imageRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />

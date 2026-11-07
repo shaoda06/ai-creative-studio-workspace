@@ -61,7 +61,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const faceImage = data && adopted('正面面部');
   const bodyPurpose = view==='masked' ? bodyPurposes[0] : bodyPurposes[1];
   const bodyImage = data && adopted(bodyPurpose);
-  const imageCard = (purpose: string, image?: ModelImage) => <AssetMediaCard title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0}
+  const imageCard = (purpose: string, image?: ModelImage) => <AssetMediaCard title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={tab !== 'images'} showVersion={tab !== 'images'}
     item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
   const otherVersions = (purpose: string) => asset!.images
     .filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose)
