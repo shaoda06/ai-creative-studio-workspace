@@ -156,6 +156,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.store, 'enqueue', side_effect=AssertionError('must not enqueue')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
+        self.assertEqual(result['next_action'], 'continue-caller-workflow')
         self.assertFalse(self.store.rows)
         self.payload.prepare_only = False
         result = await plans.execute(self.store, self.payload)
@@ -567,8 +568,10 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         task.pop('authorization')
         self.write_plan(task)
         self.payload.prepare_only = True
-        await plans.execute(self.store, self.payload)
-        task['authorization'] = '准备结果展示后用户批准生成'
+        prepared = await plans.execute(self.store, self.payload)
+        self.assertEqual(prepared['next_action'], 'continue-caller-workflow')
+        self.assertFalse(self.store.rows)
+        task['authorization'] = '用户明确要求开始生成'
         self.write_plan(task)
         self.payload.prepare_only = False
         result = await plans.execute(self.store, self.payload)

@@ -224,7 +224,7 @@ async def execute(store, payload):
         prepared.append(dict(title=data.title, report=report['report']))
         inputs.append(data)
     if payload.prepare_only or payload.start_paused and any(data.image_plan and data.image_plan.get('local_processing') for data in inputs):
-        return dict(status='prepared', tasks=prepared, next_action='review-content')
+        return dict(status='prepared', tasks=prepared, next_action='continue-caller-workflow')
     if inputs and not accepted and not any(local_flags):
         result = await store.enqueue_group(inputs, source.get('group_title') or plan_file.stem)
         journal['group_id'] = result['group_id']
