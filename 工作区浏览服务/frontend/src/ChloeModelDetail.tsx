@@ -1,3 +1,4 @@
+import { FullscreenImage } from './components/FullscreenImage';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -109,7 +110,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <details><summary>执行记录</summary>{executionSections.map(heading=><section key={heading}>{heading!=='执行记录' && <h3>{heading}</h3>}{section(heading)}</section>)}</details>
       </details>}
     </div>}
-    {(document || preview) && <Preview project="" item={document || preview!} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0}
-      close={() => { if (document) setDocument(null); else select('ref',null); }} />}
+    {document ? <Preview project="" item={document} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />
+      : preview && <FullscreenImage title={preview.name} src={preview.url!} alt={preview.name} close={() => select('ref',null)} />}
   </PreviewContext.Provider>;
 }

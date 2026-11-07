@@ -1,7 +1,8 @@
+import { FullscreenImage } from './FullscreenImage';
 import { useProductionAccess } from './ProductionAccess';
 import { useContext, useState } from 'react';
 import type { DirectorSheetImage, DirectorSheets } from '../api';
-import { Dialog, PreviewContext } from '../components';
+import { PreviewContext } from '../components';
 import { FileActions } from './FileActions';
 import { Pagination } from './Pagination';
 import { TabNav } from './TabNav';
@@ -98,12 +99,9 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
         </button>
         <Pagination variant="arrows" page={pageIndex + 1} total={pages.length} pageSize={1} change={selectPage} />
       </div>
-      {fullscreen && <Dialog size="fullscreen" showHeader={false} title={`导演分镜表 · ${count}${sceneCount}`} close={() => setFullscreen(false)}>
-        <div className="director-sheet-fullscreen">
-          <button className="director-sheet-fullscreen-image" aria-label="退出全屏看图" onClick={() => setFullscreen(false)}><img src={current.image.url + `?v=${revision}`} alt={current.image.name} /></button>
-          <Pagination variant="arrows" page={pageIndex + 1} total={pages.length} pageSize={1} change={selectPage} />
-        </div>
-      </Dialog>}
+      {fullscreen && <FullscreenImage title={`导演分镜表 · ${count}${sceneCount}`} src={current.image.url + `?v=${revision}`} alt={current.image.name} close={() => setFullscreen(false)}>
+        <Pagination variant="arrows" page={pageIndex + 1} total={pages.length} pageSize={1} change={selectPage} />
+      </FullscreenImage>}
     </> : active ? emptyMessage(active) : <div className="scene-empty" role="status"><h3>暂无导演分镜表</h3></div>}
     {combine && groups.filter(group => !group.images.length && group !== active).map(group => <div key={group.id}>
       {emptyMessage(group)}

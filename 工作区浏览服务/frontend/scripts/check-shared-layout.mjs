@@ -217,16 +217,16 @@ try {
     assert.equal(fullscreenBox.height, height);
     const fullscreenStyle = await sheetDialog.evaluate(el => ({ background: getComputedStyle(el).backgroundColor, padding: getComputedStyle(el.querySelector('.dialog-body')).padding }));
     assert.equal(fullscreenStyle.background, 'rgba(24, 34, 47, 0.9)', '深灰蓝半透明蒙版');
-    const imageFrame = await sheetDialog.locator('.director-sheet-fullscreen-image').boundingBox();
+    const imageFrame = await sheetDialog.locator('.fullscreen-image-close').boundingBox();
     assert.ok(imageFrame.x >= 16 && imageFrame.y >= 48 && imageFrame.x + imageFrame.width <= width - 16 && imageFrame.y + imageFrame.height <= height - 24, '全屏图像四周留空隙');
     const closeCircle = await sheetDialog.getByRole('button', { name: '关闭', exact: true }).boundingBox();
     assert.equal(closeCircle.width, 40);
     assert.equal(closeCircle.height, 40);
     assert.equal(closeCircle.y, 12);
     assert.equal(closeCircle.x + closeCircle.width, width - 16);
-    assert.match(await sheetDialog.locator('.director-sheet-fullscreen-image > img').getAttribute('alt'), /第02页/);
+    assert.match(await sheetDialog.locator('.fullscreen-image-close > img').getAttribute('alt'), /第02页/);
     await sheetDialog.getByRole('button', { name: '下一张图', exact: true }).click();
-    assert.match(await sheetDialog.locator('.director-sheet-fullscreen-image > img').getAttribute('alt'), /第03页/);
+    assert.match(await sheetDialog.locator('.fullscreen-image-close > img').getAttribute('alt'), /第03页/);
     await page.keyboard.press('Escape');
     await sheetDialog.waitFor({ state: 'hidden' });
     assert.match(await sheetImage.getAttribute('alt'), /第03页/, '退出全屏保留当前页');
@@ -368,6 +368,16 @@ try {
       await detailButton.click();
       await page.getByRole('dialog').getByText('本地图片详情示例。', { exact: true }).waitFor();
       await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+    }
+    const fullscreenExample=showcase.locator('.asset-media-card').filter({has:page.getByRole('heading',{name:'全屏图片示例',exact:true})});
+    for (const method of ['click','escape']) {
+      await fullscreenExample.locator('.cover').click();
+      const fullscreenDialog=page.getByRole('dialog',{name:'全屏图片示例',exact:true});
+      await fullscreenDialog.waitFor();
+      assert.ok((await fullscreenDialog.getAttribute('class')).includes('dialog-fullscreen'));
+      if (method==='click') await fullscreenDialog.getByRole('button',{name:'退出全屏看图',exact:true}).click();
+      else await page.keyboard.press('Escape');
+      await fullscreenDialog.waitFor({state:'detached'});
     }
     for (const title of ['外层已命名的采用图','外层已命名的空图片']) {
       const card=showcase.getByRole('article',{name:title,exact:true});

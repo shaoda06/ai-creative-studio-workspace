@@ -164,7 +164,15 @@ try {
   await page.getByRole('dialog').waitFor(); assert.match(page.url(),/ref=/);
   await page.reload(); await page.getByRole('dialog').waitFor();
   assert.equal(await page.getByRole('dialog').locator('img').count(),1);
+  assert.equal(await page.getByRole('dialog').getAttribute('class'),'dialog-fullscreen');
+  await page.getByRole('dialog').getByRole('button',{name:'退出全屏看图',exact:true}).click();
+  await page.getByRole('dialog').waitFor({state:'detached'});
+  assert.doesNotMatch(page.url(),/ref=/);
+  await faceColumn.locator(':scope > div > .asset-media-card .cover').click();
+  await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
+  assert.doesNotMatch(page.url(),/ref=/);
 
   const records=page.locator('.chloe-model-detail > details');
   assert.equal(await records.count(),1);

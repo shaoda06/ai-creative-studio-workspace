@@ -1,3 +1,4 @@
+import { FullscreenImage } from './FullscreenImage';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -56,6 +57,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [search, setSearch] = useState('');
   const entryTitles = ['公共组件示例', '带有较长标题并可以自然换行的公共组件入口卡片示例，供对照同行卡片的底部入口位置'].filter(title => title.includes(search));
   const [selected, setSelected] = useState('one');
+  const [fullscreenImage, setFullscreenImage] = useState(false);
   const [preview, setPreview] = useState<FileItem | null>(null);
   const close = useCallback(() => setPreview(null), []);
   const [readState, setReadState] = useState('ready');
@@ -168,6 +170,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
             <AssetMediaCard title="生成记录与查看详情" item={{ ...imageRecord, recordUrl: '/component-samples/files/示例生成记录.md', generation: '生成记录-示例' }} revision={1} formal onDetails={() => setPreview(imageDetails)} />
           </div>
         </PreviewContext.Provider>
+      </ComponentExample>
+      <ComponentExample title="全屏看图" rule="点击图片进入全屏，图片完整等比显示；再次点击图片、按Esc或关闭按钮退出。可传入分页控件，分页不关闭图片。" usage="导演分镜表、Chloe模特图片">
+        <PreviewContext.Provider value={() => setFullscreenImage(true)}><AssetMediaCard title="全屏图片示例" item={imageRecord} revision={1} compact /></PreviewContext.Provider>
+        {fullscreenImage && <FullscreenImage title="全屏图片示例" src={imageRecord.media!.url!} alt="全屏图片示例" close={() => setFullscreenImage(false)} />}
       </ComponentExample>
       <ComponentExample title="外层已命名的图片卡片" rule="hideTitle隐藏卡片内部重复标题，仍保留可访问名称、图片预览与资料；其他卡片默认显示标题。" usage="Chloe模特当前图片">
         <AssetMediaCard title="外层已命名的采用图" item={imageRecord} revision={1} formal hideTitle />
