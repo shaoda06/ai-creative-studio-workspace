@@ -223,7 +223,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_standard_default_lora_chain(self):
         standard = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'api').read_text(encoding='utf-8'))
-        for node in ("128", "342", "344", "345"):
+        for node in ("128", "507", "342", "344", "345"):
             self.assertNotIn(node, standard)
         self.assertEqual(standard["53"]["class_type"], "LoraLoaderModelOnly")
         self.assertEqual(standard["53"]["inputs"]["lora_name"], "minimax_h3_dmad_full_dareties_v4_step600_comfy_fro.safetensors")
@@ -322,6 +322,32 @@ class BaselineTests(unittest.TestCase):
                             if node in chain:
                                 self.assertEqual(graph[str(node)]['inputs']['strength_model'], strength)
 
+    def test_optional_speech_lora_exports_after_mystic_with_independent_switch(self):
+        baseline = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow').read_text(encoding='utf-8'))
+        defaults = {node['id']: node for node in baseline['nodes']}
+        self.assertEqual(defaults[507]['mode'], 4)
+        for mystic in (False, True):
+            for speech in (False, True):
+                for combat in (False, True):
+                    with self.subTest(mystic=mystic, speech=speech, combat=combat):
+                        data = copy.deepcopy(baseline)
+                        selected = {128: mystic, 507: speech, 342: combat, 344: combat, 345: combat}
+                        for node in data['nodes']:
+                            if node['id'] in selected:
+                                node['mode'] = 0 if selected[node['id']] else 4
+                        chain = [53] + [key for key in (128, 507, 342, 344, 345) if selected[key]] + [343]
+                        for output in (504, 506):
+                            api = wb.Canvas(data).api(output)
+                            for key, enabled in selected.items():
+                                self.assertEqual(str(key) in api, enabled)
+                            for parent, child in zip([331, *chain], [*chain, 405]):
+                                self.assertEqual(api[str(child)]['inputs']['model'], [str(parent), 0])
+                            if speech:
+                                self.assertEqual(api['507']['inputs']['lora_name'], 'natural_face_speech_h3_lora_v2_500.safetensors')
+                                self.assertEqual(api['507']['inputs']['strength_model'], 0.8)
+                            self.assertEqual(api['502']['inputs']['model'], ['405', 0])
+                            self.assertEqual(api['408']['inputs']['model'], ['405', 0])
+
     def test_standard_saves_both_stages_without_final_output_dependency_in_first_pass(self):
         canvas = wb.Canvas(json.loads((workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow')).read_text(encoding="utf-8")))
         first = canvas.api(504)
@@ -334,7 +360,7 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(first["503"]["inputs"]["images"], ["502", 6])
         self.assertEqual(second["505"]["inputs"]["images"], ["502", 0])
         for graph, create_id, save_id in ((first, "503", "504"), (second, "505", "506")):
-            for node in ("128", "342", "344", "345"):
+            for node in ("128", "507", "342", "344", "345"):
                 self.assertNotIn(node, graph)
             self.assertEqual(graph["343"]["inputs"]["model"], ["53", 0])
             self.assertEqual(graph["405"]["inputs"]["model"], ["343", 0])
