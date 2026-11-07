@@ -1,0 +1,4 @@
+.audio-reference-card{display:flex;align-items:center;gap:16px;min-width:0;padding:12px 16px;border:1px solid var(--line);border-radius:8px}
+.audio-reference-card-heading{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.audio-reference-card-heading h3{margin:0;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-reference-card-duration{flex:none;white-space:nowrap;margin-left:auto}

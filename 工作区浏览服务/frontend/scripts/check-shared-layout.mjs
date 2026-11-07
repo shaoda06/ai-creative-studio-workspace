@@ -338,7 +338,7 @@ try {
     await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     const entryImageCards = showcase.locator('.asset-media-card-entry');
-    assert.equal(await entryImageCards.count(), 2);
+    assert.equal(await entryImageCards.count(), 4);
     for (const card of await entryImageCards.all()) {
       await contained(card, `${width}px / 入口图片卡片`);
       const title = await card.locator('h3').evaluate(el => ({height:el.getBoundingClientRect().height, lineHeight:parseFloat(getComputedStyle(el).lineHeight), ellipsis:getComputedStyle(el).textOverflow}));
@@ -346,14 +346,35 @@ try {
       assert.equal(title.ellipsis,'ellipsis');
       assert.equal(await card.locator('.asset-media-field,.asset-media-html-field,.asset-media-footer').count(),0);
     }
-    assert.equal(await entryImageCards.locator('img').count(),1);
-    assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),1);
+    assert.equal(await entryImageCards.locator('img').count(),2);
+    assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),2);
     const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
     assert.equal(await entryLink.getAttribute('href'),'/');
     assert.equal(await entryLink.locator('button,a').count(),0);
-    await entryImageCards.getByRole('button').click();
+    await entryImageCards.first().getByRole('button').click();
     await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    const actionCard=entryImageCards.filter({hasText:'带声音的入口卡片长标题'});
+    assert.equal(await actionCard.locator('a button').count(),0);
+    const beforePlay=page.url();
+    await actionCard.getByRole('button',{name:'播放入口卡片声音',exact:true}).click();
+    await actionCard.getByRole('button',{name:'暂停入口卡片声音',exact:true}).waitFor();
+    assert.equal(page.url(),beforePlay,'入口试听不触发导航');
+    await actionCard.getByRole('button',{name:'暂停入口卡片声音',exact:true}).click();
+    assert.ok(await entryImageCards.filter({hasText:'未关联声音的入口卡片'}).getByRole('button').isDisabled());
+    const soundCards=showcase.locator('.audio-reference-card');
+    assert.equal(await soundCards.count(),2);
+    for(const soundCard of await soundCards.all()) {
+      await contained(soundCard,`${width}px / 紧凑声音卡片`);
+      const title=await soundCard.locator('h3').boundingBox(), duration=await soundCard.locator('.audio-reference-card-duration').boundingBox();
+      assert.ok(Math.abs(title.y+title.height/2-duration.y-duration.height/2)<2);
+      assert.ok(duration.x>title.x+title.width);
+      assert.ok((await soundCard.boundingBox()).height<70);
+    }
+    assert.equal(await soundCards.last().locator('.audio-reference-card-duration').innerText(),'时长：未取得');
+    await soundCards.first().getByRole('button').click();
+    await soundCards.first().getByRole('button',{name:'暂停AUD-SAMPLE@V001',exact:true}).waitFor();
+    await soundCards.first().getByRole('button').click();
     const detailCards = showcase.locator('.asset-media-card').filter({ has: page.locator('.asset-media-details') });
     assert.equal(await detailCards.count(), 3);
     const pendingCard = detailCards.filter({ hasText: '已登记尚未生成' });

@@ -1,4 +1,4 @@
-"""Shared read-only clothing and scene records; media stay in their original versioned files."""
+"""Shared read-only clothing, scene and voice records; media stay in their original versioned files."""
 import json
 from dataclasses import dataclass
 from urllib.parse import quote
@@ -69,9 +69,18 @@ def asset_cards(root, api, kind):
         content = asset_content(root, path, doc, linked_files(root, path, doc), base,
                                 ('audio', 'video') if kind == VOICES else ('image',))
         purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
-        cover = next((image['media'] for image in content['images']
-                      if image['adopted'] and image['purpose'] == purpose), None)
-        cards.append({'id': identity, 'name': name, 'media': cover})
+        current = next((image for image in content['images']
+                        if image['adopted'] and image['purpose'] == purpose), None)
+        card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
+        if kind == VOICES:
+            card['models'] = [row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特']
+            card['description'] = fields(doc, '声音信息')['声音说明']
+            card['reference'] = None
+            if current:
+                info = json.loads((resources.local(root, current['media']['key']).parent/'版本信息.json').read_text())
+                card['reference'] = {'resource': current['resource'], 'version': current['version'],
+                                     'duration': info['facts'].get('duration_seconds')}
+        cards.append(card)
     return cards
 
 

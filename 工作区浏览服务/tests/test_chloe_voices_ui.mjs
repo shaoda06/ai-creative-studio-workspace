@@ -13,7 +13,7 @@ const server=await createServer({configFile:false,root:frontend,plugins:[react()
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
 const media={kind:'audio',name:'样本',key:'sample.wav',url:'/component-samples/tone.wav'};
-const detail={id:'A001',name:'声音甲',description:'轻柔、自然的普通话声线',models:[],sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,html:'',empty:true})),versions:[
+const detail={id:'A001',name:'声音甲',description:'轻柔、自然的普通话声线',models:[{id:'M001',name:'M001 · 模特甲'}],sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,html:'',empty:true})),versions:[
  {purpose:'声音原始参考',resource:'AUD-TEST',version:'V001',media,duration:1,adopted:false,execution:'不适用',sourceHtml:'<p>原件</p>'},
  {purpose:'声音原始参考',resource:'VID-TEST',version:'V001',media:{kind:'video',name:'原始视频',key:'sample.webm',url:'/component-samples/video.webm'},duration:1,adopted:false,execution:'不适用',sourceHtml:'<p>原件</p>'},
  ...Array.from({length:8},(_,i)=>({purpose:'声音参考',resource:'AUD-TEST',version:`V00${i+1}`,media,duration:i+1,adopted:i===7,execution:'不适用',sourceHtml:'<p>来源样本</p>'}))
@@ -42,6 +42,14 @@ try {
   await page.getByRole('button',{name:'A001 · 声音甲',exact:true}).click();
   await page.getByRole('heading',{name:'声音信息',exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'原始参考'}).getByRole('button').count(),2);
+  const modelRow=page.locator('.chloe-overview-fields > div').filter({has:page.getByText('关联模特',{exact:true})});
+  const labelBox=await modelRow.locator('dt').boundingBox(), modelBox=await modelRow.locator('a').boundingBox();
+  assert.ok(Math.abs(labelBox.y+labelBox.height/2-modelBox.y-modelBox.height/2)<2,'关联模特标签和链接对齐');
+  const recording=page.locator('.audio-reference-card').first();
+  const titleBox=await recording.locator('h3').boundingBox(), durationBox=await recording.locator('.audio-reference-card-duration').boundingBox();
+  assert.ok(Math.abs(titleBox.y+titleBox.height/2-durationBox.y-durationBox.height/2)<2,'标题和时长同排');
+  assert.ok(durationBox.x>titleBox.x+titleBox.width,'时长靠右');
+  assert.ok((await recording.boundingBox()).height<70,'声音卡片保持紧凑');
   await page.getByRole('button',{name:'播放AUD-TEST@V008'}).click();
   await page.waitForFunction(()=>document.querySelector('audio')?.currentSrc.includes('tone.wav'));
   await page.getByRole('button',{name:'参考 1 · AUD-TEST@V001'}).click();
@@ -53,6 +61,7 @@ try {
   assert.equal(await versions.locator('article').count(),7);
   assert.equal(await versions.locator('h3').first().textContent(),'AUD-TEST@V007');
   assert.ok(await versions.evaluate(node=>node.scrollHeight>node.clientHeight));
+  assert.ok(Math.abs((await versions.locator('.audio-reference-card').first().boundingBox()).height-(await recording.boundingBox()).height)<1,'采用与候选使用同一紧凑卡片');
   const left=await page.getByRole('region',{name:'声音信息',exact:true}).boundingBox();
   const right=await page.getByRole('region',{name:'声音参考',exact:true}).boundingBox();
   assert.ok(left.x<right.x && Math.abs(left.y-right.y)<2);

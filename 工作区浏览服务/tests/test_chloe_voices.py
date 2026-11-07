@@ -53,6 +53,7 @@ class ChloeVoicesTests(unittest.TestCase):
         self.assertEqual(data['description'], '无')
         self.assertEqual(data['models'], [])
         card = asset_cards(self.root, self.api, VOICES)[0]
+        self.assertEqual(card['reference'], {'resource':first['resource_id'],'version':first['version'],'duration':1})
         self.assertEqual(asset_file(self.root, 'A001', card['media']['key'], VOICES), Path(first['absolute_file']))
         self.assertEqual(before, {str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
@@ -69,6 +70,10 @@ class ChloeVoicesTests(unittest.TestCase):
         self.append('关联资料', ['模特', 'M001', f'[模特](<{os.path.relpath(model/"模特说明.md",self.folder)}>)', '说话音色'])
         data = asset_detail(self.root, 'A001', self.api, VOICES)
         self.assertEqual(data['models'], [{'id':'M001', 'name':'M001 · 示例模特'}])
+        card = asset_cards(self.root, self.api, VOICES)[0]
+        self.assertEqual(card['models'], ['M001'])
+        self.assertIsNone(card['reference'])
+        self.assertEqual(card['description'], '无')
         _, label = self.audio('reference', 1)
         self.append('参考版本', ['旁白', label, '用户提供', '不适用'])
         with self.assertRaisesRegex(ValueError, '声音用途'):

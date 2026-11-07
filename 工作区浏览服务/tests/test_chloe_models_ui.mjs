@@ -111,6 +111,7 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
+   if(path==='/api/workspaces/chloe/shared-voices') return route.fulfill({json:[{id:'A001',name:'声音甲',description:'无',models:['M001'],media:{kind:'audio',name:'声音甲',key:'sample.wav',url:'/component-samples/tone.wav'},reference:{resource:'AUD-SAMPLE',version:'V001',duration:4}}]});
    if(path==='/api/workspaces/chloe/shared-models') {
     if(fail)return route.fulfill({status:409,json:{detail:'isolated invalid document'}});
     const cards=structuredClone(sample.cards);
@@ -137,7 +138,7 @@ try {
   await page.getByText('尚未采用正面面部图',{exact:true}).waitFor();
   const placeholder=page.locator('.asset-media-placeholder');
   assert.equal(await placeholder.count(),1);
-  const blankBox=await placeholder.boundingBox(), imageBox=await page.locator('.asset-media-card-link').first().locator('.cover').boundingBox();
+  const blankBox=await placeholder.boundingBox(), imageBox=await page.locator('.asset-media-card').first().locator('.cover').boundingBox();
   assert.equal(blankBox.height,imageBox.height);
   assert.ok(Math.abs(blankBox.width-imageBox.width)<=1);
   assert.equal(await placeholder.getByRole('button').count(),0);
@@ -150,10 +151,17 @@ try {
   const tabsBox=await page.getByRole('navigation',{name:'共用资产分类',exact:true}).boundingBox();
   const gridBox=await page.locator('.asset-media-grid').boundingBox();
   assert.ok(gridBox.y-tabsBox.y-tabsBox.height>=19);
+  const play=page.getByRole('button',{name:'播放示例模特甲 · 声音甲',exact:true});
+  await play.click();
+  await page.waitForFunction(()=>document.querySelector('audio')?.currentSrc.includes('tone.wav'));
+  assert.ok(page.url().endsWith('section=assets'),'试听不进入模特详情');
+  assert.ok(await page.getByRole('button',{name:'示例模特乙暂无音频',exact:true}).isDisabled());
   const card=page.getByRole('link',{name:'M001 · 示例模特甲',exact:true});
   assert.equal(await card.locator('button,a').count(),0);
   await card.focus(); await page.keyboard.press('Enter');
   await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
+  await page.getByRole('region',{name:'声音信息',exact:true}).getByRole('link',{name:'A001 · 声音甲'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'播放AUD-SAMPLE@V001',exact:true}).count(),1);
   const featureTable=page.locator('.prose-field-table table');
   const featureRatio=await featureTable.evaluate(table=>table.querySelector('th').getBoundingClientRect().width/table.getBoundingClientRect().width);
   assert.ok(Math.abs(featureRatio-.4)<.005,'人物特征表格左40%、右60%');

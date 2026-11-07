@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 import { PointerTooltip } from './PointerTooltip';
 import { useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number; to?: string; onDetails?: () => void }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number; to?: string; titleActions?: ReactNode; onDetails?: () => void }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -14,11 +15,15 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       }}>{formal ? '生成记录' : item.generation}</a> : null;
   const version = formal ? item.version?.match(/v\d+(?:\.\d+)*/i)?.[0] : item.version || item.media?.key.match(/(?:候选|草稿)-(v\d+(?:\.\d+)*)/i)?.[1];
   const linked = entry && to;
+  const linkedActions = linked && !!titleActions;
   const Cover = linked ? 'div' : 'button';
   const coverStyle = aspectRatio ? { aspectRatio, height: 'auto' } : undefined;
-  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}`;
+  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}`;
   const content = <>
-    {!hideTitle && <PointerTooltip text={title}><h3 >{title}</h3></PointerTooltip>}
+    {!hideTitle && (titleActions ? <div className="asset-media-card-heading">
+      <PointerTooltip text={title}><h3>{linkedActions ? <Link to={to!} aria-label={title} className="asset-media-card-title-link">{title}</Link> : title}</h3></PointerTooltip>
+      <div className="asset-media-card-title-actions">{titleActions}</div>
+    </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
       {item.media ? <Cover style={coverStyle} className="cover" onClick={linked ? undefined : () => preview(item.media)}><img style={aspectRatio ? { maxHeight: 'none' } : undefined} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
@@ -40,5 +45,5 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       </>}
     </div>
   </>;
-  return linked ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className} aria-label={hideTitle ? title : undefined}>{content}</article>;
+  return linked && !linkedActions ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className} aria-label={hideTitle ? title : undefined}>{content}</article>;
 }

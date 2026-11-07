@@ -1,3 +1,4 @@
+import { ChloeModelVoices } from './ChloeModelVoices';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import { FullscreenImage } from './components/FullscreenImage';
 import { useState } from 'react';
@@ -97,6 +98,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       <div className="chloe-model-detail">
       {tab==='info' && <>
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
+        <ChloeModelVoices key={data.id} spaceId={spaceId!} modelId={data.id} />
       </>}
       {tab==='images' && <div className="chloe-model-images">
         <section className="panel chloe-model-image-column" aria-label="正面面部图">

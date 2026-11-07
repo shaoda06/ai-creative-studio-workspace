@@ -222,3 +222,13 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 .prose-spaced-headings :is(h2,h3) ~ :is(h2,h3){margin-top:40px}
 
 .chloe-voice-versions{max-height:540px}
+
+.asset-media-card-heading{display:flex;align-items:center;gap:12px;margin-bottom:18px;min-width:0}
+.asset-media-card-heading>h3{font-size:15px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset-media-card-title-actions{position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex:none}
+.asset-media-card-linked-actions{position:relative}
+.asset-media-card-title-link{color:inherit;text-decoration:none}
+.asset-media-card-title-link::after{position:absolute;inset:0;content:"";border-radius:8px}
+.asset-media-card-title-link:focus-visible::after{outline:2px solid var(--green);outline-offset:2px}
+
+.chloe-model-voice{display:grid;gap:12px}.chloe-model-voice+.chloe-model-voice{margin-top:20px}

@@ -1,3 +1,4 @@
+import { AudioReferenceCard } from './components/AudioReferenceCard';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -7,12 +8,12 @@ import type { FileItem, WorkspaceSpace } from './api';
 import { Preview, PreviewContext, Result, Rich } from './components';
 import { PageCheckStatus } from './components/PageCheckStatus';
 import { ReferenceMediaCard } from './components/ReferenceMediaCard';
-import { AudioPreviewButton, useAudioPreview } from './components/AudioPreviewButton';
+import { useAudioPreview } from './components/AudioPreviewButton';
 import { LinkButton } from './components/LinkButton';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetSection } from './ChloeAssetRecords';
 
-interface VoiceCard { id: string; name: string; media: FileItem | null }
+export interface VoiceCard { id: string; name: string; description: string; models: string[]; media: FileItem | null; reference: {resource: string; version: string; duration: number | null} | null }
 export interface VoiceVersion { purpose: string; resource: string; version: string; adopted: boolean; media: FileItem; duration: number | null; sourceHtml: string; execution: string }
 export interface VoiceDetail { id: string; name: string; description: string; models: {id: string; name: string}[]; versions: VoiceVersion[]; sections: AssetSection[] }
 
@@ -34,12 +35,6 @@ export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult
   </>;
 }
 
-function durationText(seconds: number | null) {
-  if (seconds===null) return '未取得';
-  const value=Math.round(seconds*100)/100;
-  return value>60 ? `${value}秒（${Math.floor(value/60)}分${Math.round((value%60)*100)/100}秒）` : `${value}秒`;
-}
-
 export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: VoiceDetail; spaceId: string; onOpen: (file: FileItem)=>void; active?: boolean}) {
   const audio=useAudioPreview(active,data.id,0);
   const current=data.versions.filter(item=>item.adopted && item.purpose==='声音参考');
@@ -47,10 +42,8 @@ export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: Voic
   const originals=data.versions.filter(item=>item.purpose==='声音原始参考');
   const recording=(item: VoiceVersion)=>{
     const id=`${item.resource}@${item.version}`;
-    return <article key={id} className="panel" aria-label={id}>
-      <div className="reference-detail-heading"><h3>{id}</h3><AudioPreviewButton name={id} enabled playing={audio.playingId===id} progress={audio.currentId===id ? audio.progress : 0} onClick={()=>audio.toggle(id,item.media.url!)} /></div>
-      <p>时长：{durationText(item.duration)}</p>
-    </article>;
+    return <AudioReferenceCard key={id} name={id} duration={item.duration} playing={audio.playingId===id}
+      progress={audio.currentId===id ? audio.progress : 0} onPlay={()=>audio.toggle(id,item.media.url!)} />;
   };
   return <div className="chloe-model-detail">
     {audio.player}
@@ -59,7 +52,7 @@ export function ChloeVoiceContent({data,spaceId,onOpen,active=true}: {data: Voic
         <dl className="chloe-overview-fields">
           <div><dt>声音名称</dt><dd>{data.name}</dd></div>
           <div><dt>声音说明</dt><dd>{data.description}</dd></div>
-          <div><dt>关联模特</dt><dd>{data.models.length ? data.models.map(model=><p key={model.id}><Link to={`/spaces/${encodeURIComponent(spaceId)}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}>{model.name}</Link></p>) : '无'}</dd></div>
+          <div><dt>关联模特</dt><dd>{data.models.length ? data.models.map(model=><div key={model.id}><Link to={`/spaces/${encodeURIComponent(spaceId)}?section=assets&asset=models&model=${encodeURIComponent(model.id)}`}>{model.name}</Link></div>) : '无'}</dd></div>
         </dl>
         <section aria-label="原始参考"><h3>原始参考</h3>{originals.length ? <ul>{originals.map((item,index)=><li key={`${item.resource}@${item.version}`}><LinkButton onClick={()=>onOpen(item.media)}>参考 {index+1} · {item.resource}@{item.version}</LinkButton></li>)}</ul> : <p>无</p>}</section>
       </section>

@@ -1,3 +1,4 @@
+import { AudioReferenceCard } from './AudioReferenceCard';
 import { FullscreenImage } from './FullscreenImage';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -192,6 +193,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
       </ComponentExample>
       <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。默认卡片不变；entry传入to时整卡作为链接，图片不再单独打开预览，未传to时有图仍可预览。" usage="Chloe模特列表">
         <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...imageRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
+        <AssetMediaCard title="带声音的入口卡片长标题：试听按钮不会跳转" item={imageRecord} revision={1} entry to="/"
+          titleActions={<AudioPreviewButton name="入口卡片声音" enabled playing={sound.playingId==='entry'} progress={sound.currentId==='entry' ? sound.progress : 0} onClick={()=>sound.toggle('entry',audio.url!)} />} />
+        <AssetMediaCard title="未关联声音的入口卡片" item={{emptyLabel:'尚未采用图片'}} revision={1} entry to="/"
+          titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
       <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
@@ -202,6 +207,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <ReferenceMediaCard item={{ kind: 'reference', name: audio.name, media: audio, approvalHtml: '<span class="status-badge status-gray">示例</span>' }} audio playing={sound.playingId === 'sample'} progress={sound.progress} onPlay={() => sound.toggle('sample', audio.url!)} onSelect={() => setPreview(audio)} />
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />
         <AudioPreviewButton name="缺少参考音频的示例" enabled={false} playing={false} progress={0} onClick={() => {}} />
+      </ComponentExample>
+      <ComponentExample title="紧凑声音参考" rule="标题、公共试听按钮与右侧时长同排；长标题省略并提供完整提示，时长未知显示未取得。" usage="Chloe声音当前采用、其他版本与模特声音信息">
+        <AudioReferenceCard name="AUD-SAMPLE@V001" duration={4} playing={sound.playingId==='reference'} progress={sound.currentId==='reference' ? sound.progress : 0} onPlay={()=>sound.toggle('reference',audio.url!)} />
+        <AudioReferenceCard name="长声音标题用于检查容器边界LongAudioReferenceLongAudioReference@V002" duration={null} playing={sound.playingId==='long-reference'} progress={sound.currentId==='long-reference' ? sound.progress : 0} onPlay={()=>sound.toggle('long-reference',audio.url!)} />
       </ComponentExample>
       <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。示例演示这两个开关的联动。宽屏时显示右侧分段导航。播放器下方可查看当前视频原文件。" usage="Nora 剧集制作、Iris 视频制作">
         <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} />}>
