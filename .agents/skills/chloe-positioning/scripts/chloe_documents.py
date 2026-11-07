@@ -202,9 +202,11 @@ def read_document(root, path, source, substitutions):
                             raise ValueError(field+'必须引用准确图片版本')
                     elif value.startswith(('[共用:', '[本视频:')):
                         media_reference(root, path, value)
-                    for _, href in LINK.findall(value):
+                    for label, href in LINK.findall(value):
                         if not re.match(r'https?://', href) and not (path.parent/href.split('#')[0]).exists():
                             raise ValueError('文件链接不存在：'+href)
+                        if re.fullmatch(r'T\d{3,}', label):
+                            verification_reference(root, path, label, href)
                 if not fixed:
                     field = tab['columns'][0]
                     if field in PREFIXES and not re.fullmatch(PREFIXES[field]+r'\d{3,}', row[0]):
@@ -226,6 +228,18 @@ def read_document(root, path, source, substitutions):
 def records(doc, heading):
     section = next((s for s in doc['sections'] if s['heading'] == heading), None)
     return [dict(zip(t['columns'], row)) for t in section['tables'] for row in t['rows']] if section else []
+
+
+def verification_reference(root, path, identity, href):
+    filename, _, anchor = href.partition('#')
+    target = (path.parent/filename).resolve()
+    if target != root/'综合资料/运营复盘.md' or anchor != '建议验证':
+        raise ValueError('T编号须链接本工作区运营复盘的建议验证章节')
+    # Read row identity only: a source review may link back to this T row.
+    source = parse(target.read_text('utf-8'))
+    matches = [row for row in records(source, '建议验证') if row['验证编号'] == identity]
+    if len(matches) != 1:
+        raise ValueError('T编号须对应唯一存在的建议验证记录：'+identity)
 
 
 def has_evidence(path, value):

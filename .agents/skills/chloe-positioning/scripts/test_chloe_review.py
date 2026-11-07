@@ -1,9 +1,10 @@
 """Review provenance and direct suggestion references in temporary workspaces."""
 from pathlib import Path
+import os
 import tempfile
 import unittest
 
-from chloe_init import initialize_workspace, initialize_video
+from chloe_init import initialize_workspace, initialize_video, initialize_asset, write_template, ASSETS
 import chloe_documents as docs
 
 
@@ -23,7 +24,9 @@ class ChloeReviewTest(unittest.TestCase):
     def append(self, path, section, row):
         text = path.read_text()
         start = text.index('## '+section+'\n')
-        end = text.index('\n\n', text.index('| ---', start))
+        end = text.find('\n\n', text.index('| ---', start))
+        if end == -1:
+            end = len(text.rstrip())
         path.write_text(text[:end]+'\n| '+' | '.join(row)+' |'+text[end:])
 
     def read(self, path):
@@ -215,6 +218,85 @@ class ChloeReviewTest(unittest.TestCase):
         self.assertEqual(docs.records(self.read(self.readme), '效果数据'), [])
         self.append(self.review, '建议验证', next_trial)
         with self.assertRaisesRegex(ValueError, '记录身份重复'): self.read(self.review)
+
+    def verification_link(self, path):
+        return '[T001](<'+Path(os.path.relpath(self.review, path.parent)).as_posix()+'#建议验证>)'
+
+    def prepare_verification(self):
+        self.content_review()
+        self.append(self.review, '建议验证', ['T001', self.source, '待决定', '未取得', '未取得', '未取得', '未取得', '未取得'])
+
+    def test_all_stage_record_locations_can_reference_one_verification(self):
+        self.prepare_verification()
+        account = self.root/'综合资料/账号定位.md'
+        self.append(account, '决定与变更', ['B001', self.time, '内容风格', '待确定', '穿搭展示', '用户决定；'+self.verification_link(account)])
+        selection = self.root/'综合资料/选品记录.md'
+        product = initialize_asset(self.root, '商品', 'G001', '样品')/'商品说明.md'
+        self.append(selection, '选品列表', ['G001', '[商品](<商品资料/G001-样品/商品说明.md>)', '考察',
+                    self.verification_link(selection), '资料待核实', '未取得', '未取得'])
+        self.append(product, '事实变更', ['B001', self.time, '资料范围', '待确定', '用户补充展示说明',
+                    '用户原说明；'+self.verification_link(product)])
+        script = self.video/'脚本.md'
+        self.append(script, '修订记录', ['U001', self.time, 'v01', 'v02', '未取得', '不适用', '开场先展示整体搭配',
+                    '用户决定；'+self.verification_link(script)])
+        checked = [account, selection, product, script]
+        for kind, (_, prefix, filename) in ASSETS.items():
+            if kind == '商品': continue
+            asset = initialize_asset(self.root, kind, prefix+'001', '测试')/filename
+            asset.write_text(asset.read_text().replace('| 来源说明 | 待核实 |', '| 来源说明 | 用户资料；调整依据：'+self.verification_link(asset)+' |'))
+            self.append(asset, '执行记录', ['E001', '素材导入', '无', '本地', '不适用', '不适用',
+                        '用户授权示例', '未取得', '未取得', '未取得', '准备中', self.verification_link(asset)])
+            checked.append(asset)
+        production = self.video/'制作记录.md'
+        self.append(production, '执行记录', ['E001', '视频处理', '无', '本地', '不适用', '不适用',
+                    '用户授权示例', '未取得', '未取得', '未取得', '准备中', self.verification_link(production)])
+        self.append(self.readme, '剪映交接', ['J001', '未取得', '未取得', '待核对',
+                    '用户要求准备交接；'+self.verification_link(self.readme)])
+        self.append(production, '交接与成片核对', ['K001', '未取得', '[原成片](<成片/test.mp4>)',
+                    '核对开场；'+self.verification_link(production), '待核实', '未取得'])
+        publication = self.video/'发布资料.md'
+        write_template(publication, 'chloe-handoff', '发布资料模板.md', identity='V001', title='展示')
+        cols = docs.parse(publication.read_text())['sections'][0]['tables'][0]['columns']
+        row = {field: '未取得' for field in cols}
+        row.update({'资料编号':'Q001', '平台':'抖音', '发布执行':'待选择', '依据':self.verification_link(publication)})
+        self.append(publication, '发布资料', [row[field] for field in cols])
+        checked += [production, self.readme, publication]
+        for path in checked:
+            with self.subTest(path=path.name): self.read(path)
+        trial = docs.records(self.read(self.review), '建议验证')[0]
+        self.assertEqual(trial['采用状态'], '待决定')
+        self.assertEqual(trial['验证结果'], '未取得')
+
+    def test_stage_t_reference_rejects_wrong_scope_section_and_record(self):
+        self.prepare_verification()
+        account = self.root/'综合资料/账号定位.md'
+        original = account.read_text()
+        valid = self.verification_link(account)
+        for link in (valid.replace('T001', 'T999'), valid.replace('#建议验证', '#跨视频结论'),
+                     valid.replace('运营复盘.md', '账号定位.md'), '[T001](<https://example.com/review#建议验证>)'):
+            with self.subTest(link=link):
+                account.write_text(original)
+                self.append(account, '决定与变更', ['B001', self.time, '内容风格', '待确定', '穿搭展示', link])
+                with self.assertRaises(ValueError): self.read(account)
+        account.write_text(original)
+        self.append(account, '决定与变更', ['B001', self.time, '内容风格', '待确定', '穿搭展示', valid])
+        other = initialize_workspace(self.root.parent/'other'/'Chloe Workspace')
+        (other/'综合资料/运营复盘.md').write_text(self.review.read_text())
+        foreign = '[T001](<'+Path(os.path.relpath(other/'综合资料/运营复盘.md', account.parent)).as_posix()+'#建议验证>)'
+        account.write_text(account.read_text().replace(valid, foreign))
+        with self.assertRaisesRegex(ValueError, '本工作区'): self.read(account)
+        account.write_text(account.read_text().replace(foreign, valid))
+        self.append(self.review, '建议验证', ['T001', self.source, '待决定', '未取得', '未取得', '未取得', '未取得', '未取得'])
+        with self.assertRaisesRegex(ValueError, '唯一存在'): self.read(account)
+
+    def test_stage_and_source_review_can_link_back_without_duplicate_records(self):
+        self.prepare_verification()
+        self.append(self.readme, '阶段变更', ['B001', self.time, '建档依据', '未建档', '按建议准备', self.verification_link(self.readme)])
+        self.read(self.readme)
+        result = self.read(self.review)
+        self.assertEqual(len(docs.records(result, '建议验证')), 1)
+        self.assertEqual(len(docs.records(self.read(self.readme), '单条复盘')), 1)
+        self.assertEqual(docs.records(result, '建议验证')[0]['验证结果'], '未取得')
 
 
 if __name__ == '__main__':
