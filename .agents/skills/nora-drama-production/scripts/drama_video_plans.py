@@ -8,7 +8,7 @@ for _name in ('studio-comfyui', 'studio-h3', 'nora-drama-images'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from project_paths import project_file
 import workflow_graph as pairs
-from h3_workflow import reference_bindings, widget
+from h3_workflow import reference_bindings, widget, configure_first_pass
 from drama_image_plans import remote_prefix
 
 def build_video(root, spec, documents):
@@ -18,6 +18,9 @@ def build_video(root, spec, documents):
     if mapping is None:
         mapping = json.loads(documents.read(record / '输入映射.json'))
     unbound_mapping = deepcopy(mapping)
+    if 'h3_first_pass' in spec:
+        configuration = configure_first_pass(canvas, spec)
+        mapping.setdefault('baseline', {})['fixed_configuration'] = configuration
     unbound_mapping.setdefault('uploads', [])
     source_index = mapping.setdefault('uploads', [])
     for ref in spec.get('references', []):

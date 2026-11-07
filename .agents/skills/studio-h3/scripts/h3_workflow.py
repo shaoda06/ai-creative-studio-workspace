@@ -1,11 +1,71 @@
 """H3 canvas conversion and explicit media-slot binding; no business paths."""
 from copy import deepcopy
 import json
+import math
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
 import workflow_graph as pairs
 from project_paths import project_file
+
+def configure_first_pass(canvas, spec):
+    """Apply explicit six-step answers to a fresh standard H3 first-pass task."""
+    choice = spec['h3_first_pass']
+    if spec['task_type'] != 'video-first-pass':
+        raise ValueError('h3_first_pass仅用于新一采；二采及后处理保留来源配置')
+    required = {'aspect_ratio', 'width', 'height', 'steps', 'scene_type', 'speed', 'loras'}
+    if set(choice) != required:
+        raise ValueError('h3_first_pass须完整提供比例、宽高、步数、文戏/打戏、速度及附加LoRA')
+    width, height, steps = choice['width'], choice['height'], choice['steps']
+    if any(type(v) is not int or v <= 0 for v in (width, height, steps)):
+        raise ValueError('宽、高及归零前步数须为正整数')
+    if width % 32 or height % 32:
+        raise ValueError('一采宽高须为32的整数倍；请确认尺寸，不自动取整')
+    ratio = choice['aspect_ratio']
+    if not isinstance(ratio, str) or len(ratio.split(':')) != 2 or not all(v.isdigit() and int(v) > 0 for v in ratio.split(':')):
+        raise ValueError('比例须为正整数之比，例如16:9')
+    a, b = map(int, ratio.split(':'))
+    if width * b != height * a:
+        raise ValueError('分辨率与所选比例不符；请确认比例或尺寸')
+    scene = choice['scene_type']
+    if scene not in ('dialogue', 'combat'):
+        raise ValueError('scene_type须为dialogue或combat')
+    speed = choice['speed']
+    if type(speed) not in (int, float) or not math.isfinite(speed) or not -10 <= speed <= 10:
+        raise ValueError('动作速度须为-10～10之间的数值')
+    loras = choice['loras']
+    if not isinstance(loras, list) or any(type(v) is not int or v not in (1, 2) for v in loras) or len(set(loras)) != len(loras):
+        raise ValueError('附加LoRA使用不重复的编号1、2；不启用时传空列表')
+    nodes = {n['id']: n for n in canvas['nodes']}
+    combat = scene == 'combat'
+    tail = 6 if combat else 4
+    widget(canvas, nodes[261], steps=steps + tail)
+    widget(canvas, nodes[289], step=steps)
+    # The external SIGMAS link remains authoritative; do not disconnect it.
+    widget(canvas, nodes[502], steps=steps, width=width, height=height)
+    widget(canvas, nodes[343], strength_model=speed)
+    nodes[343]['mode'] = 0
+    for node, enabled in ((128, 1 in loras), (507, 2 in loras), (342, combat), (344, combat), (345, combat)):
+        nodes[node]['mode'] = 0 if enabled else 4
+    for node, weight in ((128, .5), (507, .8), (342, .65), (344, .35), (345, .35)):
+        widget(canvas, nodes[node], strength_model=weight)
+    timeline = json.loads(nodes[502]['widgets_values_named']['timeline_data'])
+    timeline.update(width=width, height=height)
+    divisor = math.gcd(a, b)
+    ratio = f'{a // divisor}:{b // divisor}'
+    label = {'16:9': '16:9 (宽屏)', '9:16': '9:16 (竖屏)'}.get(ratio, ratio)
+    timeline['output'].update(mode='fixed', width=width, height=height,
+        aspectRatio=label, longEdge=max(width, height), megapixels=width * height / 1024 ** 2, multiple=32)
+    widget(canvas, nodes[502], timeline_data=json.dumps(timeline, ensure_ascii=False))
+    # Refine is a linked preset, not authorization to execute the second pass.
+    mp = 1.9921875 if combat else 1.265625
+    pixels = mp * 1024 ** 2
+    refine_width = max(32, round(math.sqrt(pixels * width / height) / 32) * 32)
+    refine_height = max(32, round(math.sqrt(pixels * height / width) / 32) * 32)
+    widget(canvas, nodes[407], megapixels=mp, width=refine_width, height=refine_height, confirm_first_pass=True)
+    return {**deepcopy(choice), 'aspect_ratio': ratio,
+        'sampling': {'total_steps': steps + tail, 'split_step': steps,
+                     'first_pass_with_zero': steps + 1, 'refine_tail_steps': tail}}
 
 def widget(graph, node, **values):
     named = node['widgets_values_named']
@@ -65,6 +125,8 @@ def reference_bindings(api, references, subfolder, existing=()):
 def prepare_technical(root, spec, documents):
     record = project_file(root, spec['record_dir'])
     canvas = json.loads(project_file(root, spec['canvas']).read_text('utf-8-sig'))
+    if 'h3_first_pass' in spec:
+        configure_first_pass(canvas, spec)
     api = pairs.Canvas(canvas).api(spec['output_nodes'])
     refs = [{**item, 'file': str(project_file(root, item['file']))} for item in spec.get('references', [])]
     uploads = reference_bindings(api, refs, record.name, spec.get('uploads', []))
