@@ -207,8 +207,9 @@ def check_handoffs(value):
     project, root = value['project'], value['root']
     readme = document(project, 'README.md')
     manifests = list((project/'剪辑交接').glob('*.jianying.json'))
+    packages = []
     if not manifests and not records(readme, '剪映交接'):
-        return
+        return packages
     handoffs = {}
     for row in records(readme, '剪映交接'):
         if row['清单文件'] in MISSING and row['交接状态'] == '待核对':
@@ -239,7 +240,8 @@ def check_handoffs(value):
         if path not in handoffs:
             raise ValueError('剪映清单缺少README交接记录：'+path.name)
         when = datetime.fromisoformat(handoffs[path]['记录时间'])
-        media = json.loads(path.read_text('utf-8'))['media']
+        spec = json.loads(path.read_text('utf-8'))
+        media = spec['media']
         timeline = [local(project, item['file']) for item in media if item['timeline']]
         matching = [row for row in value['rounds'].values()
                     if all(v['ref'] for v in row['values']) and
@@ -247,15 +249,19 @@ def check_handoffs(value):
                     datetime.fromisoformat(row['created_at']) <= when]
         if not matching:
             raise ValueError('剪映时间线须按交接轮次完整匹配片段版本与顺序，不得遗漏、重复或乱序')
+        numbers = []
         for round_row in matching:
             for segment in round_row['values']:
                 events = [(date, ref) for date, ref in adoptions.get(segment['id']+'/'+segment['stage'], []) if date <= when]
                 if not events or sorted(events, key=lambda event: event[0])[-1][1] != segment['ref']:
                     break
             else:
-                break
-        else:
+                numbers.append(round_row['number'])
+        if not numbers:
             raise ValueError('剪映时间线含交接时尚未采用或已取消采用的片段版本')
+        if handoffs[path]['交接状态'] in ('可下载', '已交接'):
+            packages.append({'path': path, 'spec': spec, 'rounds': numbers, 'count': len(timeline)})
+    return packages
 
 
 def check(project):

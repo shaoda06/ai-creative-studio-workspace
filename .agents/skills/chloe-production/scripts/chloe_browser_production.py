@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
-from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES, prompt_sections
+from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES, prompt_sections, check_handoffs
 from chloe_documents import records, media_reference, MISSING
 from backend.parsers import documents
 from backend.services.workspaces import jianying_links
@@ -276,18 +276,14 @@ def downloads(projects,name,space_api,work,scene='whole',view=None):
         else:
             for path in record.glob('*.director.json'):
                 group=result[candidate['stage']]['director'];group['files'].append({'name':path.name,'url':api+'/works/'+work+'/production-director?path='+quote(path.relative_to(project).as_posix(),safe='')});group['count']+=1
-    adopted={data['root']/media_reference(data['root'],project/'README.md',row['资源引用'])['file']
-             for row in records(document(project,'README.md'),'当前采用') if re.fullmatch(r'P\d{3,}/(一采|二采|后处理)',row['用途'])}
-    for path in sorted((project/'剪辑交接').glob('*.jianying.json')):
-        spec=json.loads(path.read_text('utf-8-sig'));keys=[local(project,v['file']) for v in spec['media'] if v.get('timeline',True)]
-        numbers=[n for n,r in data['rounds'].items() if all(v['ref'] for v in r['values']) and keys==[data['root']/v['ref']['file'] for v in r['values']]]
-        if not numbers or not keys or not set(keys)<=adopted:continue
+    for package in check_handoffs(data):
+        path, spec, numbers = package['path'], package['spec'], package['rounds']
         key=path.relative_to(project).as_posix();urls=jianying_links(space_api,name,key)
-        result['workPackages'].append({'key':key,'label':spec['name'],'version':'','purpose':'剪映交接','rounds':numbers,'count':len(keys),**urls})
+        result['workPackages'].append({'key':key,'label':spec['name'],'version':'','purpose':'剪映交接','rounds':numbers,'count':package['count'],**urls})
         stages={v['stage'] for v in data['rounds'][numbers[-1]]['values']}
-        if len(stages)==1:
-            group=result[stages.pop()]['videos'];group.setdefault('packages',[]).append({'name':spec['name'],'count':len(keys),'url':urls['zip']})
-            group.update(count=len(keys),url=urls['zip'])
+        stage=max(stages, key=STAGES.index)
+        group=result[stage]['videos'];group.setdefault('packages',[]).append({'name':spec['name'],'count':package['count'],'url':urls['zip']})
+        group.update(count=package['count'],url=urls['zip'])
     return result
 
 
