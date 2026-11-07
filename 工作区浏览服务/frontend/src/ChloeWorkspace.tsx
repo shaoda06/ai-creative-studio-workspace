@@ -14,6 +14,8 @@ import { TabNav } from './components/TabNav';
 import { UnderlineTabs } from './components/UnderlineTabs';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
+import { ChloeClothing, ChloeClothingDetail } from './ChloeClothing';
+import type { ClothingDetail } from './ChloeClothing';
 import { ChloeModels } from './ChloeModels';
 import { ChloeModelDetail } from './ChloeModelDetail';
 import type { ModelDetail } from './ChloeModelDetail';
@@ -59,25 +61,28 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
   const modelId = current.value === 'assets' && assetCategory.value === 'models' ? params.get('model') : null;
   const modelQuery = useQuery({queryKey:['chloe-model',spaceId,modelId], queryFn:()=>get<ModelDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(modelId!)}`), enabled:!!modelId, refetchInterval:5000});
+  const clothingId = current.value==='assets' && assetCategory.value==='clothing' ? params.get('clothing') : null;
+  const clothingQuery = useQuery({queryKey:['chloe-clothing-detail',spaceId,clothingId],queryFn:()=>get<ClothingDetail>(`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-clothing/${encodeURIComponent(clothingId!)}`),enabled:!!clothingId,refetchInterval:5000});
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
     <PageHeader title={space!.name} stacked={current.value === 'assets'} actions={<Link to="/">返回工作区</Link>}>
       {current.value === 'assets' && <Breadcrumbs items={[
         { label: '共用资产', href: `#/spaces/${encodeURIComponent(spaceId!)}?section=assets` },
-        { label: assetCategory.label, href: modelId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models` : undefined },
+        { label: assetCategory.label, href: modelId || clothingId ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=${assetCategory.value}` : undefined },
         ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
+        ...(clothingId ? [{label:clothingQuery.data ? `${clothingId} · ${clothingQuery.data.name}` : clothingId}] : []),
         ...(currentLook ? [{label:`${currentLook.id} · ${currentLook.name}`}] : []),
       ]} />}
     </PageHeader>
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId ? undefined : 'panel'} aria-label={current.label}>
-      {(current.value !== 'assets' || assetCategory.value !== 'models') && <PageCheckStatus queries={[workspaceQuery]} />}
+    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || clothingId ? undefined : 'panel'} aria-label={current.label}>
+      {(current.value !== 'assets' || !['models','clothing'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
-      {current.value === 'assets' ? modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : <>
+      {current.value === 'assets' ? modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : clothingId ? <ChloeClothingDetail key={`${spaceId}/${clothingId}`} query={clothingQuery} workspaceQuery={workspaceQuery} /> : <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
-        <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
+        <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> : assetCategory.value==='clothing' ? <ChloeClothing key={spaceId} workspaceQuery={workspaceQuery} /> :
           <p className="muted">该分类的展示内容待下一步确定。</p>}</div>
       </> : <>
         <p>{current.description}</p>

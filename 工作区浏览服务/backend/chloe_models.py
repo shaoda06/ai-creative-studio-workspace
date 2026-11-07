@@ -61,7 +61,7 @@ def portrait_file(root, identity, resource_id, version):
 def listing(request: Request):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
-        raise HTTPException(404, '该空间未接入带货共用模特')
+        raise HTTPException(404, '该空间未接入带货共用资产')
     try:
         return model_cards(space.root, space.api)
     except FileNotFoundError as error:
@@ -74,7 +74,7 @@ def listing(request: Request):
 def portrait(identity: str, resource_id: str, version: str, request: Request, download: bool = False):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
-        raise HTTPException(404, '该空间未接入带货共用模特')
+        raise HTTPException(404, '该空间未接入带货共用资产')
     try:
         path = portrait_file(space.root, identity, resource_id, version)
         return FileResponse(path, filename=path.name if download else None,
@@ -153,7 +153,7 @@ def asset_content(root, path, doc, allowed, base):
     for row in records(doc, '参考版本') + records(doc, '当前采用'):
         ref = media_reference(root, path, row['资源引用'])
         if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
-            raise ValueError('模特参考版本必须为PNG、JPEG或WebP图片')
+            raise ValueError('参考版本必须为PNG、JPEG或WebP图片')
         key = ref['resource_id'] + '@' + ref['version']
         slot = (row['用途'], key)
         if slot not in images:
@@ -222,7 +222,7 @@ def model_file(root, identity, key):
 def request_space(request):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
-        raise HTTPException(404, '该空间未接入带货共用模特')
+        raise HTTPException(404, '该空间未接入带货共用资产')
     return space
 
 

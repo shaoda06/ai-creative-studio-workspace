@@ -1,3 +1,4 @@
+import { ChloeAssetRecords } from './ChloeAssetRecords';
 import { FullscreenImage } from './components/FullscreenImage';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -12,7 +13,7 @@ interface ModelImage {
   purpose: string; resource: string; version: string; adopted: boolean;
   media: FileItem; sourceHtml: string; execution: string;
 }
-interface AssetDetail {
+export interface AssetDetail {
   id: string; name: string; images: ModelImage[]; url: string;
   sections: {heading: string; html: string; empty: boolean}[];
 }
@@ -21,7 +22,6 @@ export interface ModelDetail extends AssetDetail {
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
 const bodyPurposes = ['全身三视图遮面版', '全身三视图原图', '补充细节'];
-const executionSections = ['执行记录', '输入记录', '输出记录', '审阅记录', '返修记录'];
 
 export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryResult<ModelDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { spaceId } = useParams();
@@ -127,10 +127,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}
           to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图遮面版'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
-      {(tab!=='looks' || look) && <details className="panel"><summary>资料与制作记录</summary>
-        {['关联资料','当前采用','采用变更'].map(heading=><details key={heading}><summary>{heading==='当前采用' ? '采用依据与时间' : heading}</summary>{section(heading)}</details>)}
-        <details><summary>执行记录</summary>{executionSections.map(heading=><section key={heading}>{heading!=='执行记录' && <h3>{heading}</h3>}{section(heading)}</section>)}</details>
-      </details>}
+      {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
       </div>
     </div>}
     {document ? <Preview project="" item={document} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />
