@@ -23,7 +23,7 @@
 - For a high-value scene with an accepted coverage audition: did the approaches
   genuinely differ — in knowledge timing, audience alignment, performance space,
   strongest image, landing, losses, or production fit?
-- Does the result follow the choice made within the authorized direction? Follow [方案比较](../../nora-drama-storyboard/references/coverage-audition.md) for when discussion is needed; do not require a separate selection approval for ordinary shot decisions.
+- Does the result follow the choice made within the authorized direction? Follow [方案比较](../../studio-storyboard/references/coverage-audition.md) for when discussion is needed; do not require a separate selection approval for ordinary shot decisions.
 - When a scene visual plan was used: do its start/end audience positions, spatial
   pressure, camera rhythm, reaction landing, and sound movement carry **one** dramatic turn?
 - Does that plan stay clear of owning shot boundaries? (Ordinary scenes need no plan
@@ -32,8 +32,8 @@
 - Why is this a new shot?
 - Do framing and camera behavior serve attention, alignment, pressure, reveal, or
   rhythm rather than decorate the prose?
-- Apply [镜头选择与观看效果复核](../../nora-drama-storyboard/references/场次分镜制作规范.md#运镜构图与切镜的选择) to the actual fields together: can the necessary detail, action, reaction or relation be read, and does the chosen camera behavior serve the scene's purpose? State the specific information or performance lost when proposing a correction. A fixed climax, repeated framing or a different reasonable choice is not a failure by itself; do not demand a separate reason field or movement quota.
-- 对白切点按[对白选择与审查标准](../../nora-drama-storyboard/references/场次分镜制作规范.md#对白反应与多人镜头的取舍)判断；提出机械切镜问题时，指出具体损失，不把一句一镜本身当成缺陷，也不因合镜或增加运镜自动加分。
+- Apply [镜头选择与观看效果复核](../../studio-storyboard/references/分镜写作规范.md#运镜构图与切镜的选择) to the actual fields together: can the necessary detail, action, reaction or relation be read, and does the chosen camera behavior serve the scene's purpose? State the specific information or performance lost when proposing a correction. A fixed climax, repeated framing or a different reasonable choice is not a failure by itself; do not demand a separate reason field or movement quota.
+- 对白切点按[对白选择与审查标准](../../studio-storyboard/references/分镜写作规范.md#对白反应与多人镜头的取舍)判断；提出机械切镜问题时，指出具体损失，不把一句一镜本身当成缺陷，也不因合镜或增加运镜自动加分。
 - Are Location/View, axis, screen direction, eyelines, entrances, positions,
   hands, and props coherent?
 - Are exact asset variants bound?
@@ -44,7 +44,7 @@
 
 ## Rhythm profile: shots
 
-镜长与切点按[镜长安排](../../nora-drama-storyboard/references/shot-craft.md#镜长从哪来-sht-28)核对。项目明确确认的节奏要求保留其适用范围；未确认时不引入平均镜长、近景比例或镜数指标。发现节奏问题须指出具体信息、动作或反应何处被挤掉、拖延或重复，不用统计值替代观看判断。
+镜长与切点按[镜长安排](../../studio-storyboard/references/shot-craft.md#镜长从哪来-sht-28)核对。项目明确确认的节奏要求保留其适用范围；未确认时不引入平均镜长、近景比例或镜数指标。发现节奏问题须指出具体信息、动作或反应何处被挤掉、拖延或重复，不用统计值替代观看判断。
 
 ## Frozen keyframe
 

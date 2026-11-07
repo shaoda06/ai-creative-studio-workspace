@@ -56,6 +56,8 @@ description: AI创作与制作统一入口，识别业务类型并路由一级�
 
 ## 共用方法与资料
 
+逐镜编写、修订与核对使用[共用分镜](../studio-storyboard/SKILL.md)，Nora、Iris、Chloe 的阶段入口提供内容依据与业务接续。
+
 [创作技法](../studio-creative-techniques/SKILL.md)、[通用打戏](../studio-combat-methods/SKILL.md)、[玄幻动作](../studio-fantasy-combat/SKILL.md)、[写实格斗](../studio-realistic-combat/SKILL.md)按任务实际需要引用。它们提供方法，不管理制作阶段或批准；现行调用直达对应维护者，已退役入口不参与路由。
 
 维护时使用skill-creator；按所改业务或工具的维护入口执行。跨体系结构及唯一真源要求见[结构维护](维护规范.md#规则真源与引用)，不因本入口改变历史任务或实际授权。

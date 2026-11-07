@@ -5,8 +5,12 @@ from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path, PurePosixPath
 import re
+import sys
 
 from chloe_init import ASSETS, SKILLS, resources, workspace_path
+
+sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
+from storyboard_fields import read_shots
 
 MISSING = {'待确定', '待核实', '未取得', '不适用', '无'}
 LINK = re.compile(r'\[([^\]\n]+)\]\(<([^>\n]+)>\)')
@@ -32,6 +36,8 @@ def parse(text):
         elif line.startswith('## '):
             section = {'heading': line[3:], 'tables': [], 'text': []}
             result['sections'].append(section)
+        elif re.match(r'^#{3,4} SH\d{3,}(?:｜|\s|$)', line) and section and section['heading'] == '镜头与分镜':
+            section['text'].append(lines[i])
         elif line.startswith('#'):
             raise ValueError(f'第{i+1}行：不支持的标题层级')
         elif line.startswith('|'):
@@ -152,9 +158,24 @@ def read_document(root, path, source, substitutions):
         raise ValueError('章节名称、顺序、数量与模板不一致')
     choices = enums()
     for section, schema in zip(actual['sections'], expected['sections']):
-        if len(section['tables']) != len(schema['tables']):
+        tables = schema['tables']
+        if section['heading'] == '镜头与分镜' and section['tables']:
+            # Previously filed scripts used this table, which remains readable.
+            tables = [{'columns': ['镜头编号', '时长秒', '景别与构图', '主体与商品动作', '商品可见细节',
+                                   '场景与机位', '对白或旁白', '字幕', '音乐与环境声', '参考需求'], 'rows': []}]
+        if len(section['tables']) != len(tables):
             raise ValueError(section['heading']+'：表格缺失或额外增加')
-        for tab, base in zip(section['tables'], schema['tables']):
+        if section['heading'] == '镜头与分镜':
+            shots = read_shots('\n'.join(section['text']), ('商品可见细节', '字幕', '参考需求'))
+            identities = [shot['fields']['镜号'] for shot in shots]
+            if len(identities) != len(set(identities)) or any(not re.fullmatch(r'SH\d{3,}', identity) for identity in identities):
+                raise ValueError('镜头编号重复或格式错误')
+            if shots and section['tables']:
+                raise ValueError('镜头与分镜：逐镜正文和旧表格重复维护')
+            for shot in shots:
+                value_check('时长秒', shot['fields']['时长'].removesuffix('秒').strip(), choices)
+            section['shots'] = shots
+        for tab, base in zip(section['tables'], tables):
             if tab['columns'] != base['columns']:
                 raise ValueError(section['heading']+'：表头或列序与模板不一致')
             fixed = tab['columns'] == ['字段', '内容']

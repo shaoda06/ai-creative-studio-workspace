@@ -67,6 +67,31 @@ class ChloeDocumentsTest(unittest.TestCase):
         path.write_text(path.read_text().replace('| 计划时长秒 | 15.5 |','| 计划时长秒 | 十五秒 |'))
         self.assertTrue(self.check()['errors'])
 
+    def test_shared_shot_blocks_and_legacy_table_are_readable(self):
+        from storyboard_fields import FIELDS
+        path = self.video / '脚本.md'
+        original = path.read_text()
+        values = {field: '保持当前画面' for field in FIELDS}
+        values.update({'镜号': 'SH001', '时间': '00:00–00:03秒', '时长': '3秒'})
+        pairs = list(values.items()) + [('商品可见细节', '包装上的规格'), ('字幕', '后期添加'), ('参考需求', '待确定')]
+        block = '### SH001｜展示规格\n\n' + '\n\n'.join('**' + key + '**：' + value for key, value in pairs)
+        prefix = original[:original.index('## 镜头与分镜')]
+        suffix = original[original.index('## 修订记录'):]
+        path.write_text(prefix + '## 镜头与分镜\n\n' + block + '\n\n' + suffix)
+        entry = next(e for e in docs.documents(self.root) if e[0] == path)
+        parsed = docs.read_document(self.root, *entry)
+        shots = next(section for section in parsed['sections'] if section['heading'] == '镜头与分镜')['shots']
+        self.assertEqual(shots[0]['fields']['镜号'], 'SH001')
+        good = path.read_text()
+        path.write_text(good.replace('**结束画面**：保持当前画面\n\n', ''))
+        self.assertTrue(self.check()['errors'])
+        path.write_text(good.replace(block, block + '\n\n' + block))
+        self.assertTrue(self.check()['errors'])
+        columns = '镜头编号 | 时长秒 | 景别与构图 | 主体与商品动作 | 商品可见细节 | 场景与机位 | 对白或旁白 | 字幕 | 音乐与环境声 | 参考需求'
+        legacy = '| ' + columns + ' |\n| ' + ' | '.join(['---'] * 10) + ' |\n| SH001 | 3 | 中景 | 递出包装 | 规格文字 | 正面 | 无 | 后期 | 无 | 待确定 |'
+        path.write_text(prefix + '## 镜头与分镜\n\n' + legacy + '\n\n' + suffix)
+        self.assertEqual(self.check()['errors'], [])
+
     def test_populated_input_and_output_resolve_same_shared_version(self):
         source=self.base/'source.png'; Image.new('RGB',(12,16),'red').save(source)
         common=import_media(self.root,source,'external/reference')
