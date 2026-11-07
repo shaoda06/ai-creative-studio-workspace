@@ -135,11 +135,15 @@ try {
   assert.equal(await page.getByRole('heading',{name:'资产身份',exact:true}).count(),0);
   const faceColumn=page.getByRole('region',{name:'正面面部图',exact:true});
   const bodyColumn=page.getByRole('region',{name:'基础全身三视图',exact:true});
+  assert.equal(await page.getByRole('heading',{name:'当前采用',exact:true}).count(),0);
+  const faceView=faceColumn.getByRole('navigation',{name:'正面面部图视图'});
+  assert.deepEqual(await faceView.getByRole('button').allTextContents(),['原图']);
+  assert.equal(await faceView.locator('[aria-current="page"]').textContent(),'原图');
   const faceBox=await faceColumn.boundingBox(),bodyBox=await bodyColumn.boundingBox();
   assert.ok(faceBox.x+faceBox.width<bodyBox.x && Math.abs(faceBox.y-bodyBox.y)<1,'面部和三视图同页左右排列');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
-  for (const selector of [':scope > h2',':scope > div > h3',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover',':scope > details > summary']) {
+  for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover',':scope > details > summary']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
     assert.ok(Math.abs(left.y-right.y)<1,`左右对齐：${selector}`);
   }

@@ -78,13 +78,13 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       {tab==='images' && <div className="chloe-model-images">
         <section className="panel chloe-model-image-column" aria-label="正面面部图">
           <h2>正面面部图</h2>
-          <div><h3>当前采用</h3></div>
+          <div><UnderlineTabs label="正面面部图视图" items={[{value:'original',label:'原图'}]} selected="original" onChange={() => {}} /></div>
           <div>{imageCard('正面面部',adopted('正面面部'))}</div>
           <details><summary>参考版本</summary>{references('正面面部')}</details>
         </section>
         <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
           <h2>基础全身三视图</h2>
-          <div><h3>当前采用</h3>
+          <div>
             <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           </div>
           <div>{imageCard(view==='masked' ? bodyPurposes[0] : bodyPurposes[1],adopted(view==='masked' ? bodyPurposes[0] : bodyPurposes[1]))}</div>
