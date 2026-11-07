@@ -60,8 +60,14 @@ with tempfile.TemporaryDirectory() as tmp:
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version']).replace(os.path.relpath(Path(result['absolute_file']),model),os.path.relpath(Path(result['absolute_file']),look.parent))
   append('参考版本',[purpose,reference,'用户提供','不适用'])
   if index<=1:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+ append('执行记录',['E001','图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
+ for slot,color in [('1','#ee9a70'),('2','#336688')]:
+  source=Path(tmp)/('clothing'+slot+'.png');Image.new('RGB',(200,300),color).save(source)
+  result=import_media(root,source,'clothing'+slot)
+  reference=label(Path(result['absolute_file']),result['resource_id'],result['version']).replace(os.path.relpath(Path(result['absolute_file']),model),os.path.relpath(Path(result['absolute_file']),look.parent))
+  append('输入记录',['E001',slot,'服装参考','不适用',reference])
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
- media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']]}
+ media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]}
  print(json.dumps({'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp('/private/tmp/chloe-models-');
@@ -207,6 +213,14 @@ try {
   const layout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}}));
   assert.equal(layout[0].y,layout[1].y);
   assert.ok(Math.abs(layout[0].width/layout[1].width-2/3)<0.01);
+  const clothing=lookInfo.getByRole('region',{name:'服装参考图',exact:true});
+  assert.equal(await clothing.locator('.asset-media-card').count(),2);
+  assert.equal(await lookInfo.locator(':scope > :last-child').getAttribute('aria-label'),'服装参考图');
+  await clothing.locator('.cover').first().click();
+  await page.getByRole('dialog').waitFor();
+  assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(sample.details[0].looks[0].clothing[0].reference.split('@')[0]));
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
   const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
   await page.getByRole('heading',{name:`全身定装三视图 · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();

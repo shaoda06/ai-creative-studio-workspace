@@ -210,3 +210,5 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 
 .chloe-look-detail{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:24px;align-items:start}
 .chloe-look-images{display:grid;gap:12px}
+
+.chloe-look-clothing{display:grid;gap:16px}

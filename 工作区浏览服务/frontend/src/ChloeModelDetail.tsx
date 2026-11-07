@@ -17,7 +17,7 @@ interface AssetDetail {
   sections: {heading: string; html: string; empty: boolean}[];
 }
 export interface ModelDetail extends AssetDetail {
-  looks: (AssetDetail & {media: FileItem | null; description: string})[];
+  looks: (AssetDetail & {media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
 const bodyPurposes = ['全身三视图遮面版', '全身三视图原图', '补充细节'];
@@ -47,10 +47,11 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const look = tab==='looks' ? data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const asset = look || data;
-  const preview = asset?.images.find(image => `${image.resource}@${image.version}` === params.get('ref'))?.media;
+  const preview = asset?.images.find(image => `${image.resource}@${image.version}` === params.get('ref'))?.media || look?.clothing.find(item=>item.reference===params.get('ref'))?.media;
   const open = (item: FileItem) => {
     const image = asset?.images.find(image => image.media.url === item.url);
-    if (image) select('ref', `${image.resource}@${image.version}`); else setDocument(item);
+    const clothing = look?.clothing.find(reference=>reference.media.url===item.url);
+    if (image) select('ref', `${image.resource}@${image.version}`); else if (clothing) select('ref',clothing.reference); else setDocument(item);
   };
   const section = (heading: string) => {
     const value = asset!.sections.find(section => section.heading === heading)!;
@@ -110,6 +111,12 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <div className="chloe-look-detail">
           <section className="panel" aria-label="造型信息"><h2>造型信息</h2>
             <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div><div><dt>造型说明</dt><dd>{look.description}</dd></div></dl>
+            <section className="chloe-assets-content" aria-label="服装参考图"><h3>服装参考图</h3>
+              {look.clothing.length ? <div className="chloe-look-clothing">{look.clothing.map(item=><div key={item.reference}>
+                <AssetMediaCard title={item.reference} compact revision={0} item={{media:item.media}} />
+                <p className="muted">执行编号：{item.executions.join('、')}</p>
+              </div>)}</div> : <p>无</p>}
+            </section>
           </section>
           <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>
         </div>

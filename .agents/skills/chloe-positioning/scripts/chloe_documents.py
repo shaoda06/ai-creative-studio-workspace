@@ -275,6 +275,15 @@ def check_relations(root, path, doc):
                 raise ValueError(field+'未找到：'+row[field])
     owner = owner_for(root, path)
     for row in records(doc,'输入记录'):
+        if '输入用途' in row:
+            if row['输入用途'] not in {'模特参考', '服装参考', '其他参考'}:
+                raise ValueError('输入用途须为模特参考、服装参考或其他参考')
+            if row['输入用途'] == '服装参考':
+                if row['资源引用'] in MISSING:
+                    raise ValueError('服装参考须引用具体图片版本，无图片时不建输入行')
+                clothing = media_reference(root,path,row['资源引用'])
+                if not clothing['resource_id'].startswith('IMG-') or Path(clothing['file']).suffix.lower() not in {'.png','.jpg','.jpeg','.webp'}:
+                    raise ValueError('服装参考须引用PNG、JPEG或WebP图片')
         if row['资源引用'] in MISSING:
             continue
         ref = media_reference(root,path,row['资源引用'])

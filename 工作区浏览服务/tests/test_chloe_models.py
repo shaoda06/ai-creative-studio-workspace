@@ -129,6 +129,35 @@ class ChloeModelsTests(unittest.TestCase):
             model_file(self.root,'M001','综合资料/共用素材/造型/L002-测试造型/造型说明.md')
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
+    def test_look_clothing_inputs_keep_exact_versions_and_multiple_references(self):
+        folder = initialize_asset(self.root, '造型', 'L001', '测试造型')
+        self.path = folder/'造型说明.md'
+        self.path.write_text(self.path.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |'))
+        self.append('关联资料',['模特','M001','[模特](<../../AI模特/M001-示例模特甲/模特说明.md>)','所属模特'])
+        first, _ = self.add_image('yellow', 'clothing-first')
+        second, _ = self.add_image('orange', 'clothing-second', first['resource_id'])
+        for execution in ['E001','E002']:
+            self.append('执行记录',[execution,'图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
+        for slot, ref, execution, purpose in [('1',first,'E001','服装参考'),('2',second,'E001','服装参考'),('1',first,'E002','服装参考'),('3',second,'E002','模特参考')]:
+            label = f'[共用:{ref["resource_id"]}@{ref["version"]}](<{os.path.relpath(ref["absolute_file"], folder)}>)'
+            self.append('输入记录',[execution,slot,purpose,'不适用',label])
+        before = {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        clothing = model_detail(self.root,'M001',self.api)['looks'][0]['clothing']
+        self.assertEqual(len(clothing),2)
+        self.assertEqual(clothing[0]['reference'],first['resource_id']+'@V001')
+        self.assertEqual(clothing[1]['reference'],second['resource_id']+'@V002')
+        self.assertEqual(clothing[0]['executions'],['E001','E002'])
+        self.assertEqual(model_file(self.root,'M001',clothing[0]['media']['key']),Path(first['absolute_file']))
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        good = self.path.read_text()
+        self.path.write_text(good.replace('| 服装参考 |','| 猜测用途 |'))
+        with self.assertRaisesRegex(ValueError,'输入用途'):
+            model_detail(self.root,'M001',self.api)
+        self.path.write_text(good)
+        self.append('输入记录',['E002','4','服装参考','不适用','未取得'])
+        with self.assertRaisesRegex(ValueError,'服装参考须引用'):
+            model_detail(self.root,'M001',self.api)
+
     def test_empty_and_invalid_document(self):
         self.path.unlink()
         self.assertEqual(model_cards(self.root, self.api), [])

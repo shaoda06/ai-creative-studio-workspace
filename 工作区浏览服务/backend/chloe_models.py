@@ -189,9 +189,22 @@ def model_detail(root, identity, api):
             ref = media_reference(root, look_path, cover['资源引用'])
             media = {'kind': 'image', 'key': ref['file'], 'name': look_name,
                      'url': base + '/files/' + quote(ref['file'], safe='/')}
+        clothing = {}
+        for row in records(look_doc, '输入记录'):
+            if row['输入用途'] != '服装参考':
+                continue
+            ref = media_reference(root, look_path, row['资源引用'])
+            reference = ref['resource_id'] + '@' + ref['version']
+            if reference not in clothing:
+                clothing[reference] = {'reference': reference, 'executions': [],
+                    'media': {'kind': 'image', 'name': '服装参考 · ' + reference, 'key': ref['file'],
+                              'url': base + '/files/' + quote(ref['file'], safe='/')}}
+            if row['执行编号'] not in clothing[reference]['executions']:
+                clothing[reference]['executions'].append(row['执行编号'])
         key = look_path.relative_to(root).as_posix()
         looks.append({'id': look_id, 'name': look_name, 'media': media,
                       'description': fields(look_doc, '造型信息')['造型说明'],
+                      'clothing': list(clothing.values()),
                       **asset_content(root, look_path, look_doc, allowed, base),
                       'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
                       'url': base + '/files/' + quote(key, safe='/')})
