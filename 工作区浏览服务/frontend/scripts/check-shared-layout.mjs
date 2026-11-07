@@ -393,6 +393,15 @@ try {
     await showcase.getByRole('article',{name:'外层已命名的采用图',exact:true}).locator('.cover').click();
     await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    for (const name of ['16:9图片区域','16:9空图片区域']) {
+      const card=showcase.getByRole('article',{name,exact:true});
+      const rect=await card.locator('.cover').boundingBox();
+      assert.ok(Math.abs(rect.width / rect.height - 16 / 9)<.01);
+      await contained(card,`${width}px / ${name}`);
+    }
+    const ratioImage=showcase.getByRole('article',{name:'16:9图片区域',exact:true}).locator('img');
+    assert.equal(await ratioImage.evaluate(el=>getComputedStyle(el).maxHeight),'none');
+    assert.equal(await ratioImage.evaluate(el=>getComputedStyle(el).objectFit),'contain');
     const dimensionsCard=showcase.getByRole('article',{name:'仅保留尺寸的采用图',exact:true});
     await dimensionsCard.getByText('尺寸：',{exact:true}).waitFor();
     assert.equal(await dimensionsCard.locator('.asset-media-field').count(),1);

@@ -186,6 +186,8 @@ try {
   assert.ok(faceBox.x+faceBox.width<headBox.x && Math.abs(faceBox.y-headBox.y)<1,'面部图与面部三视图左右排列');
   assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-faceBox.x)<1 && Math.abs(bodyBox.x+bodyBox.width-headBox.x-headBox.width)<1,'基础全身三视图独占下一整行');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
+  const bodyCover=await bodyColumn.locator('.cover').boundingBox();
+  assert.ok(Math.abs(bodyCover.width / bodyCover.height - 16 / 9)<.01,'基础全身图区域为16:9');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await headColumn.locator(selector).boundingBox();
