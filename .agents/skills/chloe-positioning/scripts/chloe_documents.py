@@ -360,6 +360,15 @@ def check_relations(root, path, doc):
         if row['发布编号'] not in publications:
             raise ValueError('效果数据引用不存在的发布编号')
     snapshots = {}
+    for heading, fields in (
+        ('效果数据', ('统计起始时间', '统计结束时间', '采集时间')),
+        ('跨视频结论', ('观察起始时间', '观察结束时间', '记录时间')),
+    ):
+        for row in records(doc, heading):
+            known = [(field, datetime.fromisoformat(row[field])) for field in fields if row[field] not in MISSING]
+            for (first, start), (second, end) in zip(known, known[1:]):
+                if start > end:
+                    raise ValueError(heading+'：'+first+'不得晚于'+second)
     for row in records(doc,'效果数据'):
         window = tuple(row[k] for k in ('发布编号','采集时间','统计起始时间','统计结束时间'))
         if row['采集编号'] in snapshots and snapshots[row['采集编号']] != window:
@@ -373,6 +382,17 @@ def check_relations(root, path, doc):
     for row in records(doc,'建议验证'):
         if row['复盘编号'] not in conclusions:
             raise ValueError('建议验证引用不存在的复盘编号')
+        has_result = bool(row['验证结果'].strip()) and row['验证结果'] not in MISSING
+        if row['采用状态'] == '采用':
+            if not row['采用依据'].strip() or row['采用依据'] in MISSING:
+                raise ValueError('建议验证：采用须有采用依据')
+        if row['采用状态'] == '采用' or has_result:
+            if not LINK.search(row['验证对象']):
+                raise ValueError('建议验证：采用或填写结果时须链接实际验证对象')
+            if not row['验证方法'].strip() or row['验证方法'] in MISSING:
+                raise ValueError('建议验证：采用或填写结果时须有验证方法')
+        if has_result and not LINK.search(row['结果证据']):
+            raise ValueError('建议验证：填写验证结果时须链接结果证据')
 
 
 def check_segment_plan(doc, total_duration):
