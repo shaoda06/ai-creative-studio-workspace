@@ -49,7 +49,7 @@ def clothing_cards(root, api):
         base = f'{api}/shared-clothing/{quote(identity)}'
         content = asset_content(root, path, doc, linked_files(root, path, doc), base)
         cover = next((image['media'] for image in content['images']
-                      if image['adopted'] and image['purpose'] == '正面'), None)
+                      if image['adopted'] and image['purpose'] == '服装展示图'), None)
         cards.append({'id': identity, 'name': name, 'media': cover})
     return cards
 

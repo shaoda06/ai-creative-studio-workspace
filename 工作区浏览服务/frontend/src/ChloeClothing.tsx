@@ -14,7 +14,7 @@ import type { AssetDetail } from './ChloeModelDetail';
 
 interface ClothingCard { id: string; name: string; media: FileItem | null }
 export interface ClothingDetail extends AssetDetail { description: string }
-const purposes = ['正面','侧面','背面','细节'];
+const purposes = ['服装展示图'];
 
 export function ChloeClothing({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { spaceId } = useParams();
@@ -24,7 +24,7 @@ export function ChloeClothing({ workspaceQuery }: { workspaceQuery: UseQueryResu
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (query.data.length ? <div className="asset-media-grid">{query.data.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal revision={0}
       to={`/spaces/${encodeURIComponent(spaceId!)}?section=assets&asset=clothing&clothing=${encodeURIComponent(item.id)}`}
-      item={{media:item.media,emptyLabel:'尚未采用正面图'}} />)}</div> : <p className="muted">暂无服装资料。</p>)}
+      item={{media:item.media,emptyLabel:'尚未采用服装展示图'}} />)}</div> : <p className="muted">暂无服装资料。</p>)}
   </>;
 }
 
@@ -58,7 +58,7 @@ export function ChloeClothingDetail({ query, workspaceQuery }: { query: UseQuery
           <section className="panel chloe-look-images" aria-label="服装图片"><h2>服装图片</h2>
             <UnderlineTabs label="服装图片用途" items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal revision={0} item={{media:image.media,version:image.version}} />)
-              : <AssetMediaCard title={purpose} hideTitle formal revision={0} item={{emptyLabel:`尚未采用${purpose}图`}} />}
+              : <AssetMediaCard title={purpose} hideTitle formal revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
             {others.length>0 && <details><summary>其他版本</summary><div className="chloe-model-versions" aria-label="服装其他版本" tabIndex={0}>{others.map(image=><div key={`${image.purpose}:${image.resource}@${image.version}`}>
               <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} item={{media:image.media}} />
               <details><summary>来源与执行记录</summary><Rich html={image.sourceHtml} /><p>执行编号：{image.execution}</p></details>

@@ -236,6 +236,13 @@ def linked_object(root, path, identity, value, prefix):
 
 
 def check_relations(root, path, doc):
+    if path.name == '服装说明.md':
+        for row in records(doc, '参考版本'):
+            if row['用途'] not in {'服装参考图', '服装展示图'}:
+                raise ValueError('服装用途须为服装参考图或服装展示图')
+        for row in records(doc, '当前采用'):
+            if row['用途'] != '服装展示图':
+                raise ValueError('服装当前采用只登记服装展示图')
     current = {r['字段']:r['内容'] for r in records(doc,'定位与当前进度')}
     if current and current['商品编号'] not in MISSING:
         linked_object(root,path,current['商品编号'],current['商品资料'],'G')

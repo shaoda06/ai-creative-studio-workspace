@@ -71,13 +71,13 @@ with tempfile.TemporaryDirectory() as tmp:
  initialize_asset(root,'服装','O002','未选图服装')
  path=clothing/'服装说明.md'
  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的服装来源 |'))
- for index,purpose in enumerate(['正面']*5+['背面','细节/纽扣']):
+ for index,purpose in enumerate(['服装展示图']*5+['服装参考图']):
   source=Path(tmp)/('garment'+str(index)+'.png');Image.new('RGB',(240,320),(80+index*15,130,90)).save(source)
   result=import_media(root,source,'garment'+str(index),resource_id=garment_resource if 0<index<5 else None)
   if index==0:garment_resource=result['resource_id']
   reference='[共用:'+result['resource_id']+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],clothing)+'>)'
   append('参考版本',[purpose,reference,'用户提供','不适用'])
-  if index in (0,5,6):append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+  if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  clothes=[clothing_detail(root,id,'/api/workspaces/chloe') for id in ['O001','O002']]
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
  media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in clothes for image in item['images']]}
@@ -341,9 +341,9 @@ try {
 
   const clothingImages=page.getByRole('region',{name:'服装图片',exact:true});
   const clothingTabs=page.getByRole('navigation',{name:'服装图片用途'});
-  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['正面','侧面','背面','细节']);
-  const front=sample.clothes[0].images.find(image=>image.purpose==='正面'&&image.adopted);
-  await clothingImages.getByRole('heading',{name:`正面 · ${front.resource}@${front.version}`,exact:true}).waitFor();
+  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
+  const front=sample.clothes[0].images.find(image=>image.purpose==='服装展示图'&&image.adopted);
+  await clothingImages.getByRole('heading',{name:`服装展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
   await clothingImages.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(front.resource));
@@ -354,13 +354,11 @@ try {
   assert.deepEqual((await garmentVersions.locator('h3').allTextContents()).map(text=>text.split('@')[1]),['V005','V004','V003','V002']);
   const garmentScroll=await garmentVersions.evaluate(el=>({height:el.clientHeight,full:el.scrollHeight}));
   assert.ok(garmentScroll.height<=1050 && garmentScroll.full>garmentScroll.height);
-  await clothingTabs.getByRole('button',{name:'侧面',exact:true}).click();
-  await page.getByText('尚未采用侧面图',{exact:true}).waitFor();
-  await clothingTabs.getByRole('button',{name:'细节',exact:true}).click();
-  await clothingImages.getByRole('heading',{name:/^细节\/纽扣/}).waitFor();
+  assert.equal(await clothingImages.getByRole('heading',{name:/^服装参考图/}).count(),0);
+  await page.goto(page.url().split('&purpose=')[0]+'&purpose='+encodeURIComponent('正面'));
   await page.reload();
-  await clothingImages.getByRole('heading',{name:/^细节\/纽扣/}).waitFor();
-  assert.match(page.url(),/purpose=/);
+  await clothingImages.getByRole('heading',{name:`服装展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
+  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
   const clothingLayout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(child=>{const r=child.getBoundingClientRect();return {width:r.width,y:r.y}}));
   assert.equal(clothingLayout[0].y,clothingLayout[1].y);
   assert.ok(Math.abs(clothingLayout[0].width/clothingLayout[1].width-2/3)<0.01);
@@ -370,7 +368,7 @@ try {
   await page.screenshot({path:output+`/${width}-clothing.png`,fullPage:true});
   await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
   await page.getByRole('link',{name:'O002 · 未选图服装',exact:true}).click();
-  await page.getByText('尚未采用正面图',{exact:true}).waitFor();
+  await page.getByText('尚未采用服装展示图',{exact:true}).waitFor();
   assert.equal(await page.getByText('其他版本',{exact:true}).count(),0);
   await page.getByRole('navigation',{name:'当前位置',exact:true}).getByRole('link',{name:'共用资产',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();

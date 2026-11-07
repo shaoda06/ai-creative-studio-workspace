@@ -38,10 +38,10 @@ class ChloeClothingTests(unittest.TestCase):
         self.assertIsNone(clothing_cards(self.root,self.api)[0]['media'])
         first, label = self.image('red','first')
         second, other = self.image('blue','second',first['resource_id'])
-        self.append('参考版本',['正面',label,'用户提供','不适用'])
-        self.append('参考版本',['正面',other,label,'不适用'])
+        self.append('参考版本',['服装展示图',label,'用户提供','不适用'])
+        self.append('参考版本',['服装展示图',other,label,'不适用'])
         self.assertIsNone(clothing_cards(self.root,self.api)[0]['media'])
-        self.append('当前采用',['正面',label,'隔离采用','2026-11-07T12:00:00+08:00'])
+        self.append('当前采用',['服装展示图',label,'隔离采用','2026-11-07T12:00:00+08:00'])
         before = {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         detail = clothing_detail(self.root,'O001',self.api)
         card = clothing_cards(self.root,self.api)[0]
@@ -76,3 +76,16 @@ class ChloeClothingTests(unittest.TestCase):
         shutil.copytree(self.folder,self.folder.with_name('O001-重复'))
         with self.assertRaisesRegex(ValueError,'编号重复'):
             clothing_cards(self.root,self.api)
+
+    def test_clothing_purpose_options_and_reference_not_adoptable(self):
+        _, ref = self.image('green', 'reference')
+        self.append('参考版本', ['服装参考图', ref, '用户提供', '不适用'])
+        self.assertIsNone(clothing_cards(self.root, self.api)[0]['media'])
+        text = self.path.read_text()
+        self.path.write_text(text.replace('| 服装参考图 |', '| 正面 |'))
+        with self.assertRaisesRegex(ValueError, '服装用途'):
+            clothing_detail(self.root, 'O001', self.api)
+        self.path.write_text(text)
+        self.append('当前采用', ['服装参考图', ref, '错误采用', '2026-11-07T12:00:00+08:00'])
+        with self.assertRaisesRegex(ValueError, '当前采用只登记'):
+            clothing_detail(self.root, 'O001', self.api)
