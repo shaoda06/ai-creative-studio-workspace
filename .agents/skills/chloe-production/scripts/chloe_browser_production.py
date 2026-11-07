@@ -129,6 +129,15 @@ def script_part(project,source,ids):
     return documents.markdown('\n'.join(pieces),source)
 
 
+
+def script_document(project,api,source):
+    path=local(project,source)
+    result=ref(project,api,path)
+    result['version']=fields(document(project,source),'脚本信息')['脚本版本']
+    result['doc']={'title':path.stem,'html':documents.markdown(path.read_text('utf-8-sig'),source),'url':result['url']}
+    return result
+
+
 def production_data(project,api,work=None,**kwargs):
     check_work(project,work); data=state(project)
     segments={key:{**item,'scriptHtml':script_part(project,'脚本.md',item['shotIds']),
@@ -154,12 +163,11 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         raise FileNotFoundError('本视频无独立归档入口')
     data=state(project);api=space_api+'/projects/'+quote(name,safe='')
     result=items(projects,name,space_api)[0]
-    current=ref(project,api,project/'脚本.md')
+    current=script_document(project,api,'脚本.md')
     segments=production_data(project,api,work)['segments']
     by_id={v['id']:v for v in segments};rounds=[]
     for item in data['rounds'].values():
-        script=ref(project,api,project/item['script'])
-        script['version']=fields(document(project,item['script']),'脚本信息')['脚本版本']
+        script=script_document(project,api,item['script'])
         values=[]
         for entry in item['values']:
             candidate=video(data,api,entry)

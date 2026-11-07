@@ -81,6 +81,32 @@ class ChloeProductionTests(unittest.TestCase):
         initialize_video(self.root,'V001','隔离演示')
         self.assertEqual(state(self.project)['rounds'],{})
 
+    def test_script_document_before_generation_and_round_source(self):
+        self.plan()
+        script=self.project/'脚本.md'
+        script.write_text(script.read_text().replace('| 脚本版本 | v01 |','| 脚本版本 | v02 |').replace('## 内容与声音','当前稿专属说明\n\n## 内容与声音'))
+        before=set(self.project.rglob('*'))
+        detail=browser.detail(self.projects,self.project.name,self.api,'V001')
+        current=detail['storyboards']['whole']
+        self.assertEqual(current['version'],'v02')
+        self.assertEqual(current['key'],'脚本.md')
+        self.assertIn('当前稿专属说明',current['doc']['html'])
+        self.assertIn('内容与声音',current['doc']['html'])
+        self.assertIn('SH001',current['doc']['html'])
+        self.assertIn('SH002',current['doc']['html'])
+        self.assertEqual(current['doc']['url'],detail['script']['url'])
+        self.assertEqual(detail['episodeRounds'],[])
+        self.assertTrue(all(not item['videos'] for item in detail['segments']['whole']))
+        self.assertEqual(set(self.project.rglob('*')),before)
+        self.candidate('P001','E001');self.candidate('P002','E002')
+        self.rounds([self.round(1,[('P001','E001'),('P002','E002')])])
+        detail=browser.detail(self.projects,self.project.name,self.api,'V001')
+        recorded=detail['sceneRounds']['whole'][0]['storyboard']
+        self.assertEqual(recorded['version'],'v01')
+        self.assertEqual(recorded['key'],'历史版本/脚本-v01.md')
+        self.assertNotIn('当前稿专属说明',recorded['doc']['html'])
+        self.assertIn('SH001',recorded['doc']['html'])
+
     def test_complete_round_partial_revision_and_approval_not_inferred(self):
         self.plan();self.candidate('P001','E001');self.candidate('P002','E002')
         self.candidate('P001','E003','R002')
