@@ -777,10 +777,13 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             cli = data.desktop.cli or os.environ.get('CODEX_CLI_PATH') or shutil.which('codex')
             if not cli:
                 raise NotificationNotStarted('找不到Codex CLI，通知尚未启动')
+            environment = dict(os.environ)
+            if Path(data.desktop.node).is_absolute():
+                environment['PATH'] = str(Path(data.desktop.node).parent) + os.pathsep + environment.get('PATH', os.defpath)
             def queue():
                 try:
                     completed = subprocess.run([cli, 'queue', '--thread', data.thread_id, '--message', prompt],
-                        encoding='utf-8', capture_output=True, timeout=40)
+                        encoding='utf-8', capture_output=True, timeout=40, env=environment)
                 except OSError as error:
                     if isinstance(error, (FileNotFoundError, PermissionError)) or error.errno in (
                             errno.ENOEXEC, getattr(errno, 'EBADARCH', errno.ENOEXEC)):

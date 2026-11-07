@@ -321,6 +321,26 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         event = json.loads(self.store.db.execute('SELECT event FROM task_events ORDER BY id DESC LIMIT 1').fetchone()[0])
         self.assertIn('queue unavailable', event['error'])
 
+    @unittest.skipIf(t.os.name == 'nt', 'POSIX env shebang reproduction')
+    async def test_cli_queue_uses_registered_node_with_minimal_service_path(self):
+        node = t.shutil.which('node')
+        self.assertIsNotNone(node, 'Node is required for the desktop notification test')
+        cli = self.root / 'codex-fixture'
+        cli.write_text('#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n')
+        cli.chmod(0o755)
+        empty_bin = self.root / 'empty-bin'
+        empty_bin.mkdir()
+        self.store.queue_notifications = True
+        self.data.desktop.cli = str(cli)
+        self.data.desktop.node = node
+        with patch.dict(t.os.environ, {'PATH': str(empty_bin)}):
+            before = t.subprocess.run([str(cli)], capture_output=True, encoding='utf-8')
+            self.assertEqual(before.returncode, 127)
+            result = await self.store.desktop_call(self.data, 'send', '完成通知')
+            self.assertEqual(t.os.environ['PATH'], str(empty_bin))
+        self.assertEqual(json.loads(result['receipt']),
+                         ['queue', '--thread', 'authorized-target', '--message', '完成通知'])
+
     async def test_legacy_task_uses_service_cli_without_changing_stored_context(self):
         self.store.queue_notifications = True
         result = t.subprocess.CompletedProcess([], 0, 'Queued message legacy-id', '')
