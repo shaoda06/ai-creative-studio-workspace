@@ -266,6 +266,7 @@ class BaselineTests(unittest.TestCase):
                             node['mode'] = 0 if node['id'] in chain else 4
                         field_value = {
                             261: ('steps', 12 if choice in (1, 2) else 14),
+                            343: ('strength_model', 3.0 if choice in (1, 2) else 4.0),
                             289: ('step', 8),
                             502: ('steps', 8),
                         }.get(node['id'])
@@ -300,7 +301,7 @@ class BaselineTests(unittest.TestCase):
                         for parent, node in zip([331, *chain], [*chain, 405]):
                             self.assertEqual(graph[str(node)]['inputs']['model'], [str(parent), 0])
                         self.assertEqual(graph['53']['inputs']['strength_model'], 0.8)
-                        self.assertEqual(graph['343']['inputs']['strength_model'], 3.0)
+                        self.assertEqual(graph['343']['inputs']['strength_model'], 3.0 if choice in (1, 2) else 4.0)
                         total_steps = graph['261']['inputs']['steps']
                         split_step = graph['289']['inputs']['step']
                         self.assertEqual(total_steps, 12 if choice in (1, 2) else 14)
