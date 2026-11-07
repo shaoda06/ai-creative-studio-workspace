@@ -165,8 +165,13 @@ def fixed_input_checks(store, data):
         raise ValueError('任务标题不能为空')
     for item in data.uploads:
         required = {'file', 'node', 'input', 'subfolder', 'response-name'}
-        if not required.issubset(item) or set(item) - required - {'json-path'} or not all(isinstance(item[name], str) for name in required):
+        if not required.issubset(item) or set(item) - required - {'json-path', 'resource'} or not all(isinstance(item[name], str) for name in required):
             raise ValueError('上传映射字段不完整或类型不正确')
+        if 'resource' in item:
+            import project_resources
+            ref = project_resources.reference(data.project, item['file'])
+            if ref is None or item['resource'] != {key: ref[key] for key in ('resource_id', 'version')}:
+                raise ValueError('上传资源版本与实际输入文件不符')
         if 'json-path' in item and (not isinstance(item['json-path'], list) or not item['json-path']
                                    or any(type(part) not in (str, int) for part in item['json-path'])):
             raise ValueError('JSON素材绑定必须提供字段路径数组')

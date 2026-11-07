@@ -11,8 +11,9 @@ from workspace_connection import read_connection
 
 
 def connection(args):
+    from project_paths import scope_workspace
     project = Path(args.project).resolve()
-    config = read_connection(project.parent.parent)
+    config = read_connection(scope_workspace(project))
     # Use genuine caller context inherited from Desktop, never a fabricated caller.
     caller = os.environ.get('CODEX_THREAD_ID')
     pipe = os.environ.get('CODEX_APP_TOOLS_PIPE_PATH')
@@ -29,11 +30,12 @@ def connection(args):
 
 
 def submit_plan(args):
+    from project_paths import scope_name
     project, config, thread, desktop = connection(args)
     plan = Path(args.plan)
     # The one plan parameter is project-relative, like all files inside its task entries.
     plan = plan.resolve() if plan.is_absolute() else (project / plan).resolve()
-    payload = dict(project=project.name, plan_file=plan.relative_to(project).as_posix(), thread_id=thread,
+    payload = dict(project=scope_name(project), plan_file=plan.relative_to(project).as_posix(), thread_id=thread,
                    desktop=desktop, timeout=args.timeout, prepare_only=args.prepare_only,
                    reprepare=getattr(args, 'reprepare', False), start_paused=args.start_paused)
     if getattr(args, 'record_repairs', None):
@@ -44,10 +46,11 @@ def submit_plan(args):
 
 
 def submit(args, workflow, url, uploads=None):
+    from project_paths import scope_name
     project, config, thread, desktop = connection(args)
     payload = {name: getattr(args, name) for name in
                ('project', 'task_type', 'record_dir', 'attempt_name', 'request_name', 'response_name', 'history_name', 'timeout')}
-    payload.update(project=project.name, record_dir=args.record_dir,
+    payload.update(project=scope_name(project), record_dir=args.record_dir,
         workflow=workflow, url=url, title=args.task_title, uploads=[] if uploads is None else uploads, start_paused=args.start_paused,
         outputs=json.loads(Path(args.output_plan).read_text('utf-8')),
         segment_plan=json.loads(Path(args.segment_plan).read_text('utf-8')) if args.segment_plan else None,

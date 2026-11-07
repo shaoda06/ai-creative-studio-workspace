@@ -44,7 +44,7 @@ def dispatch(args):
 
 def parser():
     p = client.Parser(description=__doc__)
-    p.add_argument('--project', required=True, help='Project root under workspace/projects; relative to cwd; uses workspace comfyui-config.json')
+    p.add_argument('--project', required=True, help='Task root: workspace/projects/<project> or workspace/综合资料; uses workspace comfyui-config.json')
     p.add_argument('--plan', help='Default submission: one task-group JSON for all ready tasks in this authorization, not one call per scene/segment; project-relative or absolute: optional group_title plus tasks (one or more); checks all members, atomically registers one group, returns group_id and child IDs; --prepare-only never registers')
     p.add_argument('--record-repairs', help='Existing local image results only: JSON object from record_dir to reason/expected_updates/updates; never runs image processing or queues tasks')
     p.add_argument('--task-type', choices=TASK_TYPES, help='Compatibility for existing tasks or an explicitly independent single task; use --plan for grouped submissions')

@@ -4,6 +4,45 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-workspace-browser/scripts'))
 
 
+SHARED_SCOPE = '@shared'
+SHARED_DIRECTORY = '综合资料'
+
+
+def scope_name(root):
+    root = Path(root)
+    return SHARED_SCOPE if root.name == SHARED_DIRECTORY and root.parent.name != 'projects' else root.name
+
+
+def scope_workspace(root):
+    root = Path(root).resolve()
+    if root.parent.name == 'projects':
+        return root.parent.parent
+    if root.name == SHARED_DIRECTORY:
+        return root.parent
+    raise ValueError('任务目录必须是工作区projects下的项目或综合资料')
+
+
+def scope_root(workspace, value, *, recorded=False):
+    workspace = Path(workspace).resolve()
+    spelling = str(value)
+    if not recorded and not Path(spelling).is_absolute() and PureWindowsPath(spelling).name != spelling:
+        raise ValueError('项目必须是当前工作区内的项目名或绝对路径')
+    if spelling == SHARED_SCOPE:
+        path = workspace / SHARED_DIRECTORY
+        if path.resolve() != path:
+            raise ValueError('共用任务目录不能重定向到其他目录')
+    elif recorded or not Path(spelling).is_absolute():
+        path = workspace / 'projects' / PureWindowsPath(spelling).name
+    else:
+        path = Path(spelling)
+    path = path.resolve()
+    if path.parent == workspace / 'projects' and path.name == SHARED_SCOPE:
+        raise ValueError('共用任务标识不能用作项目目录名')
+    if path != workspace / SHARED_DIRECTORY and path.parent != workspace / 'projects':
+        raise ValueError('任务必须属于当前工作区projects下的项目或综合资料')
+    return path
+
+
 def project_file(project, value, *, recorded=False):
     project = Path(project).resolve()
     return _project_file(project, value, recorded=recorded)

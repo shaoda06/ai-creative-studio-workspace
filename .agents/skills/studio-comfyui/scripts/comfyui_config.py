@@ -9,10 +9,8 @@ import comfyui_client as client
 
 
 def workspace_for_project(project):
-    project = Path(project).resolve()
-    if project.parent.name != 'projects':
-        raise ValueError('项目必须位于工作区的projects目录下')
-    return project.parent.parent
+    from project_paths import scope_workspace
+    return scope_workspace(project)
 
 
 def load_config(workspace, *, missing_ok=False):

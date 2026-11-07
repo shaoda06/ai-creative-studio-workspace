@@ -1,4 +1,5 @@
 """Durable local FIFO; only the service performs uploads and remote submission."""
+from project_paths import scope_name
 import argparse
 import asyncio
 from copy import deepcopy
@@ -137,7 +138,7 @@ class LocalQueue:
     def new_queue_row(self, key, data):
         now = self.client.now()
         return {'input': data, 'state': {
-            'id': key, 'project': Path(data.project).name, 'title': data.title, 'task_type': data.task_type,
+            'id': key, 'project': scope_name(data.project), 'title': data.title, 'task_type': data.task_type,
             'prompt_id': None, 'client_id': str(uuid.uuid4()), 'status': 'paused' if data.start_paused else 'local_queued',
             'preparation_required': True,
             'content_review_required': True,

@@ -7,7 +7,7 @@ import execution_records as recordio
 import re
 from urllib.parse import unquote
 
-from project_paths import project_file
+from project_paths import project_file, scope_root
 from workflow_paths import workflow_file, workflow_root
 from backend.services.director_uploads import pairs
 from backend.services import image_closeout as images
@@ -62,9 +62,7 @@ def submission_response(store, journal, *, reused=False):
 
 async def execute(store, payload):
     from backend.services.comfy_tasks import TaskInput, SKILL
-    root = project_file(store.workspace / 'projects', payload.project)
-    if root.parent != store.workspace / 'projects':
-        raise ValueError('任务清单必须属于projects中的单个项目')
+    root = scope_root(store.workspace, payload.project)
     plan_file = project_file(root, payload.plan_file)
     source = json.loads(plan_file.read_text('utf-8-sig'))
     if not source['tasks']:

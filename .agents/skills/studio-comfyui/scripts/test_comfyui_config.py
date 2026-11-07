@@ -29,6 +29,13 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(config.client.ClientError):
             config.remote_urls(self.root)
 
+    def test_shared_assets_use_workspace_config(self):
+        self.write([{'url': 'https://primary.invalid'}])
+        shared = self.root / '综合资料'
+        shared.mkdir()
+        self.assertEqual(config.remote_urls(config.workspace_for_project(shared)),
+                         ['https://primary.invalid'])
+
     def test_credentials_are_per_node_and_never_applied_to_historical_other_address(self):
         self.write([{'url': 'https://primary.invalid', 'auth': {'type': 'basic', 'username': 'alice', 'password': 'private'}},
                     {'url': 'https://backup.invalid', 'auth': {'type': 'basic', 'username': 'bob', 'password': 'other'}}])

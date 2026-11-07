@@ -87,6 +87,8 @@ def scope_links(value, api):
         return [scope_links(item, api) for item in value]
     if isinstance(value, str) and value.startswith('/api/projects/'):
         return api + value[4:]
+    if value == '/#/':
+        return '/#/spaces/' + api.rsplit('/', 1)[1]
     if isinstance(value, str) and value.startswith('/#/projects/'):
         return '/#/spaces/' + api.rsplit('/', 1)[1] + value[2:]
     if isinstance(value, str) and ('href=' in value or 'src=' in value):

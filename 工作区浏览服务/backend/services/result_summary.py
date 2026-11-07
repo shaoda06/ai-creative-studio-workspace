@@ -63,7 +63,7 @@ def summary(store, key):
     result['title'], result['task_type'] = data.title, data.task_type
     result.update(remote_url=data.url, outputs=deepcopy(outputs(store, key)),
                   record_dir=store.record_paths(key).relative_file(data.record_dir),
-                  review_path='/#/projects/' + quote(state['project'], safe=''),
+                  review_path='/#/' if state['project'] == '@shared' else '/#/projects/' + quote(state['project'], safe=''),
                   next_action=('report-user' if state.get('closeout', {}).get('status') == 'completed' else 'inspect-closeout')
                   if data.task_type.startswith('video-') else
                   ('display-image' if state.get('closeout', {}).get('status') == 'completed' else 'inspect-closeout'))

@@ -62,7 +62,7 @@ def file_info(project, value, archive=None):
     relative = path.relative_to(project)
     if any(part.startswith('.') for part in relative.parts):
         return unavailable
-    root, prefix = archive or (project, '/api/projects/' + quote(project.name, safe='') + '/files/')
+    root, prefix = archive or (project, '/api/projects/' + quote(paths.scope_name(project), safe='') + '/files/')
     file = (root / relative).resolve()
     if not file.is_relative_to(root) or not recordio.exists(file) or not recordio.backing_file(file).resolve().is_relative_to(root):
         return unavailable

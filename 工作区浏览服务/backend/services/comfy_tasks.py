@@ -236,12 +236,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         return row['_record_paths']
 
     def resolve_input(self, data, *, recorded=False):
-        if not recorded and not Path(data.project).is_absolute() and PureWindowsPath(data.project).name != data.project:
-            raise ValueError('项目必须是当前工作区内的项目名或绝对路径')
-        project = (self.workspace / 'projects' / PureWindowsPath(data.project).name
-                   if recorded or not Path(data.project).is_absolute() else Path(data.project)).resolve()
-        if project.parent != self.workspace / 'projects':
-            raise ValueError('任务必须属于当前工作区projects下的项目')
+        project = paths.scope_root(self.workspace, data.project, recorded=recorded)
         if not recorded and (project / ARCHIVE_MARKER).is_file():
             raise ValueError('项目已迁移或归档，不能在旧入口提交新任务')
         data.project = str(project)
@@ -299,7 +294,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             path = Path(value)
             return path.relative_to(project).as_posix() if path.is_relative_to(project) else str(path)
         payload = data.model_dump()
-        payload['project'] = project.name
+        payload['project'] = paths.scope_name(project)
         payload['record_dir'] = relative(data.record_dir)
         for target in [*payload['outputs'], *((payload['segment_plan'] or {}).get('targets', []))]:
             target['path'] = relative(target['path'])
@@ -394,7 +389,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             checks.check_prepared(self, data)
             key = str(uuid.uuid4())
             self.rows[key] = {'input': data, 'state': {
-                'id': key, 'project': project.name, 'title': data.title, 'task_type': data.task_type,
+                'id': key, 'project': paths.scope_name(project), 'title': data.title, 'task_type': data.task_type,
                 'prompt_id': None, 'client_id': str(uuid.uuid4()), 'status': 'submitting',
                 'preparation_required': True,
                 'content_review_required': True,
