@@ -120,7 +120,7 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertEqual(len(look['images']), 2)
         self.assertEqual(look['media']['key'], Path(second['absolute_file']).relative_to(self.root).as_posix())
         self.assertEqual(detail['images'], [])
-        self.assertIn('造型组合', [x['heading'] for x in look['sections']])
+        self.assertIn('造型信息', [x['heading'] for x in look['sections']])
         self.assertNotIn('资产身份', [x['heading'] for x in look['sections']])
         self.assertEqual(model_file(self.root, 'M001', look['media']['key']), Path(second['absolute_file']))
         self.assertNotIn('资产身份', [x['heading'] for x in detail['sections']])

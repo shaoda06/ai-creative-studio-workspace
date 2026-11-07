@@ -159,15 +159,13 @@ class ChloeDocumentsTest(unittest.TestCase):
 
     def test_look_associations_and_adoption_evidence(self):
         p=self.assets['造型']/'造型说明.md'
-        p.write_text(p.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |')
-                     .replace('| 服装来源类型 | 待确定 |','| 服装来源类型 | 商品 |')
-                     .replace('| 服装或商品编号 | 待确定 |','| 服装或商品编号 | G001 |'))
+        p.write_text(p.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |'))
         self.append(p,'关联资料',['模特','M001','[模特](<../../AI模特/M001-测试/模特说明.md>)','人物'])
         self.append(p,'关联资料',['商品','G001','[商品](<../../../商品资料/G001-测试/商品说明.md>)','穿着'])
         self.assertEqual(self.check()['errors'],[])
         good=p.read_text()
-        p.write_text(good.replace('| 服装或商品编号 | G001 |','| 服装或商品编号 | O001 |'))
-        self.assertTrue(any('造型组合' in e['error'] for e in self.check()['errors']))
+        p.write_text(good.replace('| 模特编号 | M001 |','| 模特编号 | M002 |'))
+        self.assertTrue(any('造型信息' in e['error'] for e in self.check()['errors']))
         p.write_text(good)
         self.append(p,'当前采用',['全身三视图原图','未取得','未取得','未取得'])
         self.assertTrue(any('当前采用必须' in e['error'] for e in self.check()['errors']))

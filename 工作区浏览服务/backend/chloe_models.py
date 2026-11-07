@@ -131,7 +131,7 @@ def model_looks(root, identity):
         look_id, name = path.parent.name.split('-', 1)
         doc = read_document(root, path, template('chloe-assets', '造型说明模板.md'),
                             {'identity': look_id, 'title': name})
-        if fields(doc, '造型组合')['模特编号'] == identity:
+        if fields(doc, '造型信息')['模特编号'] == identity:
             yield look_id, name, path, doc
 
 
@@ -191,6 +191,7 @@ def model_detail(root, identity, api):
                      'url': base + '/files/' + quote(ref['file'], safe='/')}
         key = look_path.relative_to(root).as_posix()
         looks.append({'id': look_id, 'name': look_name, 'media': media,
+                      'description': fields(look_doc, '造型信息')['造型说明'],
                       **asset_content(root, look_path, look_doc, allowed, base),
                       'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
                       'url': base + '/files/' + quote(key, safe='/')})

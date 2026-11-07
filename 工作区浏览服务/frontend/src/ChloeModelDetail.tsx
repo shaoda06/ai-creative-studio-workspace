@@ -17,7 +17,7 @@ interface AssetDetail {
   sections: {heading: string; html: string; empty: boolean}[];
 }
 export interface ModelDetail extends AssetDetail {
-  looks: (AssetDetail & {media: FileItem | null})[];
+  looks: (AssetDetail & {media: FileItem | null; description: string})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
 const bodyPurposes = ['全身三视图遮面版', '全身三视图原图', '补充细节'];
@@ -46,7 +46,6 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
     return `/spaces/${encodeURIComponent(spaceId!)}?${next}`;
   };
   const look = tab==='looks' ? data?.looks.find(item=>item.id===params.get('look')) : undefined;
-  const lookTab = params.get('lookTab')==='images' ? 'images' : 'info';
   const asset = look || data;
   const preview = asset?.images.find(image => `${image.resource}@${image.version}` === params.get('ref'))?.media;
   const open = (item: FileItem) => {
@@ -55,7 +54,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const section = (heading: string) => {
     const value = asset!.sections.find(section => section.heading === heading)!;
-    return value.empty ? <p className="muted">暂无{heading}。</p> : <Rich html={value.html} fieldTable={heading==='人物特征' || heading==='造型组合'} />;
+    return value.empty ? <p className="muted">暂无{heading}。</p> : <Rich html={value.html} fieldTable={heading==='人物特征'} />;
   };
   const adopted = (purpose: string) => asset!.images.find(image => image.adopted && image.purpose === purpose);
   const faceImage = data && adopted('正面面部');
@@ -108,9 +107,13 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       </div>}
       {tab==='looks' && (look ? <>
         <Link to={lookUrl()}>返回造型列表</Link>
-        <UnderlineTabs label="造型详情分类" items={[{value:'info',label:'造型信息'},{value:'images',label:'造型图片'}]} selected={lookTab} onChange={value=>{const next=new URLSearchParams(params);next.set('lookTab',value);next.delete('ref');setParams(next);}} />
-        {lookTab==='info' ? <section className="panel"><h2>造型组合</h2>{section('造型组合')}</section>
-          : <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>}
+        <div className="chloe-look-detail">
+          <section className="panel" aria-label="造型信息"><h2>造型信息</h2>
+            <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div></dl>
+            {!['无','待确定','不适用','待核实','未取得'].includes(look.description) && <p>{look.description}</p>}
+          </section>
+          <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>
+        </div>
       </> : <section className="panel">
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}
           to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图遮面版'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}

@@ -249,11 +249,10 @@ def check_relations(root, path, doc):
                 raise ValueError('关联对象编号类型错误')
             linked_object(root,path,identity,row['说明文件'],identity[0])
             linked.add(identity)
-    look = {r['字段']:r['内容'] for r in records(doc,'造型组合')}
-    if look:
-        for field,prefix in [('模特编号','M'),('服装或商品编号',{'服装':'O','商品':'G'}.get(look['服装来源类型']))]:
-            if look[field] not in MISSING and (not prefix or not look[field].startswith(prefix) or look[field] not in linked):
-                raise ValueError('造型组合与关联资料不一致：'+field)
+    look = {r['字段']:r['内容'] for r in records(doc,'造型信息')}
+    if look and look['模特编号'] not in MISSING:
+        if not re.fullmatch(r'M\d{3,}', look['模特编号']) or look['模特编号'] not in linked:
+            raise ValueError('造型信息与关联资料不一致：模特编号')
     for heading in ('款式与事实','带货条件'):
         identities = [(r['款式或SKU'],r['字段']) for r in records(doc,heading)]
         if len(set(identities)) != len(identities):

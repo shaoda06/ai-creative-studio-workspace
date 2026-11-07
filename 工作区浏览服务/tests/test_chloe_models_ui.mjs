@@ -198,11 +198,14 @@ try {
   await page.screenshot({path:output+`/${width}-detail.png`,fullPage:true});
   await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).click();
-  await page.getByRole('heading',{name:'造型组合',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'造型信息',exact:true}).waitFor();
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
-  const lookTabs=page.getByRole('navigation',{name:'造型详情分类'});
-  assert.deepEqual(await lookTabs.getByRole('button').allTextContents(),['造型信息','造型图片']);
-  await lookTabs.getByRole('button',{name:'造型图片',exact:true}).click();
+  assert.equal(await page.getByRole('navigation',{name:'造型详情分类'}).count(),0);
+  const lookInfo=page.getByRole('region',{name:'造型信息',exact:true});
+  assert.equal(await lookInfo.getByText('服装来源类型',{exact:true}).count(),0);
+  const layout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}}));
+  assert.equal(layout[0].y,layout[1].y);
+  assert.ok(Math.abs(layout[0].width/layout[1].width-2/3)<0.01);
   const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
   await page.getByRole('heading',{name:`全身定装三视图 · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
