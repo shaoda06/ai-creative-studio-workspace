@@ -5,7 +5,7 @@ import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, to, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; to?: string; onDetails?: () => void }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, to, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; to?: string; onDetails?: () => void }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -17,7 +17,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const Cover = linked ? 'div' : 'button';
   const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}`;
   const content = <>
-    <PointerTooltip text={title}><h3 >{title}</h3></PointerTooltip>
+    {!hideTitle && <PointerTooltip text={title}><h3 >{title}</h3></PointerTooltip>}
     <div className="asset-media-item">
       {item.media ? <Cover className="cover" onClick={linked ? undefined : () => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
@@ -41,5 +41,5 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       </>}
     </div>
   </>;
-  return linked ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className}>{content}</article>;
+  return linked ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className} aria-label={hideTitle ? title : undefined}>{content}</article>;
 }

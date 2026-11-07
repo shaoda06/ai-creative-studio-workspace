@@ -369,6 +369,15 @@ try {
       await page.getByRole('dialog').getByText('本地图片详情示例。', { exact: true }).waitFor();
       await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     }
+    for (const title of ['外层已命名的采用图','外层已命名的空图片']) {
+      const card=showcase.getByRole('article',{name:title,exact:true});
+      assert.equal(await card.locator('h3').count(),0);
+      await contained(card,`${width}px / 隐藏重复标题图片卡`);
+      assert.equal(await card.locator('.cover').count(),1);
+    }
+    await showcase.getByRole('article',{name:'外层已命名的采用图',exact:true}).locator('.cover').click();
+    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     console.log(`图片卡片：${width}px普通／紧凑无图同高占位、默认与自定义提示、仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
     await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
     const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });

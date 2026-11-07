@@ -41,9 +41,9 @@ with tempfile.TemporaryDirectory() as tmp:
   return '[共用:'+rid+'@'+version+'](<'+os.path.relpath(file,model)+'>)'
  first=label(target,ref['resource_id'],ref['version'])
  append('参考版本',['正面面部',first,'用户提供','不适用'])
- for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('全身三视图原图','#bbaabb',(600,300),'views'),('全身三视图遮面版','#444444',(600,300),'masked')]:
+ for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('全身三视图原图','#bbaabb',(600,300),'views'),('全身三视图遮面版','#444444',(600,300),'masked')]:
   source=Path(tmp)/(key+'.png');Image.new('RGB',size,color).save(source)
-  result=import_media(root,source,key,resource_id=ref['resource_id'] if key=='face2' else None)
+  result=import_media(root,source,key,resource_id=ref['resource_id'] if key.startswith('face') else None)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version'])
   append('参考版本',[purpose,reference,original if key=='masked' else first,'不适用'])
   if key=='views':original=reference
@@ -122,13 +122,11 @@ try {
   assert.equal(await page.getByRole('heading',{name:'人物特征',exact:true}).count(),0);
   assert.equal(await page.getByRole('navigation',{name:'当前采用三视图'}).locator('[aria-current="page"]').textContent(),'遮面版');
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
-  await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('参考版本',{exact:true}).click();
-  await page.getByRole('navigation',{name:'模特图片用途'}).getByRole('button',{name:'全身三视图原图',exact:true}).click();
+  assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
   await page.getByRole('heading',{name:'基础全身三视图',exact:true}).waitFor();
   assert.match(page.url(),/modelTab=images/);
   assert.match(page.url(),/view=original/);
-  assert.match(page.url(),/purpose=/);
   const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
   assert.deepEqual(await detailTabs.getByRole('button').allTextContents(),['模特信息','模特图片','造型']);
   assert.equal(await page.getByText('不应显示的来源文字',{exact:true}).count(),0);
@@ -143,15 +141,21 @@ try {
   assert.ok(faceBox.x+faceBox.width<bodyBox.x && Math.abs(faceBox.y-bodyBox.y)<1,'面部和三视图同页左右排列');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
-  for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover',':scope > details > summary']) {
+  for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
     assert.ok(Math.abs(left.y-right.y)<1,`左右对齐：${selector}`);
   }
-  const refs=faceColumn.locator(':scope > details');
+  assert.equal(await page.locator('.chloe-model-image-column > div > .asset-media-card h3').count(),0);
+  const refs=faceColumn.locator(':scope > div > details');
   assert.equal(await refs.getAttribute('open'),null);
   await refs.locator(':scope > summary').click();
-  await refs.locator('.asset-media-card').nth(1).waitFor();
-  assert.equal(await refs.locator('.asset-media-card').count(),2);
+  await refs.locator('.asset-media-card').nth(3).waitFor();
+  assert.equal(await refs.locator('.asset-media-card').count(),4);
+  const versions=await refs.locator('.asset-media-card h3').allTextContents();
+  assert.deepEqual(versions.map(title=>title.split('@')[1]),['V005','V004','V003','V002']);
+  const scroll=await refs.locator('.chloe-model-versions').evaluate(el=>({height:el.clientHeight,full:el.scrollHeight,overflow:getComputedStyle(el).overflowY}));
+  assert.ok(scroll.height<=1050 && scroll.full>scroll.height);
+  assert.equal(scroll.overflow,'auto');
   await refs.locator('.cover').last().click();
   await page.getByRole('dialog').waitFor(); assert.match(page.url(),/ref=/);
   await page.reload(); await page.getByRole('dialog').waitFor();
