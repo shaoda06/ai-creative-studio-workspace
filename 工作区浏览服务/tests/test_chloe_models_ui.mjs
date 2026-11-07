@@ -139,7 +139,13 @@ try {
   assert.ok(faceBox.x+faceBox.width<bodyBox.x && Math.abs(faceBox.y-bodyBox.y)<1,'面部和三视图同页左右排列');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
-  const refs=page.locator('section.panel').filter({has:page.getByRole('heading',{name:'参考版本',exact:true})});
+  for (const selector of [':scope > h2',':scope > div > h3',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover',':scope > details > summary']) {
+    const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
+    assert.ok(Math.abs(left.y-right.y)<1,`左右对齐：${selector}`);
+  }
+  const refs=faceColumn.locator(':scope > details');
+  assert.equal(await refs.getAttribute('open'),null);
+  await refs.locator(':scope > summary').click();
   await refs.locator('.asset-media-card').nth(1).waitFor();
   assert.equal(await refs.locator('.asset-media-card').count(),2);
   await refs.locator('.cover').last().click();

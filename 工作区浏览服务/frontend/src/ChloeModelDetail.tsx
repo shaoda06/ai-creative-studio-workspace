@@ -76,20 +76,23 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
       </>}
       {tab==='images' && <div className="chloe-model-images">
-        <section className="chloe-model-image-column" aria-label="正面面部图">
-          <section className="panel"><h2>正面面部图</h2><h3>当前采用</h3>
-            <div className="asset-media-grid">{imageCard('正面面部',adopted('正面面部'))}</div>
-          </section>
-          <section className="panel"><h2>参考版本</h2>{references('正面面部')}</section>
+        <section className="panel chloe-model-image-column" aria-label="正面面部图">
+          <h2>正面面部图</h2>
+          <div><h3>当前采用</h3></div>
+          <div>{imageCard('正面面部',adopted('正面面部'))}</div>
+          <details><summary>参考版本</summary>{references('正面面部')}</details>
         </section>
-        <section className="chloe-model-image-column" aria-label="基础全身三视图"><section className="panel"><h2>基础全身三视图</h2>
-          <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
-          <div className="chloe-assets-content">{imageCard(view==='masked' ? bodyPurposes[0] : bodyPurposes[1],adopted(view==='masked' ? bodyPurposes[0] : bodyPurposes[1]))}</div>
+        <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
+          <h2>基础全身三视图</h2>
+          <div><h3>当前采用</h3>
+            <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
+          </div>
+          <div>{imageCard(view==='masked' ? bodyPurposes[0] : bodyPurposes[1],adopted(view==='masked' ? bodyPurposes[0] : bodyPurposes[1]))}</div>
           <details><summary>参考版本</summary>
             <UnderlineTabs label="模特图片用途" items={bodyPurposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             <div className="chloe-assets-content">{references(purpose)}</div>
           </details>
-        </section></section>
+        </section>
       </div>}
       {tab==='looks' && (look ? <section className="panel">
         <Link to={lookUrl()}>返回造型列表</Link><Rich html={look.html} /><FileActions url={look.url} />
