@@ -499,8 +499,12 @@ def check_relations(root, path, doc):
                 raise ValueError('建议验证：采用或填写结果时须链接实际验证对象')
             if not row['验证方法'].strip() or row['验证方法'] in MISSING:
                 raise ValueError('建议验证：采用或填写结果时须有验证方法')
-        if has_result and (not LINK.search(row['结果证据']) or not has_evidence(path, row['结果证据'])):
+        evidence_links = LINK.findall(row['结果证据'])
+        if has_result and not evidence_links:
             raise ValueError('建议验证：填写验证结果时须链接结果证据')
+        for _, href in evidence_links:
+            if not re.fullmatch(r'https?://[^\s]+', href) and not (path.parent/href.split('#')[0]).is_file():
+                raise ValueError('建议验证：每个结果证据链接须指向具体文件或来源URL：'+href)
 
 
 def check_segment_plan(doc, total_duration):

@@ -293,7 +293,7 @@ class ChloeDocumentsTest(unittest.TestCase):
                ('no method',{5:'无'},'须有验证方法'),
                ('no result evidence',{6:'已验证有效'},'链接结果证据'),
                ('evidence is vague text',{6:'已验证有效',7:'已经看过'},'链接结果证据'),
-               ('evidence is a directory',{6:'已验证有效',7:f'[目录](<../projects/{self.video.name}/执行记录/>)'},'链接结果证据'),
+               ('evidence is a directory',{6:'已验证有效',7:f'[目录](<../projects/{self.video.name}/执行记录/>)'},'每个结果证据链接须指向具体文件'),
                ('missing evidence file',{6:'样本不足',7:'[证据](<不存在.md>)'},'文件链接不存在'),
                ('recorded result',{6:'样本不足，暂不能判断效果',7:proof},None),
                ('external evidence',{6:'样本不足',7:'[原平台记录](<https://example.com/evidence>)'},None),

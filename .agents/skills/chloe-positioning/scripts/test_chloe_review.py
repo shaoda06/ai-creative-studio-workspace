@@ -188,6 +188,44 @@ class ChloeReviewTest(unittest.TestCase):
             self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认', target, '核对开场', '未取得', '未取得'])
             self.read(self.review)
 
+    def test_verification_evidence_rejects_each_invalid_link(self):
+        self.content_review()
+        baseline = self.review.read_text()
+        target = f'[作品](<../projects/{self.video.name}/README.md>)'
+        file = f'[原核对](<../projects/{self.video.name}/执行记录/证据.md>)'
+        folder = f'[目录](<../projects/{self.video.name}/执行记录/>)'
+        missing = f'[缺失](<../projects/{self.video.name}/执行记录/不存在.md>)'
+        url = '[来源](<https://example.com/result>)'
+        for result in ('内容调整已落实，效果未取得', '未取得'):
+            for evidence in (folder, file+'、'+folder, folder+'、'+file,
+                             url+'、'+folder, file+'、'+missing, missing+'、'+url):
+                with self.subTest(result=result, evidence=evidence):
+                    self.review.write_text(baseline)
+                    self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认',
+                                target, '核对开场', result, evidence])
+                    with self.assertRaises(ValueError): self.read(self.review)
+
+    def test_verification_evidence_accepts_files_and_source_urls(self):
+        self.content_review()
+        baseline = self.review.read_text()
+        target = f'[作品](<../projects/{self.video.name}/README.md>)'
+        file = f'[原核对](<../projects/{self.video.name}/执行记录/证据.md#核对>)'
+        second = f'[成片](<../projects/{self.video.name}/成片/test.mp4>)'
+        url = '[来源](<https://example.com/result>)'
+        for evidence in (file, file+'、'+second, url, file+'、'+url,
+                         url+'、[另一来源](<http://example.com/other>)'):
+            with self.subTest(evidence=evidence):
+                self.review.write_text(baseline)
+                self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认',
+                            target, '核对开场', '内容调整已落实，效果未取得', evidence])
+                self.read(self.review)
+        self.review.write_text(baseline)
+        self.append(self.review, '建议验证', ['T001', self.source, '采用', '用户确认',
+                    target, '核对开场', '未取得', '未取得'])
+        self.read(self.review)
+        self.review.write_text(self.review.read_text().replace('| 未取得 | 未取得 |', '| 内容调整已落实 | 未取得 |'))
+        with self.assertRaisesRegex(ValueError, '须链接结果证据'): self.read(self.review)
+
     def test_suggestion_adoption_implementation_and_next_trial_keep_original_records(self):
         self.content_review()
         target = initialize_video(self.root, 'V002', '下一条展示')
