@@ -113,7 +113,7 @@ try {
     await clear(); await dialog.getByRole('button', { name: '‹ 返回', exact: true }).click();
     await page.getByRole('button', { name: '导出修改意见', exact: true }).click();
     const exportDialog = page.getByRole('dialog', { name: 'EP001 · C001 导出修改意见', exact: true });
-    const note = exportDialog.getByLabel('第1轮 整场总体意见', { exact: true });
+    const note = exportDialog.getByLabel('第1轮 本轮总体意见', { exact: true });
     await note.fill('修改后的意见');
     await exportDialog.getByRole('button', { name: '复制', exact: true }).click();
     await card('已复制；有未保存的修改').waitFor(); await clear();

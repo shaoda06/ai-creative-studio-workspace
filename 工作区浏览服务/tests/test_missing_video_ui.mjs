@@ -78,7 +78,7 @@ try {
   await page.goto(base + '/#/projects/' + encodeURIComponent(project), { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: '剧集制作', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
-  await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '修改轮次', exact: true }).waitFor();
   const scene = page.locator('.episode-scene-content');
   const placeholder = page.locator('.segment-video .video-placeholder');
   const select = id => page.getByRole('button', { name: new RegExp('^分段 ' + id + '，') }).first().click();

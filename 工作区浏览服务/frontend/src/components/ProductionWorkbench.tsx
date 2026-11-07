@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { FileItem } from '../api';
-import { PreviewContext, Result, Rich } from '../components';
+import { Dialog, PreviewContext, Result, Rich } from '../components';
 import { TabNav } from './TabNav';
 import { Pagination } from './Pagination';
 import { ProductionEpisodeButton } from './ProductionEpisodeButton';
@@ -42,6 +42,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const [page, setPage] = useState(1);
   const [handoffKey, setHandoffKey] = useState('');
   const [roundEntry, setRoundEntry] = useState(0);
+  const [recordNumber, setRecordNumber] = useState<number | null>(null);
   const [playback, setPlayback] = useState<{ episode: string; rounds: Record<string, number | undefined>; start?: EpisodePlayback['start'] } | null>(null);
   const cards = useRef<HTMLDivElement>(null);
   const previousEpisode = useRef(selected);
@@ -88,7 +89,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         history: workMode ? current.sceneRounds?.[id] : undefined };
     }),
   } : undefined;
-  const episodeNotesExport = useRevisionNotesExport(current && selectedScene ? { ...access.scope(project, current.name, selectedScene), episodeTitle: current.title } : null, [], null, undefined, episodeReview);
+  const episodeNotesExport = useRevisionNotesExport(current && selectedScene && (current.readOnly || current.segments?.[selectedScene]?.length)
+    ? { ...access.scope(project, current.name, selectedScene), episodeTitle: current.title } : null, [], null, undefined, episodeReview);
   const workSheets = workMode && !scenes.includes('whole') ? current?.directorSheets?.whole : undefined;
   const directorScenes = (workSheets ? [selectedScene] : scenes).map(id => {
     const rounds = current?.sceneRounds?.[id] || [];
@@ -100,9 +102,16 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   });
   const segments = current?.segments?.[selectedScene] || [];
   const sceneRounds = current?.sceneRounds?.[selectedScene] || [];
-  const selectableRounds = workMode ? episodeRounds : sceneRounds;
+  const selectableRounds = [...new Map([...episodeRounds, ...sceneRounds.filter(item => !item.episodeRound)]
+    .map(item => [item.number, item])).values()].sort((a, b) => b.number - a.number);
   const selectedRound = roundNumberForScene(selectedScene);
   const round = sceneRounds.find(item => item.number === selectedRound);
+  const recordScenes = episodeRounds.find(item => item.number === recordNumber)?.scenes || [selectedScene];
+  const recordRounds = recordScenes.flatMap(id => (current?.sceneRounds?.[id] || [])
+    .filter(item => item.number === recordNumber).map(item => ({ id, item })));
+  const recordedOutputs = recordRounds[0]?.item.reviewOutputs || [];
+  const recordOptions = selectableRounds.map(item => ({ value: String(item.number), label: `第${item.number}轮` }));
+  const openRecordFile = (item: FileItem) => { setRecordNumber(null); preview(item); };
   const downloads = useQuery({
     queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision],
     queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene)),
@@ -140,7 +149,6 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     if (current && selectedScene && fallback && roundNumbers[key] === undefined)
       setRoundNumbers(previous => ({ ...previous, [key]: fallback.number }));
   }, [current?.name, selectedScene, sceneRounds, episodeRounds, roundNumbers, setRoundNumbers]);
-  const script = round ? round.script : current?.script;
   const selectRound = (number: number) => {
     setPlayback(null);
     setRoundNumbers(previous => ({ ...previous, [current!.name + '/' + selectedScene]: number,
@@ -157,9 +165,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       item.videos.filter(video => video.stage === '后处理' && video.approved).length === 1);
   });
   const segmentCount = scenes.reduce((count, id) => count + (current?.segments?.[id]?.length || 0), 0);
-  const emptyMessage = issues.length > 0 ? '请先修正上方提示的文件结构，保存后页面会重新读取资料。'
-    : !script ? `${contentLabel}尚未建立，请先准备内容，再整理场次分镜和分段计划。`
-    : '本场尚无分段计划，请先完善本集分镜索引。';
+  const emptyMessage = issues.length > 0 ? '请先修正上方提示的资料。'
+    : !current?.script ? `尚未登记${contentLabel}。` : '尚未登记分段计划。';
   let directorFiles = current?.children;
   for (const folder of ['06-阶段采用视频', '01-一采', selectedScene + '-场次', '导演包']) {
     directorFiles = directorFiles?.find(item => item.name === folder)?.children;
@@ -198,31 +205,57 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     <div className="episode-scene-header">
       {scenes.length > 0 && <TabNav label={workMode ? '本片场次' : '本集场次'} items={scenes.map(id => ({ value: id, label: `${workMode ? workSceneLabel(id) : '场次 ' + id} · ${formatProductionDuration(durations.scenes[id])}`, marker: newVideoSegmentsForRound(current.segments?.[id] || [], current.sceneRounds?.[id] || [], roundNumberForScene(id)).size ? '本轮新生成视频' : undefined }))} selected={selectedScene} onChange={value => { setPlayback(previous => previous ? { ...previous, start: undefined } : null); setScene(value); }} />}
       <div className="episode-scene-actions">
-    {episodeRounds.length > 0 && <div className="scene-round-selector">
-      <span className="production-latest">当前最新{selectedRound !== episodeRounds.at(-1)!.number && <>：第{episodeRounds.at(-1)!.number}轮，<button className="production-latest-link" aria-label="切换到最新修改轮次" onClick={() => openRound(episodeRounds.at(-1)!.number)}>点击切换</button></>}</span>
-      <TabSelect size="toolbar" highlightSelected label="修改轮次" selected={String(selectedRound)} onChange={value => openRound(Number(value))}
-        items={[...selectableRounds].reverse().map(item => ({ value: String(item.number), label: `第${item.number}轮` }))} />
-    </div>}
-      {!roundHistory && <PointerTooltip text={script ? undefined : `${contentLabel}尚未建立`}><button className="link episode-script-link" disabled={!script} onClick={() => preview(script!)}>查看{contentLabel}</button></PointerTooltip>}
-      {roundHistory && <button className="link episode-script-link" onClick={() => preview(roundHistory)}>轮次记录</button>}
-      {productionTask && <button className="link episode-script-link" onClick={() => preview(productionTask)}>查看生产任务</button>}
+      <div className="scene-round-selector">
+        {selectableRounds.length > 0 && <span className="production-latest">当前最新{selectedRound !== selectableRounds[0].number && <>：第{selectableRounds[0].number}轮，<button className="production-latest-link" aria-label="切换到最新修改轮次" onClick={() => openRound(selectableRounds[0].number)}>点击切换</button></>}</span>}
+        <TabSelect size="toolbar" highlightSelected label="修改轮次" selected={String(selectedRound ?? '')}
+          onChange={value => openRound(Number(value))} items={recordOptions.length ? recordOptions : [{ value: '', label: '暂无轮次', disabled: true }]} />
+      </div>
+      <button className="link episode-script-link" onClick={() => setRecordNumber(selectedRound ?? 0)}>轮次记录</button>
       </div>
     </div>
+    {recordNumber !== null && <Dialog title="轮次记录" close={() => setRecordNumber(null)}>
+      {recordOptions.length > 0 ? <TabSelect size="toolbar" label="查阅轮次" selected={String(recordNumber)} items={recordOptions} onChange={value => setRecordNumber(Number(value))} />
+        : <p className="muted">尚未登记轮次。</p>}
+      {recordRounds[0]?.item.note && <p>{recordRounds[0].item.note}</p>}
+      {recordedOutputs.length > 0 && <section><h3>本轮审阅产出</h3><ul>{recordedOutputs.map((file, index) =>
+        <li key={file.key || index}>{file.url ? <button className="link" onClick={() => openRecordFile(file)}>{file.name}</button> : `${file.name}（文件不可用）`}</li>)}</ul></section>}
+      {recordRounds.map(({ id, item }) => {
+        const candidates = current.segments?.[id] || [];
+        const generated = newVideoSegmentsForRound(candidates, current.sceneRounds![id], item.number);
+        return <section key={id}>
+          <h3>{id === 'whole' ? '整片' : `场次 ${id}`}</h3>
+          <ul>
+            {([[contentLabel, item.script], ['分镜', item.storyboard], ['制作记录', item.record]] as const).map(([label, file]) =>
+              file && <li key={label}><button className="link" onClick={() => openRecordFile(file)}>{label}{file.version ? ` ${file.version}` : ''}</button></li>)}
+            {item.segments.filter(entry => generated.has(entry.id)).map(entry => {
+              const video = candidates.find(candidate => candidate.id === entry.id)?.videos.find(video =>
+                video.url && video.stage === entry.stage && video.run === entry.run && (!entry.key || video.key === entry.key));
+              const label = `${entry.id} · ${entry.stage} · ${entry.run}`;
+              return video && <li key={entry.id}><button className="link" onClick={() => openRecordFile({ ...video, kind: 'video', name: label })}>{label}</button></li>;
+            })}
+          </ul>
+        </section>;
+      })}
+      <section>
+        {(current.script || current.generationPlan || productionTask || roundHistory) && <h3>现行资料与历史索引</h3>}
+        <ul>{([[contentLabel, current.script], ['生成说明', current.generationPlan], ['生产任务', productionTask], ['历史索引原件', roundHistory]] as const).map(([label, file]) =>
+          file && <li key={label}><button className="link" onClick={() => openRecordFile(file)}>{label}</button></li>)}</ul>
+      </section>
+    </Dialog>}
     {issues.length > 0 ? <div className="notice episode-data-issues" role="alert">
       <strong>制作资料需要修正</strong>
       <ul>{issues.map((issue, index) => <li key={index}>
         <PointerTooltip text={issue.key}><button className="link"  onClick={() => preview({ kind: 'document', key: issue.key, name: issue.key.split('/').pop()! })}>{issue.key.split('/').pop()}</button></PointerTooltip>：{issue.message}
       </li>)}</ul>
     </div> : null}
-    {selectedScene ? <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + (episodeRounds.length ? '/' + roundEntry : '')} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} showRoundSelector={!episodeRounds.length} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
-      : <div className="scene-empty" role="status"><h3>暂无可显示的场次</h3><p className="muted">{emptyMessage}</p></div>}
+    <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
     {episodeNotesExport.dialog}
-    {(!!current.materials?.length || (workMode && current.materialRecord)) && <details className="asset-candidate-type production-materials"><summary>{workMode ? '制作素材与审阅' : '专用素材与图片候选'}（{current.materials?.length || 0}）</summary>
-      {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>{workMode && !current.readOnly ? '查看资产清单' : '查看素材生成与审阅记录'}</button></p>}
+    {(!!current.materials?.length || current.materialRecord) && <details className="asset-candidate-type production-materials"><summary>制作素材与审阅（{current.materials?.length || 0}）</summary>
+      {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>查看素材记录</button></p>}
       {(['pending', 'revision', 'adopted', 'unknown', 'history'] as const).map(group => {
         const images = (current.materials || []).filter(file => (file.materialGroup || 'unknown') === group)
           .sort((a, b) => b.name.replace(/\.[^.]+$/, '').localeCompare(a.name.replace(/\.[^.]+$/, ''), 'zh-CN', { numeric: true }));
-        const label = { pending: '待审核', revision: '待修改', adopted: '当前采用', unknown: '状态待核对', history: workMode ? '历史素材' : '旧版留档与已采用源图' }[group];
+        const label = { pending: '待审核', revision: '待修改', adopted: '当前采用', unknown: '状态待核对', history: '历史素材' }[group];
         return images.length || group === 'adopted' ? <details key={group} className="asset-candidate-type" data-material-group={group} open={group !== 'history'}>
           <summary>{label}（{images.length}）</summary>
           {!images.length && <p className="muted">暂无适用于当前制作的已采用专用图；项目人物、场景和道具资产仍按素材索引引用。</p>}

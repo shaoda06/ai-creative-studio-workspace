@@ -186,7 +186,7 @@ try {
   const titles = await notes.locator(':scope > h3').allTextContents();
   assert.deepEqual(titles, ['分段 P001', '分段 P002', '分段 P001']);
   assert.deepEqual(await dialog.locator('.revision-export-scene > h2').allTextContents(), ['场次 C001', '场次 C002']);
-  const summary = dialog.getByRole('textbox', { name: '第9轮 本轮汇总意见', exact: true });
+  const summary = dialog.getByRole('textbox', { name: '第9轮 本轮总体意见', exact: true });
   assert.equal(await summary.count(), 1);
   assert.equal(await dialog.getByText('旧整场意见', { exact: true }).count(), 0);
   await summary.fill('整集节奏自然，不要字幕');
@@ -241,7 +241,7 @@ try {
   await choose.click(); await page.getByRole('option', { name: /^第8轮/ }).click();
   assert.equal(await scene('C001').locator('.round-new-dot').count(), 1, '切换历史轮次后重新计算C001');
   assert.equal(await scene('C002').locator('.round-new-dot').count(), 1, '历史轮次首次生成的C002显示标记');
-  await open(); assert.equal(await dialog.getByRole('textbox', { name: '第8轮 本轮汇总意见', exact: true }).inputValue(), '');
+  await open(); assert.equal(await dialog.getByRole('textbox', { name: '第8轮 本轮总体意见', exact: true }).inputValue(), '');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   // Real player time -> historical shot start -> cursor insertion -> in-memory autosave.
   await page.getByRole('button', { name: /^场次 C001 ·/ }).click();
@@ -381,7 +381,7 @@ try {
  assert.equal(await dialog.locator('.revision-export-note').count(), 3);
  const legacyTitles = await dialog.locator('.revision-export-scene > h2').allTextContents();
  assert.deepEqual(legacyTitles, ['场次 C001 · 第5轮', '场次 C002 · 第7轮']);
- const summary = dialog.getByRole('textbox', { name: '本轮汇总意见', exact: true });
+ const summary = dialog.getByRole('textbox', { name: '本轮总体意见', exact: true });
  assert.equal(await summary.count(), 1);
  assert.equal(await dialog.locator('.revision-export-note textarea:not([readonly])').count(), 0);
  await summary.fill('当前这一轮的整集汇总意见');

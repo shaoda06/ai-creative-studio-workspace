@@ -377,8 +377,23 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
         if not values:
             raise ValueError('整片轮次至少需要一个明确分段')
         groups_by_round[number] = scene_segments([item['id'] for item in values], rows)
+        outputs = []
+        for output in spec.get('review_outputs', []):
+            try:
+                path = projects.file(name, output['file'])
+            except FileNotFoundError:
+                outputs.append({'kind': 'video', 'name': output['label']})
+            else:
+                outputs.append({**document_ref(project, api, path), 'kind': 'video', 'name': output['label']})
+        record = None
+        if spec.get('record'):
+            try:
+                record = document_ref(project, api, projects.file(name, spec['record']))
+            except FileNotFoundError:
+                issues.append('本轮制作记录缺失：' + spec['record'])
         rounds.append({'number': number, 'created_at': spec['created_at'], 'note': spec.get('note', ''),
-                       'episodeRound': True, 'script': script, 'storyboard': storyboard, 'issues': issues, 'segments': values})
+                       'episodeRound': True, 'script': script, 'storyboard': storyboard, 'record': record,
+                       'reviewOutputs': outputs, 'issues': issues, 'segments': values})
     rounds.sort(key=lambda item: item['number'])
     presentation = work_view(projects, name, space_api, work, production, include_archives=False)['irisPresentation']
     primary = presentation['primary']
@@ -401,10 +416,15 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
     scene_members = {}
     scene_rounds = {}
     episode_rounds = []
+    earlier_candidates = set()
     for round_ in rounds:
         groups = groups_by_round[round_['number']]
         episode_rounds.append({'number': round_['number'], 'scenes': list(groups)})
         entries_by_id = {item['id']: item for item in round_['segments']}
+        for item in round_['segments']:
+            identity = (item['id'], item['stage'], item['run'], item['key'])
+            item['carried'] = identity in earlier_candidates
+            earlier_candidates.add(identity)
         for scene, identities in groups.items():
             scene_members.setdefault(scene, {}).update((identity, by_id[identity]) for identity in identities)
             scene_rounds.setdefault(scene, []).append({**round_, 'segments': [entries_by_id[identity] for identity in identities]})

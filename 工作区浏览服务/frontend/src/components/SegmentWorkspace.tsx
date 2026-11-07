@@ -49,7 +49,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
 }) {
   const workMode = useProductionAccess().unitKind === 'work';
   const positionKey = `segment/${scope.notesUrl || scope.project}/${scope.episode}/${scope.scene}/${segment}`;
-  const [language, setLanguage] = useRefreshState(positionKey + '/language', 'zh');
+  const [preferredLanguage, setLanguage] = useRefreshState(positionKey + '/language', '');
   const [scriptMode, setScriptMode] = useRefreshState(positionKey + '/scriptMode', 'aligned');
   const [playback, setPlayback] = useState({ key: '', time: 0 });
   const [loadedFile, setLoadedFile] = useState({ key: '', revision: '' });
@@ -72,6 +72,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     placeholderData: (previous, query) => query?.queryKey[1] === (scope.notesUrl || scope.project) && query.queryKey[2] === identity ? previous : undefined,
     enabled: !!current && !current.context });
   const context = current?.context || (current ? detail.data : undefined);
+  const language = preferredLanguage || (context?.prompts.english && !context.prompts.chinese ? 'en' : 'zh');
   const awaitingGeneration = current && !current.url && !missingVideoState(current).unavailable
     && context?.issues.includes('该次生成的资料关联尚未记录。');
   const prompt = context?.prompts[language === 'zh' ? 'chinese' : 'english'];
@@ -135,7 +136,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <TabSelect size="toolbar" highlightSelected label="画质选择" selected={stage} onChange={value => onSelectionChange({ stage: value, key: '' })} items={['一采', '二采', '后处理'].map(value => ({ value, label: value }))} />
       <TabSelect size="toolbar" highlightSelected label="版本切换" reselect disabled={!stage} selected={current?.key || ''} onChange={key => onSelectionChange({ stage, key })} items={versions.map(item => ({
         value: item.key,
-        label: candidateLabel(item.candidateNumber),
+        label: `${candidateLabel(item.candidateNumber)} · ${item.run}`,
         badge: item.approved ? '已采用' : undefined,
       }))} />
       {products.length > 1 && <TabSelect size="toolbar" highlightSelected label="产物选择" selected={product!.id} onChange={id => setProductSelection({ version: current!.key, id })} items={products.map(item => ({ value: item.id, label: item.label, badge: item.default ? '默认' : undefined }))} />}
@@ -147,7 +148,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <SegmentReferences context={context} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
-          <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current} />
+          <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current && !plannedScript?.html} />
           {(editingNotes || readOnly) && <div className="segment-notes-export">{notesExportControl}</div>}
           {!editingNotes && <Original url={tab === 'script' ? (context?.scriptUrl || plannedScript?.url) : context?.prompts[language === 'zh' ? 'chineseUrl' : 'englishUrl']} label="查看原文件" />}
         </div>
@@ -157,7 +158,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
         </div>}
         <div className={'segment-script-content' + (aligned && tab === 'script' ? ' is-aligned' : '')} ref={scriptContent}>
         {current && !current.context && <Result loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} />}
-        {editingNotes && current ? <RevisionNoteEditor key={`${roundNumber}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} dialogues={context?.scriptHtml ? context.dialogues : undefined} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} renderShotTimeline={renderShotTimeline} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '修改意见区域' : tab === 'script' ? '分镜脚本区域' : '提示词区域'}</div> : <>
+        {editingNotes && current ? <RevisionNoteEditor key={`${roundNumber}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} dialogues={context?.scriptHtml ? context.dialogues : undefined} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} renderShotTimeline={renderShotTimeline} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '尚无视频候选可审阅。' : tab === 'script' ? '尚未登记分镜。' : '生成后可查看本次提示词。'}</div> : <>
           {awaitingGeneration ? <p className="notice" role="status">这版视频还没生成。{tab === 'script' && plannedScript?.html
             ? `现在看到的是${plannedScript.label}，不是生成视频时留下的记录。`
             : '还没有实际生成时使用的提示词和素材记录。'}</p>
@@ -172,7 +173,6 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
               ? `生成时，这里会记录实际使用的${language === 'zh' ? '提示词中文参考版' : '英文提示词'}。`
               : `该次${language === 'zh' ? '中文参考版' : '实际提交的英文提示词'}尚未关联或已缺失。`}</div>}
           </>}
-          {!awaitingGeneration && context.issues.length > 0 && <div className="notice">{context.issues.map(issue => <p key={issue}>{issue}</p>)}</div>}
         </>}
         </div>
       </section>

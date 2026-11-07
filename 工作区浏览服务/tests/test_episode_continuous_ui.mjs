@@ -48,8 +48,8 @@ try {
   const checked = page.getByRole('checkbox', { name: '连续播放', exact: true });
   const selectedScene = id => scene(id).getAttribute('aria-current');
   const chooseRound = async number => {
-    await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).click();
-    await page.getByRole('option', { name: new RegExp('^第' + number + '轮：') }).click();
+    await page.getByRole('combobox', { name: '修改轮次', exact: true }).click();
+    await page.getByRole('option', { name: new RegExp('^第' + number + '轮') }).click();
   };
   const end = () => page.locator('.segment-video video').dispatchEvent('ended');
   // Remember a historical round in the following scene, then start at C001.

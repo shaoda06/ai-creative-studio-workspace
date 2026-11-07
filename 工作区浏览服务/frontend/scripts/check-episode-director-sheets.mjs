@@ -68,11 +68,11 @@ export async function checkEpisodeDirectorSheets(page, fixture, width) {
   await viewer.getByRole('button', { name: '下一张图', exact: true }).click();
   await toggle.uncheck();
   assert.match(await fixture.locator('.director-sheet-image img').getAttribute('alt'), /C002/, '取消整合回到上方当前场次');
-  const round = fixture.getByRole('combobox', { name: '场次修改轮次', exact: true });
+  const round = fixture.getByRole('combobox', { name: '修改轮次', exact: true });
   await round.click();
-  await page.getByRole('option', { name: '第1轮：剧本缺失 · 分镜v01', exact: true }).click();
+  await page.getByRole('option', { name: '第1轮', exact: true }).click();
   await toggle.check();
-  assert.equal(await viewer.getByText('场次 C002：分镜 v01 尚未制作导演分镜表。', { exact: true }).count(), 1, '当前场次保留所选旧轮次，不借用新轮次图片');
+  assert.equal(await viewer.getByText('场次 C002：分镜 v01 暂无对应导演分镜表。', { exact: true }).count(), 1, '当前场次保留所选旧轮次，不借用新轮次图片');
   assert.equal(await pages.getByRole('button').count(), 3);
   await scenes.getByRole('button', { name: /^场次 C001 ·/ }).click();
   assert.equal(await toggle.isChecked(), true, '切场保留整合勾选及导演表标签');
@@ -80,7 +80,7 @@ export async function checkEpisodeDirectorSheets(page, fixture, width) {
   await pages.getByRole('button', { name: '2', exact: true }).click();
   assert.match(await image.getAttribute('alt'), /C002.*v01/);
   await fixture.getByRole('button', { name: '模拟其他场次最新轮次无图', exact: true }).click();
-  await viewer.getByText('场次 C003：分镜 v08 尚未制作导演分镜表。', { exact: true }).waitFor({ state: 'visible' });
+  await viewer.getByText('场次 C003：分镜 v08 暂无对应导演分镜表。', { exact: true }).waitFor({ state: 'visible' });
   assert.equal(await pages.getByRole('button').count(), 5, '最新轮次缺图时不回退到旧图');
   await toggle.uncheck();
   assert.match(await fixture.locator('.director-sheet-image img').getAttribute('alt'), /C001/);

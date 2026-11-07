@@ -1,10 +1,10 @@
 import { useProductionAccess } from './ProductionAccess';
-import { newVideoSegmentsForRound } from '../sceneRoundVideos';
-import { useEffect, useState, type ReactNode } from 'react';
+import { carriedRoundSegments, newVideoSegmentsForRound } from '../sceneRoundVideos';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get } from '../api';
 import type { FileItem, RecordData, SceneRound, SegmentVideo as VideoItem } from '../api';
-import { Document, Result } from '../components';
+import { Document, PreviewContext, Result } from '../components';
 import { UnderlineTabs } from './UnderlineTabs';
 import { latestVideo, missingVideoState, selectedRevision, type RepeatPlaybackControl } from './SegmentVideo';
 import { SegmentWorkspace } from './SegmentWorkspace';
@@ -16,7 +16,6 @@ import { SceneStoryboardEditor } from './SceneStoryboardEditor';
 import { SceneDirectorSheets, type DirectorSheetScene } from './SceneDirectorSheets';
 import { SceneDownloads } from './SceneDownloads';
 import { SegmentStageStrip } from './SegmentStageStrip';
-import { TabSelect } from './TabSelect';
 import { MessagePanel } from './MessagePanel';
 import { PointerTooltip } from './PointerTooltip';
 import './LatestSelection.css';
@@ -35,13 +34,20 @@ export type EpisodePlayback = {
 
 type ReviewRound = { stage: string; order: string[]; versions: ReviewVersions };
 
-export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, showRoundSelector = true, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; showRoundSelector?: boolean; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'> }) {
+export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; directorFiles: FileItem[]; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'> }) {
   const access = useProductionAccess();
+  const preview = useContext(PreviewContext);
   const workMode = access.unitKind === 'work';
   const { scene } = scope;
   const productionRound = sceneRounds.find(item => item.number === selectedRound);
   const latestRound = sceneRounds.at(-1);
   const newVideoSegments = newVideoSegmentsForRound(allSegments, sceneRounds, selectedRound);
+  const carried = carriedRoundSegments(sceneRounds, productionRound);
+  const outputs = productionRound?.reviewOutputs || [];
+  const carriedRuns = [...new Set(carried.map(entry => entry.run))];
+  const carriedLabel = carriedRuns.length === 1 && carried.length === productionRound?.segments.length
+    ? `分段底片沿用 ${carriedRuns[0]}`
+    : carriedRuns.map(run => `${carried.filter(item => item.run === run).map(item => item.id).join('、')} 沿用 ${run}`).join(' · ');
   const segments = productionRound ? productionRound.segments.map(entry => ({ ...allSegments.find(item => item.id === entry.id)!, ...entry })) : allSegments.filter(item => !item.historical);
   const queryClient = useQueryClient();
   const positionKey = scope.stateKey || `scene/${scope.project}/${scope.episode}/${scene}`;
@@ -90,7 +96,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
   const chosen = savedRevision ? { stage: savedRevision.stage, key: savedRevision.key }
     : savedSelection && (!savedSelection.key || reviewRound) ? savedSelection : { stage: roundDefault?.stage || latest?.stage || '', key: roundDefault?.key || latest?.key || '' };
   const viewingRoundRevision = roundEntry && currentSegment && selectedRevision(currentSegment.videos, chosen)?.run === roundEntry.run && chosen.stage === roundEntry.stage && (!roundEntry.key || chosen.key === roundEntry.key);
-  const notesExport = useRevisionNotesExport(displayScope, viewingPrevious ? previousEnding!.segments : segments, reviewRound && {
+  const notesExport = useRevisionNotesExport(currentSegment ? displayScope : null, viewingPrevious ? previousEnding!.segments : segments, reviewRound && {
     stage: reviewRound.stage, label: reviewRound.label, number: viewingPrevious ? undefined : productionRound?.number,
     versions: viewingPrevious ? { [currentSegment!.id]: reviewRound.versions[PREVIOUS_ENDING] ?? null } : productionRound
       ? Object.fromEntries(productionRound.segments.map(entry => [entry.id, { stage: entry.stage, run: entry.run, key: fixedVersions[entry.id]?.key || '' }])) : reviewRound.versions,
@@ -181,7 +187,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     selectSegment(PREVIOUS_ENDING);
   };
   const navigation = (vertical = false) => <SegmentStageStrip vertical={vertical} segments={segments} selected={segment} newVideoSegments={newVideoSegments}
-    workProgress={workMode && !scope.readOnly ? { round: reviewRound?.versions || null } : undefined}
+    roundVersions={reviewRound?.versions}
     previousEnding={previousEnding} previousSelected={viewingPrevious} onPreviousSelect={selectPrevious} onSelect={selectSegment} />;
   const changeRound = (number: number, keepSegment = false) => {
     const next = sceneRounds.find(item => item.number === number)!;
@@ -202,18 +208,12 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     setSelections(previous => ({ ...previous, [segment]: value }));
   };
   const preparationStatus = !wideVideo && (videoCache.total > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
-      {productionRound ? `第${productionRound.number}轮视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
+      {productionRound ? `第${productionRound.number}轮分段视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
         : videoCache.ready === videoCache.total ? `${reviewRound ? '本轮' : '最新'}视频已全部准备好` : `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
     </p></PointerTooltip>;
   return <>
     <div className="scene-workspace-tabs">
       <UnderlineTabs label={workMode ? "作品制作内容" : "场次内容"} items={[{ value: 'segments', label: '分段制作' }, { value: 'storyboard', label: workMode ? '分镜与声音' : '场次分镜' }, { value: 'director-sheets', label: '导演分镜表' }, ...(!scope.readOnly ? [{ value: 'dialogue', label: '分镜修改' }] : []), { value: 'downloads', label: '资源下载' }]} selected={view} onChange={value => { setAutoPlay(false); onViewChange(value); }} />
-    {showRoundSelector && sceneRounds.length > 0 && <div className="scene-round-selector">
-      <span className="production-latest">当前最新{selectedRound !== latestRound!.number && <>：第{latestRound!.number}轮：剧本{latestRound!.script?.version || '缺失'} · 分镜{latestRound!.storyboard?.version || '缺失'}，<button className="production-latest-link" aria-label="切换到最新修改轮次" onClick={() => changeRound(latestRound!.number)}>点击切换</button></>}</span>
-      <TabSelect size="toolbar" highlightSelected label="场次修改轮次" selected={String(selectedRound)} onChange={value => changeRound(Number(value))}
-        items={[...sceneRounds].reverse().map(item => ({ value: String(item.number),
-          label: `第${item.number}轮：剧本${item.script?.version || '缺失'} · 分镜${item.storyboard?.version || '缺失'}` }))} />
-    </div>}
     </div>
     <div className="episode-scene-content" aria-label={workMode && scene === 'whole' ? '整片制作内容' : scene ? `场次 ${scene} 内容` : '场次内容'}>
     {view === 'segments' && <>
@@ -222,6 +222,10 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     {preparationStatus}
     </>}
     <MessagePanel label="场次提示" messages={[
+      view === 'segments' && carried.length > 0 && { id: 'carried', content: carriedLabel,
+        detail: carried.map(item => `${item.id} · ${item.run}`).join('\n') },
+      view === 'segments' && outputs.length > 0 && { id: 'round-outputs', content: '本轮审阅产出', actions: outputs.map((file, index) =>
+        file.url ? <button key={file.key || index} className="link" onClick={() => preview(file)}>{file.name}</button> : <span key={index}>{file.name}（文件不可用）</span>) },
       !!productionRound?.issues.length && { id: 'round-issues', tone: 'error', content: `${productionRound.issues.join('；')}；不会换用当前文档。` },
       view === 'segments' && !!reviewRound && !!(savedRevision && reviewRound.versions[segment]?.key !== savedRevision.key) && {
         id: 'review-round', content: savedRevision && reviewRound.versions[segment]?.key !== savedRevision.key
@@ -250,10 +254,14 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
     {notesExport.dialog}
     </> : view === 'storyboard' ? <div className="scene-storyboard">
-      {!scene ? <p className="muted">本集尚无场次分镜。</p> : <>
-        {!storyboardDocument && !productionRound && !workMode && <Result loading={storyboard.isPending} error={storyboard.error} retry={storyboard.refetch} retrying={storyboard.isFetching} />}
-        {(storyboardDocument || (!productionRound && storyboard.data)) && <Document key={productionRound?.number || 'current'} value={storyboardDocument || storyboard.data!} />}
-      </>}
-    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} /> : view === 'dialogue' ? productionRound && productionRound.number !== sceneRounds.at(-1)?.number ? null : <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} /> : <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} readOnly={scope.readOnly} />}
+      {storyboardDocument || (!productionRound && storyboard.data) ? <Document key={productionRound?.number || 'current'} value={storyboardDocument || storyboard.data!} />
+        : scene && storyboardPath && !productionRound && (storyboard.isFetching || (storyboard.error && !('status' in storyboard.error && storyboard.error.status === 404))) ? <Result loading={storyboard.isPending} error={storyboard.error} retry={storyboard.refetch} retrying={storyboard.isFetching} />
+        : !productionRound && <div className="scene-empty" role="status"><h3>尚未登记分镜</h3></div>}
+    </div> : view === 'director-sheets' ? <SceneDirectorSheets key={positionKey + '/' + storyboardVersion} scenes={directorScenes} sceneId={scene} integrated={integrateSheets} onIntegratedChange={onIntegrateSheetsChange} revision={revision} />
+      : view === 'dialogue' ? productionRound && productionRound.number !== latestRound?.number ? null
+        : segments.length ? <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} />
+        : <div className="scene-empty" role="status"><h3>尚无可修改的分镜</h3><p className="muted">登记分段计划后可在这里修改。</p></div>
+      : scene ? <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} segments={allSegments} />
+      : <div className="scene-empty" role="status"><h3>暂无可下载资源</h3></div>}
   </div></>;
 }

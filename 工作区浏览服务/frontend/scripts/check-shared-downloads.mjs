@@ -123,7 +123,7 @@ export async function checkSharedDownloads(page, width) {
   }
   assert.equal(manifestRequests, 3, '一点击一请求');
   await page.unroute('**/component-samples/manifest-check?*');
-  const directorGroup = fixture.getByLabel('一采导演包下载', { exact: true });
+  const directorGroup = fixture.getByLabel('一采画布与导演包', { exact: true });
   assert.equal(await directorGroup.getAttribute('open'), '');
   await page.route('**/component-samples/director-check', route => route.fulfill({
     headers: { 'Content-Disposition': 'attachment; filename="scene.mmxpack.zip"' }, body: 'native-director-fixture',

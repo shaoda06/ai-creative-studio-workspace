@@ -54,8 +54,9 @@ export const videoTaskMessages: Record<string, string> = {
 
 export function workVideoState(video: VideoItem) {
   if (video.url) return '已取回';
-  const status = video.taskStatus === '未记录' ? '无后台状态记录'
-    : videoTaskMessages[video.taskStatus] || '任务状态待核对';
+  const taskStatus = video.taskStatus?.split(/[；;]/)[0];
+  const status = taskStatus === '未记录' ? '无后台状态记录'
+    : videoTaskMessages[taskStatus] || (taskStatus && /^[\u4e00-\u9fff]+$/.test(taskStatus) ? taskStatus : '任务状态待核对');
   return `${status} · 未取回`;
 }
 

@@ -23,6 +23,8 @@ def load_scene_rounds(project, episode, scene, read):
     result = []
     for entry in scene_entries(project, episode, scene, read):
         item = {**entry, 'issues': []}
+        record = episode_manifest_key(episode) if entry.get('episodeRound') else rounds.manifest_key(episode, scene)
+        item['record'] = {'kind': 'json', 'name': Path(record).name, 'key': record, 'url': quote(record, safe='/-._~')}
         documents = {}
         for kind in ('script', 'storyboard'):
             reference = entry[kind]

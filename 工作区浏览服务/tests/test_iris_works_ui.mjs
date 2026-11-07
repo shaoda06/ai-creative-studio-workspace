@@ -22,7 +22,8 @@ try {
   page.on('pageerror',error=>errors.push(String(error)));
   const base='/api/workspaces/commercial/projects/隔离多作品';
   const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片',status:'待启动'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片',status:'剪映草稿已交接'},
-    {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true}];
+    {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true},
+    {id:'F004',name:'待启动作品',key:'作品/F004-待启动作品',status:'待启动'}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
   let overviewStatus='待启动';
@@ -56,6 +57,12 @@ try {
     if(suffix==='') {
      if(identity==='F002'&&failWork){failWork=false;return route.fulfill({status:503,json:{detail:'隔离作品读取失败'}})}
      return route.fulfill({json:{productionSection:key+'/06-视频生产',files:[{kind:'group',name:'03-创意脚本',key:key+'/03-创意脚本',children:[file(script)]},{kind:'group',name:'06-视频生产',key:key+'/06-视频生产',children:[]}],irisPresentation:{primary:{'03-创意脚本':[script]},adopted:[],delivery:{status:'草稿可交接',summary:work.name+'交付版本',archivedHandoff:null,items:[{title:work.name+'横版',type:'剪映草稿',version:'v01',purpose:'本片版本',file:{...file(packageKey),jianying:{jypack:base+'/jianying-download?path='+encodeURIComponent(packageKey)}}}]}}}});
+    }
+    if(identity==='F004' && suffix==='/production-detail')
+     return route.fulfill({json:{kind:'group',name:identity,scenes:['whole'],segments:{whole:[]}}});
+    if(identity==='F004' && suffix==='/production-downloads'){
+     const empty={count:0,url:null,files:[]};
+     return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:empty,director:empty,canvas:empty}]))});
     }
     if(suffix==='/production-detail') {
      const source=n=>({kind:'document',name:'分镜v0'+n+'.md',key:key+'/分镜-v0'+n+'.md',version:'v0'+n,doc:{html:'<h2>已保存分镜v0'+n+'</h2><p>'+identity+'历史来源</p>'}});
@@ -186,7 +193,7 @@ try {
   assert.ok(await workList.evaluate(node=>Boolean(node.closest('.panel'))));
   assert.equal(await page.getByRole('region',{name:'片头与片尾',exact:true}).count(),0);
   const statistics=page.getByLabel('作品制作统计',{exact:true});
-  for(const status of ['待启动 1 部','剪映草稿已交接 1 部','未登记制作状态 1 部'])await statistics.getByText(status,{exact:true}).waitFor();
+  for(const status of ['待启动 2 部','剪映草稿已交接 1 部','未登记制作状态 1 部'])await statistics.getByText(status,{exact:true}).waitFor();
   await page.locator('[data-episode=F002]').click();
   const location=page.getByRole('navigation',{name:'当前位置',exact:true});
   const productionSwitch=location.getByRole('combobox',{name:'快速选择制作对象',exact:true});
@@ -227,10 +234,11 @@ try {
   assert.equal(await page.getByRole('button',{name:'查看制作脚本',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'查看生产任务',exact:true}).count(),0);
   const historyDialog=page.getByRole('dialog',{name:'轮次记录'});
-  await historyDialog.getByRole('heading',{name:'隔离轮次记录'}).waitFor();
-  await historyDialog.getByRole('link',{name:'第 1 轮 · 制作脚本 v01'}).click();
-  const scriptDialog=page.getByRole('dialog',{name:'第 1 轮 · 制作脚本 v01'});
-  await scriptDialog.getByText('产品片专属正文',{exact:true}).waitFor();
+  await historyDialog.getByRole('combobox',{name:'查阅轮次'}).click();
+  await historyDialog.getByRole('option',{name:'第1轮',exact:true}).click();
+  await historyDialog.getByRole('button',{name:'制作脚本 v01',exact:true}).click();
+  const scriptDialog=page.getByRole('dialog',{name:'分镜v01.md'});
+  await scriptDialog.getByRole('heading',{name:'已保存分镜v01'}).waitFor();
   await scriptDialog.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
   await editor.waitFor();
@@ -242,7 +250,7 @@ try {
   assert.deepEqual(writes,['F002','F002']);
   await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
   const dialog=page.getByRole('dialog');
-  const overall=dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true});
+  const overall=dialog.getByRole('textbox',{name:'第2轮 本轮总体意见',exact:true});
   await overall.fill('品牌片整片意见');
   await dialog.getByRole('button',{name:'保存',exact:true}).click();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
@@ -250,7 +258,7 @@ try {
   // A candidate outside the selected scene's registered rounds is a preview.
   await page.getByRole('combobox',{name:'版本切换',exact:true}).click();
   await page.getByRole('option',{name:/^候选一/}).click();
-  await page.getByRole('img',{name:'P001 一采：已采纳（R002）',exact:true}).waitFor();
+  await page.getByRole('img',{name:/^P001 一采：已采用（R002）/}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'2');
   assert.equal(await page.getByRole('checkbox',{name:'连续播放',exact:true}).isDisabled(),true);
   await page.getByRole('button',{name:'返回本轮组合',exact:true}).click();
@@ -336,19 +344,20 @@ try {
   await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
   await dialog.getByRole('heading',{name:'场次 S001',exact:true}).waitFor();
   await dialog.getByRole('heading',{name:'场次 S002',exact:true}).waitFor();
-  assert.equal(await dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true}).inputValue(),'品牌片整片意见');
+  assert.equal(await dialog.getByRole('textbox',{name:'第2轮 本轮总体意见',exact:true}).inputValue(),'品牌片整片意见');
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await choose('F003');
   const editionTabs=page.getByRole('navigation',{name:'作品制作入口',exact:true});
   const currentEdition=editionTabs.getByRole('button',{name:'现行制作',exact:true});
   const archivedEdition=editionTabs.getByRole('button',{name:'历史归档（只读）',exact:true});
   assert.equal(await currentEdition.getAttribute('aria-current'),'page');
-  await page.getByRole('button',{name:'查看生产任务',exact:true}).click();
+  await page.getByRole('button',{name:'轮次记录',exact:true}).click();
+  await page.getByRole('dialog',{name:'轮次记录'}).getByRole('button',{name:'生产任务',exact:true}).click();
   await dialog.getByText('隔离英文生产段与输入',{exact:true}).waitFor();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
   await page.getByRole('button',{name:'导出修改意见',exact:true}).click();
-  await dialog.getByRole('textbox',{name:'第2轮 整片总体意见',exact:true}).fill('同片现行总体意见');
+  await dialog.getByRole('textbox',{name:'第2轮 本轮总体意见',exact:true}).fill('同片现行总体意见');
   await dialog.getByRole('button',{name:'保存',exact:true}).click();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(saved.F003.rounds['2'].text,'同片现行总体意见');
@@ -360,12 +369,14 @@ try {
   await page.getByRole('button',{name:'查看历史意见',exact:true}).click();
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).inputValue(),'原归档分段意见');
   assert.equal(await dialog.getByRole('textbox',{name:/P001.*修改意见/}).getAttribute('readonly'),'');
-  assert.equal(await dialog.getByRole('textbox',{name:'第1轮 整片总体意见',exact:true}).inputValue(),'原归档总体意见');
+  assert.equal(await dialog.getByRole('textbox',{name:'第1轮 本轮总体意见',exact:true}).inputValue(),'原归档总体意见');
   assert.equal(await dialog.getByRole('button',{name:'保存',exact:true}).count(),0);
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(writes.length,writesBeforeArchive);
   await currentEdition.click();
-  await page.getByRole('button',{name:'查看生产任务',exact:true}).waitFor();
+  await page.getByRole('button',{name:'轮次记录',exact:true}).click();
+  await page.getByRole('dialog',{name:'轮次记录'}).getByRole('button',{name:'生产任务',exact:true}).waitFor();
+  await page.getByRole('dialog',{name:'轮次记录'}).getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'下载归档剪映包',exact:true}).count(),0);
   await choose('F001');
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
@@ -405,15 +416,15 @@ try {
   }
   await page.getByText('制作素材与审阅（4）',{exact:true}).click();
   for(const group of ['待审核','待修改','当前采用','历史素材'])await page.getByText(group+'（1）',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'查看资产清单',exact:true}).click();
+  await page.getByRole('button',{name:'查看素材记录',exact:true}).click();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   await firstScene.click();
-  await page.getByRole('img',{name:'P001 一采：已采纳（R002）',exact:true}).waitFor();
+  await page.getByRole('img',{name:/^P001 一采：已采用（R002）/}).waitFor();
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:/^第1轮/}).click();
   assert.equal(await handoff.count(),0);
-  await page.getByRole('img',{name:'P001 一采：R001 · 任务状态待核对 · 未取回',exact:true}).waitFor();
+  await page.getByRole('img',{name:/^P001 一采：R001 · 任务状态待核对 · 未取回/}).waitFor();
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
   await page.getByRole('region',{name:'一采资源下载',exact:true}).getByText('第2轮 · R002 剪映草稿包',{exact:true}).waitFor();
   const technical=page.getByLabel('一采画布与导演包',{exact:true});
@@ -428,6 +439,16 @@ try {
   assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).getAttribute('data-value'),'1');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:`${out}/${width}-works.png`});
+  await choose('F004');
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次',exact:true}).isDisabled(),true);
+  for(const [tab,title] of [['分段制作','暂无可显示的分段'],['分镜与声音','尚未登记分镜'],
+   ['分镜修改','尚无可修改的分镜'],['资源下载','暂无可下载资源']]){
+   await page.locator('.episode-detail').getByRole('button',{name:tab,exact:true}).click();
+   await page.getByRole('heading',{name:title,exact:true}).waitFor();
+  }
+  await page.getByRole('button',{name:'轮次记录',exact:true}).click();
+  await page.getByText('尚未登记轮次。',{exact:true}).waitFor();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await location.getByRole('link',{name:'视频制作',exact:true}).click();
   await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();

@@ -174,7 +174,7 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
   };
   const visibleNotes = draft?.notes.filter(item => mode === 'history' || (draft.episode || draft.scope.notesUrl ? item.current : draft.number != null && item.roundNumber === draft.number)) || [];
   const visibleRounds = draft?.rounds.filter(item => mode === 'history' || item.number === draft.number) || [];
-  const overallLabel = workMode ? '整片总体意见' : draft?.episode ? '本轮汇总意见' : '整场总体意见';
+  const overallLabel = '本轮总体意见';
   const text = draft?.grouped ? revisionNotesMarkdown({ project: draft.scope.project, episode: draft.scope.episode, episodeTitle: draft.scope.episodeTitle, work: workMode,
     number: draft.number, history: mode === 'history', notes: visibleNotes.map(note => ({ ...note, scene: note.scene! })), rounds: visibleRounds,
     combination: draft.combination, combinationHistory: draft.combinationHistory, legacyRounds: draft.legacyRounds }) : draft ? `${draft.scope.project} / ${draft.scope.label || (draft.scope.episode + ' / ' + draft.scope.scene)} ${mode === 'round' ? draft.label + '审看意见' : '全部历史意见'}\n\n` + [
@@ -224,9 +224,9 @@ export function useRevisionNotesExport(scope: NoteScope | null, segments: { id: 
           </section>) : visibleNotes.map(item => renderExportNote(item))}
           {!visibleNotes.length && <p className="muted">{mode === 'round' ? '当前范围暂无分段意见。' : '暂无分段意见。'}</p>}
           <section className="revision-export-overall" aria-label={overallLabel}>
-            {draft.episode && mode === 'round' && <h2>本轮汇总意见</h2>}
+            {draft.episode && mode === 'round' && <h2>本轮总体意见</h2>}
             {visibleRounds.map(item => <label key={item.number}>{(!draft.episode || mode === 'history') && <strong>第{item.number}轮 · {overallLabel}</strong>}<textarea aria-label={`第${item.number}轮 ${overallLabel}`} placeholder={workMode ? '填写这套整片组合的意见…' : draft.episode ? '填写整集本轮共用的意见…' : '填写整场共用的意见…'} maxLength={20000} readOnly={draft.scope.readOnly} value={item.text} onChange={event => { setDraft({ ...draft, rounds: draft.rounds.map(note => note.number === item.number ? { ...note, text: event.target.value } : note) }); setConfirmClose(false); setMessage(''); }} /></label>)}
-            {draft.combination && <label><textarea aria-label="本轮汇总意见" placeholder="填写整集本轮共用的意见…" maxLength={20000} value={draft.combination.text} onChange={event => { setDraft({ ...draft, combination: { ...draft.combination!, text: event.target.value } }); setConfirmClose(false); setMessage(''); }} /></label>}
+            {draft.combination && <label><textarea aria-label="本轮总体意见" placeholder="填写整集本轮共用的意见…" maxLength={20000} value={draft.combination.text} onChange={event => { setDraft({ ...draft, combination: { ...draft.combination!, text: event.target.value } }); setConfirmClose(false); setMessage(''); }} /></label>}
             {!visibleRounds.length && !draft.combination && <p className="muted">{draft.episode ? '请先选择各场已登记的修改轮次，再填写整集汇总意见。' : mode === 'round' ? '整场总体意见按已登记的场次轮次保存；请先选择本场次的修改轮次。' : (workMode ? '暂无按轮次保存的整片总体意见。' : '暂无按轮次保存的整场总体意见。')}</p>}
           </section>
           {mode === 'history' && draft.combinationHistory.map(item => <section className="revision-export-legacy" key={combinationKey(item.scenes)}><strong>整集汇总意见（{combinationLabel(item.scenes)}）</strong><textarea aria-label={`整集汇总意见（${combinationLabel(item.scenes)}）`} readOnly value={item.text} /></section>)}

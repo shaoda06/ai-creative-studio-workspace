@@ -65,7 +65,11 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         state = self.project / key / '作品状态.md'
         state.write_text(state.read_text().replace(first['script']['file'], current_script)
                          + f'| 轮次记录 | {history} |\n')
-        second = {**first, 'number': 2, 'script': {'file': current_script, 'version': 'v02'}}
+        output = key + '/06-视频生产/候选/对照.mp4'
+        self.write(output, 'fixture video')
+        second = {**first, 'number': 2, 'script': {'file': current_script, 'version': 'v02'},
+                  'record': history, 'review_outputs': [{'label': '本轮对照', 'file': output},
+                                                       {'label': '缺失产出', 'file': output + '.missing'}]}
         self.write(key + '/06-视频生产/制作轮次.json', json.dumps({'rounds': [first, second]}, ensure_ascii=False))
         data = self.detail()
         self.assertIsNone(data['productionTask'])
@@ -74,6 +78,13 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertIn('第 1 轮审阅', html)
         self.assertIn(f'data-doc="{first["script"]["file"]}">第 1 轮 · 制作脚本 v01</a>', html)
         self.assertNotIn('制作脚本 v02', html)
+        first_round, second_round = data['sceneRounds']['whole']
+        self.assertFalse(first_round['segments'][0]['carried'])
+        self.assertTrue(second_round['segments'][0]['carried'])
+        self.assertEqual(second_round['record']['key'], history)
+        available, missing = second_round['reviewOutputs']
+        self.assertEqual((available['name'], available['key']), ('本轮对照', output))
+        self.assertNotIn('url', missing)
 
     def test_legacy_single_shot_and_plan_timing_use_business_ids(self):
         spec = self.register()

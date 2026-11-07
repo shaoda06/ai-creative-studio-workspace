@@ -277,14 +277,14 @@ try {
     assert.match(await sheets.getByRole('combobox', { name: '导演分镜表候选' }).innerText(), /候选2/);
     assert.equal(await sheetImage.count(), 1, '无采用时默认当前来源最新候选');
     await sheets.getByRole('button', { name: '模拟无图旧版分镜', exact: true }).click();
-    assert.equal(await sheets.getByText('分镜 v01 尚未制作导演分镜表。', { exact: true }).count(), 1);
+    assert.equal(await sheets.getByText('分镜 v01 暂无对应导演分镜表。', { exact: true }).count(), 1);
     assert.equal(await sheetImage.count(), 0, '旧分镜不换用新图');
     await sheets.getByRole('button', { name: '模拟其他来源分镜', exact: true }).click();
     assert.match(await sheetImage.getAttribute('alt'), /v03-第01页/, '仅显示匹配来源候选');
     assert.equal(await sheetPages.getByRole('button').count(), 1);
     assert.equal(await sheetArrows.count(), 0, '单页不出现翻页箭头');
     await sheets.getByRole('button', { name: '模拟空场次', exact: true }).click();
-    assert.equal(await sheets.getByText('分镜 v07 尚未制作导演分镜表。', { exact: true }).count(), 1);
+    assert.equal(await sheets.getByText('分镜 v07 暂无对应导演分镜表。', { exact: true }).count(), 1);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '导演表桌面无横向溢出');
     await checkEpisodeDirectorSheets(page, sheets, width);
     console.log(`导演分镜表检查：${width}px单图、移除重复版本文字、数字跳页与高亮同步、圆形箭头、首尾隐藏、记录与下载同排靠右、全视口看图与退出、审阅入口靠右、来源版本筛选、候选采用状态、单页及空场次通过。`);
