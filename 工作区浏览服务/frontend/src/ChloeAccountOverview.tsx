@@ -49,11 +49,11 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
         </details>
       </section>
       <section className="panel" aria-labelledby="chloe-connection-heading">
-        <h2 id="chloe-connection-heading">连接与权限</h2>
-        <Fields values={connection} names={['连接状态', '实际登录身份', '发布权限', '挂品资格']} />
-        <p className="muted">连接、发布权限和挂品资格分别核实。</p>
+        <h2 id="chloe-connection-heading">{identity['平台']}账号接入</h2>
+        <Fields values={connection} names={['连接状态', '实际登录身份', '发布权限', '挂品资格', '可用操作范围', '核对时间']} />
+        <p className="muted">显示最近一次记录的核对结果，连接状态不代表实时登录状态。</p>
         <details className="chloe-overview-more"><summary>连接核对与发布约定</summary>
-          <Fields values={connection} names={['连接方式', '连接工具', '可用操作范围', '核对时间', '核对证据']} />
+          <Fields values={connection} names={['连接方式', '连接工具', '核对证据']} />
           <Fields values={publishing} names={['发布形式', '默认可见范围', '发布时间与频率', '文案习惯', '标签习惯']} />
           <p className="muted">默认选项不代替单次发布授权。</p>
         </details>
@@ -77,12 +77,11 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
 
     <section className="panel" aria-labelledby="chloe-videos-heading">
       <h2 id="chloe-videos-heading">视频进度</h2>
-      {!videos.length ? <p className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</p> :
-        <table className="chloe-overview-videos"><thead><tr><th scope="col">视频</th><th scope="col">当前阶段</th><th scope="col">制作状态</th><th scope="col">下一步</th></tr></thead>
+      <table className="chloe-overview-videos"><thead><tr><th scope="col">视频</th><th scope="col">当前阶段</th><th scope="col">制作状态</th><th scope="col">下一步</th></tr></thead>
           <tbody>{videos.map(({ progress }) => <tr key={progress['视频编号']}>
             <td><small>{progress['视频编号']}</small>{progress['视频名称']}</td><td>{progress['当前阶段']}</td>
             <td>{progress['制作状态']}</td><td>{progress['下一步']}</td>
-          </tr>)}</tbody></table>}
+          </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
     </section>
     <p className="muted">资料来源：账号定位、账号运营配置、各视频项目 README。统计随这些记录更新。</p>
   </div>;

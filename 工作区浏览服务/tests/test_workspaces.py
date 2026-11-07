@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -40,6 +41,23 @@ class WorkspaceTests(HttpTestCase):
         self.client = TestClient(main.app, client=('127.0.0.1', 50000))
         self.addCleanup(self.client.close)
         self.api = '/api/workspaces/commercial'
+
+    def test_account_overview_uses_registered_root_and_reports_invalid_documents(self):
+        self.spaces.get('commercial').view = 'chloe-commerce'
+        fixture = Path(__file__).resolve().parents[1]/'examples/chloe-overview/new'
+        shutil.copytree(fixture, self.other, dirs_exist_ok=True)
+        url = self.api + '/account-overview'
+        self.assertEqual(self.client.get(url).json()['videos'], [])
+        path = self.other/'综合资料/账号运营配置.md'
+        path.write_text(path.read_text().replace('| 公开账号名 | 待核实 |', '| 公开账号名 | 隔离账号 |'))
+        self.assertEqual(self.client.get(url).json()['identity']['公开账号名'], '隔离账号')
+        self.assertEqual(self.client.get('/api/workspaces/nora/account-overview').status_code, 404)
+        self.assertEqual(self.client.get('/api/workspaces/unknown/account-overview').status_code, 404)
+        self.assertEqual(self.client.post(url).status_code, 405)
+        path.write_text(path.read_text().replace('## 账号身份', '## 临时写法'))
+        self.assertEqual(self.client.get(url).status_code, 409)
+        path.unlink()
+        self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_iris_overview_config_is_optional_and_leaves_source_readable(self):
         self.spaces.get('commercial').view = 'iris-commercial'

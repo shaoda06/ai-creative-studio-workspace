@@ -31,6 +31,7 @@ try {
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
       if (path === '/api/workspaces') return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
+      if (path === '/api/workspaces/chloe/account-overview') return route.fulfill({json:samples.new});
       if (path === '/api/examples/chloe/overview') {
         if (fail) return route.fulfill({status:503,json:{detail:'isolated example failure'}});
         const data = structuredClone(samples[url.searchParams.get('scenario')]);
@@ -45,6 +46,11 @@ try {
       unexpected.push(path); return route.fulfill({status:404,json:{detail:'unexpected isolated request'}});
     });
     await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe');
+    await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
+    assert.equal(await page.locator('time').count(),1, 'one footer check status');
+    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
+    assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['视频','当前阶段','制作状态','下一步']);
+    await page.screenshot({path:output+`/${width}-actual-empty.png`,fullPage:true});
     await page.getByRole('link',{name:'查看账号概况演示'}).click();
     await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','1','1','0']);
@@ -74,7 +80,8 @@ try {
     await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
     await page.getByRole('link',{name:'返回 Chloe',exact:true}).click();
     await page.getByRole('link',{name:'查看账号概况演示'}).waitFor();
-    assert.equal(await page.locator('.chloe-overview').count(),0);
+    await page.getByRole('heading',{name:'账号名称待核实'}).waitFor();
+    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }

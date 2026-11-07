@@ -1,6 +1,14 @@
 import { useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
+import { get } from './api';
+import type { WorkspaceSpace } from './api';
+import { Result } from './components';
+import { PageCheckStatus } from './components/PageCheckStatus';
+import { ChloeAccountOverview } from './ChloeAccountOverview';
+import type { ChloeOverviewData } from './ChloeAccountOverview';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 
@@ -14,18 +22,33 @@ const sections = [
   { value: 'resources', label: '资源库', description: '共用及视频专属的图片、视频、音频与具体版本。' },
 ];
 
-export function ChloeWorkspace() {
+type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
+
+function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
+  const { spaceId } = useParams();
+  const query = useQuery({ queryKey: ['account-overview', spaceId],
+    queryFn: () => get<ChloeOverviewData>(`/api/workspaces/${encodeURIComponent(spaceId!)}/account-overview`),
+    refetchInterval: 5000 });
+  return <section aria-label="账号概况">
+    <PageCheckStatus queries={[workspaceQuery, query]} />
+    <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    {query.data && <ChloeAccountOverview data={query.data} />}
+    <p><Link to="/examples/chloe/overview">查看账号概况演示</Link></p>
+  </section>;
+}
+
+export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
   const controls = useContext(HeaderControlsContext);
   const [params, setParams] = useSearchParams();
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
   return <>
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
-    <section className="panel" aria-label={current.label}>
+    {current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className="panel" aria-label={current.label}>
+      <PageCheckStatus queries={[workspaceQuery]} />
       <h2>{current.label}</h2>
       <p>{current.description}</p>
       <p className="muted">当前为栏目预览，具体内容随后补充。</p>
-      {current.value === 'overview' && <Link to="/examples/chloe/overview">查看账号概况演示</Link>}
-    </section>
+    </section>}
   </>;
 }

@@ -41,7 +41,7 @@ from backend.routes.prompts import create_router as prompt_router
 from backend.services.assets import AssetLibrary
 from backend.routes.assets import create_router as asset_router
 from backend.routes.project_resources import create_router as resource_router
-from backend.chloe_overview import router as chloe_examples_router
+from backend.chloe_overview import account_overview, router as chloe_examples_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -930,6 +930,19 @@ def workspace_service(request: Request):
 @spaces_router.get('/projects')
 def workspace_projects(request: Request):
     return request.state.workspace_space.projects.discover()
+
+
+@spaces_router.get('/account-overview')
+def workspace_account_overview(request: Request):
+    space = request.state.workspace_space
+    if space.view != 'chloe-commerce':
+        raise HTTPException(404, '该空间未接入带货账号概况')
+    try:
+        return account_overview(space.root)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @spaces_router.get('/projects/{name}')

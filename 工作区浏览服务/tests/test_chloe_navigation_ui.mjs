@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdtemp, readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const { chromium } = require('playwright');
 const { createServer } = await import(require.resolve('vite'));
 const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
 const frontend = fileURLToPath(new URL('../frontend/', import.meta.url));
 const version = JSON.parse(await readFile(frontend+'package.json', 'utf8')).version;
+const tool = fileURLToPath(new URL('../', import.meta.url));
+const emptyOverview = JSON.parse(execFileSync(tool+'.venv/bin/python', ['-c', 'import json; from backend.chloe_overview import example_overview; print(json.dumps(example_overview("new")))'], {cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp('/private/tmp/chloe-navigation-');
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],
   define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -22,6 +25,7 @@ try {
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
+      if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
       if (path === '/api/workspaces') return route.fulfill({json:[
