@@ -73,10 +73,11 @@ try {
   assert.equal(await page.locator('.page-heading .breadcrumbs').count(),1);
   assert.equal(await page.locator('section[aria-label="共用资产"] > h2').count(),0);
   await page.screenshot({path:output+`/${width}-cards.png`,fullPage:true});
-  await page.getByRole('button',{name:'查看详情',exact:true}).first().click();
-  await page.getByRole('dialog').waitFor();
-  await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
-  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('button',{name:'查看详情',exact:true}).count(),0);
+  assert.equal(await page.locator('.asset-media-field,.asset-media-footer').count(),0);
+  const tabsBox=await page.getByRole('navigation',{name:'共用资产分类',exact:true}).boundingBox();
+  const gridBox=await page.locator('.asset-media-grid').boundingBox();
+  assert.ok(gridBox.y-tabsBox.y-tabsBox.height>=19);
   await page.getByRole('button',{name:'示例模特甲 · 正面面部',exact:true}).click();
   await page.getByRole('dialog').waitFor();
   assert.equal(await page.getByRole('dialog').locator('img').count(),1);
@@ -84,6 +85,9 @@ try {
   long=true;await page.reload();
   await page.getByRole('heading',{name:'M001 · '+'LongModelName'.repeat(30),exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  const titleSize=await page.locator('.asset-media-card h3').first().evaluate(el=>({height:el.getBoundingClientRect().height,line:parseFloat(getComputedStyle(el).lineHeight)}));
+  assert.ok(Math.abs(titleSize.height-titleSize.line)<=1);
+
   for(const element of await page.locator('.asset-media-card').all()){
    const box=await element.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1);
   }
@@ -99,5 +103,5 @@ try {
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }
- console.log('Chloe model cards passed: document-based fixtures, one card per model, adopted/empty portraits, detail/image preview, breadcrumbs, long content and retry; screenshots '+output);
+ console.log('Chloe model cards passed: document-based fixtures, one card per model, adopted/empty portraits, entry metadata hidden/image preview, breadcrumbs, long content and retry; screenshots '+output);
 }finally{await browser.close();await server.close();}

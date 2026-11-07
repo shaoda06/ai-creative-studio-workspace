@@ -313,6 +313,20 @@ try {
     await compactAsset.getByRole('button').click();
     await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+    const entryImageCards = showcase.locator('.asset-media-card-entry');
+    assert.equal(await entryImageCards.count(), 2);
+    for (const card of await entryImageCards.all()) {
+      await contained(card, `${width}px / 入口图片卡片`);
+      const title = await card.locator('h3').evaluate(el => ({height:el.getBoundingClientRect().height, lineHeight:parseFloat(getComputedStyle(el).lineHeight), ellipsis:getComputedStyle(el).textOverflow}));
+      assert.ok(Math.abs(title.height-title.lineHeight)<=1);
+      assert.equal(title.ellipsis,'ellipsis');
+      assert.equal(await card.locator('.asset-media-field,.asset-media-html-field,.asset-media-footer').count(),0);
+    }
+    assert.equal(await entryImageCards.locator('img').count(),1);
+    assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),1);
+    await entryImageCards.getByRole('button').click();
+    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     const detailCards = showcase.locator('.asset-media-card').filter({ has: page.locator('.asset-media-details') });
     assert.equal(await detailCards.count(), 3);
     const pendingCard = detailCards.filter({ hasText: '已登记尚未生成' });

@@ -4,7 +4,7 @@ import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; onDetails?: () => void }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, onDetails }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; onDetails?: () => void }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -12,10 +12,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         preview({ kind: 'markdown', name: item.generation || '生成记录', key: decodeURIComponent(item.recordUrl.split('/files/')[1]), url: item.recordUrl });
       }}>{formal ? '生成记录' : item.generation}</a> : null;
   const version = formal ? item.version?.match(/v\d+(?:\.\d+)*/i)?.[0] : item.version || item.media?.key.match(/(?:候选|草稿)-(v\d+(?:\.\d+)*)/i)?.[1];
-  return <article className={compact ? 'asset-media-card asset-media-card-compact' : 'asset-media-card'}>
+  return <article className={`asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}`}>
     <PointerTooltip text={title}><h3 >{title}</h3></PointerTooltip>
     <div className="asset-media-item">
-      {item.media ? <button className="cover" onClick={() => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact ? undefined : event => {
+      {item.media ? <button className="cover" onClick={() => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         let divisor = width, remainder = height;
         while (remainder) [divisor, remainder] = [remainder, divisor % remainder];
@@ -24,6 +24,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1.5" /><path d="m3 17 6-6 4 4 3-3 5 5" /></svg>
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}
+      {!entry && <>
       {!compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{dimensions || '读取中'}</p>}
       {!compact && item.media && !onDetails && <div className="asset-media-field file-entry-main"><span className="field-label">文件：</span><FileActions url={item.media.url} /></div>}
       {version ? <p className="asset-media-field"><span className="field-label">{compact ? '资源版本' : formal ? '采用版本' : '版本'}：</span>{version}</p> : null}
@@ -32,6 +33,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       {(formal ? ['scope'] : ['scope', 'retentionPurpose', 'pendingLabel', 'userState']).map(key => item[key] && <p key={key} className={`asset-media-field${key === 'scope' ? ' asset-media-scope' : ''}`}><span className="field-label">{({ scope: '适用范围', retentionPurpose: '留存用途', pendingLabel: '留存状态', userState: '用户决定' } as Record<string, string>)[key]}：</span>{item[key]}</p>)}
       {!formal && item.generation && <p className="asset-media-field"><span className="field-label">生成记录：</span>{recordLink || item.generation}</p>}
       {((formal && recordLink) || onDetails) && <div className="asset-media-footer">{formal && recordLink}{onDetails && <button className="asset-media-details" onClick={onDetails}>查看详情</button>}</div>}
+      </>}
       </>}
     </div>
   </article>;

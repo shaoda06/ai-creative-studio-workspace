@@ -195,3 +195,6 @@ dialog .dialog-close-floating{position:absolute;top:12px;right:16px;z-index:3;di
 dialog .dialog-close-floating:hover{background:#ffffff2b}
 
 html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
+
+.asset-media-card-entry>h3{height:1.7em;white-space:nowrap;display:block;text-overflow:ellipsis}.asset-media-card-entry .asset-media-item>.cover{margin-bottom:0}
+.chloe-assets-content{margin-top:20px}

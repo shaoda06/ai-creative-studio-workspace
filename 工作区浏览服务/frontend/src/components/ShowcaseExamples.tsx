@@ -166,6 +166,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
           </div>
         </PreviewContext.Provider>
       </ComponentExample>
+      <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。默认卡片不变，有图仍可预览。" usage="Chloe模特列表">
+        <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...imageRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
+        <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry />
+      </ComponentExample>
       <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
         <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />
         <AssetMediaCard title="A002 · 无图示例" item={{}} revision={1} compact />

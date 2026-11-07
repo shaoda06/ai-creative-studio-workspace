@@ -71,8 +71,8 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
       {current.value === 'assets' ? <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
-        {assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
-          <p className="muted">该分类的展示内容待下一步确定。</p>}
+        <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
+          <p className="muted">该分类的展示内容待下一步确定。</p>}</div>
       </> : <>
         <p>{current.description}</p>
         <p className="muted">当前为栏目预览，具体内容随后补充。</p>
