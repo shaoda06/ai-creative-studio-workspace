@@ -17,7 +17,7 @@ interface ReferenceAssetCard { id: string; name: string; media: FileItem | null 
 export interface ReferenceAssetDetail extends AssetDetail { description: string }
 export const referenceAssetKinds = {
   clothing: {label:'服装', parameter:'clothing', endpoint:'shared-clothing', ratio:'4:3'},
-  scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:'16:9'},
+  scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:'9:16'},
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
 

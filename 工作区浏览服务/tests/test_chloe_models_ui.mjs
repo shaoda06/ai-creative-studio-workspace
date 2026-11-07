@@ -85,7 +85,7 @@ with tempfile.TemporaryDirectory() as tmp:
  path=clothing/'场景说明.md'
  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的场景来源 |'))
  for index,purpose in enumerate(['场景展示图']*5+['场景参考图']*2):
-  source=Path(tmp)/('scene'+str(index)+'.png');Image.new('RGB',(640,360),(80+index*15,130,90)).save(source)
+  source=Path(tmp)/('scene'+str(index)+'.png');Image.new('RGB',(360,640),(80+index*15,130,90)).save(source)
   result=import_media(root,source,'scene'+str(index),resource_id=scene_resource if 0<index<5 else None)
   if index==0:scene_resource=result['resource_id']
   reference='[共用:'+result['resource_id']+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],clothing)+'>)'
@@ -353,7 +353,7 @@ try {
   assert.equal(await page.locator('.asset-media-card').count(),0);
   fail=false;long=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
-  for (const [kind,label,prefix,title,ratio,details] of [['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院','16:9',sample.scenes]]) {
+  for (const [kind,label,prefix,title,ratio,details] of [['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院','9:16',sample.scenes]]) {
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:label,exact:true}).click();
   await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
   await page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true}).waitFor();
