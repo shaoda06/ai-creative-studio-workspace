@@ -21,9 +21,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     <div className="asset-media-item">
       {item.media ? <Cover className="cover" onClick={linked ? undefined : () => preview(item.media)}><img className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
-        let divisor = width, remainder = height;
-        while (remainder) [divisor, remainder] = [remainder, divisor % remainder];
-        setDimensions(`${width} × ${height}（${width / divisor}:${height / divisor}）`);
+        setDimensions(`${width} × ${height}`);
       }} /></Cover> : <div className="cover asset-media-placeholder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1.5" /><path d="m3 17 6-6 4 4 3-3 5 5" /></svg>
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>

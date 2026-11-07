@@ -397,6 +397,7 @@ try {
     await dimensionsCard.getByText('尺寸：',{exact:true}).waitFor();
     assert.equal(await dimensionsCard.locator('.asset-media-field').count(),1);
     assert.equal(await dimensionsCard.getByText('读取中',{exact:true}).count(),0);
+    assert.match(await dimensionsCard.locator('.asset-media-field').innerText(), /^尺寸：\s*\d+ × \d+$/);
     assert.equal(await dimensionsCard.locator('.file-entry-main').count(),0);
     await contained(dimensionsCard,`${width}px / 仅尺寸图片卡`);
     const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});
