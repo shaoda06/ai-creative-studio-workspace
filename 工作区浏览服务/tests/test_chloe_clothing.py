@@ -11,6 +11,7 @@ from backend.chloe_reference_assets import CLOTHING, SCENES, asset_cards, asset_
 from chloe_init import initialize_workspace, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
+from chloe_documents import check_workspace
 
 
 class ChloeClothingTests(unittest.TestCase):
@@ -99,3 +100,35 @@ class ChloeClothingTests(unittest.TestCase):
 
 class ChloeSceneTests(ChloeClothingTests):
     kind = SCENES
+
+    def test_non_image_scene_references_fail_document_check_and_page(self):
+        original = self.path.read_text()
+        samples = Path(__file__).resolve().parents[1]/'frontend/public/component-samples'
+        for name in ('tone.wav', 'video.webm'):
+            ref = import_media(self.root, samples/name, 'wrong-scene-'+name)
+            link = f'[共用:{ref["resource_id"]}@{ref["version"]}](<{os.path.relpath(ref["absolute_file"], self.folder)}>)'
+            for heading, purpose in (('参考版本', '场景参考图'), ('参考版本', '场景展示图'), ('当前采用', '场景展示图')):
+                with self.subTest(media=name, heading=heading, purpose=purpose):
+                    self.path.write_text(original)
+                    tail = ['用户提供', '不适用'] if heading == '参考版本' else ['隔离采用', '2026-11-08T10:00:00+08:00']
+                    self.append(heading, [purpose, link, *tail])
+                    result = check_workspace(self.root, self.path)
+                    self.assertEqual(len(result['errors']), 1)
+                    self.assertIn('须引用PNG、JPEG或WebP图片', str(result['errors']))
+                    with self.assertRaisesRegex(ValueError, '须引用PNG、JPEG或WebP图片'):
+                        self.detail(self.root, self.identity, self.api)
+
+    def test_scene_upstream_execution_must_exist(self):
+        self.append('执行记录', ['E001', '图片生成', '不适用', 'Imagegen', '不适用', '不适用', '隔离测试', '不适用', '2026-11-08T10:00:00+08:00', '不适用', '准备中', '无'])
+        self.append('执行记录', ['E002', '图片处理', 'E001', 'RTX2倍', '不适用', '不适用', '隔离测试', '不适用', '2026-11-08T10:00:00+08:00', '不适用', '准备中', '无'])
+        _, link = self.image('green', 'scene')
+        self.append('参考版本', ['场景展示图', link, '用户提供', 'E001'])
+        self.append('当前采用', ['场景展示图', link, '隔离采用', '2026-11-08T10:00:00+08:00'])
+        self.assertEqual(check_workspace(self.root, self.path)['errors'], [])
+        self.assertIsNotNone(self.cards(self.root, self.api)[0]['media'])
+        self.path.write_text(self.path.read_text().replace('| E002 | 图片处理 | E001 |', '| E002 | 图片处理 | E999 |'))
+        result = check_workspace(self.root, self.path)
+        self.assertEqual(len(result['errors']), 1)
+        self.assertIn('E002引用不存在的上游执行：E999', str(result['errors']))
+        with self.assertRaisesRegex(ValueError, 'E002引用不存在的上游执行：E999'):
+            self.detail(self.root, self.identity, self.api)

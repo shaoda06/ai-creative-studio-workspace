@@ -253,6 +253,12 @@ def check_relations(root, path, doc):
         for row in records(doc, '当前采用'):
             if row['用途'] != label+'展示图':
                 raise ValueError(label+'当前采用只登记'+label+'展示图')
+    if path.name == '场景说明.md':
+        for heading in ('参考版本', '当前采用'):
+            for row in records(doc, heading):
+                ref = media_reference(root, path, row['资源引用'])
+                if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+                    raise ValueError('场景说明：'+heading+'须引用PNG、JPEG或WebP图片')
     if path.name == '声音说明.md':
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
@@ -299,6 +305,10 @@ def check_relations(root, path, doc):
     if script and records(doc, '分段计划'):
         check_segment_plan(doc, script['计划时长秒'])
     executions = {r['执行编号'] for r in records(doc,'执行记录')}
+    if path.name == '场景说明.md':
+        for row in records(doc, '执行记录'):
+            if row['上游执行'] not in MISSING and row['上游执行'] not in executions:
+                raise ValueError('场景说明：'+row['执行编号']+'引用不存在的上游执行：'+row['上游执行'])
     reviews = {r['审阅编号'] for r in records(doc,'审阅记录')}
     for heading in ('输入记录','输出记录','参考版本'):
         for row in records(doc, heading):
