@@ -16,6 +16,7 @@ from pathlib import Path
 from PIL import Image
 from backend.chloe_models import model_cards,model_detail
 from backend.chloe_clothing import clothing_cards,clothing_detail
+from backend.chloe_reference_assets import SCENES,asset_cards,asset_detail
 from chloe_init import initialize_workspace,initialize_asset,SKILLS
 import sys
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
@@ -79,9 +80,21 @@ with tempfile.TemporaryDirectory() as tmp:
   append('参考版本',[purpose,reference,'用户提供','不适用'])
   if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  clothes=[clothing_detail(root,id,'/api/workspaces/chloe') for id in ['O001','O002']]
+ clothing=initialize_asset(root,'场景','S001','示例庭院')
+ initialize_asset(root,'场景','S002','未选图场景')
+ path=clothing/'场景说明.md'
+ path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的场景来源 |'))
+ for index,purpose in enumerate(['场景展示图']*5+['场景参考图']*2):
+  source=Path(tmp)/('scene'+str(index)+'.png');Image.new('RGB',(640,360),(80+index*15,130,90)).save(source)
+  result=import_media(root,source,'scene'+str(index),resource_id=scene_resource if 0<index<5 else None)
+  if index==0:scene_resource=result['resource_id']
+  reference='[共用:'+result['resource_id']+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],clothing)+'>)'
+  append('参考版本',[purpose,reference,'用户提供','不适用'])
+  if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+ scenes=[asset_detail(root,id,'/api/workspaces/chloe',SCENES) for id in ['S001','S002']]
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
- media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in clothes for image in item['images']]}
- print(json.dumps({'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
+ media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in clothes+scenes for image in item['images']]}
+ print(json.dumps({'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp('/private/tmp/chloe-models-');
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -90,7 +103,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true});
 try {
  for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}}), errors=[], unexpected=[];
-  let fail=false, long=false;
+  let fail=false, long=false, emptyScenes=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -105,6 +118,9 @@ try {
     return route.fulfill({json:cards});
    }
    if(path==='/api/workspaces/chloe/shared-clothing')return route.fulfill({json:sample.clothingCards});
+   if(path==='/api/workspaces/chloe/shared-scenes')return route.fulfill(fail ? {status:409,json:{detail:'isolated invalid scene'}} : {json:emptyScenes ? [] : sample.sceneCards});
+   const scene=sample.scenes.find(item=>path===`/api/workspaces/chloe/shared-scenes/${item.id}`);
+   if(scene)return route.fulfill({json:scene});
    const garment=sample.clothes.find(item=>path===`/api/workspaces/chloe/shared-clothing/${item.id}`);
    if(garment)return route.fulfill({json:garment});
    const detail=sample.details.find(item=>path===`/api/workspaces/chloe/shared-models/${item.id}`);
@@ -337,16 +353,17 @@ try {
   assert.equal(await page.locator('.asset-media-card').count(),0);
   fail=false;long=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
-  await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:'服装',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='服装');
-  await page.getByRole('link',{name:'O001 · 示例外套',exact:true}).waitFor();
+  for (const [kind,label,prefix,title,ratio,details] of [['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院','16:9',sample.scenes]]) {
+  await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:label,exact:true}).click();
+  await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
+  await page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true}).waitFor();
   assert.equal(await page.locator('.asset-media-card').count(),2);
-  await page.getByRole('link',{name:'O001 · 示例外套',exact:true}).click();
-  const clothingInfo=page.getByRole('region',{name:'服装信息',exact:true});
+  await page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true}).click();
+  const clothingInfo=page.getByRole('region',{name:label+'信息',exact:true});
   await clothingInfo.getByText('无',{exact:true}).waitFor();
-  assert.equal(await page.getByText('不显示的服装来源',{exact:true}).count(),0);
-  const referenceLinks=clothingInfo.getByRole('region',{name:'服装参考图',exact:true});
-  const referenceImages=sample.clothes[0].images.filter(image=>image.purpose==='服装参考图');
+  assert.equal(await page.getByText(`不显示的${label}来源`,{exact:true}).count(),0);
+  const referenceLinks=clothingInfo.getByRole('region',{name:label+'参考图',exact:true});
+  const referenceImages=details[0].images.filter(image=>image.purpose===label+'参考图');
   assert.equal(await referenceLinks.getByRole('button').count(),2);
   for (const [index,image] of referenceImages.entries()) {
     await referenceLinks.getByRole('button',{name:`参考图 ${index+1} · ${image.resource}@${image.version}`,exact:true}).click();
@@ -356,20 +373,20 @@ try {
     await page.getByRole('dialog').waitFor({state:'detached'});
   }
 
-  assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'O001 · 示例外套');
-  assert.equal(await page.locator('.breadcrumb-actions').textContent(),'返回服装列表');
+  assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),`${prefix}001 · ${title}`);
+  assert.equal(await page.locator('.breadcrumb-actions').textContent(),`返回${label}列表`);
   const headerRows=await page.locator('.page-heading').evaluate(el=>['h1','.page-actions','.breadcrumbs > div:first-child','.breadcrumb-actions','.breadcrumbs'].map(selector=>{const r=el.querySelector(selector).getBoundingClientRect();return {y:r.y,height:r.height,right:r.right}}));
   assert.ok(Math.abs(headerRows[0].y+headerRows[0].height/2-headerRows[1].y-headerRows[1].height/2)<=5,JSON.stringify(headerRows));
   assert.ok(headerRows[2].y>headerRows[0].y+headerRows[0].height);
   assert.ok(Math.abs(headerRows[2].y+headerRows[2].height/2-headerRows[3].y-headerRows[3].height/2)<1);
   assert.ok(Math.abs(headerRows[3].right-headerRows[4].right)<1);
 
-  const clothingImages=page.getByRole('region',{name:'服装图片',exact:true});
-  await clothingImages.getByRole('heading',{name:'服装图片（4:3）',exact:true}).waitFor();
-  const clothingTabs=page.getByRole('navigation',{name:'服装图片用途'});
-  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
-  const front=sample.clothes[0].images.find(image=>image.purpose==='服装展示图'&&image.adopted);
-  await clothingImages.getByRole('heading',{name:`服装展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
+  const clothingImages=page.getByRole('region',{name:label+'图片',exact:true});
+  await clothingImages.getByRole('heading',{name:`${label}图片（${ratio}）`,exact:true}).waitFor();
+  const clothingTabs=page.getByRole('navigation',{name:label+'图片用途'});
+  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),[label+'展示图']);
+  const front=details[0].images.find(image=>image.purpose===label+'展示图'&&image.adopted);
+  await clothingImages.getByRole('heading',{name:`${label}展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
   const adoptedClothingCard=clothingImages.locator('.asset-media-card').first();
   assert.deepEqual(await adoptedClothingCard.locator('.field-label').allTextContents(),['尺寸：']);
   assert.equal(await adoptedClothingCard.getByText('下载',{exact:true}).count(),0);
@@ -379,29 +396,38 @@ try {
   await page.getByRole('dialog').locator('img').click();
   await page.getByRole('dialog').waitFor({state:'detached'});
   await clothingImages.getByText('其他版本',{exact:true}).click();
-  const garmentVersions=page.locator('[aria-label="服装其他版本"]');
+  const garmentVersions=page.locator(`[aria-label="${label}其他版本"]`);
   assert.deepEqual((await garmentVersions.locator('h3').allTextContents()).map(text=>text.split('@')[1]),['V005','V004','V003','V002']);
   const garmentScroll=await garmentVersions.evaluate(el=>({height:el.clientHeight,full:el.scrollHeight}));
   assert.ok(garmentScroll.height<=1050 && garmentScroll.full>garmentScroll.height);
-  assert.equal(await clothingImages.getByRole('heading',{name:/^服装参考图/}).count(),0);
+  assert.equal(await clothingImages.getByRole('heading',{name:new RegExp(`^${label}参考图`)}).count(),0);
   await page.goto(page.url().split('&purpose=')[0]+'&purpose='+encodeURIComponent('正面'));
   await page.reload();
-  await clothingImages.getByRole('heading',{name:`服装展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
-  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
+  await clothingImages.getByRole('heading',{name:`${label}展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
+  assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),[label+'展示图']);
   const clothingLayout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(child=>{const r=child.getBoundingClientRect();return {width:r.width,y:r.y}}));
   assert.equal(clothingLayout[0].y,clothingLayout[1].y);
   assert.ok(Math.abs(clothingLayout[0].width/clothingLayout[1].width-2/3)<0.01);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.getByText('资料与制作记录',{exact:true}).click();
   assert.deepEqual(await page.locator('.chloe-model-detail > details > details > summary').allTextContents(),['关联资料','采用依据与时间','采用变更','执行记录']);
-  await page.screenshot({path:output+`/${width}-clothing.png`,fullPage:true});
-  await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
-  await page.getByRole('link',{name:'O002 · 未选图服装',exact:true}).click();
-  await page.getByText('尚未采用服装展示图',{exact:true}).waitFor();
-  await page.getByRole('region',{name:'服装信息',exact:true}).getByRole('region',{name:'服装参考图',exact:true}).getByText('无',{exact:true}).waitFor();
+  await page.screenshot({path:output+`/${width}-${kind}.png`,fullPage:true});
+  await page.getByRole('link',{name:`返回${label}列表`,exact:true}).click();
+  await page.getByRole('link',{name:`${prefix}002 · 未选图${label}`,exact:true}).click();
+  await page.getByText(`尚未采用${label}展示图`,{exact:true}).waitFor();
+  await page.getByRole('region',{name:label+'信息',exact:true}).getByRole('region',{name:label+'参考图',exact:true}).getByText('无',{exact:true}).waitFor();
   assert.equal(await page.getByText('其他版本',{exact:true}).count(),0);
   await page.getByRole('navigation',{name:'当前位置',exact:true}).getByRole('link',{name:'共用资产',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
+  }
+  await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:'场景',exact:true}).click();
+  await page.getByRole('link',{name:'S001 · 示例庭院',exact:true}).waitFor();
+  fail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
+  assert.equal(await page.getByText('暂无场景资料。',{exact:true}).count(),0);
+  fail=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
+  await page.getByRole('link',{name:'S001 · 示例庭院',exact:true}).waitFor();
+  emptyScenes=true;await page.reload();await page.getByText('暂无场景资料。',{exact:true}).waitFor();
+  assert.equal(await page.locator('.asset-media-card').count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }
