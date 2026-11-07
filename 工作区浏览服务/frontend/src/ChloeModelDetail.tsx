@@ -59,6 +59,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const adopted = (purpose: string) => asset!.images.find(image => image.adopted && image.purpose === purpose);
   const faceImage = data && adopted('正面面部');
+  const faceViewsImage = data && adopted('面部三视图');
   const bodyPurpose = view==='masked' ? bodyPurposes[0] : bodyPurposes[1];
   const bodyImage = data && adopted(bodyPurpose);
   const imageCard = (purpose: string, image?: ModelImage) => <AssetMediaCard title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={tab !== 'images'} showVersion={tab !== 'images'}
@@ -105,7 +106,13 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div>{imageCard('正面面部',faceImage)}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
         </section>
-        <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
+        <section className="panel chloe-model-image-column" aria-label="面部三视图">
+          <h2>面部三视图（16:9）{faceViewsImage && <span className="muted"> · {faceViewsImage.resource}@{faceViewsImage.version}</span>}</h2>
+          <div><UnderlineTabs label="面部三视图视图" items={[{value:'original',label:'原图'}]} selected="original" onChange={() => {}} /></div>
+          <div>{imageCard('面部三视图',faceViewsImage)}</div>
+          <div>{otherVersions('面部三视图').length > 0 && <details><summary>其他版本</summary>{references('面部三视图')}</details>}</div>
+        </section>
+        <section className="panel chloe-model-image-column chloe-model-body-column" aria-label="基础全身三视图">
           {bodyImages()}
         </section>
       </div>}
