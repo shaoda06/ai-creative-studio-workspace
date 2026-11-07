@@ -17,7 +17,7 @@ export interface ModelDetail {
   sections: {heading: string; html: string; empty: boolean}[];
   looks: {id: string; name: string; media: FileItem | null; html: string; url: string}[];
 }
-const tabs = [{value:'info',label:'模特信息'},{value:'face',label:'正面面部图'},{value:'looks',label:'造型'}];
+const tabs = [{value:'info',label:'模特信息'},{value:'face',label:'正面面部图'},{value:'body',label:'基础全身三视图'},{value:'looks',label:'造型'}];
 const bodyPurposes = ['全身三视图遮面版', '全身三视图原图', '补充细节'];
 const executionSections = ['执行记录', '输入记录', '输出记录', '审阅记录', '返修记录'];
 
@@ -72,16 +72,16 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       }} />
       {tab==='info' && <>
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
-        <section className="panel"><h2>基础全身三视图</h2>
+        <details className="panel"><summary>关联资料</summary>{section('关联资料')}</details>
+      </>}
+      {tab==='body' && <section className="panel"><h2>基础全身三视图</h2>
           <UnderlineTabs label="当前采用三视图" items={[{value:'masked',label:'遮面版'},{value:'original',label:'原图'}]} selected={view} onChange={value=>select('view',value)} />
           <div className="chloe-assets-content asset-media-grid">{imageCard(view==='masked' ? bodyPurposes[0] : bodyPurposes[1],adopted(view==='masked' ? bodyPurposes[0] : bodyPurposes[1]))}</div>
           <details><summary>参考版本</summary>
             <UnderlineTabs label="模特图片用途" items={bodyPurposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             <div className="chloe-assets-content">{references(purpose)}</div>
           </details>
-        </section>
-        <details className="panel"><summary>关联资料</summary>{section('关联资料')}</details>
-      </>}
+        </section>}
       {tab==='face' && <>
         <section className="panel"><h2>当前采用</h2><div className="asset-media-grid">{imageCard('正面面部',adopted('正面面部'))}</div></section>
         <section className="panel"><h2>参考版本</h2>{references('正面面部')}</section>
