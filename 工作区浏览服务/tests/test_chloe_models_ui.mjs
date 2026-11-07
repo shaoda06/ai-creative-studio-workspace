@@ -356,6 +356,9 @@ try {
   assert.deepEqual(await clothingTabs.getByRole('button').allTextContents(),['服装展示图']);
   const front=sample.clothes[0].images.find(image=>image.purpose==='服装展示图'&&image.adopted);
   await clothingImages.getByRole('heading',{name:`服装展示图 · ${front.resource}@${front.version}`,exact:true}).waitFor();
+  const adoptedClothingCard=clothingImages.locator('.asset-media-card').first();
+  assert.deepEqual(await adoptedClothingCard.locator('.field-label').allTextContents(),['尺寸：']);
+  assert.equal(await adoptedClothingCard.getByText('下载',{exact:true}).count(),0);
   await clothingImages.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(front.resource));
