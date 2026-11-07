@@ -106,9 +106,23 @@ class ChloeModelsTests(unittest.TestCase):
             end = text.index('\n\n', text.index('| ---', start))
             row = f'\n| 模特 | {model_id} | [说明](<../../AI模特/{model_id}-{model_name}/模特说明.md>) | 造型人物 |'
             path.write_text(text[:end]+row+text[end:])
+        look_path = self.root/'综合资料/共用素材/造型/L001-测试造型/造型说明.md'
+        first, _ = self.add_image('red', 'look-original')
+        second, _ = self.add_image('black', 'look-masked')
+        self.path = look_path
+        for purpose, ref in [('全身三视图原图', first), ('全身三视图遮面版', second)]:
+            label = f'[共用:{ref["resource_id"]}@{ref["version"]}](<{os.path.relpath(ref["absolute_file"], look_path.parent)}>)'
+            self.append('当前采用', [purpose, label, '隔离采用', '2026-11-07T12:00:00+08:00'])
         before = {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         detail = model_detail(self.root, 'M001', self.api)
         self.assertEqual([x['id'] for x in detail['looks']], ['L001'])
+        look = detail['looks'][0]
+        self.assertEqual(len(look['images']), 2)
+        self.assertEqual(look['media']['key'], Path(second['absolute_file']).relative_to(self.root).as_posix())
+        self.assertEqual(detail['images'], [])
+        self.assertIn('造型组合', [x['heading'] for x in look['sections']])
+        self.assertNotIn('资产身份', [x['heading'] for x in look['sections']])
+        self.assertEqual(model_file(self.root, 'M001', look['media']['key']), Path(second['absolute_file']))
         self.assertNotIn('资产身份', [x['heading'] for x in detail['sections']])
         self.assertEqual(model_file(self.root,'M001','综合资料/共用素材/造型/L001-测试造型/造型说明.md').name,'造型说明.md')
         with self.assertRaises(FileNotFoundError):

@@ -52,8 +52,16 @@ with tempfile.TemporaryDirectory() as tmp:
  text=look.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |')
  start=text.index('## 关联资料');end=text.index('\\n\\n',text.index('| ---',start))
  look.write_text(text[:end]+'\\n| 模特 | M001 | [模特](<../../AI模特/M001-示例模特甲/模特说明.md>) | 穿搭人物 |'+text[end:])
+ path=look
+ for index,purpose in enumerate(['全身三视图原图']+['全身三视图遮面版']*5):
+  source=Path(tmp)/('look'+str(index)+'.png');Image.new('RGB',(600,300),(50+index*20,90,130)).save(source)
+  result=import_media(root,source,'look'+str(index),resource_id=look_resource if index>1 else None)
+  if index==1:look_resource=result['resource_id']
+  reference=label(Path(result['absolute_file']),result['resource_id'],result['version']).replace(os.path.relpath(Path(result['absolute_file']),model),os.path.relpath(Path(result['absolute_file']),look.parent))
+  append('参考版本',[purpose,reference,'用户提供','不适用'])
+  if index<=1:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
- media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']}
+ media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']]}
  print(json.dumps({'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp('/private/tmp/chloe-models-');
@@ -190,7 +198,31 @@ try {
   await page.screenshot({path:output+`/${width}-detail.png`,fullPage:true});
   await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).click();
-  await page.getByRole('heading',{name:'L001｜通勤造型 造型说明',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'造型组合',exact:true}).waitFor();
+  assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'L001 · 通勤造型');
+  const lookTabs=page.getByRole('navigation',{name:'造型详情分类'});
+  assert.deepEqual(await lookTabs.getByRole('button').allTextContents(),['造型信息','造型图片']);
+  await lookTabs.getByRole('button',{name:'造型图片',exact:true}).click();
+  const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
+  const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
+  await page.getByRole('heading',{name:`全身定装三视图 · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
+  await lookPanel.locator(':scope > div > .asset-media-card .cover').click();
+  await page.getByRole('dialog').waitFor();
+  assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(lookMasked.resource));
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
+  await lookPanel.getByText('其他版本',{exact:true}).click();
+  const lookRefs=lookPanel.locator('.chloe-model-versions');
+  assert.equal(await lookRefs.locator('.asset-media-card').count(),4);
+  assert.deepEqual((await lookRefs.locator('h3').allTextContents()).map(title=>title.split('@')[1]),['V005','V004','V003','V002']);
+  const lookScroll=await lookRefs.evaluate(el=>({height:el.clientHeight,full:el.scrollHeight}));
+  assert.ok(lookScroll.height<=1050 && lookScroll.full>lookScroll.height);
+  await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
+  const lookOriginal=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图原图');
+  await page.getByRole('heading',{name:`全身定装三视图 · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  await page.reload();
+  await page.getByRole('heading',{name:`全身定装三视图 · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  await page.screenshot({path:output+`/${width}-look.png`,fullPage:true});
   assert.match(page.url(),/look=L001/);
   assert.equal(await page.getByRole('dialog').count(),0);
   await page.reload();

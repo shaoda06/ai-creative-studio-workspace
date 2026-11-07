@@ -142,10 +142,7 @@ def model_files(root, identity, path, doc):
     return allowed
 
 
-def model_detail(root, identity, api):
-    name, path, doc = model_context(root, identity)
-    base = f'{api}/shared-models/{quote(identity)}'
-    allowed = model_files(root, identity, path, doc)
+def asset_content(root, path, doc, allowed, base):
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -176,6 +173,14 @@ def model_detail(root, identity, api):
             text.extend('| ' + ' | '.join(row) + ' |' for row in table['rows'])
         sections.append({'heading': section['heading'], 'html': linked_html('\n'.join(text), source, allowed, base),
                          'empty': not any(t['rows'] for t in section['tables'])})
+    return {'images': list(images.values()), 'sections': sections}
+
+
+def model_detail(root, identity, api):
+    name, path, doc = model_context(root, identity)
+    base = f'{api}/shared-models/{quote(identity)}'
+    allowed = model_files(root, identity, path, doc)
+    content = asset_content(root, path, doc, allowed, base)
     looks = []
     for look_id, look_name, look_path, look_doc in model_looks(root, identity):
         cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图遮面版'), None)
@@ -186,10 +191,11 @@ def model_detail(root, identity, api):
                      'url': base + '/files/' + quote(ref['file'], safe='/')}
         key = look_path.relative_to(root).as_posix()
         looks.append({'id': look_id, 'name': look_name, 'media': media,
+                      **asset_content(root, look_path, look_doc, allowed, base),
                       'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
                       'url': base + '/files/' + quote(key, safe='/')})
-    return {'id': identity, 'name': name, 'images': list(images.values()), 'sections': sections, 'looks': looks,
-            'url': base + '/files/' + quote(source, safe='/')}
+    return {'id': identity, 'name': name, **content, 'looks': looks,
+            'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 
 def model_file(root, identity, key):
