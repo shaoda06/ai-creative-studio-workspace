@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory() as tmp:
  initialize_asset(root,'服装','O002','未选图服装')
  path=clothing/'服装说明.md'
  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的服装来源 |'))
- for index,purpose in enumerate(['服装展示图']*5+['服装参考图']):
+ for index,purpose in enumerate(['服装展示图']*5+['服装参考图']*2):
   source=Path(tmp)/('garment'+str(index)+'.png');Image.new('RGB',(240,320),(80+index*15,130,90)).save(source)
   result=import_media(root,source,'garment'+str(index),resource_id=garment_resource if 0<index<5 else None)
   if index==0:garment_resource=result['resource_id']
@@ -331,6 +331,17 @@ try {
   const clothingInfo=page.getByRole('region',{name:'服装信息',exact:true});
   await clothingInfo.getByText('无',{exact:true}).waitFor();
   assert.equal(await page.getByText('不显示的服装来源',{exact:true}).count(),0);
+  const referenceLinks=clothingInfo.getByRole('region',{name:'服装参考图',exact:true});
+  const referenceImages=sample.clothes[0].images.filter(image=>image.purpose==='服装参考图');
+  assert.equal(await referenceLinks.getByRole('button').count(),2);
+  for (const [index,image] of referenceImages.entries()) {
+    await referenceLinks.getByRole('button',{name:`参考图 ${index+1} · ${image.resource}@${image.version}`,exact:true}).click();
+    await page.getByRole('dialog').waitFor();
+    assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'),image.media.url);
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({state:'detached'});
+  }
+
   assert.equal(await page.locator('.breadcrumbs [aria-current="page"]').textContent(),'O001 · 示例外套');
   assert.equal(await page.locator('.breadcrumb-actions').textContent(),'返回服装列表');
   const headerRows=await page.locator('.page-heading').evaluate(el=>['h1','.page-actions','.breadcrumbs > div:first-child','.breadcrumb-actions','.breadcrumbs'].map(selector=>{const r=el.querySelector(selector).getBoundingClientRect();return {y:r.y,height:r.height,right:r.right}}));
@@ -369,6 +380,7 @@ try {
   await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
   await page.getByRole('link',{name:'O002 · 未选图服装',exact:true}).click();
   await page.getByText('尚未采用服装展示图',{exact:true}).waitFor();
+  await page.getByRole('region',{name:'服装信息',exact:true}).getByRole('region',{name:'服装参考图',exact:true}).getByText('无',{exact:true}).waitFor();
   assert.equal(await page.getByText('其他版本',{exact:true}).count(),0);
   await page.getByRole('navigation',{name:'当前位置',exact:true}).getByRole('link',{name:'共用资产',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();

@@ -8,6 +8,7 @@ import { Result, PreviewContext, Preview, Rich } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { FullscreenImage } from './components/FullscreenImage';
 import { UnderlineTabs } from './components/UnderlineTabs';
+import { LinkButton } from './components/LinkButton';
 import { PageCheckStatus } from './components/PageCheckStatus';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
@@ -41,6 +42,7 @@ export function ChloeClothingDetail({ query, workspaceQuery }: { query: UseQuery
   };
   const adopted = data?.images.filter(image=>image.adopted && image.purpose.split('/')[0]===purpose) || [];
   const others = data?.images.filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose).reverse().sort((a,b)=>b.version.localeCompare(a.version,undefined,{numeric:true})) || [];
+  const references = data?.images.filter(image=>image.purpose==='服装参考图') || [];
   const preview = data?.images.find(image=>`${image.resource}@${image.version}`===params.get('ref'))?.media;
   const open = (file: FileItem) => {
     const image=data?.images.find(image=>image.media.url===file.url);
@@ -54,6 +56,11 @@ export function ChloeClothingDetail({ query, workspaceQuery }: { query: UseQuery
         <div className="chloe-look-detail">
           <section className="panel" aria-label="服装信息"><h2>服装信息</h2>
             <dl className="chloe-overview-fields"><div><dt>服装名称</dt><dd>{data.name}</dd></div><div><dt>服装说明</dt><dd>{data.description}</dd></div></dl>
+            <section aria-label="服装参考图"><h3>参考图</h3>
+              {references.length ? <ul>{references.map((image,index)=><li key={`${image.resource}@${image.version}`}>
+                <LinkButton onClick={()=>open(image.media)}>参考图 {index+1} · {image.resource}@{image.version}</LinkButton>
+              </li>)}</ul> : <p>无</p>}
+            </section>
           </section>
           <section className="panel chloe-look-images" aria-label="服装图片"><h2>服装图片</h2>
             <UnderlineTabs label="服装图片用途" items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
