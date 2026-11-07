@@ -196,6 +196,27 @@ class ChloeDocumentsTest(unittest.TestCase):
         self.append(p,'发布记录',['P002','[成片](<成片/test.mp4>)','不适用','重发文案','不适用','不适用','不适用',time,'未取得','定时发布','已提交','未取得','未取得','隔离授权','未取得'])
         self.assertEqual(self.check()['errors'],[])
 
+    def test_content_only_review_requires_no_capture_but_rejects_unknown_ids(self):
+        path=self.video/'README.md'
+        self.append(path,'单条复盘',['R001','不适用','分析用户提供的成片构图','不适用','没有运营数据，仅做内容分析','调整开场构图'])
+        valid=path.read_text()
+        self.assertEqual(self.check()['errors'],[])
+        for value in ('D999','未取得','不适用、D001'):
+            path.write_text(valid.replace('| R001 | 不适用 |','| R001 | '+value+' |'))
+            self.assertTrue(any('采集编号' in error['error'] for error in self.check()['errors']))
+
+    def test_data_review_accepts_only_registered_captures(self):
+        path=self.video/'README.md';time='2026-11-07T10:00:00+08:00'
+        (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
+        self.append(path,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,'未取得','定时发布','待提交','未取得','未取得','隔离授权','未取得'])
+        for identity in ('D001','D002'):
+            self.append(path,'效果数据',[identity,'P001',time,time,time,'指标','1','次','隔离口径','隔离证据'])
+        self.append(path,'单条复盘',['R001','D001、D002','内容观察','仅说明样本变化','隔离样本','继续观察'])
+        valid=path.read_text()
+        self.assertEqual(self.check()['errors'],[])
+        path.write_text(valid.replace('| R001 | D001、D002 |','| R001 | D001、D999 |'))
+        self.assertTrue(any('采集编号' in error['error'] for error in self.check()['errors']))
+
     def test_pending_video_needs_no_final_registry_or_publication(self):
         p=self.video/'README.md'
         original=p.read_text()

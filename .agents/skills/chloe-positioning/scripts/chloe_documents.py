@@ -280,6 +280,8 @@ def check_relations(root, path, doc):
     script = {r['字段']:r['内容'] for r in records(doc,'脚本信息')}
     if script and script['脚本状态'] == '已确认' and any(script[k] in MISSING for k in ('确认依据','确认时间')):
         raise ValueError('已确认脚本缺少确认依据或时间')
+    if script and records(doc, '分段计划'):
+        check_segment_plan(doc, script['计划时长秒'])
     executions = {r['执行编号'] for r in records(doc,'执行记录')}
     reviews = {r['审阅编号'] for r in records(doc,'审阅记录')}
     for heading in ('输入记录','输出记录','参考版本'):
@@ -337,12 +339,36 @@ def check_relations(root, path, doc):
         snapshots[row['采集编号']] = window
     captures = {r['采集编号'] for r in records(doc,'效果数据')}
     for row in records(doc,'单条复盘'):
-        if not set(row['采集编号'].split('、')) <= captures:
+        if row['采集编号'] != '不适用' and not set(row['采集编号'].split('、')) <= captures:
             raise ValueError('单条复盘引用不存在的采集编号')
     conclusions = {r['复盘编号'] for r in records(doc,'跨视频结论')}
     for row in records(doc,'建议验证'):
         if row['复盘编号'] not in conclusions:
             raise ValueError('建议验证引用不存在的复盘编号')
+
+
+def check_segment_plan(doc, total_duration):
+    section = next(section for section in doc['sections'] if section['heading'] == '镜头与分镜')
+    shots = [(shot['fields']['镜号'], shot['fields']['时长'].removesuffix('秒').strip()) for shot in section['shots']]
+    if section['tables']:
+        shots = [(row['镜头编号'], row['时长秒']) for row in records(doc, '镜头与分镜')]
+    planned = records(doc, '分段计划')
+    segment_ids = [row['分段编号'] for row in planned]
+    if len(segment_ids) != len(set(segment_ids)):
+        raise ValueError('分段编号重复')
+    covered = [identity for row in planned for identity in row['镜头编号'].split('、')]
+    if covered != [identity for identity, _ in shots]:
+        raise ValueError('分段计划须按脚本顺序完整覆盖每个镜头一次，不得漏镜、重复或乱序')
+    if any(value in MISSING or Decimal(value) <= 0 for _, value in shots):
+        raise ValueError('已分段的镜头须填写大于零的实际计划时长')
+    durations = {identity: Decimal(value) for identity, value in shots}
+    for row in planned:
+        if not re.fullmatch(r'P\d{3,}', row['分段编号']):
+            raise ValueError('分段编号格式错误')
+        if row['时长秒'] in MISSING or Decimal(row['时长秒']) != sum(durations[identity] for identity in row['镜头编号'].split('、')):
+            raise ValueError(row['分段编号']+'计划时长须等于所含镜头时长之和')
+    if total_duration not in MISSING and Decimal(total_duration) != sum(durations.values()):
+        raise ValueError('脚本计划总时长须等于全部镜头及分段时长之和')
 
 
 def check_system(root, owner):

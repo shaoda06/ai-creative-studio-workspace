@@ -1,6 +1,7 @@
 """Isolated Chloe workflow, exact resources, review and public workbench projection."""
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from PIL import Image
 from backend.services import production
 from backend.services.project_files import ProjectFiles
 from backend.services.review_notes import ExportChanges, NoteChange, OverallChange, ProjectReviewNotes, NotesChangedError
-from chloe_init import initialize_workspace, initialize_video, resources
+from chloe_init import initialize_workspace, initialize_video, resources, SKILLS
 from chloe_documents import check_workspace
 from chloe_production import state
 import chloe_browser_production as browser
@@ -83,7 +84,10 @@ class ChloeProductionTests(unittest.TestCase):
 
     def test_director_sheet_separate_source_chart_and_candidate(self):
         add_row(self.record,'执行记录',['E001','图片生成','不适用','Imagegen','不适用','不适用','隔离授权','未取得','未取得','未取得','准备中','无'])
-        _,reference,_=self.resource(kind='image')
+        actual,_,resource=self.resource(kind='image')
+        template=(SKILLS/'chloe-creative/templates/导演表登记接入模板.md').read_text()
+        sample=re.search(r'资源引用为实际`([^`]+)`',template)[1]
+        reference=sample.replace('IMG-编号',resource['resource_id']).replace('@V001','@'+resource['version']).replace('相对原文件路径',os.path.relpath(actual,self.project))
         add_row(self.record,'输出记录',['E001','导演表/脚本v02/图表v04/候选3/第1页',reference])
         add_row(self.project/'README.md','当前采用',['导演表/第1页',reference,'隔离批准','2026-11-07T12:00:00+08:00'])
         before={p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()}
@@ -113,6 +117,34 @@ class ChloeProductionTests(unittest.TestCase):
                 self.record.write_text(original)
                 add_row(self.record,'输出记录',['E001',slot,reference])
                 with self.assertRaises(ValueError):state(self.project)
+
+    def test_segment_plan_rejects_missing_duplicate_order_and_duration_errors(self):
+        self.plan()
+        script=self.project/'脚本.md';original=script.read_text()
+        changes=[
+            ('| P002 | SH002 | 4 |','| P002 | SH001 | 5 |'),
+            ('| P002 | SH002 | 4 |',''),
+            ('| P001 | SH001 | 5 |\n| P002 | SH002 | 4 |','| P002 | SH002 | 4 |\n| P001 | SH001 | 5 |'),
+            ('| P002 | SH002 | 4 |','| P002 | SH002 | 99 |'),
+            ('| 计划时长秒 | 待确定 |','| 计划时长秒 | 8 |'),
+            ('| P002 | SH002 | 4 |','| P001 | SH002 | 4 |'),
+            ('| P002 | SH002 | 4 |','| P002 | SH999 | 4 |'),
+        ]
+        for old,new in changes:
+            with self.subTest(change=(old,new)):
+                self.assertIn(old,original)
+                script.write_text(original.replace(old,new))
+                self.assertTrue(check_workspace(self.root,only=script)['errors'])
+                with self.assertRaises(ValueError):state(self.project)
+
+    def test_multi_shot_segment_accepts_exact_decimal_planned_duration(self):
+        self.plan()
+        script=self.project/'脚本.md'
+        text=script.read_text().replace('| P001 | SH001 | 5 |\n| P002 | SH002 | 4 |','| P001 | SH001、SH002 | 0.3 |')
+        text=text.replace('**时长**：5秒','**时长**：0.1秒').replace('**时长**：4秒','**时长**：0.2秒')
+        script.write_text(text.replace('| 计划时长秒 | 待确定 |','| 计划时长秒 | 0.3 |'))
+        self.assertEqual(check_workspace(self.root,only=script)['errors'],[])
+        self.assertEqual(state(self.project)['plan']['P001']['duration'],0.3)
 
     def test_script_document_before_generation_and_round_source(self):
         self.plan()
