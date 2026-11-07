@@ -148,6 +148,16 @@ try {
   assert.equal(await page.getByRole('dialog').locator('img').count(),1);
   await page.keyboard.press('Escape');
 
+  const records=page.locator('.chloe-model-detail > details');
+  assert.equal(await records.count(),1);
+  assert.equal(await records.getAttribute('open'),null);
+  const summary=records.locator(':scope > summary');
+  assert.equal(await summary.textContent(),'资料与制作记录');
+  assert.equal(await summary.evaluate(el=>getComputedStyle(el).color),await page.locator('body').evaluate(el=>getComputedStyle(el).color));
+  await summary.focus(); await page.keyboard.press('Enter');
+  await records.locator(':scope > details > summary').first().waitFor();
+  assert.deepEqual(await records.locator(':scope > details > summary').allTextContents(),['关联资料','采用依据与时间','采用变更','执行记录']);
+  assert.equal(await records.locator(':scope > details[open]').count(),0);
   await page.getByText('执行记录',{exact:true}).click();
   await page.getByText('暂无执行记录。',{exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

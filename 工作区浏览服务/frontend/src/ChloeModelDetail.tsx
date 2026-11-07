@@ -74,7 +74,6 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       }} />
       {tab==='info' && <>
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
-        <details className="panel"><summary>关联资料</summary>{section('关联资料')}</details>
       </>}
       {tab==='images' && <div className="chloe-model-images">
         <section className="chloe-model-image-column" aria-label="正面面部图">
@@ -98,10 +97,10 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}
           to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图遮面版'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
-      {tab!=='looks' && <>
-        {['当前采用','采用变更'].map(heading=><details className="panel" key={heading}><summary>{heading==='当前采用' ? '采用依据与时间' : heading}</summary>{section(heading)}</details>)}
-        <details className="panel"><summary>执行记录</summary>{executionSections.map(heading=><section key={heading}>{heading!=='执行记录' && <h3>{heading}</h3>}{section(heading)}</section>)}</details>
-      </>}
+      {tab!=='looks' && <details className="panel"><summary>资料与制作记录</summary>
+        {['关联资料','当前采用','采用变更'].map(heading=><details key={heading}><summary>{heading==='当前采用' ? '采用依据与时间' : heading}</summary>{section(heading)}</details>)}
+        <details><summary>执行记录</summary>{executionSections.map(heading=><section key={heading}>{heading!=='执行记录' && <h3>{heading}</h3>}{section(heading)}</section>)}</details>
+      </details>}
     </div>}
     {(document || preview) && <Preview project="" item={document || preview!} baseUrl={`/api/workspaces/${encodeURIComponent(spaceId!)}/shared-models/${encodeURIComponent(data!.id)}`} revision={0}
       close={() => { if (document) setDocument(null); else select('ref',null); }} />}
