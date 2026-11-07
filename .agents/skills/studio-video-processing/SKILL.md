@@ -7,8 +7,8 @@ description: 共用视频技术处理，按明确源文件、尺寸、帧率和�
 
 媒体原件、上传参考音视频及修改版本统一按[项目资源与版本](../studio-workspace-browser/references/项目资源与版本管理.md)保存；本技能继续维护原业务记录和采用。输入、审核、采用及导出引用准确版本，不因阶段再次复制媒体。
 
-调用阶段提供实际输入、宽高、帧率、裁切位置、方法、输出及授权。Agent解释目标与实际限制；脚本装配确定参数、保留原声和播放时长，并读取客观媒体信息，不判断内容是否获批。
+调用阶段提供实际输入、输出及授权；Agent按[后处理分步询问](references/视频技术处理规范.md#后处理分步询问)补齐输出分辨率、帧率及必要的画面适配选择。Agent解释目标与实际限制；脚本装配确定参数、保留原声和播放时长，并读取客观媒体信息，不判断内容是否获批。
 
 媒体核对调用[scripts/video_metadata.py](scripts/video_metadata.py)的`probe(path)`，只读ffprobe的轨道与容器信息，不抽帧、转写或审片。缺少依赖或格式异常如实失败；不将推荐规格填写为实测值。
 
-RIFE/RTX基准及参数装配按[技术处理规范](references/视频技术处理规范.md)，脚本`scripts/video_workflow.py`的`assemble`只接收方法、源路径、前缀、尺寸与裁切位置，不选择已采用来源；通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务明确`video_plan.adapter:"technical"`；业务另行维护源版本、候选、采用与正式位置。
+RIFE/RTX基准及参数装配按[技术处理规范](references/视频技术处理规范.md)，脚本`scripts/video_workflow.py`共用计算显示尺寸与裁切量，并按实际来源和选择装配；任务字段与原规格复用按[调用接口](references/视频技术处理规范.md#调用接口)，不选择已采用来源；通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务明确`video_plan.adapter:"technical"`；业务另行维护源版本、候选、采用与正式位置。

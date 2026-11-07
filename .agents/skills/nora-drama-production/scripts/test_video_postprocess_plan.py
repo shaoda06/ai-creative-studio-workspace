@@ -70,6 +70,36 @@ class PostprocessPlanTests(unittest.TestCase):
                         canvas_path.unlink()
                     (self.root / 'plan.json').unlink()
 
+    def test_target_choices_probe_each_source_and_reuse_without_submission(self):
+        self.request.pop('profile')
+        self.request.pop('orientation')
+        self.request['video_postprocess'] = dict(resolution=[1920, 1080], fps='original', fit='crop')
+        facts = [dict(width=1920, height=1088, frame_rate=24),
+                 dict(width=1920, height=1080, frame_rate=30)]
+        with patch.object(tool, 'probe', side_effect=facts) as probe:
+            result = self.build()
+        self.assertEqual(probe.call_count, 2)
+        self.assertEqual(result['task_count'], 1)
+        plan = json.loads((self.root / 'plan.json').read_text())
+        self.assertEqual(len(plan['reused_sources']), 1)
+        self.assertEqual(plan['reused_sources'][0]['source'], self.selected['EP001-C002-P001'])
+        task = plan['tasks'][0]
+        api = Canvas(json.loads((self.root / task['canvas']).read_text())).api('16')
+        self.assertNotIn('12', api)
+        self.assertEqual(api['25']['inputs']['y'], 4)
+        self.assertEqual(api['16']['inputs']['frame_rate'], ['7', 2])
+        self.assertEqual(task['video_postprocess']['source'], task['mapping']['source_video'])
+        self.assertEqual(task['mapping']['postprocess_configuration']['fps'], 24)
+
+    def test_all_original_returns_reuse_without_canvases(self):
+        self.request['video_postprocess'] = dict(resolution='original', fps='original')
+        with patch.object(tool, 'probe', return_value=dict(width=1536, height=864, frame_rate=24)):
+            result = self.build()
+        self.assertEqual(result['state'], 'reuse')
+        self.assertEqual(result['task_count'], 0)
+        self.assertEqual(len(result['reused_sources']), 2)
+        self.assertFalse(list(self.root.rglob('内容画布.workflow.json')))
+
     def test_stale_approval_and_missing_media_do_not_write(self):
         original = copy.deepcopy(self.selected)
         self.selected['EP001-C001-P001'] = 'EP001-C001-P001-R004-二采'

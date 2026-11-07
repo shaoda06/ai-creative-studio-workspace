@@ -5,6 +5,8 @@ import math
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
+from video_workflow import configure_postprocess
 import workflow_graph as pairs
 from project_paths import project_file
 
@@ -156,7 +158,10 @@ def reference_bindings(api, references, subfolder, existing=()):
 
 def prepare_technical(root, spec, documents):
     record = project_file(root, spec['record_dir'])
-    canvas = json.loads(project_file(root, spec['canvas']).read_text('utf-8-sig'))
+    if 'video_postprocess' in spec:
+        canvas, postprocess = configure_postprocess(root, spec)
+    else:
+        canvas = json.loads(project_file(root, spec['canvas']).read_text('utf-8-sig'))
     if 'h3_first_pass' in spec:
         configure_first_pass(canvas, spec)
     if 'h3_second_pass' in spec:
