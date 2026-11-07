@@ -38,7 +38,7 @@ try {
         if (long) {
           data.identity['公开账号名'] = '超长账号名称'.repeat(18);
           data.direction['目标人群'] = 'LongUnbrokenExample'.repeat(35);
-          data.connection['挂品资格'] = '长段核对说明。'.repeat(30);
+          data.connection['商品挂载'] = '长段核对说明。'.repeat(30);
           data.videos[0].progress['下一步'] = 'VeryLongNextStep'.repeat(30);
         }
         return route.fulfill({json:data});

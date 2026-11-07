@@ -4,14 +4,13 @@ export interface ChloeOverviewData {
   direction: Record<string, string>;
   identity: Record<string, string>;
   connection: Record<string, string>;
-  publishing: Record<string, string>;
   decisions: Record<string, string>[];
   videos: { progress: Record<string, string>; published: boolean }[];
 }
 
-function Fields({ values, names, labels = {} }: { values: Record<string, string>; names: string[]; labels?: Record<string, string> }) {
+function Fields({ values, names }: { values: Record<string, string>; names: string[] }) {
   return <dl className="chloe-overview-fields">{names.map(name => <div key={name}>
-    <dt>{labels[name] || name}</dt><dd>{values[name]}</dd>
+    <dt>{name}</dt><dd>{values[name]}</dd>
   </div>)}</dl>;
 }
 
@@ -50,8 +49,7 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
       </section>
       <section className="panel" aria-labelledby="chloe-connection-heading">
         <h2 id="chloe-connection-heading">{identity['平台']}账号接入</h2>
-        <Fields values={connection} names={['连接状态', '发布权限', '挂品资格']}
-          labels={{ '发布权限': '视频发布', '挂品资格': '商品挂载' }} />
+        <Fields values={connection} names={['连接状态', '视频发布', '商品挂载']} />
         <small>最近核对：{connection['核对时间'] === '未取得' ? '尚未核对' : connection['核对时间']}</small>
       </section>
     </div>

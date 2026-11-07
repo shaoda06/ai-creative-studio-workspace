@@ -23,7 +23,7 @@ def account_overview(root: Path):
         videos.append({'progress': fields(doc, '定位与当前进度'),
                        'published': any(r['发布状态'] == '已发布' for r in records(doc, '发布记录'))})
     return {'direction': fields(direction, '账号方向'), 'identity': fields(account, '账号身份'),
-            'connection': fields(account, '连接与权限'), 'publishing': fields(account, '发布默认选项'),
+            'connection': fields(account, '账号接入'),
             'decisions': records(direction, '待决定事项'), 'videos': videos}
 
 

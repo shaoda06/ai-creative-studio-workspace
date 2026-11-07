@@ -32,6 +32,10 @@ class ChloeDocumentsTest(unittest.TestCase):
         result=self.check()
         self.assertEqual(result,{'checked_documents':15,'errors':[]})
         self.assertEqual(len({source for _,source,_ in docs.documents(self.root)}),15)
+        account = next(e for e in docs.documents(self.root) if e[0].name == '账号运营配置.md')
+        parsed = docs.read_document(self.root, *account)
+        self.assertEqual([s['heading'] for s in parsed['sections']], ['账号身份', '账号接入', '资料映射', '核对与变更', '填写说明'])
+        self.assertEqual([r['字段'] for r in docs.records(parsed, '账号接入')], ['连接状态', '视频发布', '商品挂载', '核对时间'])
         with self.assertRaises(ValueError):
             initialize_video(self.root,'V002','商品|主题')
         p=self.root/'综合资料/账号定位.md'
@@ -48,8 +52,10 @@ class ChloeDocumentsTest(unittest.TestCase):
                  ('| 平台 | 抖音 |','| 平台 | 抖音 |\n| 平台 | 抖音 |'),
                  ('| 连接状态 | 未核实 |','| 连接状态 | 已经登录 |'),
                  ('| 核对时间 | 未取得 |','| 核对时间 | 今天 |'),
-                 ('| 默认可见范围 | 待确定 |','| 默认可见范围 |  |'),
-                 ('| 标签习惯 | 待确定 |','| 标签习惯 | 甲|乙 |')]
+                 ('| 视频发布 | 待核实 |','| 视频发布 |  |'),
+                 ('| 视频发布 | 待核实 |','| 视频发布 | 已核实 |'),
+                 ('| 商品挂载 | 待核实 |','| 商品挂载 | 已核实 |'),
+                 ('| 公开账号名 | 待核实 |','| 公开账号名 | 甲|乙 |')]
         for before,after in changes:
             with self.subTest(change=before):
                 p.write_text(original.replace(before,after))

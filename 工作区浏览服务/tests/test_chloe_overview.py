@@ -16,7 +16,10 @@ class ChloeOverviewTests(unittest.TestCase):
         self.assertEqual(new['videos'], [])
         self.assertEqual(new['connection']['连接状态'], '未核实')
         self.assertEqual(working['connection']['连接状态'], '已连接')
-        self.assertEqual(working['connection']['挂品资格'], '待核实')
+        self.assertEqual(working['connection']['商品挂载'], '待核实')
+        self.assertEqual(working['connection']['视频发布'], '可发布')
+        self.assertEqual(list(new['connection']), ['连接状态', '视频发布', '商品挂载', '核对时间'])
+        self.assertNotIn('publishing', working)
         self.assertEqual(len(working['videos']), 3)
         self.assertFalse(any(v['published'] for v in working['videos']))
 
