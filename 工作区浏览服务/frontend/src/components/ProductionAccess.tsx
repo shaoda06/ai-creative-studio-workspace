@@ -7,6 +7,7 @@ import type { NoteScope } from './RevisionNotes';
 export interface ProductionAccess {
   unitKind: 'episode' | 'work';
   storyboardLabel?: string;
+  sourceDocumentLabel?: string;
   showStoryboardEditor?: boolean;
   storyboard?: (unit: string, scene: string) => string;
   namespace: (project: string) => string;

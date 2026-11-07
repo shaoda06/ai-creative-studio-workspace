@@ -21,6 +21,7 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
 }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
+  const sourceLabel = access.sourceDocumentLabel ?? '分镜';
   const preview = useContext(PreviewContext);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [pageKey, setPageKey] = useState(`${sceneId}/`);
@@ -42,7 +43,7 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
       const pages = candidates.filter(item => versionKey(item) === version);
       const adopted = pages.filter(item => item.adopted).length;
       const first = pages[0];
-      const title = history ? `${first.sourceVersion ? '分镜 ' + first.sourceVersion : '来源分镜未标注'} · 导演表 ${first.version}`
+      const title = history ? `${first.sourceVersion ? sourceLabel + ' ' + first.sourceVersion : `来源${sourceLabel}未标注`} · 导演表 ${first.version}`
         : `候选${first.candidateNumber}`;
       return { value: version, label: `${title}（${pages.length}张）`,
         badge: adopted === pages.length ? '已采用' : adopted ? '部分已采用' : undefined };
@@ -67,8 +68,8 @@ export function SceneDirectorSheets({ sheets, storyboardVersion = '', scenes, sc
   const sceneCount = current && combine ? ` · ${current.group.id} 第${current.index + 1}页 / 共${current.group.images.length}页` : '';
   const emptyMessage = (group: typeof groups[number]) => <p className="muted">
     {combine && `场次 ${group.id}：`}
-    {history ? '暂无已登记的历史导演分镜表。' : !group.storyboardVersion ? '尚未登记来源分镜版本。'
-      : `分镜 ${group.storyboardVersion} 暂无对应导演分镜表。`}
+    {history ? '暂无已登记的历史导演分镜表。' : !group.storyboardVersion ? `尚未登记来源${sourceLabel}版本。`
+      : `${sourceLabel} ${group.storyboardVersion} 暂无对应导演分镜表。`}
   </p>;
   return <section aria-label={workMode ? '本片导演分镜表' : combine ? '整集导演分镜表' : '本场导演分镜表'}>
     <div className="toolbar director-sheet-toolbar">

@@ -97,6 +97,8 @@ try {
   assert.equal(await script.getByRole('heading',{name:'修订记录',exact:true}).count(),0);
   assert.equal(await tabs.getByRole('button',{name:'分镜修改',exact:true}).count(),0);
   await page.getByRole('button',{name:'导演分镜表',exact:true}).click();
+  await page.getByText('脚本 v01 暂无对应导演分镜表。',{exact:true}).waitFor();
+  assert.equal(await page.getByText('分镜 v01 暂无对应导演分镜表。',{exact:true}).count(),0);
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
