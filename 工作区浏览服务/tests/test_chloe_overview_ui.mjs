@@ -41,6 +41,9 @@ try {
           data.direction['内容风格'] = '较长的内容风格描述。'.repeat(30);
           data.videos[0].progress['当前问题'] = '长问题描述'.repeat(30);
           data.videos[0].progress['下一步'] = 'LongNextStep'.repeat(40);
+          data.videos[1].progress['处理状态'] = '受阻';
+          data.videos[1].progress['当前问题'] = '人工后期等待补充素材';
+          data.videos[2].progress['视频状态'] = '已发布';
         }
         return route.fulfill({json:data});
       }
@@ -55,11 +58,14 @@ try {
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
     const metricBoxes = await Promise.all((await page.locator('.chloe-overview-metrics > div').all()).map(el=>el.boundingBox()));
     assert.ok(metricBoxes.every(box=>Math.abs(box.y-metricBoxes[0].y)<1), 'metrics stay in one row');
-    await page.getByText('暂无需要用户决定的视频事项。',{exact:true}).waitFor();
+    await page.getByText('暂无待用户决定或受阻的视频事项。',{exact:true}).waitFor();
     await page.screenshot({path:output+`/${width}-actual-empty.png`,fullPage:true});
     await page.getByRole('link',{name:'查看账号概况演示'}).click();
     await page.getByText(samples.working.direction['目标人群'],{exact:true}).waitFor();
-    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','1','1','0']);
+    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','1','0']);
+    assert.deepEqual(await page.locator('.chloe-overview-metrics dt').allTextContents(),['视频总数','制作中','待发布','已发布']);
+    assert.match(await page.locator('.chloe-overview-attention').innerText(),/待用户决定：1 · 受阻：0/);
+    assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['视频','当前阶段','视频状态','处理状态','下一步']);
     assert.equal(await page.locator('.chloe-overview-task').count(),1);
     assert.equal(await page.locator('.chloe-overview-videos tbody tr').count(),3);
     await page.screenshot({path:output+`/${width}-working.png`,fullPage:true});
@@ -71,6 +77,9 @@ try {
     await page.getByText(samples.working.direction['目标人群'],{exact:true}).waitFor();
     long = true; await page.reload();
     await page.getByText('抖音、小红书',{exact:true}).waitFor();
+    assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','0','1']);
+    assert.equal(await page.locator('.chloe-overview-task').count(),2);
+    assert.match(await page.locator('.chloe-overview-attention').innerText(),/待用户决定：1 · 受阻：1/);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1));
     for (const element of await page.locator('.chloe-overview, .chloe-overview-fields dd, .chloe-overview-task, .chloe-overview-videos').all()) {
       const box = await element.boundingBox(); assert.ok(box.x >= 0 && box.x+box.width <= width+1);

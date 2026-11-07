@@ -20,9 +20,9 @@ class ChloeOverviewTests(unittest.TestCase):
         self.assertEqual(example_overview('new')['videos'], [])
         videos = example_overview('working')['videos']
         self.assertEqual(len(videos), 3)
-        self.assertEqual(sum(v['progress']['制作状态'] == '待用户决定' for v in videos), 1)
+        self.assertEqual(sum(v['progress']['处理状态'] == '待用户决定' for v in videos), 1)
         self.assertEqual(sum(v['progress']['当前阶段'] == '人工后期' for v in videos), 1)
-        self.assertFalse(any(v['published'] for v in videos))
+        self.assertEqual([v['progress']['视频状态'] for v in videos], ['制作中','制作中','待发布'])
 
     def test_document_updates_multiple_platforms_and_format_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -40,11 +40,11 @@ class ChloeOverviewTests(unittest.TestCase):
             root = Path(tmp)/'example'
             shutil.copytree(TOOL/'examples/chloe-overview/working', root)
             path = next((root/'projects').glob('V001-*/README.md'))
-            text = path.read_text().replace('| 制作状态 | 待用户决定 |', '| 制作状态 | 进行中 |')
+            text = path.read_text().replace('| 处理状态 | 待用户决定 |', '| 处理状态 | 正常 |')
             path.write_text(text)
             videos = account_overview(root)['videos']
-            self.assertEqual(videos[0]['progress']['制作状态'], '进行中')
-            self.assertEqual(sum(v['progress']['制作状态'] == '待用户决定' for v in videos), 0)
+            self.assertEqual(videos[0]['progress']['处理状态'], '正常')
+            self.assertEqual(sum(v['progress']['处理状态'] == '待用户决定' for v in videos), 0)
             path.write_text(text.replace('## 定位与当前进度', '## 临时章节'))
             with self.assertRaisesRegex(ValueError, '章节名称'):
                 account_overview(root)

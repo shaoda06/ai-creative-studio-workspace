@@ -16,7 +16,7 @@ MISSING = {'待确定', '待核实', '未取得', '不适用', '无'}
 LINK = re.compile(r'\[([^\]\n]+)\]\(<([^>\n]+)>\)')
 MEDIA = re.compile(r'\[(共用|本视频):((?:IMG|VID|AUD)-[a-zA-Z0-9-]+)@(V[0-9]{3,})\]\(<([^>\n]+)>\)')
 PREFIXES = {'事项编号': 'I', '记录编号': 'B', '事实编号': 'F', '条件编号': 'C', '卖点编号': 'S',
-            '执行编号': 'E', '审阅编号': 'R', '返修编号': 'X', '交接编号': 'J', '成片编号': 'C',
+            '执行编号': 'E', '审阅编号': 'R', '返修编号': 'X', '交接编号': 'J',
             '发布编号': 'P', '采集编号': 'D', '复盘编号': 'R', '验证编号': 'T', '修订编号': 'U',
             '核对编号': 'K', '镜头编号': 'SH'}
 
@@ -285,13 +285,22 @@ def check_relations(root, path, doc):
                 raise ValueError('实际共用输入与共用引用表不一致')
         elif row['共用引用键'] != '不适用':
             raise ValueError('非视频共用输入的引用键须为不适用')
-    finals = {r['成片编号'] for r in records(doc,'人工成片')}
     publications = {r['发布编号'] for r in records(doc,'发布记录')}
     for row in records(doc,'发布记录'):
-        if row['成片编号'] not in finals:
-            raise ValueError('发布记录引用不存在的成片编号')
-        if row['发布状态'] == '已发布' and any(row[k] in MISSING for k in ('实际发布时间','平台作品ID','发布链接','授权依据','结果证据')):
+        match = LINK.fullmatch(row['发布文件'])
+        if not match:
+            raise ValueError('发布文件必须直接链接本视频成片目录的实际文件')
+        target = (path.parent/match[2]).resolve()
+        if not target.is_relative_to(owner/'成片') or not target.is_file():
+            raise ValueError('发布文件必须直接链接本视频成片目录的实际文件')
+        if row['发布方式'] == '定时发布' and row['计划发布时间'] in MISSING:
+            raise ValueError('定时发布缺少计划发布时间')
+        if row['发布进展'] == '已发布' and any(row[k] in MISSING for k in ('实际发布时间','平台作品ID','发布链接','授权依据','结果证据')):
             raise ValueError('已发布记录缺少实际发布字段')
+    if current:
+        published = any(r['发布进展'] == '已发布' for r in records(doc,'发布记录'))
+        if (current['视频状态'] == '已发布') != published:
+            raise ValueError('视频状态与实际已发布记录不一致')
     for row in records(doc,'效果数据'):
         if row['发布编号'] not in publications:
             raise ValueError('效果数据引用不存在的发布编号')
@@ -301,12 +310,6 @@ def check_relations(root, path, doc):
         if row['采集编号'] in snapshots and snapshots[row['采集编号']] != window:
             raise ValueError('同一采集编号的发布对象或时间窗口不一致')
         snapshots[row['采集编号']] = window
-    for row in records(doc,'人工成片'):
-        match = LINK.fullmatch(row['文件路径'])
-        if not match or not (path.parent/match[2]).resolve().is_relative_to(owner/'成片'):
-            raise ValueError('人工成片必须链接本视频成片目录的文件')
-        if row['成片状态'] == '已确认' and any(row[k] in MISSING for k in ('确认依据','确认时间')):
-            raise ValueError('已确认成片缺少确认依据或时间')
     captures = {r['采集编号'] for r in records(doc,'效果数据')}
     for row in records(doc,'单条复盘'):
         if not set(row['采集编号'].split('、')) <= captures:

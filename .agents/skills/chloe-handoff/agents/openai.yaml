@@ -1,4 +1,4 @@
 interface:
   display_name: "Chloe 剪映交接与成片接续"
-  short_description: "核对 Chloe 已采用片段及顺序，准备可下载的剪映清单，接续用户人工后期与准确成片版本。"
+  short_description: "核对 Chloe 已采用片段及顺序，准备可下载的剪映清单，接续用户人工后期与发布文件引用。"
   default_prompt: "使用 $chloe-handoff 按实际对象、当前阶段与有效授权处理任务。"

@@ -165,17 +165,60 @@ class ChloeDocumentsTest(unittest.TestCase):
                      .replace('| 商品资料 | 待确定 |','| 商品资料 | [商品](<../../综合资料/商品资料/G001-测试/商品说明.md>) |'))
         (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
         time='2026-11-07T10:00:00+08:00'
-        self.append(p,'人工成片',['C001','[成片](<成片/test.mp4>)','已确认','15','1080','1920','24','隔离示例确认',time])
-        self.append(p,'发布记录',['P001','C001','不适用','测试文案','不适用','不适用','不适用','不适用',time,'已发布','test-platform-id','https://example.com/post','隔离授权示例','隔离结果示例'])
+        p.write_text(p.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
+        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','测试文案','不适用','不适用','不适用','不适用',time,'立即发布','已发布','test-platform-id','https://example.com/post','隔离授权示例','隔离结果示例'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'播放量','10','次','平台显示','https://example.com/metrics'])
         self.append(p,'效果数据',['D001','P001',time,time,time,'净增粉丝','-2','人','平台显示','https://example.com/metrics'])
         self.append(p,'单条复盘',['R001','D001','样本不足','未取得','隔离示例','继续观察'])
         self.assertEqual(self.check()['errors'],[])
         good=p.read_text()
-        p.write_text(good.replace('| P001 | C001 |','| P001 | C002 |'))
-        self.assertTrue(any('成片编号' in e['error'] for e in self.check()['errors']))
+        p.write_text(good.replace('[成片](<成片/test.mp4>)','[其他文件](<README.md>)'))
+        self.assertTrue(any('发布文件' in e['error'] for e in self.check()['errors']))
         p.write_text(good.replace('| 已发布 | test-platform-id |','| 已发布 | 未取得 |'))
         self.assertTrue(any('实际发布字段' in e['error'] for e in self.check()['errors']))
+        withdrawn=good.replace('| 立即发布 | 已发布 |','| 立即发布 | 已撤回 |')
+        p.write_text(withdrawn)
+        self.assertTrue(any('视频状态' in e['error'] for e in self.check()['errors']))
+        p.write_text(withdrawn.replace('| 视频状态 | 已发布 |','| 视频状态 | 待发布 |'))
+        self.assertEqual(self.check()['errors'],[])
+        p.write_text(good)
+        self.append(p,'发布记录',['P002','[成片](<成片/test.mp4>)','不适用','重发文案','不适用','不适用','不适用',time,'未取得','定时发布','已提交','未取得','未取得','隔离授权','未取得'])
+        self.assertEqual(self.check()['errors'],[])
+
+    def test_pending_video_needs_no_final_registry_or_publication(self):
+        p=self.video/'README.md'
+        original=p.read_text()
+        self.assertNotIn('## 人工成片',original)
+        (self.video/'成片/未发布.mp4').write_bytes(b'path-only fixture')
+        for status in ('制作中','待发布'):
+            p.write_text(original.replace('| 视频状态 | 制作中 |','| 视频状态 | '+status+' |'))
+            self.assertEqual(self.check()['errors'],[])
+        for status in ('完成','已完成','已发布','已定时','审核中'):
+            p.write_text(original.replace('| 视频状态 | 制作中 |','| 视频状态 | '+status+' |'))
+            self.assertTrue(self.check()['errors'])
+        p.write_text(original.replace('| 处理状态 | 正常 |','| 处理状态 | 进行中 |'))
+        self.assertTrue(self.check()['errors'])
+
+    def test_publication_process_keeps_pending_and_checks_exact_file(self):
+        p=self.video/'README.md'
+        p.write_text(p.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 待发布 |'))
+        (self.video/'成片/test.mp4').write_bytes(b'path-only fixture')
+        time='2026-11-07T10:00:00+08:00'
+        self.append(p,'发布记录',['P001','[成片](<成片/test.mp4>)','不适用','文案','不适用','不适用','不适用',time,'未取得','定时发布','待提交','未取得','未取得','隔离授权','未取得'])
+        good=p.read_text()
+        for progress in ('待提交','已提交','审核中','失败','已撤回','待核实'):
+            p.write_text(good.replace('| 待提交 |','| '+progress+' |'))
+            self.assertEqual(self.check()['errors'],[])
+        for old,new in [('[成片](<成片/test.mp4>)','C001'),
+                        ('[成片](<成片/test.mp4>)','[目录](<成片>)'),
+                        ('[成片](<成片/test.mp4>)','[缺失](<成片/missing.mp4>)'),
+                        (time,'未取得'),('| 定时发布 |','| 已定时 |')]:
+            p.write_text(good.replace(old,new))
+            self.assertTrue(self.check()['errors'])
+        outside=self.root/'综合资料/outside.mp4'; outside.write_bytes(b'outside')
+        (self.video/'成片/link.mp4').symlink_to(outside)
+        p.write_text(good.replace('成片/test.mp4','成片/link.mp4'))
+        self.assertTrue(any('发布文件' in e['error'] for e in self.check()['errors']))
 
 
 if __name__=='__main__':

@@ -18,8 +18,7 @@ def account_overview(root: Path):
         identity, title = path.parent.name.split('-', 1)
         doc = read_document(root, path, template('chloe-creative', '视频README模板.md'),
                             {'identity': identity, 'title': title})
-        videos.append({'progress': fields(doc, '定位与当前进度'),
-                       'published': any(r['发布状态'] == '已发布' for r in records(doc, '发布记录'))})
+        videos.append({'progress': fields(doc, '定位与当前进度')})
     return {'direction': fields(direction, '账号方向'), 'videos': videos}
 
 
