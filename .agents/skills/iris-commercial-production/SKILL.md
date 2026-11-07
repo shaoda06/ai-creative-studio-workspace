@@ -13,7 +13,7 @@ description: Iris 商业视频生产二级业务阶段，按批准备内容和�
 
 - 输入：当前分镜、明确素材版本、可用执行工具及授权。
 - 内部生产：[模板](templates/生产任务.md)，一批一份主记录，字段与时点见阶段规则。
-- 整片审阅组合：[轮次与网页接入](references/整片制作轮次与网页接入.md)，使用一份[轮次索引](templates/制作轮次.json)，生成批次保留原编号。
+- 作品制作轮次：[轮次与网页接入](references/整片制作轮次与网页接入.md)，每批方案确定送审或准备执行时，登记到同一份[轮次索引](templates/制作轮次.json)。
 - 交付整理：[模板](templates/制作进展与样片说明.md)，来源于当前生产资料与实际成果。
 
 Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
