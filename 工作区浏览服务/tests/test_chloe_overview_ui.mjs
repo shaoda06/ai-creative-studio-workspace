@@ -38,7 +38,7 @@ try {
         if (long) {
           data.identity['公开账号名'] = '超长账号名称'.repeat(18);
           data.direction['目标人群'] = 'LongUnbrokenExample'.repeat(35);
-          data.connection['核对证据'] = '长段核对说明。'.repeat(30);
+          data.connection['挂品资格'] = '长段核对说明。'.repeat(30);
           data.videos[0].progress['下一步'] = 'VeryLongNextStep'.repeat(30);
         }
         return route.fulfill({json:data});
@@ -66,7 +66,7 @@ try {
     await page.getByRole('heading',{name:'Chloe 的通勤衣橱（演示）',exact:true}).waitFor();
     long = true; await page.reload();
     await page.getByRole('heading',{name:'超长账号名称'.repeat(18),exact:true}).waitFor();
-    for (const label of ['人物、声音与制作约定','连接核对与发布约定']) await page.locator('summary',{hasText:label}).click();
+    await page.locator('summary',{hasText:'人物、声音与制作约定'}).click();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1));
     for (const element of await page.locator('.chloe-overview, .chloe-overview-fields dd, .chloe-overview-videos').all()) {
       const box = await element.boundingBox(); assert.ok(box.x >= 0 && box.x+box.width <= width+1);

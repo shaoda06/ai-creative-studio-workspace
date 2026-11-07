@@ -9,14 +9,14 @@ export interface ChloeOverviewData {
   videos: { progress: Record<string, string>; published: boolean }[];
 }
 
-function Fields({ values, names }: { values: Record<string, string>; names: string[] }) {
+function Fields({ values, names, labels = {} }: { values: Record<string, string>; names: string[]; labels?: Record<string, string> }) {
   return <dl className="chloe-overview-fields">{names.map(name => <div key={name}>
-    <dt>{name}</dt><dd>{values[name]}</dd>
+    <dt>{labels[name] || name}</dt><dd>{values[name]}</dd>
   </div>)}</dl>;
 }
 
 export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
-  const { direction, identity, connection, publishing, decisions, videos } = data;
+  const { direction, identity, connection, decisions, videos } = data;
   const pending = decisions.filter(item => item['当前结论'] === '待确定');
   const waiting = videos.filter(item => item.progress['制作状态'] === '待用户决定');
   const metrics = [
@@ -50,13 +50,9 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
       </section>
       <section className="panel" aria-labelledby="chloe-connection-heading">
         <h2 id="chloe-connection-heading">{identity['平台']}账号接入</h2>
-        <Fields values={connection} names={['连接状态', '实际登录身份', '发布权限', '挂品资格', '可用操作范围', '核对时间']} />
-        <p className="muted">显示最近一次记录的核对结果，连接状态不代表实时登录状态。</p>
-        <details className="chloe-overview-more"><summary>连接核对与发布约定</summary>
-          <Fields values={connection} names={['连接方式', '连接工具', '核对证据']} />
-          <Fields values={publishing} names={['发布形式', '默认可见范围', '发布时间与频率', '文案习惯', '标签习惯']} />
-          <p className="muted">默认选项不代替单次发布授权。</p>
-        </details>
+        <Fields values={connection} names={['连接状态', '发布权限', '挂品资格']}
+          labels={{ '发布权限': '视频发布', '挂品资格': '商品挂载' }} />
+        <small>最近核对：{connection['核对时间'] === '未取得' ? '尚未核对' : connection['核对时间']}</small>
       </section>
     </div>
 
