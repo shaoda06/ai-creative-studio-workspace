@@ -58,7 +58,7 @@ def register(store, key, outputs, report_file):
     planned = validate_plan(data)
     if len(outputs) != len(planned):
         raise ValueError('图片取回摘要缺项')
-    inspected, checked, _, _ = inspect_remote(data, state, outputs, planned)
+    inspected, checked, _, _ = inspect_remote(data, state, outputs, planned, align_rtx=True)
     checks = []
     for path in checked:
         current = recordio.stamp(path)

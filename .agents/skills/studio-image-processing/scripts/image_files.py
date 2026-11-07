@@ -83,7 +83,7 @@ def store_png(project, destination, raw, *, source=None, replace=False, prior=No
 
 
 
-def inspect_remote(data, state, outputs, planned):
+def inspect_remote(data, state, outputs, planned, *, align_rtx=False):
     """Check actual requests, upload bindings and PNG receipts, without business documents."""
     root = Path(data.project)
     request_path = Path(data.record_dir) / data.request_name
@@ -103,7 +103,17 @@ def inspect_remote(data, state, outputs, planned):
         raw = candidate.read_bytes()
         width, height = png(raw)
         target = planned[candidate]
-        if (width, height) != (target['width'], target['height']):
+        expected = (target['width'], target['height'])
+        if align_rtx:
+            output = next(out for out in data.outputs if project_file(root, out.path) == candidate)
+            node = accepted[output.node_id]
+            if node['class_type'] == 'SaveImage':
+                node = accepted[str(node['inputs']['images'][0])]
+            if (node['class_type'] == 'RTXVideoSuperResolution'
+                    and not node['inputs']['quality'].startswith(('DENOISE_', 'DEBLUR_'))):
+                # Match the RTX node's round-to-even 8-pixel output alignment.
+                expected = tuple(max(8, round(n / 8) * 8) for n in expected)
+        if (width, height) != expected:
             raise ValueError('图片实际尺寸不符：' + item['path'])
         receipt = project_file(root, item['receipt'], recorded=True)
         checked.extend((candidate, receipt))

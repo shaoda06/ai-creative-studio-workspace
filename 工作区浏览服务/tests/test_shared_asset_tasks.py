@@ -25,13 +25,13 @@ class SharedAssetTests(unittest.IsolatedAsyncioTestCase):
     output = image_fixture.ImageCloseoutTests.output
     rel = image_fixture.ImageCloseoutTests.rel
 
-    def setup_shared(self):
+    def setup_shared(self, source_size=(32, 48)):
         self.root = self.root.resolve()
         self.project = self.root / '综合资料'
         self.project.mkdir()
         resources.initialize(self.project, managed=True)
         source = self.root / 'source.png'
-        source.write_bytes(image_fixture.png(32, 48))
+        source.write_bytes(image_fixture.png(*source_size))
         ref = resources.register(self.project, source, key='source')
         actual = self.project / ref['file']
         self.record = self.project / '共用素材/M001/E003'
@@ -44,11 +44,20 @@ class SharedAssetTests(unittest.IsolatedAsyncioTestCase):
         self.data.uploads = uploads
         self.data.outputs = [t.OutputTarget(node_id=node, output_key='images', index=0,
             path=target, response_name='取回响应.json', resource_id=ref['resource_id'], base_file=ref['file'])]
-        self.data.image_plan = {'adapter':'technical','images':[{'path':target,'width':64,'height':96}]}
+        self.data.image_plan = {'adapter':'technical','images':[{'path':target,'width':source_size[0]*2,'height':source_size[1]*2}]}
         return ref, actual
 
     async def test_shared_preparation_collection_and_immutable_parent(self):
-        ref, source = self.setup_shared()
+        await self.check_collection((32, 48), (64, 96))
+
+    async def test_rtx_alignment_rejects_other_sizes_then_recovers_same_task(self):
+        await self.check_collection((38, 48), (80, 96), [(76, 96), (88, 96), (80, 104)])
+
+    async def test_rtx_alignment_rounds_half_to_even_down(self):
+        await self.check_collection((34, 48), (64, 96), [(68, 96)])
+
+    async def check_collection(self, source_size, output_size, rejected=()):
+        ref, source = self.setup_shared(source_size)
         original = source.read_bytes()
         result = await self.store.prepare_only(self.data)
         self.assertTrue(result['prepared'])
@@ -68,8 +77,13 @@ class SharedAssetTests(unittest.IsolatedAsyncioTestCase):
         request=recordio.read(self.record/self.data.request_name)
         request['prompt']['2']['inputs']['image']='shared-M001-E003/'+source.name
         recordio.write(self.record/self.data.request_name,request)
-        self.output(target, image_fixture.png(64,96))
         projects=SimpleNamespace(get=Mock(side_effect=AssertionError('no business parser')))
+        for size in rejected:
+            self.output(target, image_fixture.png(*size))
+            outcome=await result_registration.closeout_tasks(self.store, projects, ['task'])
+            self.assertFalse(outcome['user_message_ready'])
+            self.assertIn('图片实际尺寸不符', outcome['results'][0]['error'])
+        self.output(target, image_fixture.png(*output_size))
         outcome=await result_registration.closeout_tasks(self.store, projects, ['task'])
         self.assertTrue(outcome['user_message_ready'],outcome)
         self.assertEqual(source.read_bytes(),original)
