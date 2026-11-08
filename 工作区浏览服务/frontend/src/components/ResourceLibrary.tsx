@@ -1,8 +1,8 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, projectUrl } from '../api';
 import type { FileItem } from '../api';
-import { Dialog, FileLink, PreviewContext, Result } from '../components';
+import { Dialog, FileLink, Result } from '../components';
 import { AssetMediaCard } from './AssetMediaCard';
 import { Pagination } from './Pagination';
 import { SearchField } from './SearchField';
@@ -29,7 +29,6 @@ export function ResourceLibrary({ project, baseUrl = projectUrl(project), active
     queryFn: () => get<Listing>(`${baseUrl}/resources?q=${encodeURIComponent(search)}&kind=${encodeURIComponent(kind)}&page=${page}`), enabled: active });
   const detail = useQuery({ queryKey: ['resource-family', baseUrl, selected],
     queryFn: () => get<Family>(`${baseUrl}/resources/${selected}`), enabled: active && !!selected });
-  const preview = useContext(PreviewContext);
   return <div className="resource-library">
     <div className="section-heading"><h2>{selected && detail.data ? detail.data.name : listTitle}</h2><div className="resource-library-actions">
       {selected && <button onClick={() => setSelected('')}>返回资源列表</button>}
@@ -56,9 +55,8 @@ export function ResourceLibrary({ project, baseUrl = projectUrl(project), active
             : <><h3>{version.version}</h3><FileLink item={version.media} showStatus={false} /></>}
           <p>{origins[version.origin] || version.origin} · {(version.facts.bytes / 1024 / 1024).toFixed(2)} MiB{version.facts.duration_seconds !== undefined && ` · ${version.facts.duration_seconds.toFixed(2)}秒${version.facts.duration_seconds > 60 ? `（${Math.floor(version.facts.duration_seconds / 60)}分${(version.facts.duration_seconds % 60).toFixed(2)}秒）` : ''}`}</p>
           <p className="muted">登记：{version.registered_at}</p>
-          {version.parent && <p>来源版本：<button className="link" onClick={() => preview({ kind: ({ 图片: 'image', 视频: 'video', 音频: 'audio' } as Record<string, string>)[version.parent!.kind || ''] || 'file', key: version.parent!.file,
-            name: `${version.parent!.resource_id}@${version.parent!.version}`, url: `${baseUrl}/files/${version.parent!.file.split('/').map(encodeURIComponent).join('/')}` })}>
-              {version.parent.resource_id}@{version.parent.version}</button></p>}
+          {version.parent && <div>来源版本：<FileLink showStatus={false} showOriginal={false} item={{ kind: ({ 图片: 'image', 视频: 'video', 音频: 'audio' } as Record<string, string>)[version.parent.kind || ''] || 'file', key: version.parent.file,
+            name: `${version.parent.resource_id}@${version.parent.version}`, url: `${baseUrl}/files/${version.parent.file.split('/').map(encodeURIComponent).join('/')}` }} /></div>}
           <details><summary>引用记录（{version.uses.length}）</summary>{version.uses.map((use, index) => <div key={index}>
             <FileLink item={use.document} showStatus={false} /><p className="muted">{use.excerpt}</p>
           </div>)}{!version.uses.length && <p className="muted">尚无业务引用记录。</p>}</details>

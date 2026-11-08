@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { GenerationContext, SegmentVideo as VideoItem } from '../api';
 import { get, projectUrl } from '../api';
-import { Original, PreviewContext, Rich, Result } from '../components';
+import { FileActions, Original, PreviewContext, Rich, Result } from '../components';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { TabSelect } from './TabSelect';
@@ -30,6 +30,7 @@ function SegmentReferences({ context }: { context?: GenerationContext }) {
         {material.url ? <button className="reference-preview" onClick={() => preview({ kind: material.kind, name: material.name, url: material.url })} aria-label={`查看 ${material.label} ${material.name}`}>
           {material.kind === 'image' ? <img src={material.url} alt={material.name} loading="lazy" /> : material.kind === 'video' ? <><video src={material.url} muted preload="metadata" /><span className="reference-media-label">视频 ▶</span></> : <span className="reference-audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2" fill="none" stroke="currentColor" strokeWidth="2" /><circle cx="6" cy="18" r="3" fill="currentColor" /><circle cx="18" cy="16" r="3" fill="currentColor" /></svg><span>音频</span></span>}
         </button> : <p className="muted">原素材缺失</p>}
+        {material.kind === 'video' && <FileActions url={material.url} downloadOnly />}
       </figure>)}{!context.references[group].length && <p className="muted">{context.issues.length ? '该次参考素材关联尚未完整记录。' : '该次未使用此类参考素材。'}</p>}</div>
     </div>) : <span className="placeholder-label">参考素材区域</span>}
   </section>;

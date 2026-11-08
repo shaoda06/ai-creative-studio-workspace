@@ -21,6 +21,14 @@ try:
  print(json.dumps({'items':browser.items(x.projects,x.project.name,x.api),'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':browser.downloads(x.projects,x.project.name,x.api,'V001')}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
+// A real reference-video entry must retain an outside download when its popup is simplified.
+const previewDetail=JSON.parse(JSON.stringify(fixture.detail),(key,value)=>{
+ if(value && typeof value==='object' && value.references?.common && value.prompts){
+  value.references.common.push({kind:'video',name:'隔离参考视频',label:'Video 1',url:'/component-samples/video.webm'});
+ }
+ return value;
+});
+fixture.detail=previewDetail;
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();const browser=await chromium.launch({channel:'chrome',headless:true});
 try {
@@ -112,6 +120,15 @@ try {
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
+  const reference=page.locator('.segment-reference-images figure').filter({has:page.getByRole('button',{name:'查看 Video 1 隔离参考视频',exact:true})});
+  assert.equal(await reference.getByRole('link',{name:'下载',exact:true}).count(),1);
+  await reference.getByRole('button').click();
+  assert.equal(await page.getByRole('dialog').locator('.file-action-links').count(),0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'轮次记录',exact:true}).click();
+  const rounds=page.getByRole('dialog');
+  assert.ok(await rounds.getByRole('link',{name:'下载',exact:true}).count()>0);
+  await page.keyboard.press('Escape');
   // The shared task ledger belongs to the workspace, not its nested content context.
   taskMode=true;
   scopedDetail=JSON.parse(JSON.stringify(fixture.detail),(key,value)=>{

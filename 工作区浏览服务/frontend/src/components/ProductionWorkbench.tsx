@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { FileItem } from '../api';
-import { Dialog, PreviewContext, Result, Rich } from '../components';
+import { Dialog, FileActions, PreviewContext, Result, Rich } from '../components';
 import { TabNav } from './TabNav';
 import { Pagination } from './Pagination';
 import { ProductionEpisodeButton } from './ProductionEpisodeButton';
@@ -236,7 +236,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
               const video = candidates.find(candidate => candidate.id === entry.id)?.videos.find(video =>
                 video.url && video.stage === entry.stage && video.run === entry.run && (!entry.key || video.key === entry.key));
               const label = `${entry.id} · ${entry.stage} · ${entry.run}`;
-              return video && <li key={entry.id}><button className="link" onClick={() => openRecordFile({ ...video, kind: 'video', name: label })}>{label}</button></li>;
+              return video && <li key={entry.id}><button className="link" onClick={() => openRecordFile({ ...video, kind: 'video', name: label })}>{label}</button> <FileActions url={video.downloadUrl || video.url} downloadOnly /></li>;
             })}
           </ul>
         </section>;

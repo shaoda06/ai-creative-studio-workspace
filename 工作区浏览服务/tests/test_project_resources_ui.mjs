@@ -45,7 +45,7 @@ try {
      uses:i?[{heading:'原审核记录',excerpt:'本次未通过，保持V001采用。',document:{kind:'markdown',name:'原审核记录',key:'审核.md',url:base+'/files/审核.md'}}]:[]}))}});
    }
    if(path.endsWith('fixture.png'))return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jLyoAAAAASUVORK5CYII=','base64')});
-   if(path.endsWith('fixture.webm'))return route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
+   if(path.endsWith('fixture.webm') || path===base+'/files/资源/视频/VID-fixture/V001/fixture')return route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
    if(path.endsWith('fixture.wav'))return route.fulfill({contentType:'audio/wav',path:frontend+'public/component-samples/tone.wav'});
    if(path.endsWith('审核.md'))return route.fulfill({contentType:'text/plain',body:'# 原审核记录\n本次未通过，保持V001采用。'});
    unexpected.push(req.method()+' '+path);return route.abort();
@@ -69,6 +69,12 @@ try {
   await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();await search.fill('');
   await page.getByRole('button',{name:/表演参考视频.*2个版本/}).click();
   await page.getByText(/65.00秒（1分5.00秒）/).first().waitFor();
+  const parent=page.locator('.file').filter({has:page.getByRole('button',{name:'VID-fixture@V001',exact:true})});
+  assert.equal(await parent.getByRole('link',{name:'下载',exact:true}).count(),1);
+  assert.ok((await parent.getByRole('link',{name:'下载',exact:true}).getAttribute('href')).includes('/V001/fixture'));
+  await parent.getByRole('button',{name:'VID-fixture@V001',exact:true}).click();
+  assert.equal(await page.getByRole('dialog').locator('.file-action-links').count(),0);
+  await page.keyboard.press('Escape');
   await page.screenshot({path:`${out}/${width}-video.png`});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.getByRole('button',{name:'返回资源列表',exact:true}).click();

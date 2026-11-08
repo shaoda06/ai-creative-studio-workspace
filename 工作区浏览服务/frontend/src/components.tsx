@@ -53,7 +53,16 @@ export function Rich({ html = '', languages = {}, fieldTable = false, spacedHead
       languageGroup: element.getAttribute('data-language-pair'),
     })) : null };
   }, [html]);
-  return <div className={`prose${fieldTable ? ' prose-field-table' : ''}${spacedHeadings ? ' prose-spaced-headings' : ''}`} onClick={event => {
+  const videoDownloads = useMemo(() => {
+    if (!content.html.includes('data-doc=')) return [];
+    const document = new DOMParser().parseFromString(content.html, 'text/html');
+    const videos = new Map<string, string>();
+    document.querySelectorAll<HTMLAnchorElement>('a[data-doc][href]').forEach(link => {
+      if (link.target !== '_blank' && previewFileKind(link.dataset.doc!.split('#')[0]) === 'video') videos.set(link.getAttribute('href')!, link.textContent || '视频');
+    });
+    return Array.from(videos, ([url, name]) => ({ url, name }));
+  }, [content.html]);
+  return <><div className={`prose${fieldTable ? ' prose-field-table' : ''}${spacedHeadings ? ' prose-spaced-headings' : ''}`} onClick={event => {
     const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-doc]');
     if (anchor && anchor.target !== '_blank') {
       event.preventDefault();
@@ -64,12 +73,12 @@ export function Rich({ html = '', languages = {}, fieldTable = false, spacedHead
   }} dangerouslySetInnerHTML={content.blocks ? undefined : { __html: content.html }}>{content.blocks?.map((block, index) => {
     if (!block.code) return <div className="rich-fragment" key={index} dangerouslySetInnerHTML={{ __html: block.html }} />;
     return <CodeBlock key={index} text={block.text} languages={block.languageGroup ? languages[block.languageGroup] : undefined} />;
-  })}</div>;
+  })}</div>{videoDownloads.map(({ url, name }) => <div key={url}><FileActions url={url} downloadOnly downloadLabel={`下载 ${name}`} /></div>)}</>;
 }
 export function FileLink({ item, showOriginal = true, showStatus = true }: { item: FileItem; showOriginal?: boolean; showStatus?: boolean }) {
   const preview = useContext(PreviewContext);
   const target = item.kind === 'reference' && item.media ? { ...item.media, name: item.name, prompts: item.prompts } : item;
-  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{showOriginal && <FileActions url={target.url} />}{item.jianying && <>
+  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{(showOriginal || target.kind === 'video' || previewFileKind((target.key || target.name).split('#')[0]) === 'video') && <FileActions url={target.url} downloadOnly={!showOriginal} />}{item.jianying && <>
     <DownloadButton url={item.jianying.jypack} label="下载剪映包" title={`生成剪映包：${item.name}`} pack />
     <DownloadButton url={item.jianying.zip} label="下载 ZIP" title={`生成 ZIP：${item.name}`} pack />
   </>}{item.director !== undefined && <DownloadButton url={item.director} label="下载导演包" title={`按需生成导演包：${item.name}`} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
@@ -230,11 +239,11 @@ export function Preview({ project, item, revision, close, baseUrl = projectUrl(p
   const video = kind === 'video' || fileKind === 'video';
   const audio = kind === 'audio' || fileKind === 'audio';
   return <Dialog title={item.name} close={close}>
-    {showFileActions && kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
+    {showFileActions && !video && kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
     {text && !item.doc && revision !== openedRevision && <FloatingMessage>项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></FloatingMessage>}
     {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div>{showFileActions && <FileActions url={item.url} />}</div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
       image ? <img className="preview-image" src={item.url} alt={item.name} onError={() => setMediaError('图片无法加载，请下载原文件查看。')} /> :
-      video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请使用原文件入口。')} /> :
+      video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请关闭预览后重新打开，或从外层目录、资料详情下载视频查看。')} /> :
       audio ? <audio controls preload="metadata" src={item.url} onError={() => setMediaError('音频无法加载，请使用原文件入口。')} /> : <p>此格式暂不支持页内预览，请打开原文件。</p>}
     {mediaError && <FloatingMessage tone="error">{mediaError}</FloatingMessage>}
     {item.prompts && <details><summary>对应提示词</summary><p>英文</p><pre>{item.prompts.english}</pre><p>中文</p><pre>{item.prompts.chinese}</pre></details>}

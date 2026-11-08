@@ -116,7 +116,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
           { ...video, name: '旧导出示例.webm', key: '示例/旧导出示例.webm' },
         ]} />
       </ComponentExample>
-      <ComponentExample fullWidth title="只读文件目录" rule="直接使用公共文件树，按文件与子目录浏览，保留空目录。列表只保留文件名预览入口，不显示确认状态；查看与下载放在预览弹窗中，不提供改名、移动或删除。示例不使用真实项目文件。" usage="仅文件名入口的目录资料">
+      <ComponentExample fullWidth title="只读文件目录" rule="直接使用公共文件树，按文件与子目录浏览，保留空目录。列表保留文件名预览入口，不显示确认状态；视频下载位于目录行，视频弹窗只播放，其他文件操作沿用原样，不提供改名、移动或删除。示例不使用真实项目文件。" usage="仅文件名入口的目录资料">
         <FileTree showOriginal={false} showStatus={false} items={[{ kind: 'video', name: '示例发布成片.webm', url: video.url },
           { kind: 'group', name: '分平台', children: [{ kind: 'video', name: '示例竖屏版本.webm', url: video.url }] },
           { kind: 'group', name: '待导出空目录', children: [] }]} />
@@ -207,11 +207,12 @@ export function ShowcaseExamples({ category }: { category: string }) {
       <ComponentExample title="音视频卡片与试听" rule="试听播放2秒轻提示音，可暂停；视频入口打开公共预览。无音频时按钮禁用。" usage="参考音视频、人物音色">
         <ReferenceMediaCard item={{ kind: 'reference', name: audio.name, media: audio, approvalHtml: '<span class="status-badge status-gray">示例</span>' }} audio playing={sound.playingId === 'sample'} progress={sound.progress} onPlay={() => sound.toggle('sample', audio.url!)} onSelect={() => setPreview(audio)} />
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />
+        <FileActions url={video.url} downloadOnly />
         <AudioPreviewButton name="缺少参考音频的示例" enabled={false} playing={false} progress={0} onClick={() => {}} />
       </ComponentExample>
-      <ComponentExample title="仅播放的视频预览" rule="Preview默认显示查看和下载；调用方可用showFileActions关闭文件按钮组，保留播放、关闭和Esc退出。示例只播放本地静态视频。" usage="Chloe成片与发布的视频弹窗">
-        <button onClick={() => setVideoOnlyPreview(true)}>打开仅播放预览</button>
-        {videoOnlyPreview && <Preview project="" item={video} revision={1} showFileActions={false} close={() => setVideoOnlyPreview(false)} />}
+      <ComponentExample title="仅播放的视频预览" rule="视频Preview统一不显示查看和下载，保留播放、关闭和Esc退出；其他类型保留原文件操作。示例只播放本地静态视频。" usage="三个工作区的视频预览弹窗">
+        <button onClick={() => setVideoOnlyPreview(true)}>打开仅播放预览</button><FileActions url={video.url} downloadOnly />
+        {videoOnlyPreview && <Preview project="" item={video} revision={1} close={() => setVideoOnlyPreview(false)} />}
       </ComponentExample>
       <ComponentExample title="紧凑声音参考" rule="标题、公共试听按钮与右侧时长同排；长标题省略并提供完整提示，时长未知显示未取得。" usage="Chloe声音当前采用、其他版本与模特声音信息">
         <AudioReferenceCard name="AUD-SAMPLE@V001" duration={4} playing={sound.playingId==='reference'} progress={sound.currentId==='reference' ? sound.progress : 0} onPlay={()=>sound.toggle('reference',audio.url!)} />

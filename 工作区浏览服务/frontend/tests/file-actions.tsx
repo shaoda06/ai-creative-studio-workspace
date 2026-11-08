@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Document, FileTree, Preview, PreviewContext } from '../src/components';
+import { Document, FileTree, Preview, PreviewContext, Rich } from '../src/components';
 import type { FileItem } from '../src/api';
 import { AssetMedia } from '../src/components/AssetMedia';
 import { CoverLibrary } from '../src/components/CoverLibrary';
@@ -22,6 +22,14 @@ function Demo() {
     </section>)}
     <section aria-label="正文"><Document value={{ html: '<h2>资料卡正文</h2>', url: '/fixture/正文.md' }} /></section>
     <section aria-label="封面"><CoverLibrary revision={1} value={{ assets: [{ id: 'cover', name: '封面', platforms: ['通用'], scope: '全剧通用', current: { ready: true, name: '封面', setName: '测试套组', platforms: ['通用'], statusHtml: '', media: { ...media('成品'), width: 4, height: 3, ratio: '4:3' }, original: { ...media('原图'), width: 8, height: 6, ratio: '4:3' }, targetSize: '4×3', targetRatio: '4:3', scope: '通用', layout: '横版', version: 'v01' }, rounds: [], hasUpdate: false }], unassigned: [], groups: [] }} /></section>
+    <section aria-label="视频目录"><FileTree showOriginal={false} showStatus={false} items={[
+      { kind: 'video', name: '目录视频.webm', key: 'clip.webm', url: '/component-samples/video.webm' },
+      { kind: 'file', name: '扩展名视频.mov', key: 'clip.mov', url: '/component-samples/video.webm' },
+      { kind: 'video', name: '失败视频.webm', url: '/fixture/broken.webm' },
+      { kind: 'audio', name: '声音.wav', url: '/component-samples/tone.wav' },
+      { kind: 'image', name: '图片.svg', url: '/component-samples/image.svg' },
+    ]} /></section>
+    <section aria-label="正文视频"><Rich html={'<p><a data-doc="clip.webm" href="/component-samples/video.webm">正文视频</a> <a data-doc="clip.webm" href="/component-samples/video.webm">相同视频</a></p>'} /></section>
     {preview && <Preview key={preview.key} project="文件测试" item={preview} revision={1} close={() => setPreview(null)} />}
   </main></PreviewContext.Provider>;
 }

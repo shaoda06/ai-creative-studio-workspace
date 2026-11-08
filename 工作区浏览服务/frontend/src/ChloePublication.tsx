@@ -116,6 +116,6 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
         </section>
       </>}
     </section>
-    {preview && <Preview project={project} item={preview} showFileActions={preview.kind !== 'video'} revision={0} close={() => setPreview(null)} />}
+    {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext>;
 }
