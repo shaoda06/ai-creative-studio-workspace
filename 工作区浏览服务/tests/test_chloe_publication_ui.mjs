@@ -36,6 +36,8 @@ try:
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
 const listItems=[{...fixture.list[0],id:'V002',project:'V002-测试'}, {...fixture.list[0],id:'V1000',project:'V1000-测试'}, ...fixture.list, {...fixture.list[0],id:'V010',project:'V010-测试'}];
+const removable={...fixture.detail.finals[0],name:'未引用成片.webm',key:fixture.detail.finals[0].key.replace(/[^/]+$/, '未引用成片.webm'),url:fixture.detail.finals[0].url.replace(/[^/]+$/,encodeURIComponent('未引用成片.webm'))};
+fixture.detail.finals.push(removable);
 const video=await readFile(frontend+'public/component-samples/video.webm');
 const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeURIComponent(url),Buffer.from(bytes,'base64')]));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -46,16 +48,20 @@ try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false;
+  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
    if(request.method()!=='GET')writes.push(path);
+   if(request.method()==='DELETE' && path===decodeURIComponent(removable.url)){
+    if(failDelete)return route.fulfill({status:409,json:{detail:'隔离删除失败，请重试'}});
+    removed=true;return route.fulfill({json:{ok:true}});
+   }
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:fixture.detail});
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)} });
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
    if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
    unexpected.push(path);return route.fulfill({status:404,body:'unexpected isolated request'});
@@ -95,6 +101,22 @@ try {
    const cells=el.querySelectorAll('thead th'),box=el.getBoundingClientRect();
    return Math.abs(cells[0].getBoundingClientRect().width/box.width-.6)<.01 && Math.abs(box.width-el.closest('section').getBoundingClientRect().width)<2;
   }));
+  assert.ok(await table.evaluate(el=>{
+   const row=el.querySelector('tbody tr'),cell=row.cells[0],actions=row.cells[1].querySelector('.chloe-publication-file-actions');
+   const buttons=actions.querySelectorAll('button'),left=buttons[0].getBoundingClientRect(),right=buttons[buttons.length-1].getBoundingClientRect(),box=actions.getBoundingClientRect();
+   return getComputedStyle(cell).verticalAlign==='middle' && getComputedStyle(cell).textAlign==='left' && Math.abs((left.left+right.right)/2-(box.left+box.right)/2)<2;
+  }));
+  const removeRow=table.getByRole('row').filter({hasText:'未引用成片.webm'});
+  await removeRow.getByRole('button',{name:'删除',exact:true}).click();
+  await page.getByRole('dialog',{name:'删除成片',exact:true}).getByRole('button',{name:'取消',exact:true}).click();
+  assert.deepEqual(writes,[]);
+  await removeRow.getByRole('button',{name:'删除',exact:true}).click();
+  await page.getByRole('dialog',{name:'删除成片',exact:true}).getByRole('button',{name:'确认删除',exact:true}).click();
+  await page.getByText('隔离删除失败，请重试',{exact:true}).waitFor();
+  assert.equal(await removeRow.count(),1);failDelete=false;
+  await page.getByRole('dialog',{name:'删除成片',exact:true}).getByRole('button',{name:'确认删除',exact:true}).click();
+  await removeRow.waitFor({state:'hidden'});
+  assert.equal(await page.getByRole('dialog').count(),0);
   const fileDownload=page.waitForEvent('download');await table.getByRole('button',{name:'下载',exact:true}).first().click();
   const exported=await fileDownload;assert.equal(exported.suggestedFilename(),fixture.detail.finals[0].name);
   assert.deepEqual(await readFile(await exported.path()),video);await exported.delete();
@@ -135,7 +157,7 @@ try {
   await page.getByRole('button',{name:'下载成片',exact:true}).waitFor();
   empty=true;await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');await page.reload();
   await page.getByText('暂无视频项目。',{exact:false}).waitFor();
-  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[]);
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url)]);
   await context.close();
  }
  console.log('Chloe publication: real adapter fixtures, copy, original downloads, playback, cover preview, switching, empty/error/retry and three desktop widths passed.');

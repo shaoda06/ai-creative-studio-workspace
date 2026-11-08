@@ -1,10 +1,10 @@
 import { useChloeScope } from './chloeScope';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { get } from './api';
 import type { FileItem } from './api';
-import { Preview, PreviewContext, Result } from './components';
+import { Dialog, Preview, PreviewContext, Result } from './components';
 import { PageHeader } from './components/PageHeader';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageCheckStatus } from './components/PageCheckStatus';
@@ -14,6 +14,7 @@ import { AssetMediaCard } from './components/AssetMediaCard';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { CopyButton } from './components/CopyButton';
 import { DownloadButton } from './components/DownloadButton';
+import { useNotify } from './components/Notifications';
 import './ChloePublication.css';
 
 type Video = { project: string; id: string; title: string; status: string; finalCount: number };
@@ -47,6 +48,25 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     queryFn: () => get<Publication>(`${baseUrl}/publication-videos/${encodeURIComponent(project)}`), refetchInterval: 5000 });
   const [materialId, setMaterialId] = useState('');
   const [preview, setPreview] = useState<FileItem | null>(null);
+  const [remove, setRemove] = useState<FileItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const client = useQueryClient();
+  const notify = useNotify();
+  async function deleteFile() {
+    setDeleting(true);
+    try {
+      const response = await fetch(remove!.url!, { method: 'DELETE' });
+      if (!response.ok) throw new Error((await response.json()).detail || '删除失败');
+      setRemove(null);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['chloe-publication-detail', baseUrl, project] }),
+        client.invalidateQueries({ queryKey: ['chloe-publication', baseUrl] }),
+      ]);
+      notify('已删除成片');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error), 'error');
+    } finally { setDeleting(false); }
+  }
   const data = query.data;
   const material = data?.materials.find(item => item.id === materialId) || data?.materials.at(-1);
   const used = data?.history.some(item => item.materialId === material?.id);
@@ -101,10 +121,11 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
             <colgroup><col style={{ width: '60%' }} /><col style={{ width: '40%' }} /></colgroup>
             <thead><tr><th scope="col">文件名</th><th scope="col">操作</th></tr></thead>
             <tbody>{data.finals.length ? data.finals.map(file => <tr key={file.key}>
-              <td><span className="chloe-publication-text">{file.name}</span></td>
-              <td><div className="chloe-publication-toolbar">
+              <td style={{ verticalAlign: 'middle', textAlign: 'left' }}><span className="chloe-publication-text">{file.name}</span></td>
+              <td><div className="chloe-publication-toolbar chloe-publication-file-actions">
                 <button onClick={() => setPreview(file)}>预览成片</button>
                 <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
+                <button onClick={() => setRemove(file)}>删除</button>
               </div></td>
             </tr>) : <tr><td colSpan={2}>暂无成片</td></tr>}</tbody>
           </table></div></div>
@@ -119,6 +140,11 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
         </section>
       </>}
     </section>
+    {remove && <Dialog title="删除成片" size="compact" closeDisabled={deleting} close={() => setRemove(null)}>
+      <p>确定删除“{remove.name}”吗？文件将从磁盘删除，无法撤销。</p>
+      <div className="chloe-publication-toolbar"><button disabled={deleting} onClick={() => setRemove(null)}>取消</button>
+        <button disabled={deleting} onClick={() => void deleteFile()}>{deleting ? '删除中…' : '确认删除'}</button></div>
+    </Dialog>}
     {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext>;
 }

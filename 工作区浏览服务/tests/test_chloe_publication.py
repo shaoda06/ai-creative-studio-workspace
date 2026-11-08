@@ -6,13 +6,14 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
-from backend.chloe_publication import publication, router
+from backend.chloe_publication import publication, router, write_router
 from chloe_init import initialize_workspace, initialize_project, initialize_video, write_template, SKILLS
 from chloe_documents import check_workspace, read_document, template
 from tests.http_case import HttpTestCase
+from backend.main import queue_write
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
 sys.path.insert(0, str(SKILLS/'studio-workspace-browser/scripts'))
@@ -35,7 +36,8 @@ class ChloePublicationTests(HttpTestCase):
             request.state.workspace_space = self.space
             return await call_next(request)
         app.include_router(router, prefix=self.api)
-        self.client = TestClient(app)
+        app.include_router(write_router, prefix=self.api, dependencies=[Depends(queue_write)])
+        self.client = TestClient(app, base_url="http://127.0.0.1")
         self.addCleanup(self.client.close)
         self.url = self.api+'/publication-videos/'+self.project.name
 
@@ -65,6 +67,46 @@ class ChloePublicationTests(HttpTestCase):
                     'https://example.com/product?id=1&sku=blue','未取得','待选择','实际成片与商品资料']
         self.append(path, '发布资料', self.row)
         return film, cover, path
+
+    def test_delete_unreferenced_final_and_preserve_other_files(self):
+        film = self.project/'成片/子目录/待删.webm'
+        other = self.project/'成片/保留.webm'
+        store_media(self.project, film, source=Path(__file__).parents[1]/'frontend/public/component-samples/video.webm')
+        store_media(self.project, other, source=film)
+        before = other.read_bytes()
+        key = film.relative_to(self.root).as_posix()
+        url = self.url+'/files/'+key
+        self.assertEqual(self.client.delete(url).status_code,403)
+        self.assertEqual(self.client.delete(url,headers={'Origin':'https://outside.example'}).status_code,403)
+        response = self.client.delete(url,headers={'Origin':'http://127.0.0.1'})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertFalse(film.exists())
+        self.assertEqual(other.read_bytes(),before)
+        self.assertEqual(len(self.client.get(self.url).json()['finals']),1)
+        self.assertEqual(self.client.delete(url,headers={'Origin':'http://127.0.0.1'}).status_code,404)
+
+    def test_delete_rejects_referenced_and_out_of_scope_files(self):
+        film, cover, material = self.prepare()
+        url = self.url+'/files/'+film.relative_to(self.root).as_posix()
+        headers={'Origin':'http://127.0.0.1'}
+        response=self.client.delete(url,headers=headers)
+        self.assertEqual(response.status_code,409,response.text)
+        self.assertIn('发布资料.md',response.text)
+        self.assertTrue(film.exists())
+        material.unlink()
+        evidence=self.project/'引用说明.md'
+        evidence.write_text('[复盘依据](成片/%E6%9C%80%E7%BB%88%E6%88%90%E7%89%87.webm)')
+        self.assertEqual(self.client.delete(url,headers=headers).status_code,409)
+        evidence.unlink()
+        other=initialize_video(self.root,'V002','其他作品')
+        foreign=other/'成片/其他.webm';store_media(other,foreign,source=film)
+        for key in [foreign.relative_to(self.root).as_posix(),(self.project/'README.md').relative_to(self.root).as_posix(),cover['file']]:
+            self.assertEqual(self.client.delete(self.url+'/files/'+key,headers=headers).status_code,404)
+        outside=self.base/'outside.webm';outside.write_bytes(b'preserve')
+        (self.project/'成片/越界.webm').symlink_to(outside)
+        self.assertEqual(self.client.delete(url,headers=headers).status_code,409)
+        self.assertEqual(outside.read_bytes(),b'preserve')
+        self.assertTrue(film.exists())
 
     def test_empty_and_read_only_original_media(self):
         self.assertEqual(publication.detail(self.root,self.project.name,self.api)['materials'],[])

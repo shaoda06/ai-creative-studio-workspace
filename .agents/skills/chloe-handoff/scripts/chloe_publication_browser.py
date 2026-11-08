@@ -1,8 +1,9 @@
-"""Read Chloe publication preparations and original media without writing business state."""
+"""Read Chloe publication preparations and manage unreferenced final files."""
 import html
 from pathlib import Path
 import re
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
+from markdown_it import MarkdownIt
 
 from chloe_documents import LINK, MISSING, media_reference, read_document, records, template
 import project_resources as resources
@@ -108,3 +109,20 @@ def media_file(root, name, key):
     if target not in allowed:
         raise FileNotFoundError('不是本视频成片或已引用的发布封面')
     return target
+
+
+def delete_final(root, name, key):
+    project, _, _, _ = project_context(root, name)
+    target = resources.local(root, key)
+    if target not in final_files(project):
+        raise FileNotFoundError('不是本视频成片目录内的视频')
+    markdown = MarkdownIt('commonmark').enable('table')
+    for source in project.rglob('*.md'):
+        for block in markdown.parse(source.read_text(encoding='utf-8')):
+            for token in block.children or []:
+                if token.type != 'link_open':
+                    continue
+                value = urlsplit(token.attrGet('href'))
+                if not value.scheme and (source.parent/unquote(value.path)).resolve() == target:
+                    raise ValueError('该成片仍被 '+source.relative_to(project).as_posix()+' 引用，请先处理引用再删除。')
+    target.unlink()
