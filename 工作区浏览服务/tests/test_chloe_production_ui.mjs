@@ -17,7 +17,9 @@ from tests.test_chloe_production import ChloeProductionTests, browser
 x=ChloeProductionTests();x.setUp()
 try:
  x.test_shared_request_context_and_native_pack_refer_original()
- x.rounds([x.round(1,[('P001','E001'),('P002','E002')])])
+ x.candidate('P001','E003',stage='二采');x.candidate('P002','E004',stage='二采')
+ x.record.write_text(x.record.read_text().replace('| E003 | 视频生成 | 不适用 |','| E003 | 视频生成 | E001 |').replace('| E004 | 视频生成 | 不适用 |','| E004 | 视频生成 | E002 |'))
+ x.rounds([x.round(1,[('P001','E001'),('P002','E002')]),x.round(2,[('P001','E003'),('P002','E004')])])
  status_items={}
  path=x.project/'README.md'; original=path.read_text()
  for status in ('制作中','待发布','已发布'):
@@ -25,12 +27,9 @@ try:
   if status=='已发布':x.published_record()
   status_items[status]=browser.items(x.projects,x.project.name,x.api)
  path.write_text(original)
- print(json.dumps({'items':status_items['制作中'],'statusItems':status_items,'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':browser.downloads(x.projects,x.project.name,x.api,'V001')}))
+ print(json.dumps({'items':status_items['制作中'],'statusItems':status_items,'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':{str(n):browser.downloads(x.projects,x.project.name,x.api,'V001',round_number=n) for n in (1,2)}}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
-// Explicit handoff fixture: hide only heading duplicates, retain resource downloads.
-fixture.downloads.workPackages=[{key:'test.jianying.json',label:'隔离交接',version:'',purpose:'剪映交接',rounds:[1],count:2,jypack:'/isolated-draft',zip:'/isolated-zip'}];
-fixture.downloads['后处理'].videos={count:2,url:'/isolated-zip',files:[],packages:[{name:'隔离交接',count:2,url:'/isolated-zip'}]};
 // A real reference-video entry must retain an outside download when its popup is simplified.
 const previewDetail=JSON.parse(JSON.stringify(fixture.detail),(key,value)=>{
  if(value && typeof value==='object' && value.references?.common && value.prompts){
@@ -44,7 +43,7 @@ await server.listen();const browser=await chromium.launch({channel:'chrome',head
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}});page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let videoStatus="制作中";let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let scopedDetail=fixture.detail;
+  const errors=[],unexpected=[],writes=[];let videoStatus="制作中";let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let downloadFailure=true;const downloadRequests=[];let scopedDetail=fixture.detail;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),url=new URL(request.url()),path=decodeURIComponent(url.pathname);
@@ -63,7 +62,12 @@ try {
     return route.fulfill({json:fixture.statusItems[videoStatus]});
    }
    if(path.endsWith('/production-detail'))return route.fulfill({json:{...scopedDetail,statusHtml:fixture.statusItems[videoStatus][0].statusHtml}});
-   if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads});
+   if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads[url.searchParams.get('round') || '2']});
+   if(path.endsWith('/production-download')){
+    downloadRequests.push(url.search);
+    if(downloadFailure)return route.fulfill({status:409,json:{detail:'隔离打包失败'}});
+    return route.fulfill({contentType:'application/zip',headers:{'Content-Disposition':'attachment; filename="isolated.zip"'},body:'isolated-download'});
+   }
    if(path.endsWith('/production-notes')||path.endsWith('/production-notes/export')){
     if(request.method()==='PUT'){
      writes.push(path);const input=request.postDataJSON();const rows=input.notes||[input];
@@ -126,7 +130,27 @@ try {
   await page.locator('.scene-storyboard').waitFor();
   assert.equal(await page.getByRole('region',{name:'修改场次分镜正文',exact:true}).count(),0);
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
-  await page.getByRole('region',{name:'后处理交接包',exact:true}).getByRole('button',{name:'剪映草稿包',exact:true}).waitFor();
+  const firstPack=page.getByRole('region',{name:'一采交接包',exact:true});
+  const secondPack=page.getByRole('region',{name:'二采交接包',exact:true});
+  await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).waitFor();
+  assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isEnabled(),true);
+  assert.equal(await firstPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isDisabled(),true);
+  await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
+  await page.getByRole('option',{name:'第1轮',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[aria-label="一采交接包"] button')?.disabled===false);
+  assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isDisabled(),true);
+  await firstPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).click();
+  await page.getByText('隔离打包失败',{exact:false}).first().waitFor();
+  downloadFailure=false;
+  for(const label of ['视频 ZIP 包','剪映草稿包']){
+   const pending=page.waitForEvent('download');
+   await firstPack.getByRole('button',{name:label,exact:true}).click();
+   const downloaded=await pending;
+   assert.equal(await readFile(await downloaded.path(),'utf8'),'isolated-download');
+   await downloaded.delete();
+  }
+  assert.ok(downloadRequests.every(value=>new URLSearchParams(value).get('round')==='1'));
+  assert.deepEqual(downloadRequests.map(value=>new URLSearchParams(value).get('format')),['zip','zip','jypack']);
   await page.locator('details[aria-label="一采画布与导演包"] > summary').click();
   await page.getByText('E001 · 导演包',{exact:false}).first().waitFor();
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();

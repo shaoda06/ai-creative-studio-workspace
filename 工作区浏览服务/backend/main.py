@@ -1022,14 +1022,38 @@ def workspace_production_detail(name: str, work: str, request: Request, view: Li
 
 @spaces_router.get('/projects/{name}/works/{work}/production-downloads')
 def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole',
+                                   round_number: Annotated[int | None, Query(alias='round', ge=1)] = None,
                                    view: Literal['current', 'archive'] | None = None):
     space = request.state.workspace_space
     try:
-        return production.workbench(space).downloads(space.projects, name, space.api, work, scene, view)
+        if round_number is not None and not hasattr(production.workbench(space), 'download_files'):
+            raise HTTPException(404, '当前业务未接入轮次下载')
+        options = {'round_number': round_number} if round_number is not None else {}
+        return production.workbench(space).downloads(space.projects, name, space.api, work, scene, view, **options)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
         raise HTTPException(409, '作品下载资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-download')
+def workspace_production_download(name: str, work: str, request: Request,
+                                  round_number: Annotated[int, Query(alias='round', ge=1)],
+                                  stage: Literal['一采', '二采', '后处理'],
+                                  archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
+    if not management_request(request):
+        raise HTTPException(403, '视频打包仅允许本机或局域网工作台访问')
+    space = request.state.workspace_space
+    adapter = production.workbench(space)
+    if not hasattr(adapter, 'download_files'):
+        raise HTTPException(404, '当前业务未接入轮次下载')
+    try:
+        files, filename = adapter.download_files(space.projects, name, work, round_number, stage)
+        return zip_response(files, filename, archive_format, videos_only=True)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-director')

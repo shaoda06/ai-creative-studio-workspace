@@ -27,14 +27,16 @@ function OriginalDownloads({ resource, label, generated = false }: { resource: R
     : <DownloadButton url={resource.url} label={label} title={resource.url ? '按当前已采用来源临时生成导演包' : '本场该阶段暂无对应文件'} />;
 }
 
-export function SceneDownloads({ project, episode, scene, revision, segments = [] }: {
-  project: string; episode: string; scene: string; revision: number; segments?: NonNullable<FileItem['segments']>[string];
+export function SceneDownloads({ project, episode, scene, revision, segments = [], selectedRound }: {
+  project: string; episode: string; scene: string; revision: number; selectedRound?: number; segments?: NonNullable<FileItem['segments']>[string];
 }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
-  const downloads = useQuery({ queryKey: ['episode-downloads', access.namespace(project), episode, scene, revision],
-    queryFn: () => get<Downloads>(access.downloads(project, episode, scene)), placeholderData: keepPreviousData });
+  const roundMode = access.roundDownloads === true;
+  const round = roundMode ? selectedRound : undefined;
+  const downloads = useQuery({ queryKey: ['episode-downloads', access.namespace(project), episode, scene, revision, ...(roundMode ? [round] : [])],
+    queryFn: () => get<Downloads>(access.downloads(project, episode, scene, round)), placeholderData: keepPreviousData });
   const packageLabel = (item: StagePackage) => {
     if (!workMode) return item.name;
     const handoff = downloads.data?.workPackages?.find(pkg => pkg.zip === item.url);
@@ -43,7 +45,7 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
   const adopted = segments.flatMap(item => item.videos.filter(video => video.approved && video.url)
     .map(video => ({ id: item.id, video })));
   const archivedPackages = downloads.data?.workPackages?.filter(item => item.archived) || [];
-  const hasResources = downloads.data && (adopted.length > 0 || archivedPackages.length > 0 || Object.values(downloads.data).some(group =>
+  const hasResources = downloads.data && ((!roundMode && adopted.length > 0) || archivedPackages.length > 0 || Object.values(downloads.data).some(group =>
     !Array.isArray(group) && Object.values(group).some(resource => resource.url || resource.files.length || resource.messages?.length)));
   return <div className="stage-downloads" aria-label="资源下载">
     {(downloads.isFetching || downloads.isPending || downloads.error) && <Result
@@ -59,26 +61,30 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
       const selectedPackage = original.packages?.find(item => item.url === choices[stage]) || original.packages?.[0];
       const videos = selectedPackage || original;
       const approved = adopted.filter(item => item.video.stage === stage);
+      const available = roundMode ? original.files : approved.map(({ id, video }) => ({
+        name: `${id} · ${video.run}`, url: video.downloadUrl || video.url!,
+      }));
+      const videoLabel = roundMode ? '本轮视频' : '已采用视频';
       return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
       <h3>{stage}</h3>
-      <details className="stage-download-group" aria-label={stage + '已采用视频'}>
-        <summary>已采用视频 <small className="stage-download-count muted">{approved.length} 段</small>
-          {!approved.length && <small className="stage-download-count muted">暂无已采用视频。</small>}
+      <details className="stage-download-group" aria-label={stage + videoLabel}>
+        <summary>{videoLabel} <small className="stage-download-count muted">{available.length} 段</small>
+          {!available.length && <small className="stage-download-count muted">{roundMode ? '本轮该阶段暂无视频。' : '暂无已采用视频。'}</small>}
         </summary>
-        {approved.length > 0 && <div className="stage-download-actions">{approved.map(({ id, video }) =>
-          <DownloadButton key={video.key} url={video.downloadUrl || video.url} label={`${id} · ${video.run}`} title="下载已采用的原视频" />)}</div>}
+        {available.length > 0 && <div className="stage-download-actions">{available.map(file =>
+          <DownloadButton key={file.url} url={file.url} label={file.name} title="下载原视频" />)}</div>}
       </details>
       <section className="stage-download-group" aria-label={stage + '交接包'}>
-        <h4>交接包 <small className="stage-download-count muted">{videos.url ? `${videos.count} 份视频` : workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</small>
+        <h4>交接包 <small className="stage-download-count muted">{videos.url ? `${videos.count} 份视频` : roundMode ? '本轮该阶段暂无视频。' : workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</small>
           {workMode && selectedPackage && original.packages?.length === 1 && <small className="stage-download-count muted">{packageLabel(selectedPackage)}</small>}
         </h4>
         {original.packages && original.packages.length > 1 && <TabSelect label={`${stage}交付版本`} selected={videos.url || ''} onChange={url => setChoices(previous => ({ ...previous, [stage]: url }))} items={original.packages.map(item => ({ value: item.url, label: packageLabel(item) }))} />}
         <div className="stage-download-actions stage-download-packages">
         <DownloadButton url={videos.url} label="视频 ZIP 包" pack title={videos.url
-          ? workMode ? `下载本片${stage}交接清单，共${videos.count}份视频` : `仅下载${episode}场次${scene}的${stage}已采用视频，共${videos.count}份产物文件`
-          : workMode ? `本片暂无${stage}交接清单` : `场次${scene}的${stage}暂无已采用视频`} />
+          ? roundMode ? `按第${round}轮${stage}临时打包，共${videos.count}份原视频` : workMode ? `下载本片${stage}交接清单，共${videos.count}份视频` : `仅下载${episode}场次${scene}的${stage}已采用视频，共${videos.count}份产物文件`
+          : roundMode ? `第${round}轮暂无${stage}视频` : workMode ? `本片暂无${stage}交接清单` : `场次${scene}的${stage}暂无已采用视频`} />
         <DownloadButton url={videos.url ? videos.url.replace(/&format=zip$/, '') + '&format=jypack' : null}
-          label="剪映草稿包" pack title={workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />
+          label="剪映草稿包" pack title={roundMode ? `按第${round}轮${stage}原视频顺序临时生成剪映草稿` : workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />
         </div>
       </section>
       <details className="stage-download-group" aria-label={stage + '画布与导演包'}>

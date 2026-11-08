@@ -305,13 +305,44 @@ def archive_episode(project,work):
     return None
 
 
-def downloads(projects,name,space_api,work,scene='whole',view=None):
+def selected_round(data, number):
+    if number not in data['rounds']:
+        raise FileNotFoundError('制作轮次不存在')
+    return data['rounds'][number]
+
+
+def round_videos(data, number, stage):
+    if stage not in STAGES:
+        raise ValueError('制作阶段无效')
+    files = []
+    for candidate in selected_round(data, number)['values']:
+        if candidate['stage'] != stage or not candidate['ref']:
+            continue
+        path = local(data['root'], candidate['ref']['file'])
+        if not path.is_file():
+            raise FileNotFoundError('原视频缺失：'+str(path))
+        member = candidate['id']+'-'+candidate['run']+path.suffix
+        files.append((path, member))
+    return files
+
+
+def download_files(projects, name, work, round_number, stage):
+    project = projects.project(name)
+    check_work(project, work)
+    files = round_videos(state(project), round_number, stage)
+    if not files:
+        raise ValueError('所选轮次的该阶段暂无视频')
+    return files, work+'-第'+str(round_number)+'轮-'+stage+'.zip'
+
+
+def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=None):
     project=projects.project(name);check_work(project,work)
     if scene!='whole':raise FileNotFoundError('分段范围不存在')
     data=state(project);api=space_api+'/projects/'+quote(name,safe='')
     result={stage:{kind:{'count':0,'url':None,'files':[]} for kind in ('videos','director','canvas')} for stage in STAGES}
     result['workPackages']=[];seen=set()
-    for candidate in data['candidates'].values():
+    candidates = data['candidates'].values() if round_number is None else selected_round(data, round_number)['values']
+    for candidate in candidates:
         execution=candidate['execution']
         if execution in seen:continue
         seen.add(execution);task_record=task_for(project,candidate['record'])
@@ -328,6 +359,15 @@ def downloads(projects,name,space_api,work,scene='whole',view=None):
         else:
             for path in record.glob('*.director.json'):
                 group=result[candidate['stage']]['director'];group['files'].append({'name':path.name,'url':api+'/works/'+work+'/production-director?path='+quote(path.relative_to(project).as_posix(),safe='')});group['count']+=1
+    if round_number is not None:
+        for stage in STAGES:
+            values = round_videos(data, round_number, stage)
+            group = result[stage]['videos']
+            group['files'] = [ref(project, api, path) for path, _ in values]
+            group['count'] = len(values)
+            if values:
+                group['url'] = api+'/works/'+work+'/production-download?round='+str(round_number)+'&stage='+quote(stage, safe='')+'&format=zip'
+        return result
     for package in check_handoffs(data):
         path, spec, numbers = package['path'], package['spec'], package['rounds']
         key=path.relative_to(project).as_posix();urls=jianying_links(space_api,name,key)

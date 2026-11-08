@@ -114,8 +114,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const recordOptions = selectableRounds.map(item => ({ value: String(item.number), label: `第${item.number}轮` }));
   const openRecordFile = (item: FileItem) => { setRecordNumber(null); preview(item); };
   const downloads = useQuery({
-    queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision],
-    queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene)),
+    queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision, ...(access.roundDownloads ? [selectedRound] : [])],
+    queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene, access.roundDownloads ? selectedRound : undefined)),
     enabled: workMode && !!current && !!selectedScene,
   });
   const handoffs = downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!)) || [];

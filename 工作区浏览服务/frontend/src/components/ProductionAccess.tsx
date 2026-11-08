@@ -6,6 +6,7 @@ import type { NoteScope } from './RevisionNotes';
 // Business adapters supply addresses and terms; the complete reviewer stays shared.
 export interface ProductionAccess {
   unitKind: 'episode' | 'work';
+  roundDownloads?: boolean;
   unitDisplayName?: (unit: string) => string;
   storyboardLabel?: string;
   sourceDocumentLabel?: string;
@@ -16,7 +17,7 @@ export interface ProductionAccess {
   scope: (project: string, unit: string, scene: string) => NoteScope;
   notesSummary: (scope: NoteScope) => string;
   notes: (scope: NoteScope, scene: string) => string;
-  downloads: (project: string, unit: string, scene: string) => string;
+  downloads: (project: string, unit: string, scene: string, round?: number) => string;
   package: (project: string, unit: string) => string;
   document: (project: string, path: string) => string;
 }

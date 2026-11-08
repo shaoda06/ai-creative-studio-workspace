@@ -262,7 +262,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       : view === 'dialogue' ? productionRound && productionRound.number !== latestRound?.number ? null
         : segments.length ? <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} />
         : <div className="scene-empty" role="status"><h3>尚无可修改的分镜</h3><p className="muted">登记分段计划后可在这里修改。</p></div>
-      : scene ? <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} segments={allSegments} />
+      : scene ? <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} segments={allSegments} selectedRound={selectedRound} />
       : <div className="scene-empty" role="status"><h3>暂无可下载资源</h3></div>}
   </div></>;
 }

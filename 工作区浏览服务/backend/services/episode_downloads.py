@@ -1,7 +1,8 @@
-"""Download selected approved videos and stage-specific director files."""
+"""Download explicitly selected videos and stage-specific director files."""
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from zipfile import ZipFile, ZIP_STORED
 
 from fastapi.responses import FileResponse
 import sys
@@ -36,7 +37,7 @@ def clear_downloads():
         shutil.rmtree(path)
 
 
-def zip_response(files, filename, archive_format='zip', *, timeline_members=None):
+def zip_response(files, filename, archive_format='zip', *, timeline_members=None, videos_only=False):
     # Videos are already compressed. Keep their original bytes.
     DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
     with ExitStack() as stack:
@@ -46,9 +47,14 @@ def zip_response(files, filename, archive_format='zip', *, timeline_members=None
         members = [member for _, member in files]
         if len(set(members)) != len(members):
             raise ValueError('同一分段存在多个已采用，请核对采用记录后重新下载')
-        jianying_export.export_archive(files, path, Path(filename).stem,
-                                       getattr(files, 'timeline_members', None) if timeline_members is None else timeline_members,
-                                       archive_format)
+        if videos_only and archive_format == 'zip':
+            with ZipFile(path, 'w', compression=ZIP_STORED) as bundle:
+                for source, member in files:
+                    bundle.write(source, member)
+        else:
+            jianying_export.export_archive(files, path, Path(filename).stem,
+                                           getattr(files, 'timeline_members', None) if timeline_members is None else timeline_members,
+                                           archive_format)
         if archive_format == 'jypack':
             filename = str(Path(filename).with_suffix('.jypack'))
         response = VideoZipResponse(archive.name, media_type=(
