@@ -95,17 +95,20 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
           </section>
           <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
         </> : <p className="muted">尚未准备发布资料。进入发布环节后，Agent会结合成片及制作资料准备封面、文案、话题和挂品信息。</p>}
-        <details open={!material}>
-          <summary>成片目录（{data.finals.length} 个视频）</summary>
-          {!data.finals.length ? <p className="muted">成片目录内暂无视频，请将剪映导出的成片放入本视频的成片目录。</p> : <>
-            <p className="muted">这里可查看目录文件；本次发布使用的文件以上方发布资料为准。</p>
-            <div className="chloe-publication-files">{data.finals.map(file => <div className="chloe-publication-toolbar" key={file.key}>
-              <span className="chloe-publication-text">{file.name}</span>
-              <button onClick={() => setPreview(file)}>预览成片</button>
-              <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
-            </div>)}</div>
-          </>}
-        </details>
+        <section aria-label="成片目录">
+          <h2>成片目录</h2>
+          <div className="prose"><div className="table-scroll"><table aria-label="成片文件">
+            <colgroup><col style={{ width: '60%' }} /><col style={{ width: '40%' }} /></colgroup>
+            <thead><tr><th scope="col">文件名</th><th scope="col">操作</th></tr></thead>
+            <tbody>{data.finals.length ? data.finals.map(file => <tr key={file.key}>
+              <td><span className="chloe-publication-text">{file.name}</span></td>
+              <td><div className="chloe-publication-toolbar">
+                <button onClick={() => setPreview(file)}>预览成片</button>
+                <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
+              </div></td>
+            </tr>) : <tr><td colSpan={2}>暂无成片</td></tr>}</tbody>
+          </table></div></div>
+        </section>
         <section aria-label="发布记录"><h2>发布记录</h2>
           {!data.history.length ? <p className="muted">暂无发布安排或结果。</p> : data.history.map(record => <article key={record.fields['发布编号']} className="chloe-publication-history">
             <h3>{record.fields['发布编号']} · {record.fields['发布进展']}</h3>

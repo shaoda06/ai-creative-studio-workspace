@@ -86,7 +86,18 @@ try {
    const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
    assert.deepEqual(await readFile(destination),bytes);await download.delete();
   }
-  await page.getByText(/^成片目录（/).click();
+  const files=page.getByRole('region',{name:'成片目录',exact:true});
+  const table=files.getByRole('table',{name:'成片文件',exact:true});
+  assert.equal(await files.locator('details').count(),0);
+  assert.equal(await files.getByText('这里可查看目录文件',{exact:false}).count(),0);
+  assert.equal(await table.locator('tbody tr').count(),fixture.detail.finals.length);
+  assert.ok(await table.evaluate(el=>{
+   const cells=el.querySelectorAll('thead th'),box=el.getBoundingClientRect();
+   return Math.abs(cells[0].getBoundingClientRect().width/box.width-.6)<.01 && Math.abs(box.width-el.closest('section').getBoundingClientRect().width)<2;
+  }));
+  const fileDownload=page.waitForEvent('download');await table.getByRole('button',{name:'下载',exact:true}).first().click();
+  const exported=await fileDownload;assert.equal(exported.suggestedFilename(),fixture.detail.finals[0].name);
+  assert.deepEqual(await readFile(await exported.path()),video);await exported.delete();
   await page.getByRole('button',{name:'预览成片',exact:true}).first().click();
   const dialog=page.getByRole('dialog');await dialog.waitFor();
   assert.equal(await dialog.locator('.file-action-links').count(),0);
@@ -117,7 +128,7 @@ try {
   await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
   assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
-  missingPortrait=false;noMaterial=true;await page.reload();await page.getByText('成片目录内暂无视频',{exact:false}).waitFor();
+  missingPortrait=false;noMaterial=true;await page.reload();await page.getByRole('cell',{name:'暂无成片',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
