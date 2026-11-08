@@ -78,6 +78,39 @@ class ChloeResourceLibraryTests(unittest.TestCase):
     def snapshot(self):
         return {p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
 
+    def add_voice_video(self):
+        ref = import_media(self.root, self.base/'video.webm', 'voice-original-video')
+        doc = self.voice/'声音说明.md'
+        link = f"[共用:{ref['resource_id']}@{ref['version']}](<{os.path.relpath(ref['absolute_file'], self.voice)}>)"
+        header = '| 用途 | 资源引用 | 来源或原图引用 | 执行编号 |\n| --- | --- | --- | --- |'
+        doc.write_text(doc.read_text().replace(header, header+f'\n| 声音原始参考 | {link} | 用户上传 | 无 |'))
+        return ref
+
+    def test_video_voice_reference_title_search_and_exact_version_are_readonly(self):
+        from chloe_documents import read_document
+        ref = self.add_voice_video()
+        read_document(self.root, self.voice/'声音说明.md',
+                      SKILLS/'chloe-assets/templates/声音说明模板.md',
+                      {'identity': 'A001', 'title': '隔离声音', 'kind': '声音'})
+        newer = import_media(self.root, self.base/'video.webm', 'voice-original-new',
+                             resource_id=ref['resource_id'])
+        before = self.snapshot()
+        for query in ('隔离声音', '隔离声音 · 原始参考', 'VIDEO.WEBM', ref['resource_id']+'@V001'):
+            result = self.client.get(self.api+'/resource-library', params={
+                'kind': '视频', 'owner': '综合资料', 'q': query}).json()
+            entry = next(v for v in result['items'] if v['version'] == ref['version'])
+            self.assertEqual(entry['display_name'], '隔离声音 · 原始参考')
+            self.assertEqual(entry['name'], 'video.webm')
+            self.assertEqual(entry['media']['name'], 'video.webm')
+            if query.startswith('隔离声音'):
+                self.assertEqual(result['total'], 1)
+        entries, _ = catalog(self.root, self.api)
+        latest = next(v for v in entries if v['resource_id'] == newer['resource_id'] and v['version'] == newer['version'])
+        self.assertEqual(latest['display_name'], 'video.webm')
+        detail = detail_data(self.root, self.api, '综合资料', ref['resource_id'], ref['version'])
+        self.assertEqual(detail['display_name'], '隔离声音 · 原始参考')
+        self.assertEqual(self.snapshot(), before)
+
     def test_catalog_is_readonly_unique_versions_and_excludes_deliverables(self):
         before = self.snapshot()
         response = self.client.get(self.api+'/resource-library')

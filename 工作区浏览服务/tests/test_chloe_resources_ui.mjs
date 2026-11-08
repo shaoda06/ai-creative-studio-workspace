@@ -15,7 +15,7 @@ from PIL import Image
 from tests.test_chloe_resource_library import ChloeResourceLibraryTests
 from backend.chloe_resource_library import catalog,detail_data
 from chloe_resources import import_media
-x=ChloeResourceLibraryTests();x.setUp();x.label_visuals()
+x=ChloeResourceLibraryTests();x.setUp();x.label_visuals();x.add_voice_video()
 try:
  for i in range(9):
   p=x.base/(('超长文件名用于核对桌面展示边界-'*7 if i==0 else 'sample-')+str(i)+'.png')
@@ -61,7 +61,7 @@ try{
   await page.goto(url);
   await page.locator('.chloe-resource-item').first().waitFor();
   assert.equal(await page.getByRole('searchbox',{name:'搜索资源'}).getAttribute('placeholder'),'搜索标题、文件名或资源编号');
-  for(const [query,count] of [['隔离模特 · 正面面部',2],['隔离穿搭展示 · P001 · 一采',1],['隔离声音 · 原始参考',1]]){
+  for(const [query,count] of [['隔离模特 · 正面面部',2],['隔离穿搭展示 · P001 · 一采',1],['隔离声音 · 原始参考',2]]){
    await page.getByRole('searchbox',{name:'搜索资源'}).fill(query);
    await page.waitForFunction(({query,count})=>{
     const titles=[...document.querySelectorAll('.chloe-resource-item h3')].map(el=>el.textContent);
@@ -72,7 +72,7 @@ try{
   await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===12);
   assert.equal(await page.locator('.chloe-resource-item').count(),12);
   await page.getByRole('button',{name:'下一页',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===2);
+  await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===3);
   await page.getByRole('button',{name:'图片',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===12);
   const cells=await page.locator('.chloe-resource-item').all();
@@ -101,6 +101,11 @@ try{
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('');
   await page.getByRole('combobox',{name:'资源归属'}).click();await page.getByRole('option',{name:'全部归属',exact:true}).click();
   await page.getByRole('button',{name:'视频',exact:true}).click();
+  await page.getByRole('searchbox',{name:'搜索资源'}).fill('隔离声音');
+  await page.getByRole('heading',{name:'隔离声音 · 原始参考',exact:true}).waitFor();
+  assert.equal(await page.locator('.chloe-resource-item').count(),1);
+  await page.getByRole('searchbox',{name:'搜索资源'}).fill('隔离穿搭展示');
+  await page.getByRole('heading',{name:'隔离穿搭展示 · P001 · 一采',exact:true}).waitFor();
   const videoCard=page.locator('.chloe-resource-item');
   assert.equal(await videoCard.locator('h3').innerText(),'隔离穿搭展示 · P001 · 一采');
   assert.equal(await videoCard.evaluate(el=>el.tagName),'ARTICLE');
@@ -111,6 +116,7 @@ try{
   await page.screenshot({path:output+'/'+width+'-video.png',fullPage:true});
   await page.getByRole('button',{name:'播放 video.webm',exact:true}).click();
   await page.locator('dialog video').waitFor();await page.keyboard.press('Escape');
+  await page.getByRole('searchbox',{name:'搜索资源'}).fill('');
   await page.getByRole('button',{name:'音频',exact:true}).click();
   await page.locator('.chloe-resource-audio').waitFor();
   const audioBox=await page.locator('.chloe-resource-item').boundingBox(),gridBox=await page.locator('.chloe-resource-grid').boundingBox();assert.ok(Math.abs(audioBox.width-(gridBox.width-48)/3)<1,'audio shares three-column card width');

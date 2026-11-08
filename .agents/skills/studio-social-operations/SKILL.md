@@ -9,13 +9,13 @@ description: 通用社交媒体运营一级入口，组织账号连接、个人�
 
 | 当前任务 | 入口 |
 | --- | --- |
-| 发布意向、平台账号、浏览器连接与身份核对 | [01 运营启用与账号连接](../nora-operations-setup/SKILL.md) |
-| 头像、主页背景设计与采用 | [02 个人页准备](../nora-profile-images/SKILL.md) |
-| 通用与单作品封面、横竖适配及采用 | [03 封面制作](../nora-cover-images/SKILL.md) |
-| 最终成片核对、发布材料、手动交接或授权代发、发布记录 | [04 发布准备与记录](../nora-publication/SKILL.md) |
-| 后台数据、账号活跃时段、成片分析和运营报告 | [05 作品复盘与管理](../nora-operations-review/SKILL.md) |
-| 当前制作或发布准备如何参考既有报告 | [06 后续制作参考与指导](../nora-operations-guidance/SKILL.md) |
+| 发布意向、平台账号、浏览器连接与身份核对 | [01 运营启用与账号连接](../studio-operations-setup/SKILL.md) |
+| 头像、主页背景设计与采用 | [02 个人页准备](../studio-profile-images/SKILL.md) |
+| 通用与单作品封面、横竖适配及采用 | [03 封面制作](../studio-cover-images/SKILL.md) |
+| 最终成片核对、发布材料、手动交接或授权代发、发布记录 | [04 发布准备与记录](../studio-publication/SKILL.md) |
+| 后台数据、账号活跃时段、成片分析和运营报告 | [05 作品复盘与管理](../studio-operations-review/SKILL.md) |
+| 当前制作或发布准备如何参考既有报告 | [06 后续制作参考与指导](../studio-operations-guidance/SKILL.md) |
 
-已有明确对象与阶段时直接接续，不要求重新建档或加载全部阶段。二级技能沿用现有标识；标识前缀不限定业务归属。接入信息按[运营项目README规范](../nora-operations-setup/references/运营项目README规范.md)从调用方入口取得，不由公共运营创建另一套项目结构。
+已有明确对象与阶段时直接接续，不要求重新建档或加载全部阶段。接入信息按[运营项目README规范](../studio-operations-setup/references/运营项目README规范.md)从调用方入口取得，不由公共运营创建另一套项目结构。
 
 实际操控浏览器前读取[共用浏览器操作](../studio-browser-operations/SKILL.md)。运营启用、交付、分析建议和技能维护不构成发布、修改已发布作品、额外生成或调度授权。

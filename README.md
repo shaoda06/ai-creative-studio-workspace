@@ -159,4 +159,4 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## 分层README规范
 
-一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)或[Chloe视频建档规范](.agents/skills/chloe-creative/references/视频项目与脚本规范.md)等所属业务入口维护；公共运营只规定[接入信息要求](.agents/skills/nora-operations-setup/references/运营项目README规范.md)，不另定项目结构。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。
+一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)或[Chloe视频建档规范](.agents/skills/chloe-creative/references/视频项目与脚本规范.md)等所属业务入口维护；公共运营只规定[接入信息要求](.agents/skills/studio-operations-setup/references/运营项目README规范.md)，不另定项目结构。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。

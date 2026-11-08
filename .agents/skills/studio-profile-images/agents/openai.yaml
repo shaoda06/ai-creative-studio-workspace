@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio 个人页准备"
+  short_description: "社交媒体运营二级阶段，设计、生成、采用头像及主页背景，管理业务规格、记录与展示。"
+  default_prompt: "使用$studio-profile-images处理当前任务，先确定输入、授权和实际范围。"

@@ -1,6 +1,6 @@
 """Compatibility import for the business-owned browser projection."""
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-cover-images/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-cover-images/scripts'))
 import cover_browser_projection as _implementation
 sys.modules[__name__] = _implementation

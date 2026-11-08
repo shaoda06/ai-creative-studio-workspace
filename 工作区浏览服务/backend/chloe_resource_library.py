@@ -87,7 +87,8 @@ def catalog(root, api):
                     titles = voice_titles.get((file, version['resource_id'], version['version']), [])
                     display_name = '；'.join(dict.fromkeys(titles)) or family['name'] or file.name
                 else:
-                    titles = visuals.get((file, version['resource_id'], version['version']), [])
+                    reference = (file, version['resource_id'], version['version'])
+                    titles = visuals.get(reference, []) + voice_titles.get(reference, [])
                     if titles:
                         display_name = '；'.join(dict.fromkeys(titles))
                     elif family['kind'] == '图片' and scope != '综合资料':

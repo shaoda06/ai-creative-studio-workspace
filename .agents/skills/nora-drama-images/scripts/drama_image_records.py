@@ -33,7 +33,7 @@ TEMPLATES = {'人物': '人物参考图工作稿模板.md', '场景': '场景参
 
 
 def template_path(skill, kind):
-    folder = (SKILLS / 'nora-cover-images/templates'
+    folder = (SKILLS / 'studio-cover-images/templates'
               if kind == '封面' else Path(__file__).resolve().parents[1] / 'references/模板')
     return folder / TEMPLATES[kind]
 
