@@ -62,14 +62,16 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
       return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
       <h3>{stage}</h3>
       <details className="stage-download-group" aria-label={stage + '已采用视频'}>
-        <summary>已采用视频 <small className="stage-download-count muted">{approved.length} 段</small></summary>
-        {approved.length ? <div className="stage-download-actions">{approved.map(({ id, video }) =>
-          <DownloadButton key={video.key} url={video.downloadUrl || video.url} label={`${id} · ${video.run}`} title="下载已采用的原视频" />)}</div> : <p className="muted">暂无已采用视频。</p>}
+        <summary>已采用视频 <small className="stage-download-count muted">{approved.length} 段</small>
+          {!approved.length && <small className="stage-download-count muted">暂无已采用视频。</small>}
+        </summary>
+        {approved.length > 0 && <div className="stage-download-actions">{approved.map(({ id, video }) =>
+          <DownloadButton key={video.key} url={video.downloadUrl || video.url} label={`${id} · ${video.run}`} title="下载已采用的原视频" />)}</div>}
       </details>
       <section className="stage-download-group" aria-label={stage + '交接包'}>
-        <h4>交接包 {videos.url && <small className="stage-download-count muted">{videos.count} 份视频</small>}</h4>
-        {!videos.url && <p className="muted">{workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</p>}
-        {workMode && selectedPackage && original.packages?.length === 1 && <p className="muted">{packageLabel(selectedPackage)}</p>}
+        <h4>交接包 <small className="stage-download-count muted">{videos.url ? `${videos.count} 份视频` : workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</small>
+          {workMode && selectedPackage && original.packages?.length === 1 && <small className="stage-download-count muted">{packageLabel(selectedPackage)}</small>}
+        </h4>
         {original.packages && original.packages.length > 1 && <TabSelect label={`${stage}交付版本`} selected={videos.url || ''} onChange={url => setChoices(previous => ({ ...previous, [stage]: url }))} items={original.packages.map(item => ({ value: item.url, label: packageLabel(item) }))} />}
         <div className="stage-download-actions stage-download-packages">
         <DownloadButton url={videos.url} label="视频 ZIP 包" pack title={videos.url
@@ -84,12 +86,13 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
         {([{ key: 'canvas', label: '原画布' }, { key: 'director', label: '导演包' }] as const).map(({ key, label }) => {
           const resource = downloads.data[stage][key];
           return <div key={key}>
-            <h4>{label}</h4>
+            <h4>{label}
+              {resource.messages?.map(message => <small className="stage-download-count muted" key={message}>{message}</small>)}
+              {!resource.files.length && !resource.url && !resource.messages?.length && <small className="stage-download-count muted">暂无对应文件。</small>}
+            </h4>
             {(resource.files.length > 0 || resource.url) && <div className="stage-download-actions">
               <OriginalDownloads resource={resource} label={key === 'director' ? '下载导演包' : '下载画布'} generated={key === 'director'} />
             </div>}
-            {resource.messages?.map(message => <p className="muted" key={message}>{message}</p>)}
-            {!resource.files.length && !resource.url && !resource.messages?.length && <p className="muted">暂无对应文件。</p>}
           </div>;
         })}
       </details>
