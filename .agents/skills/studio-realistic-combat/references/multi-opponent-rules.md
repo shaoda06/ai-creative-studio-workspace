@@ -2,7 +2,7 @@
 
 > 本文件是 **小规模多点战斗（小规模多人）的唯一真源**：1v2 / 1v3 / 2v2 / 3v3。
 > 凡任务中出现「两人以上同场交手」，本文件的规则**覆盖** `r1-combat-core.md` / `camera-action-specs.md` / `render-adapters.md` 中的 1v1 默认写法（轴线锁定、开局构图、站位声明、景别策略）。
-> 镜头选择沿用[场次分镜制作规范](../../nora-drama-storyboard/references/场次分镜制作规范.md)，本节补充多人关系的可读性。本文件未写到的部分，回到 `r1-combat-core.md`。
+> 镜头选择沿用[共用分镜写作规范](../../studio-storyboard/references/分镜写作规范.md#运镜构图与切镜的选择)，本节补充多人关系的可读性。本文件未写到的部分，回到 `r1-combat-core.md`。
 
 ---
 

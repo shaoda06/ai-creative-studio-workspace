@@ -1,6 +1,6 @@
 # AI Creative Studio Workspace
 
-`nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、Nora短剧、Iris商业视频、Chloe带货及共用运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。三个业务资料区及真实项目由使用者在本地初始化，不随公共仓库提供。
+`ai-creative-studio-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、Nora短剧、Iris商业视频、Chloe带货及共用运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。三个业务资料区及真实项目由使用者在本地初始化，不随公共仓库提供。
 
 ## 开始使用
 
@@ -34,7 +34,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 
 ## 会话组织
 
-会话职责、编号、标题、并行与逐集接续统一维护于[会话与进度管理规范](.agents/skills/nora-serial-drama/references/会话与进度管理规范.md)，此处不另列会话清单。
+会话职责、命名和接续按所属业务维护：Nora读取[会话与进度管理规范](.agents/skills/nora-serial-drama/references/会话与进度管理规范.md)，Iris读取[流程与交接](.agents/skills/iris-commercial-video/references/流程与交接.md)，Chloe读取[会话组织与接续规范](.agents/skills/chloe-commerce-video/references/会话组织与接续规范.md)，独立社媒运营从[运营入口](.agents/skills/studio-social-operations/SKILL.md)接续。实际会话入口留在所属项目，不统一套用某项业务的编号。
 
 ## 目录
 
@@ -109,7 +109,7 @@ FFmpeg是工作区的本地音视频处理依赖。只在初始化项目工作�
 
 ## 工作区浏览服务
 
-Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现Nora、Iris与Chloe的projects项目；Chloe使用通用资料页，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
+Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现业务项目：Nora、Iris项目位于各自资料区的`projects/`；Chloe具名项目直接位于资料区下，项目内部的`projects/`保存单条视频。Chloe项目页提供账号概况、选品与商品、共用资产、视频制作、成片与发布、运营复盘和资源库；完整制作页复用公共组件。服务同时提供Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
 
 首次安装、构建、开发及测试说明见[服务README](工作区浏览服务/README.md)。服务需要Python 3.10＋及项目依赖，前端构建需要Node.js 22＋、pnpm 11；已构建后普通浏览不需要Node.js；ComfyUI后台的Codex会话通知需要本机Node，具体接入见服务README。项目页面由浏览服务读取源资料展示，不再生成或维护项目静态HTML。
 
@@ -121,7 +121,7 @@ Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows�
 
 ## 维护与检查
 
-修改短剧技能前读取其[维护规范](.agents/skills/studio-entry/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
+修改工作区技能前读取[维护规范](.agents/skills/studio-entry/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
 
 按影响范围选择已有测试，不因普通文档修改运行全部测试。下列命令均在工作区根目录执行：
 

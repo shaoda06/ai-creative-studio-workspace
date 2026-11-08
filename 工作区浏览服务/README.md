@@ -1,6 +1,6 @@
-> 总工作区为AI Creative Studio Workspace。所有技能位于总目录.agents/skills；Nora资料位于workspaces/Nora Workspace，Iris位于workspaces/Iris Workspace。服务代码、公共提示词/资产和工作流从总层定位，项目及节点配置从所属资料空间定位。无本机覆盖配置时，存在新Nora资料区就使用它；旧版平铺布局仍可使用原根。
+> 总工作区为AI Creative Studio Workspace。所有技能位于总目录.agents/skills；Nora资料位于workspaces/Nora Workspace，Iris位于workspaces/Iris Workspace，Chloe位于workspaces/Chloe Workspace，具名项目直接位于Chloe资料区下。服务代码、公共提示词/资产和工作流从总层定位，项目及节点配置从所属资料空间定位。无本机覆盖配置时，存在新Nora资料区就使用它；旧版平铺布局仍可使用原根。
 
-# Nora 工作区浏览服务
+# AI Creative Studio 工作区浏览服务
 
 当前版本见 `frontend/package.json`，网页底栏显示已加载的版本。项目浏览、Krea2风格库和开发记录共用一个入口，源文件仍是内容依据。
 
@@ -12,7 +12,7 @@
 
 ## 日常启动
 
-Agent使用、任务接入和后台开发维护的统一入口为[浏览后台工具技能](../.agents/skills/studio-workspace-browser/SKILL.md)。图片业务准备和采用由[图片阶段](../.agents/skills/nora-drama-images/SKILL.md)维护；后台明确分发技术结果与业务接入，现有接口继续兼容。
+Agent使用、任务接入和后台开发维护的统一入口为[浏览后台工具技能](../.agents/skills/studio-workspace-browser/SKILL.md)。短剧图片业务准备和采用由[图片阶段](../.agents/skills/nora-drama-images/SKILL.md)维护；后台明确分发技术结果与业务接入，现有接口继续兼容。
 
 Windows双击本目录的 `启动（Windows）.bat`，macOS双击 `启动（Mac）.command`，就绪后自动打开 http://127.0.0.1:8782/ 。停止时双击“停止（Windows）.bat”或“停止（Mac）.command”。启动前核对前端入口、`dist/release.json`与`frontend/package.json`的版本：构建缺失或版本过期时自动构建，已是当前版本时跳过。源码修改仍须按发布规则递增版本，不以文件修改时间判断发布。
 
@@ -52,9 +52,9 @@ Nora项目空间的项目卡片和顶部项目切换菜单共用原 `/api/projec
 
 ## 内置工作流
 
-首页共用工具提供“内置工作流”入口，以列表卡片分组展示主技能工作流目录中Qwen-image-2-1、Minimax-H3、后处理综合三个分类下的正式工作流，以及“非正式工作流”子目录中的备用工作流，分别下载画布/API原文件。标准版按用户选择使用四种生成配置；配置同时决定LoRA、采样步数、尺寸及后处理分支，并支持横竖屏，参数及完整询问选项见[H3执行规范](../.agents/skills/nora-drama-production/references/ComfyUI-H3视频执行规范.md#标准版四种配置与生成前询问)。此页面只下载文件，不自动切换配置或提交生成任务。项目页不显示根目录“历史版本”栏目，其磁盘资料保留，各阶段辅助资料及任务历史不受影响。
+首页共用工具提供“内置工作流”入口，以列表卡片分组展示主技能工作流目录中Qwen-image-2-1、Minimax-H3、后处理综合三个分类下的正式工作流，以及“非正式工作流”子目录中的备用工作流，分别下载画布/API原文件。标准版按[H3配置选择与装配前询问](../.agents/skills/studio-h3/references/参数与基准规范.md#标准版配置选择与装配前询问)确定本次配置、LoRA、采样、尺寸和方向；具体选项与参数由该共用规范维护。此页面只下载文件，不自动切换配置或提交生成任务。项目页不显示根目录“历史版本”栏目，其磁盘资料保留，各阶段辅助资料及任务历史不受影响。
 
-项目顶部导航只识别现有的正式栏目：00项目定位至09剧集制作对应的十个规定目录；参考音频和参考视频仍归入“参考素材”菜单。其他目录、嵌套projects、综合资料及历史版本不会成为导航按钮，其文件不因导航筛选而删除。入队路径的填写与校验见[统一提交说明](../.agents/skills/studio-workspace-browser/references/固定脚本接口规范.md#浏览服务监控接入)。
+Nora项目顶部导航只识别现有的正式栏目：00项目定位至09剧集制作对应的十个规定目录；参考音频和参考视频仍归入“参考素材”菜单。其他目录、嵌套projects、综合资料及历史版本不会成为导航按钮，其文件不因导航筛选而删除。入队路径的填写与校验见[统一提交说明](../.agents/skills/studio-workspace-browser/references/固定脚本接口规范.md#浏览服务监控接入)。
 
 剧集分段条第二集起提供固定宽度的“上集末段”回看入口，宽屏时在分段导航顶部；第一集不显示。普通布局的名称和秒数下方显示一采、二采、后处理状态条；宽屏竖向分段条仅显示名称和秒数，上集末段同样隐藏状态图标。视频下方说明按“画质 · 版本 · 候选几”排列，已采用候选追加状态标记，见[W219](docs/开发记录/W219-视频说明排序与宽屏分段简化.md)。按直接上一集的剧本及分镜顺序取末段，默认打开最新可播放版本，点击本集分段返回；缺少资料或视频时入口禁用并提示缺项。勾选连续播放后，按当前场次所选修改轮次的分段顺序接续，末段播完自动切到下一场首段，直到本集末段停止。开启时固定本集各场轮次：已有选择的沿用所选轮次，未选择的取当时最新轮次；各段使用对应轮次登记的阶段和R。下一场缺少轮次、分段或对应视频时停止并提示，不跳过场次、不换用其他版本。跨场次保留连播勾选并自动播放；手动切场、切轮、换画质或版本会关闭连播。上集末段仅供单独回看，不属于本集连播队列。回看不计入本场下载范围，本轮规则见[W191](docs/开发记录/W191-本轮连播版本与意见导出.md)，回看入口原始实现见[W182](docs/开发记录/W182-上集末段回看.md)。
 
@@ -157,7 +157,7 @@ pnpm --dir frontend build
 
 ```json
 {
-  "workspace": "C:/原工作区路径/nora-ai-drama-workspace",
+  "workspace": "C:/原工作区路径/ai-creative-studio-workspace",
   "port": 8783,
   "environment": "development"
 }

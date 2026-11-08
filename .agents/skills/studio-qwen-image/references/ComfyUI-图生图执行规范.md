@@ -41,7 +41,7 @@ API中的正文、输入图片、尺寸、种子和输出前缀是任务占位�
 | 实际参考图片 | 各`LoadImage.inputs.image` | 后台按真实上传响应填写，数量和顺序来自任务清单 |
 | 输出宽、高 | `479.inputs.width`、`height` | 按调用方给出的宽高明确填写，均为32倍数 |
 | 种子 | `481.inputs.seed` | 调用方提供有效非负整数，不使用-1随机标记 |
-| 输出前缀 | `487.inputs.filename_prefix` | 按[远端输出目录](../../nora-serial-drama/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
+| 输出前缀 | `487.inputs.filename_prefix` | 按[远端输出目录](../../studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
 | 反向提示词 | `497.inputs.negative_prompt` | 默认空；已明确需要时以`parameters.negative_prompt`填写并记录 |
 | 参考缩放 | 532及扩展的`ImageScaleToTotalPixels` | 固定`upscale_method=lanczos`、`megapixels=1.5`、`resolution_steps=32` |
 | 编码器参考处理 | `497.inputs.resolution`、`vae` | 固定`0`、`["478",0]`，保留参考图编码链 |
