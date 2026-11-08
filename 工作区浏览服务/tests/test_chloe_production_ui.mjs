@@ -136,7 +136,7 @@ try {
   assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isEnabled(),true);
   assert.equal(await firstPack.count(),0);
   assert.equal(await page.locator('.stage-download-section').count(),1);
-  assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮本轮视频','第2轮交接包','第2轮画布与导演包']);
+  assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮交接包','第2轮本轮视频','第2轮画布与导演包']);
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:'第1轮',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[aria-label="第1轮交接包"] button')?.disabled===false);

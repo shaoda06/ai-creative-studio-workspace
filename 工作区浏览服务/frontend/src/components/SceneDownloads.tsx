@@ -69,15 +69,16 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
         name: `${id} · ${video.run}`, url: video.downloadUrl || video.url!,
       }));
       const videoLabel = roundMode ? '本轮视频' : '已采用视频';
-      return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
-      <h3>{stage}</h3>
-      <details className="stage-download-group" aria-label={stage + videoLabel}>
+      const videoList = <details className="stage-download-group" aria-label={stage + videoLabel}>
         <summary>{videoLabel} <small className="stage-download-count muted">{available.length} 段</small>
           {!available.length && <small className="stage-download-count muted">{roundMode ? '本轮暂无视频。' : '暂无已采用视频。'}</small>}
         </summary>
         {available.length > 0 && <div className="stage-download-actions">{available.map(file =>
           <DownloadButton key={file.url} url={file.url} label={file.name} title="下载原视频" />)}</div>}
-      </details>
+      </details>;
+      return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
+      <h3>{stage}</h3>
+      {!roundMode && videoList}
       <section className="stage-download-group" aria-label={stage + '交接包'}>
         <h4>交接包 <small className="stage-download-count muted">{videos.url ? `${videos.count} 份视频` : roundMode ? '本轮暂无视频。' : workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</small>
           {workMode && selectedPackage && original.packages?.length === 1 && <small className="stage-download-count muted">{packageLabel(selectedPackage)}</small>}
@@ -91,6 +92,7 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
           label="剪映草稿包" pack title={roundMode ? `按${stage}完整分段顺序临时生成剪映草稿` : workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />
         </div>
       </section>
+      {roundMode && videoList}
       <details className="stage-download-group" aria-label={stage + '画布与导演包'}>
         <summary>画布与导演包</summary>
         {([{ key: 'canvas', label: '原画布' }, { key: 'director', label: '导演包' }] as const).map(({ key, label }) => {
