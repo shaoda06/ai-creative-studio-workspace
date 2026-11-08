@@ -20,6 +20,7 @@ license: MIT
 
 | 问题 | 参考 |
 | --- | --- |
+| 台词时点、口型、场景文字、叠字与字幕 | [逐镜声源与口型](references/分镜写作规范.md#心理独白与开口对白的切换)、[画面文字与实现归属](references/分镜写作规范.md#画面文字与实现归属) |
 | 镜头职责、对白覆盖、切点及镜长 | [镜头手艺](references/shot-craft.md)、[生产镜头语法](references/production-shot-grammar.md) |
 | 不同取景方案、多人调度及信息覆盖 | [场次视觉计划](references/scene-visual-plan.md)、[调度方法](references/blocking-playbooks.md)、[覆盖比较](references/coverage-audition.md) |
 | 光影、关键帧及漫剧视觉表达 | [光线设计](references/lighting-craft.md)、[关键帧方法](references/keyframe-craft.md)、[视觉词表](references/comic-keyframe-lexicon.md)、[转写示例](references/screenplay-to-keyframe-example.md) |

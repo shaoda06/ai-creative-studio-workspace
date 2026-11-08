@@ -208,19 +208,7 @@ them fit this checklist. A loud scene can fail when nothing changes.
 
 ## Dialogue
 
-- What does each speaker want from the other now?
-- What is withheld, reframed, threatened, bargained, accused, or proven?
-- Does the line respond to the prior move and alter the next?
-- Are voices distinct by worldview, status, relationship, vocabulary, and rhythm?
-- Does exposition enter through conflict/evidence/consequence rather than a
-  neutral information dump?
-- When a long speech is split, does the inserted action change the speaker's tactic
-  and give downstream a sourced cut point, rather than pad with a glance or a pause
-  (`SCR-09`)? When a long speech carries no internal turn, was it shortened instead
-  of split?
-
-Silence, interruption, slang, narration, and sentence length are creator options,
-not universal scoring ratios.
+Apply the [shared read-through method](../../studio-creative-techniques/references/对白与场次表演方法.md#连读与压稿) to the Nora review scope. Cite the line and its preceding action or response. For a split long speech (`SCR-09`), check the actual cut point against the [performance method](../../studio-creative-techniques/references/对白与场次表演方法.md#信息行动与表演).
 
 ## Rhythm profile (`REV-12`)
 

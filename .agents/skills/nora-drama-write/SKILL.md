@@ -27,8 +27,7 @@ license: MIT
 | 问题 | 方法资料 |
 | --- | --- |
 | 行动因果、选择、证据或时间容量 | [剧作手艺](references/script-craft.md) |
-| 人物声音、过去关系及接话 | [对白手艺](references/dialogue-craft.md) |
-| 声源、留白与声音过渡 | [场景声音](references/scene-sound-dramaturgy.md) |
+| 人物口吻、接话、表演、声源和声音留白 | [共用对白与场次表演](../studio-creative-techniques/references/对白与场次表演方法.md)和[共用剧本的声源写法](../studio-screenplay/SKILL.md#声源与正文写法)；本集约束按[台词设计、节奏与统计](references/对白与表演修订规范.md#台词设计节奏与统计) |
 | 同一义务的不同可拍实现 | [可替代实现](references/substitutable-realization.md) |
 | 长任务接续 | [场景交接方法](references/scene-handoff-capsule.md)，复用既有工作稿或上下文，不另建台账 |
 
