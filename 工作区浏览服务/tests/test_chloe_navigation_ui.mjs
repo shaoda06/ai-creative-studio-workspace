@@ -50,6 +50,11 @@ try {
       await page.waitForFunction(expected=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===expected,expected);
       assert.equal(await breadcrumb.evaluate(el=>getComputedStyle(el).cursor),'pointer');
       assert.equal(await breadcrumb.locator('[aria-current="page"]').evaluate(el=>getComputedStyle(el).cursor),'pointer');
+      if (['账号概况','选品与商品','视频制作','成片与发布'].includes(label)) {
+        await page.locator('main .panel').first().waitFor();
+        const gap = await page.evaluate(()=>document.querySelector('main .panel').getBoundingClientRect().top-document.querySelector('.breadcrumbs').getBoundingClientRect().bottom);
+        assert.ok(Math.abs(gap-20)<1, label+' breadcrumb-to-panel spacing is 20px');
+      }
       assert.equal(await nav.locator('[aria-current="page"]').textContent(),label);
       const bounds = await nav.getByRole('button',{name:label,exact:true}).boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
