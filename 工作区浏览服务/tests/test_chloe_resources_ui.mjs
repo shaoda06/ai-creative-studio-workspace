@@ -73,7 +73,9 @@ try{
   await page.getByRole('combobox',{name:'资源归属'}).click();await page.getByRole('option',{name:'共用资源',exact:true}).click();
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('UPSCALED');
   await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===1);
-  const card=page.locator('.chloe-resource-item');await card.locator('.cover').click();
+  const card=page.locator('.chloe-resource-item');
+  assert.equal(await card.locator('article .chloe-resource-description').count(),1,'metadata and actions inside image border');
+  await card.locator('.cover').click();
   await page.getByRole('dialog').waitFor();assert.equal(await page.locator('dialog img').count(),1);await page.keyboard.press('Escape');
   const download=page.waitForEvent('download');await card.getByRole('link',{name:'下载',exact:true}).click();await download;
   await card.getByRole('button',{name:'详情',exact:true}).click();
@@ -88,6 +90,13 @@ try{
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('');
   await page.getByRole('combobox',{name:'资源归属'}).click();await page.getByRole('option',{name:'全部归属',exact:true}).click();
   await page.getByRole('button',{name:'视频',exact:true}).click();
+  const videoCard=page.locator('.chloe-resource-item');
+  assert.equal(await videoCard.evaluate(el=>el.tagName),'ARTICLE');
+  await page.waitForFunction(()=>document.querySelector('.chloe-resource-video')?.readyState>=2);
+  assert.ok(await videoCard.locator('video').evaluate(el=>el.paused && el.currentTime===0 && el.videoWidth>0 && !el.controls),'decoded first frame without playing');
+  const outer=await videoCard.boundingBox(),actions=await videoCard.locator('.chloe-resource-actions').boundingBox();
+  assert.ok(actions.y+actions.height<outer.y+outer.height,'actions inside video border');
+  await page.screenshot({path:output+'/'+width+'-video.png',fullPage:true});
   await page.getByRole('button',{name:'播放 video.webm',exact:true}).click();
   await page.locator('dialog video').waitFor();await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'音频',exact:true}).click();

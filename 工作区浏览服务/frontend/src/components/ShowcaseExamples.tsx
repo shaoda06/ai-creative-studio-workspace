@@ -182,6 +182,11 @@ export function ShowcaseExamples({ category }: { category: string }) {
           </div>
         </PreviewContext.Provider>
       </ComponentExample>
+      <ComponentExample title="含补充信息的图片卡片" rule="children插槽放在原卡片边框内，承载调用方的元信息与操作；不传入时保持原卡片。" usage="Chloe资源库">
+        <AssetMediaCard title="资源版本示例" item={imageRecord} revision={1} compact showVersion={false}>
+          <p>IMG-DEMO@V001 · 共用资源</p><LinkButton onClick={() => setPreview(imageDetails)}>详情</LinkButton>
+        </AssetMediaCard>
+      </ComponentExample>
       <ComponentExample title="全屏看图" rule="点击图片进入全屏，图片完整等比显示；再次点击图片、按Esc或关闭按钮退出。可传入分页控件，分页不关闭图片。" usage="导演分镜表、Chloe模特图片">
         <PreviewContext.Provider value={() => setFullscreenImage(true)}><AssetMediaCard title="全屏图片示例" item={imageRecord} revision={1} compact /></PreviewContext.Provider>
         {fullscreenImage && <FullscreenImage title="全屏图片示例" src={imageRecord.media!.url!} alt="全屏图片示例" close={() => setFullscreenImage(false)} />}

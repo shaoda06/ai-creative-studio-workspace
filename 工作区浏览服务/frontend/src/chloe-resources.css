@@ -10,3 +10,5 @@
 .chloe-resource-fields dd { margin: 0; overflow-wrap: anywhere; }
 .chloe-resource-detail, .chloe-resource-use { overflow-wrap: anywhere; }
 .chloe-resource-use { margin: 16px 0; }
+
+.chloe-resource-video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }

@@ -425,6 +425,14 @@ try {
       await page.getByRole('dialog').getByText('本地图片详情示例。', { exact: true }).waitFor();
       await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     }
+    const extendedCard=showcase.locator('.asset-media-card').filter({has:page.getByRole('heading',{name:'资源版本示例',exact:true})});
+    await contained(extendedCard,`${width}px / 含补充信息图片卡`);
+    assert.equal(await extendedCard.getByText('IMG-DEMO@V001 · 共用资源',{exact:true}).count(),1);
+    const extendedBounds=await extendedCard.boundingBox(),extendedAction=await extendedCard.getByRole('button',{name:'详情',exact:true}).boundingBox();
+    assert.ok(extendedAction.y+extendedAction.height<extendedBounds.y+extendedBounds.height,'supplemental actions stay within card');
+    await extendedCard.getByRole('button',{name:'详情',exact:true}).click();
+    await page.getByRole('dialog').getByText('本地图片详情示例。',{exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     const fullscreenExample=showcase.locator('.asset-media-card').filter({has:page.getByRole('heading',{name:'全屏图片示例',exact:true})});
     for (const method of ['click','escape']) {
       await fullscreenExample.locator('.cover').click();

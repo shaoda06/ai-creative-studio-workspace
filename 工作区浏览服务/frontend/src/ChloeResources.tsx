@@ -58,16 +58,23 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
       </div>
       <Result loading={listing.isPending} error={listing.error} retry={listing.refetch} retrying={listing.isFetching} />
       {listing.data && <>
-        <div className="chloe-resource-grid">{listing.data.items.map(item=><div className={`chloe-resource-item${item.kind==='音频'?' is-audio':''}`} key={item.key}>
-          {item.kind==='图片' ? <AssetMediaCard title={item.name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false} /> : item.kind==='音频' && item.media ?
-            <AudioReferenceCard name={item.name} duration={item.facts.duration_seconds??null} playing={audio.playingId===item.key} progress={audio.currentId===item.key?audio.progress:0} onPlay={()=>audio.toggle(item.key,item.media!.url!)} /> :
-            <article aria-label={item.name}><h3>{item.name}</h3>{item.media ? <button className="cover" aria-label={`播放 ${item.name}`} onClick={()=>setPreview(item.media!)}>▶</button> : <p className="muted">原文件缺失</p>}</article>}
-          <div className="chloe-resource-description">
+        <div className="chloe-resource-grid">{listing.data.items.map(item=>{
+          const description = <div className="chloe-resource-description">
             <p>{label(item)}</p><p className="muted">{item.owner_label}</p>
             <p className="muted">{[item.facts.width && item.facts.height ? `${item.facts.width} × ${item.facts.height}` : '',item.kind!=='图片' && item.facts.duration_seconds!==undefined ? duration(item.facts.duration_seconds) : ''].filter(Boolean).join(' · ')}</p>
             <div className="chloe-resource-actions"><LinkButton onClick={()=>setSelected(item)}>详情</LinkButton><FileActions url={item.media?.url} downloadOnly /></div>
-          </div>
-        </div>)}</div>
+          </div>;
+          return item.kind==='图片' ? <div className="chloe-resource-item" key={item.key}>
+            <AssetMediaCard title={item.name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false}>{description}</AssetMediaCard>
+          </div> : <article className={`chloe-resource-item${item.kind==='音频'?' is-audio':''}`} key={item.key} aria-label={item.name}>
+            {item.kind==='音频' && item.media ?
+              <AudioReferenceCard name={item.name} duration={item.facts.duration_seconds??null} playing={audio.playingId===item.key} progress={audio.currentId===item.key?audio.progress:0} onPlay={()=>audio.toggle(item.key,item.media!.url!)} /> :
+              <div><h3>{item.name}</h3>{item.media ? <button className="cover" aria-label={`播放 ${item.name}`} onClick={()=>setPreview(item.media!)}>
+                <video className="chloe-resource-video" src={item.media.url} preload="metadata" muted playsInline aria-hidden="true" />
+              </button> : <p className="muted">原文件缺失</p>}</div>}
+            {description}
+          </article>;
+        })}</div>
         {!listing.data.total && <p className="muted">暂无符合条件的资源。</p>}
         <Pagination page={listing.data.page} total={listing.data.total} pageSize={listing.data.page_size} change={setPage} itemLabel="个版本" />
       </>}
