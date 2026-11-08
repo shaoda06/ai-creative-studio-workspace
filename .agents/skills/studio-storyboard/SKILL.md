@@ -23,6 +23,7 @@ license: MIT
 | 台词时点、口型、场景文字、叠字与字幕 | [逐镜声源与口型](references/分镜写作规范.md#心理独白与开口对白的切换)、[画面文字与实现归属](references/分镜写作规范.md#画面文字与实现归属) |
 | 镜头职责、对白覆盖、切点及镜长 | [镜头手艺](references/shot-craft.md)、[生产镜头语法](references/production-shot-grammar.md) |
 | 不同取景方案、多人调度及信息覆盖 | [场次视觉计划](references/scene-visual-plan.md)、[调度方法](references/blocking-playbooks.md)、[覆盖比较](references/coverage-audition.md) |
+| 镜头参考、首帧和开场状态 | [镜头参考图与首帧](references/分镜写作规范.md#镜头参考图与首帧) |
 | 光影、关键帧及漫剧视觉表达 | [光线设计](references/lighting-craft.md)、[关键帧方法](references/keyframe-craft.md)、[视觉词表](references/comic-keyframe-lexicon.md)、[转写示例](references/screenplay-to-keyframe-example.md) |
 | 修订关联与连续性核对 | [镜头修订方法](references/shot-revision-identity.md)、[核对示例](references/review-and-fixtures.md) |
 | 打斗、法术或写实格斗 | 按题材使用[通用动作](../studio-combat-methods/SKILL.md)、[玄幻动作](../studio-fantasy-combat/SKILL.md)或[写实格斗](../studio-realistic-combat/SKILL.md) |
