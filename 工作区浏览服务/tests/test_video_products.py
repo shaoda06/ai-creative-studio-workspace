@@ -114,7 +114,7 @@ class VideoProductTests(HttpTestCase):
         restart = ProjectStore(self.root, cache_directory=self.root / '.cache')
         data = restart.section('示例项目', '09-剧集制作', 'EP001', mode='playback')
         self.assertTrue(data['catalogues']['09-剧集制作']['children'][0]['segments']['C001'][0]['videos'][0]['approved'])
-        self.assertEqual(json.loads(cache.read_text())['schema'], 22)
+        self.assertEqual(json.loads(cache.read_text())['schema'], 24)
         self.assertEqual(restart.snapshot(self.project), snapshot)
 
     def test_approved_round_is_not_limited_to_default_product(self):

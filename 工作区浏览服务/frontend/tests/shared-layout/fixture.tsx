@@ -29,6 +29,9 @@ const videos: SegmentVideo[] = [1, 2].map(candidateNumber => ({
 }));
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 function Fixture() {
+  const [messageMode, setMessageMode] = useState('normal');
+  const [textTab, setTextTab] = useState('script');
+  const messageVideos = videos.map(video => messageMode === 'error' ? { ...video, context: undefined, contextUrl: '/api/fixture-context' } : { ...video, ...(messageMode === 'pending' ? { url: '', taskStatus: '排队中', fileRevision: '', deliveryStatus: '', products: undefined } : {}), context: { ...video.context!, issues: messageMode === 'issues' ? ['参考素材尚未关联本地原文件。', '分镜快照尚未关联。'] : messageMode === 'pending' ? ['该次生成的资料关联尚未记录。'] : [] } });
   const [wide, setWide] = useState(false);
   const [continuous, setContinuous] = useState(false);
   const [ended, setEnded] = useState(0);
@@ -42,9 +45,10 @@ function Fixture() {
     <InputsFixture />
     <section data-testid="showcase"><ComponentShowcase onImplementation={() => {}} /></section>
     <section data-testid="business" className="panel episode-detail"><div className="episode-scene-content">
+      <div aria-label="候选提示测试状态">{['normal', 'issues', 'pending', 'error'].map(mode => <button key={mode} onClick={() => setMessageMode(mode)}>{mode}</button>)}</div>
       <SegmentWorkspace scope={{ project: 'fixture-only', episode: 'EP001', scene: 'C001' }}
-        segment="P001" revision={0} items={videos} selection={selection} onSelectionChange={setSelection}
-        tab="script" onTabChange={() => {}} notesExportControl={null}
+        segment="P001" revision={0} items={messageVideos} selection={selection} onSelectionChange={setSelection}
+        tab={textTab} onTabChange={setTextTab} notesExportControl={null}
         segmentNavigation={<span>P001</span>} autoPlay={false} onVideoEnded={() => setEnded(value => value + 1)} onVideoError={() => {}}
         cachedSources={{}} retainSource={() => () => {}} wideVideo={wide}
         onToggleWide={() => setWide(value => !value)} continuous={continuous}

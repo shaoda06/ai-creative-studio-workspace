@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe 带货复盘与调整"
+  short_description: "结合用户提供的 Chloe 成片和运营资料复盘内容、商品点击、订单与佣金表现，提出可验证的后续调整。"
+  default_prompt: "使用 $chloe-review 按实际对象、当前阶段与有效授权处理任务。"

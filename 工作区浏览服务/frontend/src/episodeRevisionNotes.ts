@@ -1,13 +1,14 @@
-import type { SegmentVideo } from './api';
+import type { SceneRound, SegmentVideo } from './api';
 import type { NoteInput, OverallNote, SavedSceneNotes } from './revisionNotes';
-import { noteKey } from './revisionNotes';
+import { hasNoteContent, noteKey } from './revisionNotes';
 import { candidateLabel } from './components/SegmentVideo';
 
 export interface EpisodeReview {
   number?: number;
   rounds: number[];
   scenes: { id: string; number?: number; segments: { id: string; videos: SegmentVideo[] }[];
-    versions: { id: string; stage: string; run: string }[] }[];
+    versions: { id: string; stage: string; run: string }[];
+    history?: SceneRound[] }[];
 }
 export interface CombinationSummary { scenes: Record<string, number>; text: string; updatedAt: string }
 export const combinationKey = (scenes: Record<string, number>) => Object.keys(scenes).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).map(scene => `${scene}:${scenes[scene]}`).join('|');
@@ -15,14 +16,31 @@ export const combinationLabel = (scenes: Record<string, number>) => Object.keys(
 export interface SavedEpisodeNotes { episode: string; scenes: Record<string, SavedSceneNotes>; rounds: Record<string, OverallNote>; combinations?: Record<string, CombinationSummary> }
 export type EpisodeExportNote = NoteInput & { scene: string; key: string; title: string; original: string; current: boolean; editable: boolean };
 
-export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeReview): EpisodeExportNote[] {
-  const scenes = [...new Set([...review.scenes.map(item => item.id), ...Object.keys(saved.scenes)])]
-    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+export function workNoteScenes(saved: SavedSceneNotes, review: EpisodeReview): SavedEpisodeNotes['scenes'] {
+  const scenes: SavedEpisodeNotes['scenes'] = {};
+  for (const [key, note] of Object.entries(saved.notes)) {
+    const matches = review.scenes.filter(scene => scene.history?.some(round =>
+      (note.roundNumber == null || round.number === note.roundNumber) && round.segments.some(segment =>
+        segment.id === note.segment && segment.stage === note.stage && segment.run === note.run)));
+    const owners = !matches.length && note.roundNumber == null
+      ? review.scenes.filter(scene => scene.segments.some(segment => segment.id === note.segment))
+      : matches;
+    const id = owners.length === 1 ? owners[0].id : '';
+    (scenes[id] ??= { notes: {}, rounds: {} }).notes[key] = note;
+  }
+  return scenes;
+}
+
+export const workSceneLabel = (scene: string) => scene === 'whole' ? '整片' : scene ? '场次 ' + scene : '未登记场次';
+
+export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeReview, workMode = false): EpisodeExportNote[] {
+  const scenes = [...new Set([...review.scenes.map(item => item.id), ...Object.keys(saved.scenes)])];
+  if (!workMode) scenes.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
   return scenes.flatMap(scene => {
     const selected = review.scenes.find(item => item.id === scene);
     const ids = selected?.versions.map(item => item.id) || selected?.segments.map(item => item.id) || [];
     const order = (id: string) => { const index = ids.indexOf(id); return index < 0 ? ids.length + Number(id.slice(1)) : index; };
-    return Object.values(saved.scenes[scene]?.notes || {}).filter(note => note.text.trim())
+    return Object.values(saved.scenes[scene]?.notes || {}).filter(hasNoteContent)
       .sort((a, b) => order(a.segment) - order(b.segment) || (a.roundNumber ?? 0) - (b.roundNumber ?? 0)
         || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1)))
       .map(note => {
@@ -30,9 +48,10 @@ export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeRevi
         const candidate = video ? candidateLabel(video.candidateNumber, video.approved) : '候选号未登记';
         const current = !!selected && (note.roundNumber ?? null) === (selected.number ?? null)
           && selected.versions.some(item => item.id === note.segment && item.stage === note.stage && item.run === note.run);
-        const editable = review.rounds.includes(note.roundNumber!);
+        const editable = workMode || review.rounds.includes(note.roundNumber!);
+        const sceneTitle = workMode ? workSceneLabel(scene) : scene;
         return { ...note, scene, key: scene + '/' + noteKey(note), current, editable,
-          title: `${scene} / ${note.roundNumber ? `第${note.roundNumber}轮` : '未标注轮次'} / ${note.segment} / ${note.stage} / ${note.run} / ${candidate}${editable ? '' : ' / 场次历史（只读）'}`, original: note.text };
+          title: `${sceneTitle} / ${note.roundNumber ? `第${note.roundNumber}轮` : '未标注轮次'} / ${note.segment} / ${note.stage} / ${note.run} / ${candidate}${editable ? '' : ' / 场次历史（只读）'}`, original: note.text };
       });
   });
 }

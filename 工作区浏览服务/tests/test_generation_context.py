@@ -14,7 +14,7 @@ from backend.parsers.project import build_data
 from backend.services.projects import ProjectStore
 
 spec = importlib.util.spec_from_file_location('generation_writer', Path(__file__).resolve().parents[2] /
-    '.agents/skills/nora-ai-short-drama/scripts/generation_context.py')
+    '.agents/skills/nora-drama-production/scripts/generation_context.py')
 writer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(writer)
 
@@ -69,6 +69,38 @@ class GenerationContextTests(HttpTestCase):
 
     def videos(self):
         return build_data(self.project, web_episode_navigation=True)['catalogues']['09-剧集制作']['children'][0]['segments']['C001'][0]['videos']
+
+    def test_dialogues_come_from_candidate_snapshot_and_keep_each_speaker(self):
+        context, _, _ = self.add_run('R001')
+        frozen = self.project / context['storyboard']['file']
+        frozen.write_text(frozen.read_text().replace('**景别**',
+            '**台词**：女主：还没好？\n男主（画外现场对白）：烫。\n女主：我来。\n**音效**：无\n**景别**'))
+        lines = self.videos()[0]['context']['dialogues']
+        self.assertEqual(lines, [
+            {'shot': 'EP001-SH001', 'index': 0, 'speaker': '女主', 'original': '还没好？'},
+            {'shot': 'EP001-SH001', 'index': 1, 'speaker': '男主（画外现场对白）', 'original': '烫。'},
+            {'shot': 'EP001-SH001', 'index': 2, 'speaker': '女主', 'original': '我来。'},
+        ])
+        self.assertNotIn('最新版不应出现', str(lines))
+        frozen.write_text(frozen.read_text().replace('女主：还没好？\n男主（画外现场对白）：烫。\n女主：我来。', '无'))
+        self.assertEqual(self.videos()[0]['context']['dialogues'], [])
+
+    def test_pre_dialogue_persistent_context_cache_is_rebuilt(self):
+        context, _, _ = self.add_run('R001')
+        frozen = self.project / context['storyboard']['file']
+        frozen.write_text(frozen.read_text().replace('**景别**', '**台词**：女主：走吧。\n**景别**'))
+        cache_dir = Path(self.temp.name) / 'cache'
+        url = '/api/projects/示例项目/episodes/EP001/contexts/' + context['identity']
+        with patch.object(main, 'store', ProjectStore(self.project.parent, cache_directory=cache_dir)), TestClient(main.app) as client:
+            self.assertEqual(client.get(url).status_code, 200)
+        cache = cache_dir / ('示例项目/09-剧集制作--EP001--context--' + context['identity'] + '.json')
+        saved = json.loads(cache.read_text())
+        saved['schema'] = 24
+        saved['data']['context'].pop('dialogues')
+        cache.write_text(json.dumps(saved, ensure_ascii=False))
+        with patch.object(main, 'store', ProjectStore(self.project.parent, cache_directory=cache_dir)), TestClient(main.app) as client:
+            value = client.get(url).json()
+        self.assertEqual(value.get('dialogues'), [{'shot': 'EP001-SH001', 'index': 0, 'speaker': '女主', 'original': '走吧。'}])
 
     def test_playback_and_lazy_context_keep_every_recorded_version(self):
         first, _, missing = self.add_run('R001')
@@ -523,6 +555,76 @@ class GenerationContextTests(HttpTestCase):
         self.write('图片/公共.png', '已被替换的输入')
         with self.assertRaisesRegex(ValueError, '不可覆盖'):
             writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+
+    def test_first_task_shares_existing_readonly_image_without_extra_png_storage(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        source = self.project / '图片/公共.png'
+        source.chmod(0o444)
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        frozen = root / '输入素材/公共.png'
+        self.assertTrue(source.samefile(frozen))
+        self.assertEqual(source.read_text(), '提交时公共原图')
+
+    def test_new_round_automatically_reuses_identical_frozen_pngs(self):
+        root, workflow, mapping = self.automatic_task(selected=(0,))
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        old = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]
+        revised = root.with_name('EP001-C001-P001-R005-一采')
+        mapping['segments'][0].update(round='R005', local_execution_dir=str(revised))
+        self.write(str((revised / '输入映射.json').relative_to(self.project)), json.dumps(mapping))
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        saved = (revised / '输入映射.json').read_bytes()
+        current = json.loads(saved)['generation_contexts'][0]
+        self.assertEqual(current['references'], old['references'])
+        self.assertNotEqual(current['prompts'], old['prompts'])
+        self.assertNotEqual(current['storyboard'], old['storyboard'])
+        self.assertFalse((revised / '输入素材').exists())
+        # A later lexically earlier snapshot must not change this task's recorded association.
+        self.write(self.episode + '/其他资料/执行附件/AAA/输入素材/copy.png', '提交时公共原图')
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        self.assertEqual((revised / '输入映射.json').read_bytes(), saved)
+        self.assertEqual((self.project / current['references']['common'][0]['file']).stat().st_mode & 0o222, 0)
+        self.write('图片/公共.png', '正式图后来更新')
+        self.assertEqual((self.project / current['references']['common'][0]['file']).read_text(), '提交时公共原图')
+        with self.assertRaisesRegex(ValueError, '不可覆盖'):
+            writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+
+    def test_changed_png_gets_new_snapshot_while_unchanged_reference_is_shared(self):
+        root, workflow, mapping = self.automatic_task(selected=(0,))
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        old = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]
+        revised = root.with_name('EP001-C001-P001-R005-一采')
+        mapping['segments'][0].update(round='R005', local_execution_dir=str(revised))
+        # Same byte length is not proof of identical content.
+        self.write('图片/公共.png', '提交时公共新图')
+        self.write(str((revised / '输入映射.json').relative_to(self.project)), json.dumps(mapping))
+        writer.prepare_generation_context(self.project, revised, workflow, 'video-first-pass')
+        current = json.loads((revised / '输入映射.json').read_text())['generation_contexts'][0]
+        self.assertNotEqual(current['references']['common'], old['references']['common'])
+        self.assertEqual(current['references']['segment'], old['references']['segment'])
+        self.assertEqual((revised / '输入素材/公共.png').read_text(), '提交时公共新图')
+        self.assertEqual((root / '输入素材/公共.png').read_text(), '提交时公共原图')
+
+    def test_auto_reuse_ignores_formal_assets_history_and_other_projects(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        self.write('03-人物资料/参考图/副本.png', '提交时公共原图')
+        self.write(self.episode + '/其他资料/历史版本/输入素材/旧副本.png', '提交时公共原图')
+        other = self.project.parent / '另一个项目/09-剧集制作/EP001/其他资料/执行附件/task/输入素材/公共.png'
+        other.parent.mkdir(parents=True)
+        other.write_text('提交时公共原图')
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        self.assertEqual((root / '输入素材/公共.png').read_text(), '提交时公共原图')
+
+    def test_identical_bytes_under_different_names_share_file_but_keep_slots_and_origins(self):
+        root, workflow, _ = self.automatic_task(selected=(0,))
+        self.write('图片/本组.png', '提交时公共原图')
+        writer.prepare_generation_context(self.project, root, workflow, 'video-first-pass')
+        refs = json.loads((root / '输入映射.json').read_text())['generation_contexts'][0]['references']
+        common, local = refs['common'][0], refs['segment'][0]
+        self.assertEqual(local['file'], common['file'])
+        self.assertEqual((common['label'], local['label']), ('<Picture 1>', '<Picture 2>'))
+        self.assertEqual((common['original_file'], local['original_file']), ('图片/公共.png', '图片/本组.png'))
+        self.assertFalse((root / '输入素材/本组.png').exists())
 
     def test_same_revision_retry_keeps_context_and_old_mapping(self):
         root, workflow, mapping = self.automatic_task(selected=(0,))

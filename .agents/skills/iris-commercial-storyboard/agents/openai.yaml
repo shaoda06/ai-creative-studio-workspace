@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 分镜与声音"
+  short_description: "Iris 商业视频分镜与声音二级业务阶段，落实逐镜动作、构图和声音，维护导演表及同源分镜交付。"
+  default_prompt: "使用 $iris-commercial-storyboard 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

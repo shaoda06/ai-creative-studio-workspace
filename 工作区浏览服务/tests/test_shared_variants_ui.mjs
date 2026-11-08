@@ -7,8 +7,8 @@ const base = process.argv[2];
 assert.ok(base, 'Usage: node tests/test_shared_variants_ui.mjs URL');
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const width of [1362, 390]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 }, acceptDownloads: true });
+  for (const width of [1280, 1366, 1920]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 }, acceptDownloads: true });
     const errors = [], writes = [];
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', async route => {
@@ -56,7 +56,7 @@ try {
     assert.ok(await page.getByRole('searchbox', { name: '禁用搜索示例' }).isDisabled());
     await page.getByRole('searchbox', { name: '紧凑搜索示例' }).fill('找不到');
     assert.ok(await page.getByText('没有匹配的示例。').isVisible());
-    if (width < 600) assert.equal(await nav.evaluate(el => getComputedStyle(el).display), 'grid');
+    assert.equal(await nav.evaluate(el => getComputedStyle(el).flexDirection), 'column');
     await cats.getByRole('button', { name: '文件与正文', exact: true }).click();
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name: '下载本地导出示例', exact: true }).click();

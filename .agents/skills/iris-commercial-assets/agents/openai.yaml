@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 资产准备"
+  short_description: "Iris 商业视频资产准备二级业务阶段，维护唯一资产清单、真实来源与采用，准备镜头所需材料及资产视觉稿。"
+  default_prompt: "使用 $iris-commercial-assets 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

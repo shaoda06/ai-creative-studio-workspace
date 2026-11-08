@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { EpisodeProduction } from '../../src/components/EpisodeProduction';
 import type { DirectorSheets, FileItem, SceneRound } from '../../src/api';
 import { Preview, PreviewContext } from '../../src/components';
+import { ProductionAccessContext, noraProductionAccess } from '../../src/components/ProductionAccess';
 import { SceneDirectorSheets } from '../../src/components/SceneDirectorSheets';
 
 const image = (page: number, version = 'v02', sourceVersion = 'v07', candidateNumber = 2, adopted = false) => ({
@@ -18,7 +19,7 @@ export function DirectorSheetsFixture() {
   const client = useQueryClient();
   const [mode, setMode] = useState('formal');
   const [preview, setPreview] = useState<FileItem | null>(null);
-  const version = mode === 'old' ? 'v01' : mode === 'other' ? 'v08' : 'v07';
+  const version = mode === 'unknown-script' ? '' : mode === 'script' ? 'v02' : mode === 'old' ? 'v01' : mode === 'other' ? 'v08' : 'v07';
   const data = mode === 'seven' ? { ...sheets, formal: [], candidates: Array.from({ length: 7 }, (_, index) => image(index + 1)) } : mode === 'empty' ? undefined : mode === 'candidate' ? { ...sheets, formal: [], candidates: sheets.candidates.map(item => ({ ...item, adopted: false })) } : sheets;
   const rounds: SceneRound[] = [1, 2].map(number => ({ number, created_at: '', script: null,
     storyboard: { kind: 'document', name: '分镜', version: number === 1 ? 'v01' : 'v07' }, issues: [], segments: [{ id: 'P001', duration: 1, stage: '一采', run: 'R001' }] }));
@@ -43,6 +44,8 @@ export function DirectorSheetsFixture() {
   };
   return <section data-testid="director-sheets" className="panel">
     <h2>导演分镜表隔离检查</h2>
+    <button onClick={() => setMode('script')}>模拟脚本来源</button>
+    <button onClick={() => setMode('unknown-script')}>模拟未登记脚本版本</button>
     <button onClick={openEpisode}>模拟整集六页</button>
     <button onClick={() => setMode('seven')}>模拟七页候选</button>
     <button onClick={() => setMode('candidate')}>模拟仅候选</button>
@@ -55,7 +58,7 @@ export function DirectorSheetsFixture() {
     <PreviewContext.Provider value={setPreview}>
       {mode === 'episode' ? <EpisodeProduction project="director-fixture" selected="EP001" onSelect={() => {}} revision={1}
         items={[{ kind: 'group', name: 'EP001' }]} statistics={{ total: 1, completed: 0, running: 1, notStarted: 0 }} />
-        : <div className="episode-scene-content"><SceneDirectorSheets key={mode} sheets={data} storyboardVersion={version} revision={1} /></div>}
+        : <div className="episode-scene-content"><ProductionAccessContext value={{...noraProductionAccess, sourceDocumentLabel: mode.includes('script') ? '脚本' : undefined}}><SceneDirectorSheets key={mode} sheets={data} storyboardVersion={version} revision={1} /></ProductionAccessContext></div>}
 
       {preview && <Preview project="fixture-only" item={preview} revision={1} close={() => setPreview(null)} />}
     </PreviewContext.Provider>

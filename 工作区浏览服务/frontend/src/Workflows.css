@@ -8,5 +8,3 @@
 .workflow-info{min-width:0;flex:1}
 .workflow-info h3{margin:0;font-size:16px;line-height:1.6;overflow-wrap:anywhere}
 .workflow-downloads{display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex-shrink:0;max-width:100%}
-@media(max-width:1000px){.workflow-row{flex-direction:column;align-items:stretch;gap:14px;padding:16px}.workflow-info h3{font-size:15px}}
-@media(max-width:600px){.workflow-group-heading{align-items:flex-start;gap:12px}.workflow-group-heading h2{flex-shrink:0;font-size:18px}.workflow-group-heading p{max-width:55%;font-size:12px}}

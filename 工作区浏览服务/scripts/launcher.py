@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / 'runtime'
 CONFIG = RUNTIME / 'service.json'
 settings = json.loads(CONFIG.read_text('utf-8-sig')) if CONFIG.is_file() else {}
-WORKSPACE = Path(settings.get('workspace', ROOT.parent)).resolve()
+DEFAULT_WORKSPACE = ROOT.parent / 'workspaces/Nora Workspace'
+WORKSPACE = Path(settings.get('workspace', DEFAULT_WORKSPACE if DEFAULT_WORKSPACE.is_dir() else ROOT.parent)).resolve()
 PORT = int(settings.get('port', 8782))
 ENVIRONMENT = settings.get('environment', 'production')
 URL = f'http://127.0.0.1:{PORT}'
@@ -64,7 +65,7 @@ def mac_task(action):
         'Label': label, 'ProgramArguments': arguments, 'WorkingDirectory': str(ROOT),
         'EnvironmentVariables': {'PATH': os.environ.get('PATH', os.defpath)},
         'RunAtLoad': False, 'KeepAlive': False,
-        'StandardOutPath': str(RUNTIME / 'server.log'), 'StandardErrorPath': str(RUNTIME / 'server.log'),
+        'StandardOutPath': str(RUNTIME / 'launcher.log'), 'StandardErrorPath': str(RUNTIME / 'launcher.log'),
     }))
     command(['launchctl', 'bootstrap', f'gui/{os.getuid()}', str(path)])
     command(['launchctl', 'kickstart', target])
@@ -84,9 +85,12 @@ def serve():
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
     os.environ.update(NORA_WORKSPACE=str(WORKSPACE), NORA_SERVICE_ENV=ENVIRONMENT, NORA_SERVICE_PORT=str(PORT))
-    sys.stdout = sys.stderr = (RUNTIME / 'server.log').open('a', encoding='utf-8', buffering=1)
+    from service_logging import configure
+    configure(RUNTIME)
+    from backend.services.projects import ProjectStore
+    ProjectStore(WORKSPACE / 'projects', cache_directory=RUNTIME / 'project-cache').prune_cache()
     import uvicorn
-    uvicorn.run('backend.main:app', host='0.0.0.0', port=PORT)
+    uvicorn.run('backend.main:app', host='0.0.0.0', port=PORT, log_config=None)
 
 
 def running():
@@ -136,6 +140,7 @@ def start(open_browser=True, *, force_restart=False):
         except OSError as error:
             raise RuntimeError(f'{PORT}端口已被其他程序占用；未停止该程序。请查看工作区浏览服务/README.md。') from error
     RUNTIME.mkdir(exist_ok=True)
+    (RUNTIME / 'launcher.log').write_text('', encoding='utf-8')
     managed('start')
     for _ in range(40):
         data = running()
@@ -183,7 +188,10 @@ def main():
         else:
             (start if args.action == 'start' else restart)(not args.no_browser)
     except (OSError, RuntimeError, ValueError) as error:
-        if sys.platform == 'win32' and not args.no_browser and args.action != 'serve':
+        if args.action == 'serve':
+            import logging
+            logging.getLogger('launcher').exception('服务启动失败：%s', error)
+        elif sys.platform == 'win32' and not args.no_browser:
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, str(error), 'Nora 工作区浏览服务', 0x10)
         else:

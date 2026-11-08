@@ -22,7 +22,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
       requests.push(`${req.method} ${url}`);
       assert.equal(req.method, 'GET');
       let data;
-      if (url === '/api/projects') data = projects.map(id => ({ id, name: id }));
+      if (url === '/api/workspaces') data = [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: projects.map(id => ({ id, name: id })) }];
+      else if (url === '/api/projects') data = projects.map(id => ({ id, name: id }));
       else {
         const match = url.match(/^\/api\/projects\/([^/]+)\/(.+)$/);
         const [, name, route] = match || [];
@@ -39,8 +40,8 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
 try {
-  for (const width of [1362, 390, 320]) {
-    const context = await browser.newContext({ viewport: { width, height: 916 } });
+  for (const width of [1280, 1366, 1920]) {
+    const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -53,7 +54,7 @@ try {
     await body.getByText('甲项目的主旨与简介正文', { exact: true }).waitFor();
     const switchProject = async name => {
       await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
-      await page.getByRole('option', { name: new RegExp(`^0[12]-${name}`) }).click();
+      await page.getByRole('option', { name, exact: true }).click();
     };
     await switchProject('乙项目');
     try { await body.getByText('乙项目的项目定位正文', { exact: true }).waitFor({ timeout: 4000 }); }
@@ -71,5 +72,5 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
     await context.close();
   }
-  console.log(`PASS: 项目恢复后下拉切换、栏目切换、往返切换；1362/390/320px；无写请求或浏览器错误。截图：${screenshots}`);
+  console.log(`PASS: 项目恢复后下拉切换、栏目切换、往返切换；1280/1366/1920px；无写请求或浏览器错误。截图：${screenshots}`);
 } finally { await browser.close(); await server.close(); }

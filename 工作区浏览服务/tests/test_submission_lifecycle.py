@@ -692,10 +692,10 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         async with serving(remote) as remote_url, serving(api) as api_url:
             (self.root / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [remote_url]}), 'utf-8')
             self.data.url = remote_url
-            service = self.root / '工作区浏览服务/runtime/task-service.json'
+            service = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             service.parent.mkdir(parents=True)
-            service.write_text(json.dumps({'url': api_url, 'token': self.store.token}), 'utf-8')
-            command = [sys.executable, '-X', 'utf8', '-B', str(t.SKILL / 'scripts/comfyui_dispatch.py'),
+            service.write_text(json.dumps({'url': api_url, 'token': self.store.token, 'workspace': str(self.root)}), 'utf-8')
+            command = [sys.executable, '-X', 'utf8', '-B', str(t.SKILL.parent / 'studio-comfyui/scripts/comfyui_dispatch.py'),
                        '--project', str(self.project), '--task-type', 'image', '--workflow', str(workflow),
                        '--uploads', str(uploads), '--output-plan', str(outputs), '--record-dir', str(self.record),
                        '--image-plan', str(image_plan),

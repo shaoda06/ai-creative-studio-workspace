@@ -1,13 +1,16 @@
 export async function get<T>(path: string): Promise<T> {
   const response = await fetch(path);
-  if (!response.ok) throw new Error((await response.text()) || `读取失败（${response.status}）`);
+  if (!response.ok) throw Object.assign(new Error((await response.text()) || `读取失败（${response.status}）`), { status: response.status });
   return response.json();
 }
 export const projectUrl = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
 export const styleUrl = (path: string) => `/api/krea2/files/${path.split('/').map(encodeURIComponent).join('/')}`;
+export interface DialogueLine { shot: string; index: number; speaker: string; original: string }
 export interface GenerationContext {
+  dialogues?: DialogueLine[];
+  shotTimingSource?: 'recorded' | 'plan';
   scriptHtml: string; scriptUrl?: string; source?: string; issues: string[];
-  shots: { id: string; duration: number | null; html: string }[];
+  shots: { id: string; duration: number | null; start?: number; html: string }[];
   prompts: { english: string; chinese: string; englishUrl?: string; chineseUrl?: string };
   references: Record<'common' | 'segment', { name: string; label: string; kind: 'image' | 'video' | 'audio'; url?: string; missing?: boolean }[]>;
 }
@@ -17,14 +20,19 @@ export interface VideoProduct {
   previewUrl?: string; previewRevision?: string; previewNote?: string;
 }
 export interface SegmentVideo {
+  adoptionKnown?: boolean;
+  contextUrl?: string;
   products?: VideoProduct[];
   downloadUrl?: string;
   previewNote?: string;
   reviewFileRevision?: string; key: string; url: string; run: string; stage: string; approved: boolean; candidateNumber: number; context?: GenerationContext; fileRevision: string; deliveryStatus: string; taskStatus: string; taskStateUrl?: string; checkedAt: string }
-export interface SceneRound { number: number; created_at: string; note?: string; episodeRound?: boolean; script: (FileItem & { version: string }) | null; storyboard: (FileItem & { version: string }) | null; issues: string[]; segments: { id: string; duration: number; stage: string; run: string; scriptHtml: string; scriptUrl: string }[] }
-export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean };
-export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; record: FileItem | null }
-export interface FileItem { materialGroup?: string; materialStatus?: string; materialNote?: string; materialReview?: FileItem; version?: string; directorSheets?: Record<string, DirectorSheets>; storyboardIndex?: FileItem | null; generationPlan?: FileItem | null; videoPrompts?: FileItem[]; materials?: FileItem[]; materialRecord?: FileItem | null; episodeRounds?: { number: number; scenes: string[] }[]; sceneRounds?: Record<string, SceneRound[]>; warnings?: string[]; previousEpisode?: FileItem | null; kind: string; name: string; title?: string; titleStatus?: string; productionComplete?: boolean; scenes?: string[]; productionIssues?: { key: string; message: string; scene?: string }[]; script?: FileItem | null; storyboards?: Record<string, FileItem>; segments?: Record<string, { id: string; duration: number; historical?: boolean; scriptHtml: string; scriptUrl?: string; videos: SegmentVideo[] }[]>; key?: string; url?: string; children?: FileItem[]; files?: FileItem[]; summary?: string; category?: string; statusHtml?: string; approvalHtml?: string; sourceHtml?: string; duration?: string; media?: FileItem; doc?: Record<string, unknown>; prompts?: { english?: string; chinese?: string }; }
+export interface SceneRound { number: number; created_at: string; note?: string; episodeRound?: boolean; record?: FileItem | null; reviewOutputs?: FileItem[]; script: (FileItem & { version: string }) | null; storyboard: (FileItem & { version: string }) | null; issues: string[]; segments: { key?: string; carried?: boolean; id: string; duration: number; stage: string; run: string; scriptHtml: string; scriptUrl: string; shotIds?: string[] }[] }
+export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean; sourceRecord?: FileItem };
+export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; history?: DirectorSheetImage[]; record: FileItem | null }
+export interface FileItem {
+  workStatusLabel?: string;
+  hasArchive?: boolean; productionTask?: FileItem | null; roundHistory?: FileItem | null; workStatus?: { label: string; summaryHtml: string; deliverySummary: string; record: FileItem }; readOnly?: boolean; director?: string | null; jianying?: { jypack: string | null; zip: string | null }; materialGroup?: string; materialStatus?: string; materialNote?: string; materialReview?: FileItem; version?: string; directorSheets?: Record<string, DirectorSheets>; storyboardIndex?: FileItem | null; generationPlan?: FileItem | null; videoPrompts?: FileItem[]; materials?: FileItem[]; materialRecord?: FileItem | null; episodeRounds?: { number: number; scenes: string[] }[]; sceneRounds?: Record<string, SceneRound[]>; warnings?: string[]; previousEpisode?: FileItem | null; kind: string; name: string; title?: string; titleStatus?: string; productionComplete?: boolean; scenes?: string[]; productionIssues?: { key: string; message: string; scene?: string }[]; script?: FileItem | null; storyboards?: Record<string, FileItem>; segments?: Record<string, { id: string; label?: string; duration: number; historical?: boolean; planned?: boolean; scriptHtml: string; scriptUrl?: string; shotIds?: string[]; videos: SegmentVideo[] }[]>; key?: string; url?: string; children?: FileItem[]; files?: FileItem[]; summary?: string; category?: string; statusHtml?: string; approvalHtml?: string; sourceHtml?: string; duration?: string; media?: FileItem; doc?: Record<string, unknown>; prompts?: { english?: string; chinese?: string };
+}
 export interface Group { name: string; files: FileItem[] }
 // Source records contain stage-specific fields; retain their original keys and text.
 export type RecordData = Record<string, any>;
@@ -37,3 +45,7 @@ export function searchTree(items: FileItem[], search: string): FileItem[] {
     return children.length ? [{ ...item, children, files: undefined }] : [];
   });
 }
+
+export interface WorkspaceSpace { project_layout?: 'flat' | 'nested'; id: string; name: string; view: 'serial-drama' | 'iris-commercial' | 'chloe-commerce' | 'files'; projects: { id: string; name: string }[] }
+export const spaceProjectPath = (space: WorkspaceSpace, name: string) => space.view === 'serial-drama'
+  ? `/projects/${encodeURIComponent(name)}` : space.project_layout === 'nested' ? `/spaces/${space.id}/contexts/${encodeURIComponent(name)}` : `/spaces/${space.id}/projects/${encodeURIComponent(name)}`;

@@ -12,8 +12,8 @@ await server.listen();
 const browser=await chromium.launch({headless:true});
 const screenshots=await mkdtemp('/tmp/nora-task-card-details-');
 try {
- for(const width of [1362,390,320]) {
-  const page=await browser.newPage({viewport:{width,height:916}}), errors=[], writes=[];
+ for(const width of [1280, 1366, 1920]) {
+  const page=await browser.newPage({viewport:{ width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 }}), errors=[], writes=[];
   page.on('pageerror',error=>errors.push(String(error)));
   page.on('console',msg=>{if(msg.type()==='error')errors.push(msg.text())});
   const rows=['one','two'].map((id,i)=>({queue:'local',group_id:'group',id,project:'隔离测试',title:'片段'+(i+1),task_type:'video-first-pass',status:'local_queued',category:'queued',source_session_name:'来源会话长名称与任务标题独立保留'.repeat(6),remote_url:'http://fixture-node',created_at:'2026-10-27T00:00:00Z'}));
@@ -22,7 +22,8 @@ try {
   await page.route('**/api/**',async route=>{
     const r=route.request(), path=new URL(r.url()).pathname;
     if(r.method()!=='GET')writes.push(path);
-    if(path==='/api/comfy/tasks')return route.fulfill({json:{tasks:[running],local_tasks:rows,remote_nodes:[{url:'http://fixture-node',name:'隔离节点',connection:'connected',queue:[{prompt_id:'running-prompt',status:'running',queue_position:null}],running_count:1,queued_count:0}],local_counts:{'http://fixture-node':{queued:2,paused:0,history:0}},history_updated_at:{}}});
+    if(path==='/api/workspaces') return route.fulfill({json:[{id:'nora',name:'Nora示例空间',view:'serial-drama',projects:[]}]});
+    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[running],local_tasks:rows,remote_nodes:[{url:'http://fixture-node',name:'隔离节点',connection:'connected',queue:[{prompt_id:'running-prompt',status:'running',queue_position:null}],running_count:1,queued_count:0}],local_counts:{'http://fixture-node':{queued:2,paused:0,history:0}},history_updated_at:{}}});
     const match=path.match(/\/api\/comfy\/tasks\/(one|two|running)\/detail$/);
     if(match){
       const members=[...rows,running];
@@ -69,5 +70,5 @@ try {
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);
   await page.close();
  }
- console.log('PASS: 1362/390/320px; aligned shared detail labels, long source name, group progress, member navigation, live completion; no writes/errors/overflow; screenshots '+screenshots);
+ console.log('PASS: 1280/1366/1920px; aligned shared detail labels, long source name, group progress, member navigation, live completion; no writes/errors/overflow; screenshots '+screenshots);
 } finally {await browser.close();await server.close();}

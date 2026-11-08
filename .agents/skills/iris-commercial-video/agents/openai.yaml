@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 商业视频制作"
+  short_description: "Iris 广告、产品介绍和品牌宣传片主控，按实际阶段路由需求、创意、分镜、资产、生成、返修与剪辑交接，管理客户反馈及流程维护；不"
+  default_prompt: "使用 $iris-commercial-video 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

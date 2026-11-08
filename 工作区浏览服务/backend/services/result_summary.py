@@ -5,38 +5,11 @@ from pathlib import Path
 from urllib.parse import quote
 
 
-def prepared_identities(store, key):
-    """Read an existing checked association once; do not infer it from a save name."""
-    row = store.rows[key]
-    if '_review_identities' not in row:
-        data = row['input']
-        record = Path(data.record_dir)
-        identities = set()
-        try:
-            report = json.loads((record / '执行检查报告.json').read_text('utf-8-sig'))
-        except FileNotFoundError:
-            # Legacy registrations can lack preparation reports. Fill only this missing link.
-            if not row['state'].get('preparation_required'):
-                try:
-                    mapping = json.loads((record / '输入映射.json').read_text('utf-8-sig'))
-                    identities = {item['identity'] for item in mapping.get('generation_contexts', [])}
-                except (OSError, ValueError, KeyError, TypeError):
-                    pass
-        except (OSError, ValueError):
-            pass
-        else:
-            try:
-                if report.get('ok'):
-                    mapping = report.get('prepared_input', {}).get('mapping', {})
-                    stage = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}[data.task_type]
-                    identities = {f"{mapping['segments'][index]['segment']}-{mapping['segments'][index]['round']}-{stage}"
-                                  for index in mapping.get('selected_indices', [])}
-            except (KeyError, TypeError, AttributeError, IndexError):
-                pass
-        if identities:
-            row['_review_identities'] = identities
-        return identities
-    return row['_review_identities']
+
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-drama-production/scripts'))
+from drama_result_identities import prepared_identities
 
 
 def outputs(store, key):
@@ -62,14 +35,15 @@ def outputs(store, key):
                 target = next((target for target in data.segment_plan.targets if target.index == item['index']), None)
                 item['receipt'] = str(Path(data.record_dir) / (target.response_name if target else f"最终取回-{item['index']:03d}.json"))
     items = store.record_paths(key).convert(items, relative=True)
-    if data.task_type.startswith('video-'):
+    from backend.services.video_tasks import business as business_video
+    if business_video(data):
         for item in items:
             trusted = bool(item.get('identity'))
             identity = item['identity'] = item.get('identity') or Path(item['path']).stem
             parts = identity.split('-')
             if len(parts) == 5 and (trusted or identity in prepared_identities(store, key)):
                 item['review'] = dict(zip(('episode', 'scene', 'part', 'revision', 'stage'), parts))
-    if not data.task_type.startswith('video-') or all(item.get('review') for item in items):
+    if not business_video(data) or all(item.get('review') for item in items):
         row['_result_outputs'] = signature, items
     else:
         row.pop('_result_outputs', None)  # Missing proof can be repaired before an explicit retry.
@@ -89,7 +63,7 @@ def summary(store, key):
     result['title'], result['task_type'] = data.title, data.task_type
     result.update(remote_url=data.url, outputs=deepcopy(outputs(store, key)),
                   record_dir=store.record_paths(key).relative_file(data.record_dir),
-                  review_path='/#/projects/' + quote(state['project'], safe=''),
+                  review_path='/#/' if state['project'] == '@shared' else '/#/projects/' + quote(state['project'], safe=''),
                   next_action=('report-user' if state.get('closeout', {}).get('status') == 'completed' else 'inspect-closeout')
                   if data.task_type.startswith('video-') else
                   ('display-image' if state.get('closeout', {}).get('status') == 'completed' else 'inspect-closeout'))
@@ -125,7 +99,8 @@ def image_delivery(store, tasks):
             report_file=str(Path(data.record_dir) / '结果收尾报告.json'),
             images=[dict(file=str(Path(data.project) / item.get('display_path', item['path'])),
                 candidate_file=str(Path(data.project) / item['path']), width=item['width'], height=item['height'],
-                format=item['format'], bytes=item['bytes'], draft_file=str(Path(data.project) / item['draft'])) for item in pictures]))
+                format=item['format'], bytes=item['bytes'],
+                draft_file=str(Path(data.project) / item['draft']) if item.get('draft') else None) for item in pictures]))
     return dict(completed=len(ready), image_count=sum(len(item['images']) for item in ready), tasks=ready)
 
 
@@ -144,7 +119,7 @@ def video_delivery(store, tasks):
         ready.append(dict(task_id=task['id'], task_type=task['task_type'], title=task['title'], review_path=task['review_path'],
             report_file=str(Path(data.record_dir)/'结果收尾报告.json'),
             videos=[dict(identity=item['identity'], file=str(Path(data.project)/item['path']),
-                draft_file=str(Path(data.project)/item['draft']), metadata=item.get('metadata')) for item in videos]))
+                draft_file=str(Path(data.project)/item['draft']) if item.get('draft') else None, metadata=item.get('metadata')) for item in videos]))
     return dict(completed=len(ready), video_count=sum(len(item['videos']) for item in ready), tasks=ready)
 
 

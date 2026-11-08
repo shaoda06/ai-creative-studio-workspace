@@ -106,11 +106,13 @@ class VideoExecutionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('视频轨3.0Mbps；文件总3.1Mbps',draft.read_text())
             app=FastAPI();app.state.comfy_tasks=self.store
             app.add_api_route('/api/internal/comfy/notifications/{batch_id}/report',main.agent_result_report,methods=['POST'])
-            cli=self.root/'.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
-            cli.parent.mkdir(parents=True);shutil.copyfile(tasks.SKILL/'scripts/browser_tasks.py',cli)
+            cli=self.root/'.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
+            cli.parent.mkdir(parents=True);shutil.copyfile(Path(__file__).resolve().parents[2]/'.agents/skills/studio-workspace-browser/scripts/browser_tasks.py',cli)
+            shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+            shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
             async with serving(app) as url:
-                config=self.root/'工作区浏览服务/runtime/task-service.json'
-                config.parent.mkdir(parents=True,exist_ok=True);config.write_text(json.dumps({'url':url,'token':self.store.token}))
+                config=self.root/'工作区浏览服务/runtime/workspaces/nora/task-service.json'
+                config.parent.mkdir(parents=True,exist_ok=True);config.write_text(json.dumps({'url':url,'token':self.store.token,'workspace':str(self.root)}))
                 with patch.object(result_registration,'register',side_effect=AssertionError('read must not register')):
                     process=await asyncio.create_subprocess_exec(sys.executable,'-B',str(cli),'report','--notification-id',batch,
                         stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,
@@ -143,7 +145,7 @@ class VideoExecutionTests(unittest.IsolatedAsyncioTestCase):
         result=video_records.probe(output)
         self.assertEqual((result['width'],result['height']),(64,48));self.assertEqual(result['frame_rate'],24)
         self.assertAlmostEqual(result['duration'],.5,places=3);self.assertEqual(result['audio'],[])
-        with patch.object(video_records.shutil,'which',return_value=None),self.assertRaisesRegex(FileNotFoundError,'ffprobe'):
+        with patch.object(__import__('video_metadata').shutil,'which',return_value=None),self.assertRaisesRegex(FileNotFoundError,'ffprobe'):
             video_records.probe(output)
 
 

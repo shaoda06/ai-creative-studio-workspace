@@ -1,0 +1,81 @@
+"""Fixed native Imagegen preparation/closeout CLI. Does not generate or upscale images."""
+import argparse
+import json
+from pathlib import Path
+import sys
+
+WORKSPACE = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(WORKSPACE / '工作区浏览服务'))
+sys.path.insert(0, str(WORKSPACE / '.agents/skills/studio-comfyui/scripts'))
+
+from project_paths import project_file
+from backend.services import imagegen_results as native
+from backend.services.image_closeout import validate_names
+from backend.services.execution_checks import write_json
+from backend.services.projects import ProjectStore
+
+
+def main():
+    parser = argparse.ArgumentParser(description='准备Imagegen交接、运行固定收尾或只读核对命名；不调用生图或超分，不登记自动批准')
+    commands = parser.add_subparsers(dest='command', required=True)
+    for command in ('prepare', 'complete', 'report', 'fail', 'check-name'):
+        item = commands.add_parser(command)
+        item.add_argument('--project', required=True, help='本机项目绝对目录；也可为独立测试项目')
+        if command in ('prepare', 'check-name'):
+            item.add_argument('--request', required=True, help=('项目内JSON请求：kind/formal/draft/output，只核对路径，不写文件'
+                              if command == 'check-name' else '项目内JSON请求，含formal/output、完整prompt和实际授权；专项样例按规定填写'))
+        else:
+            item.add_argument('--manifest', required=True, help='prepare返回的项目内Imagegen执行清单路径')
+        if command == 'complete':
+            item.add_argument('--source', required=True, help='内置Imagegen实际返回的本机原生PNG绝对路径；只复制，不改原图')
+            item.add_argument('--actual-prompt-file', help='可选；默认读取执行清单内的实际提示词；旧清单仍读取原提示词文件')
+            item.add_argument('--record-repair', help='已有成果的登记修复JSON：reason/expected_updates/updates，不改原执行清单或批准')
+        if command == 'fail':
+            item.add_argument('--error-file', required=True, help='实际错误的UTF-8文件；不自动重试或改换模型／能力')
+    args = parser.parse_args()
+    root = Path(args.project).resolve()
+    if args.command == 'check-name':
+        spec = json.loads(project_file(root, args.request).read_text('utf-8-sig'))
+        validate_names(root, dict(kind=spec['kind'], image_type=spec.get('image_type'), formal=spec.get('formal'), draft=spec['draft'],
+            images=[dict(path=spec['output'])]), required=True)
+        result = dict(status='valid', formal=spec.get('formal'), candidate=spec['output'])
+    elif args.command == 'prepare':
+        job = native.prepare(root, args.request)
+        result = {name: job[name] for name in ('manifest', 'executor', 'generation', 'candidate', 'prompt_file',
+                  'generation_call_file', 'result_store_key', 'report') if name in job}
+        result['result_store_key'] = job.get('result_store_key', 'imagegen:' + root.name + ':' + job['manifest'])
+        result['generation_call'] = native.generation_call(job['request']['prompt'],
+            [str(project_file(root, item['file'])) for item in job['request'].get('references', [])], result['result_store_key'])
+        result['complete_command'] = [sys.executable, str(Path(__file__).resolve()), 'complete',
+            '--project', str(root), '--manifest', job['manifest']]
+    else:
+        job = json.loads(project_file(root, args.manifest).read_text('utf-8-sig'))
+        if args.command == 'complete':
+            if args.actual_prompt_file:
+                actual = Path(args.actual_prompt_file).read_text('utf-8-sig')
+            elif 'prompt_file' in job:
+                actual = project_file(root, job['prompt_file']).read_text('utf-8-sig')
+            else:
+                actual = job['request']['prompt']
+            if actual != job['request']['prompt']:
+                raise ValueError('实际提示词与交接不符，未保存或登记候选')
+            receipt = project_file(root, str(Path(job['record']) / 'Imagegen实际调用结果.json'))
+            content = dict(source=str(Path(args.source).resolve()), actual_prompt=actual,
+                executor=job['executor'], provider='imagegen')
+            if receipt.exists():
+                if json.loads(receipt.read_text('utf-8-sig')) != content:
+                    raise ValueError('实际调用凭据已存在不同内容，不覆盖')
+            else:
+                write_json(receipt, content)
+            repair = json.loads(Path(args.record_repair).read_text('utf-8-sig')) if args.record_repair else None
+            result = native.complete(root, args.manifest, receipt, ProjectStore(root.parent), repair=repair)
+        elif args.command == 'fail':
+            result = native.fail(root, args.manifest, Path(args.error_file).read_text('utf-8-sig'))
+        else:
+            result = json.loads(project_file(root, job['report']).read_text('utf-8-sig'))
+        result = {name: result[name] for name in ('provider', 'status', 'user_message_ready', 'items', 'review_path', 'browser', 'error') if name in result}
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == '__main__':
+    main()

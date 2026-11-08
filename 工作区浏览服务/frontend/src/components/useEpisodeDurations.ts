@@ -10,7 +10,7 @@ export function sceneDurationEntries(episode: FileItem, scene: string, number?: 
   const round = episode.sceneRounds?.[scene]?.find(item => item.number === number);
   return (round?.segments || segments.filter(item => !item.historical)).map(entry => {
     const videos = segments.find(item => item.id === entry.id)?.videos || [];
-    const video = 'stage' in entry ? videos.find(item => item.stage === entry.stage && item.run === entry.run)
+    const video = 'stage' in entry ? videos.find(item => item.stage === entry.stage && item.run === entry.run && (!("key" in entry) || !entry.key || item.key === entry.key))
       : latestVideo(videos.filter(item => item.url));
     const final = video?.products?.find(item => item.default);
     return { planned: entry.duration, url: final ? final.url : video?.url };

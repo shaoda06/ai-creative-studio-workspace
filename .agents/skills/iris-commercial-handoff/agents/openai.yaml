@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 返修与交接"
+  short_description: "Iris 商业视频返修与交接二级业务阶段，评估局部修复或重做、维护采用组合，按明确要求调用共用工具打包。"
+  default_prompt: "使用 $iris-commercial-handoff 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

@@ -1,3 +1,4 @@
+import { checkCandidateMessages } from './check-candidate-messages.mjs';
 import { checkSharedDownloads } from './check-shared-downloads.mjs';
 import { checkEpisodeDirectorSheets } from './check-episode-director-sheets.mjs';
 import { checkSharedInputs } from './check-shared-inputs.mjs';
@@ -50,13 +51,18 @@ try {
   server = await preview({ ...config, preview: { host: '127.0.0.1', port: 0, open: false } });
   const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
   browser = await chromium.launch({ headless: true });
-  for (const width of [1362, 390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } });
-    const errors = [], forbidden = [];
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
+    const { width, height } = viewport;
+    const page = await browser.newPage({ viewport });
+    const errors = [], forbidden = []; let contextAttempts = 0;
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
+      if (url.origin === origin && url.pathname === '/api/fixture-context') {
+        contextAttempts++;
+        return route.fulfill(contextAttempts === 1 ? { status: 503, json: { detail: '隔离读取失败' } } : { json: { scriptHtml: '<p>恢复后的分镜</p>', shots: [], issues: [], prompts: { english: 'Recovered.', chinese: '恢复后的提示词。' }, references: { common: [], segment: [] } } });
+      }
       // Local fixture responses only; no request reaches a project service.
       if (url.origin === origin && /^\/api\/projects\/director-fixture\/revision-notes\/EP001\/C00[1-4]$/.test(url.pathname) && request.method() === 'GET')
         return route.fulfill({ json: { notes: {}, rounds: {} } });
@@ -81,11 +87,53 @@ try {
     await checkSharedDownloads(page, width);
     await checkSharedInputs(page, width, selfTest);
     const showcase = page.getByTestId('showcase'), business = page.getByTestId('business');
+    await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const spacedDocument = showcase.getByRole('region', { name: '分镜章节留白', exact: true });
+    assert.equal(await spacedDocument.locator('.prose h3').nth(1).evaluate(el => getComputedStyle(el).marginTop), '40px');
+    assert.notEqual(await spacedDocument.locator('.prose h3').first().evaluate(el => getComputedStyle(el).marginTop), '40px');
+    assert.equal(await spacedDocument.locator('.prose p').first().evaluate(el => getComputedStyle(el).marginTop), '13px');
+
     await showcase.getByRole('button', { name: '布局与搜索', exact: true }).click();
-    const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true });
+    await showcase.getByRole('searchbox', { name: '搜索示例入口', exact: true }).fill('');
+    const entryCards = showcase.getByRole('region', { name: '入口卡片与搜索' }).getByRole('link');
+    await entryCards.nth(1).waitFor();
+    assert.equal(await entryCards.count(), 2);
+    const entryBottoms = await entryCards.evaluateAll(cards => cards.map(card => card.querySelector('p').getBoundingClientRect().bottom));
+    assert.ok(Math.abs(entryBottoms[0] - entryBottoms[1]) <= 1, `${width}px / 展示页入口卡片贴底对齐`);
+    await contained(entryCards.first(), `${width}px / 展示页入口卡片`);
+    const compactEntries = showcase.getByRole('region', { name: '紧凑入口卡片', exact: true }).getByRole('link');
+    assert.deepEqual(await compactEntries.first().evaluate(el => {
+      const style = getComputedStyle(el);
+      return [style.paddingTop, style.paddingBottom, style.columnGap, getComputedStyle(el.querySelector('h3')).margin];
+    }), ['18px', '18px', '6px', '0px']);
+    assert.equal(await entryCards.first().evaluate(el => getComputedStyle(el).paddingTop), '23px');
+    for (const entry of await compactEntries.all()) await contained(entry, `${width}px / 紧凑入口卡片`);
+    const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
+    const singlePath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '示例当前栏目' });
+    for (const path of [singlePath, namingPath]) {
+      assert.equal(await path.evaluate(el => getComputedStyle(el).cursor), 'pointer');
+      assert.equal(await path.locator('[aria-current="page"]').evaluate(el => getComputedStyle(el).cursor), 'pointer');
+    }
+    assert.equal(await namingPath.locator('a').evaluate(el => getComputedStyle(el).cursor), 'pointer');
+    const currentStyle = node => {
+      const style = getComputedStyle(node);
+      return [style.color, style.fontSize, style.fontWeight];
+    };
+    assert.deepEqual(await singlePath.locator('[aria-current="page"]').evaluate(currentStyle),
+      await namingPath.locator('[aria-current="page"]').evaluate(currentStyle));
+    assert.equal(await singlePath.evaluate(node => getComputedStyle(node).marginBottom), '0px');
+    await contained(singlePath, `${width}px / 页头当前位置`);
+    const titleRow = showcase.locator('.page-heading-title-row');
+    const titlePositions = await titleRow.evaluate(el => ['h1', '.page-actions'].map(selector => { const r=el.querySelector(selector).getBoundingClientRect(); return {y:r.y,height:r.height}; }));
+    assert.ok(Math.abs(titlePositions[0].y+titlePositions[0].height/2-titlePositions[1].y-titlePositions[1].height/2)<=5, `${width}px / 纵向页头标题与操作同行`);
+    await contained(titleRow, `${width}px / 纵向页头操作区`);
+
     assert.match(await namingPath.innerText(), /EP001 · 组件演示集/);
     assert.doesNotMatch(await namingPath.innerText(), /（最终定名）/);
     await contained(namingPath.locator('.episode-title-status.status-green'), `${width}px / 标题集名状态`);
+    const downloadPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '下载操作示例' });
+    await contained(downloadPath, `${width}px / 展示页路径与操作插槽`);
+    await contained(downloadPath.locator('.breadcrumb-actions'), `${width}px / 展示页双下载按钮`);
     await showcase.getByRole('button', { name: '下拉菜单', exact: true }).click();
     const reference = showcase.getByRole('combobox', { name: '高亮选项示例', exact: true });
     const expected = await styleOf(reference);
@@ -112,10 +160,10 @@ try {
           const productBounds = await productMenu.boundingBox();
           assert.ok(productBounds.x >= 0 && productBounds.x + productBounds.width <= width, '[产物菜单越界]');
           await productMenu.getByRole('option', { name: /绿底 MP4/ }).click();
-          assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /process=1/);
+          assert.match(await business.locator('.segment-video video').getAttribute('src'), /process=1/);
           await productSelect.click();
           await productMenu.getByRole('option', { name: /透明 MOV 默认/ }).click();
-          assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /final=1/);
+          assert.equal(await business.getByRole('link', { name: /查看视频原文件/ }).count(), 0);
           assert.match(await business.locator('.segment-video video').getAttribute('src'), /preview=1/);
         }
         await contained(selectors, context);
@@ -123,13 +171,13 @@ try {
         assert.equal(overflow, false, `[页面越界] ${context}`);
       }
     }
-    if (selfTest && width === 390) {
+    if (selfTest && width === 1280) {
       // Inject each known failure, then run the very same assertions used above.
       let injected = await page.addStyleTag({ content: '.video-source{font-size:11px!important}.segment-selectors .tab-select{font-size:inherit!important}' });
       await assert.rejects(sameStyle(business.getByRole('combobox', { name: '画质选择', exact: true }), expected, '模拟宽屏继承'), /字号\/样式继承/);
       await injected.evaluate(el => el.remove());
-      injected = await page.addStyleTag({ content: '.segment-selectors{max-width:none!important;flex-wrap:nowrap!important}' });
-      await assert.rejects(contained(selectors, '模拟手机越界'), /容器越界/);
+      injected = await page.addStyleTag({ content: `.segment-selectors{min-width:${width + 100}px!important;max-width:none!important;flex-wrap:nowrap!important}` });
+      await assert.rejects(contained(selectors, '模拟桌面容器越界'), /容器越界/);
       await injected.evaluate(el => el.remove());
       await contained(selectors, '恢复后');
       const screenshot = join(tmpdir(), `nora-shared-layout-${process.pid}.png`);
@@ -194,19 +242,19 @@ try {
     assert.equal(fullscreenBox.x, 0);
     assert.equal(fullscreenBox.y, 0);
     assert.equal(fullscreenBox.width, width);
-    assert.equal(fullscreenBox.height, 918);
+    assert.equal(fullscreenBox.height, height);
     const fullscreenStyle = await sheetDialog.evaluate(el => ({ background: getComputedStyle(el).backgroundColor, padding: getComputedStyle(el.querySelector('.dialog-body')).padding }));
     assert.equal(fullscreenStyle.background, 'rgba(24, 34, 47, 0.9)', '深灰蓝半透明蒙版');
-    const imageFrame = await sheetDialog.locator('.director-sheet-fullscreen-image').boundingBox();
-    assert.ok(imageFrame.x >= 16 && imageFrame.y >= 48 && imageFrame.x + imageFrame.width <= width - 16 && imageFrame.y + imageFrame.height <= 918 - 24, '全屏图像四周留空隙');
+    const imageFrame = await sheetDialog.locator('.fullscreen-image-close').boundingBox();
+    assert.ok(imageFrame.x >= 16 && imageFrame.y >= 48 && imageFrame.x + imageFrame.width <= width - 16 && imageFrame.y + imageFrame.height <= height - 24, '全屏图像四周留空隙');
     const closeCircle = await sheetDialog.getByRole('button', { name: '关闭', exact: true }).boundingBox();
     assert.equal(closeCircle.width, 40);
     assert.equal(closeCircle.height, 40);
     assert.equal(closeCircle.y, 12);
     assert.equal(closeCircle.x + closeCircle.width, width - 16);
-    assert.match(await sheetDialog.locator('.director-sheet-fullscreen-image > img').getAttribute('alt'), /第02页/);
+    assert.match(await sheetDialog.locator('.fullscreen-image-close > img').getAttribute('alt'), /第02页/);
     await sheetDialog.getByRole('button', { name: '下一张图', exact: true }).click();
-    assert.match(await sheetDialog.locator('.director-sheet-fullscreen-image > img').getAttribute('alt'), /第03页/);
+    assert.match(await sheetDialog.locator('.fullscreen-image-close > img').getAttribute('alt'), /第03页/);
     await page.keyboard.press('Escape');
     await sheetDialog.waitFor({ state: 'hidden' });
     assert.match(await sheetImage.getAttribute('alt'), /第03页/, '退出全屏保留当前页');
@@ -257,15 +305,22 @@ try {
     assert.match(await sheets.getByRole('combobox', { name: '导演分镜表候选' }).innerText(), /候选2/);
     assert.equal(await sheetImage.count(), 1, '无采用时默认当前来源最新候选');
     await sheets.getByRole('button', { name: '模拟无图旧版分镜', exact: true }).click();
-    assert.equal(await sheets.getByText('分镜 v01 尚未制作导演分镜表。', { exact: true }).count(), 1);
+    assert.equal(await sheets.getByText('分镜 v01 暂无对应导演分镜表。', { exact: true }).count(), 1);
     assert.equal(await sheetImage.count(), 0, '旧分镜不换用新图');
     await sheets.getByRole('button', { name: '模拟其他来源分镜', exact: true }).click();
     assert.match(await sheetImage.getAttribute('alt'), /v03-第01页/, '仅显示匹配来源候选');
     assert.equal(await sheetPages.getByRole('button').count(), 1);
     assert.equal(await sheetArrows.count(), 0, '单页不出现翻页箭头');
     await sheets.getByRole('button', { name: '模拟空场次', exact: true }).click();
-    assert.equal(await sheets.getByText('分镜 v07 尚未制作导演分镜表。', { exact: true }).count(), 1);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '导演表手机无横向溢出');
+    assert.equal(await sheets.getByText('分镜 v07 暂无对应导演分镜表。', { exact: true }).count(), 1);
+    await sheets.getByRole('button', { name: '模拟脚本来源', exact: true }).click();
+    await sheets.getByText('脚本 v02 暂无对应导演分镜表。', { exact: true }).waitFor();
+    await sheets.getByRole('button', { name: '历史版本', exact: true }).click();
+    assert.match(await sheets.getByRole('combobox', { name: '历史导演分镜表版本', exact: true }).innerText(), /脚本 v07/);
+    await sheets.getByRole('button', { name: '模拟未登记脚本版本', exact: true }).click();
+    await sheets.getByText('尚未登记来源脚本版本。', { exact: true }).waitFor();
+
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, '导演表桌面无横向溢出');
     await checkEpisodeDirectorSheets(page, sheets, width);
     console.log(`导演分镜表检查：${width}px单图、移除重复版本文字、数字跳页与高亮同步、圆形箭头、首尾隐藏、记录与下载同排靠右、全视口看图与退出、审阅入口靠右、来源版本筛选、候选采用状态、单页及空场次通过。`);
     await showcase.getByRole('button', { name: '列表与分页', exact: true }).click();
@@ -285,12 +340,75 @@ try {
     assert.equal(await fullExample.locator(':scope > header').count(), 0, '展示页使用真实无顶部栏规格');
     assert.equal((await fullExample.boundingBox()).width, width);
     await fullExample.getByRole('button', { name: '关闭', exact: true }).click();
+    await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const fieldTable=showcase.getByRole('region',{name:'字段表格',exact:true}).locator('table');
+    const fieldRatio=await fieldTable.evaluate(table=>table.querySelector('th').getBoundingClientRect().width/table.getBoundingClientRect().width);
+    assert.ok(Math.abs(fieldRatio-.4)<.005,'字段表格左列固定40%');
+    assert.equal(await fieldTable.evaluate(table=>table.scrollWidth<=table.clientWidth+1),true,'长正文在表格内换行');
+    await contained(fieldTable,`${width}px / 字段表格`);
     await showcase.getByRole('button', { name: '图片与音视频', exact: true }).click();
+    const compactAsset = showcase.locator('.asset-media-card-compact').filter({ hasText: 'A001 · 已采用示例' });
+    await compactAsset.getByText('资源版本：V002', { exact: true }).waitFor();
+    await contained(compactAsset, `${width}px / 紧凑图片卡片`);
+    assert.equal(await compactAsset.getByRole('link').count(), 0);
+    await compactAsset.getByRole('button').click();
+    await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+    const entryImageCards = showcase.locator('.asset-media-card-entry');
+    assert.equal(await entryImageCards.count(), 4);
+    for (const card of await entryImageCards.all()) {
+      await contained(card, `${width}px / 入口图片卡片`);
+      const title = await card.locator('h3').evaluate(el => ({height:el.getBoundingClientRect().height, lineHeight:parseFloat(getComputedStyle(el).lineHeight), ellipsis:getComputedStyle(el).textOverflow}));
+      assert.ok(Math.abs(title.height-title.lineHeight)<=1);
+      assert.equal(title.ellipsis,'ellipsis');
+      assert.equal(await card.locator('.asset-media-field,.asset-media-html-field,.asset-media-footer').count(),0);
+    }
+    assert.equal(await entryImageCards.locator('img').count(),2);
+    assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),2);
+    const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
+    assert.equal(await entryLink.getAttribute('href'),'/');
+    assert.equal(await entryLink.locator('button,a').count(),0);
+    await entryImageCards.first().getByRole('button').click();
+    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    const actionCard=entryImageCards.filter({hasText:'带声音的入口卡片长标题'});
+    assert.equal(await actionCard.locator('a button').count(),0);
+    const beforePlay=page.url();
+    await actionCard.getByRole('button',{name:'播放入口卡片声音',exact:true}).click();
+    await actionCard.getByRole('button',{name:'暂停入口卡片声音',exact:true}).waitFor();
+    assert.equal(page.url(),beforePlay,'入口试听不触发导航');
+    await actionCard.getByRole('button',{name:'暂停入口卡片声音',exact:true}).click();
+    assert.ok(await entryImageCards.filter({hasText:'未关联声音的入口卡片'}).getByRole('button').isDisabled());
+    const soundCards=showcase.locator('.audio-reference-card');
+    assert.equal(await soundCards.count(),2);
+    for(const soundCard of await soundCards.all()) {
+      await contained(soundCard,`${width}px / 紧凑声音卡片`);
+      const title=await soundCard.locator('h3').boundingBox(), duration=await soundCard.locator('.audio-reference-card-duration').boundingBox();
+      assert.ok(Math.abs(title.y+title.height/2-duration.y-duration.height/2)<2);
+      assert.ok(duration.x>title.x+title.width);
+      assert.ok((await soundCard.boundingBox()).height<70);
+    }
+    assert.equal(await soundCards.last().locator('.audio-reference-card-duration').innerText(),'时长：未取得');
+    await soundCards.first().getByRole('button').click();
+    await soundCards.first().getByRole('button',{name:'暂停AUD-SAMPLE@V001',exact:true}).waitFor();
+    await soundCards.first().getByRole('button').click();
     const detailCards = showcase.locator('.asset-media-card').filter({ has: page.locator('.asset-media-details') });
     assert.equal(await detailCards.count(), 3);
     const pendingCard = detailCards.filter({ hasText: '已登记尚未生成' });
     assert.equal(await pendingCard.getByText('尚未生成图片', { exact: true }).count(), 1);
     assert.equal(await pendingCard.locator('img').count(), 0);
+    const compactEmpty = showcase.locator('.asset-media-card-compact').filter({ hasText: 'A002 · 无图示例' });
+    for (const [emptyCard, filledCard, expectedHeight] of [[pendingCard, detailCards.filter({ hasText: '仅有查看详情' }), 260], [compactEmpty, compactAsset, 180]]) {
+      const empty = emptyCard.locator('.asset-media-placeholder');
+      await contained(empty, `${width}px / 无图占位区域`);
+      assert.equal((await empty.boundingBox()).height, expectedHeight);
+      assert.equal((await filledCard.locator('.cover').boundingBox()).height, expectedHeight);
+      assert.equal(await empty.getByRole('button').count(), 0);
+      assert.equal(await empty.locator('svg[aria-hidden="true"]').count(), 1);
+      assert.equal(await emptyCard.locator('img').count(), 0);
+    }
+    assert.equal(await compactEmpty.getByText('已登记，图片文件缺失。', { exact: true }).count(), 1);
+
     for (const card of await detailCards.all()) {
       const detailButton = card.getByRole('button', { name: '查看详情', exact: true });
       const edges = await detailButton.evaluate(el => ({ button: el.getBoundingClientRect().right, footer: el.parentElement.getBoundingClientRect().right }));
@@ -307,8 +425,87 @@ try {
       await page.getByRole('dialog').getByText('本地图片详情示例。', { exact: true }).waitFor();
       await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     }
-    console.log(`图片卡片：${width}px仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
+    const extendedCard=showcase.locator('.asset-media-card').filter({has:page.getByRole('heading',{name:'资源版本示例',exact:true})});
+    await contained(extendedCard,`${width}px / 含补充信息图片卡`);
+    assert.equal(await extendedCard.getByText('IMG-DEMO@V001 · 共用资源',{exact:true}).count(),1);
+    const extendedBounds=await extendedCard.boundingBox(),extendedAction=await extendedCard.getByRole('button',{name:'详情',exact:true}).boundingBox();
+    assert.ok(extendedAction.y+extendedAction.height<extendedBounds.y+extendedBounds.height,'supplemental actions stay within card');
+    await extendedCard.getByRole('button',{name:'详情',exact:true}).click();
+    await page.getByRole('dialog').getByText('本地图片详情示例。',{exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    const fullscreenExample=showcase.locator('.asset-media-card').filter({has:page.getByRole('heading',{name:'全屏图片示例',exact:true})});
+    for (const method of ['click','escape']) {
+      await fullscreenExample.locator('.cover').click();
+      const fullscreenDialog=page.getByRole('dialog',{name:'全屏图片示例',exact:true});
+      await fullscreenDialog.waitFor();
+      assert.ok((await fullscreenDialog.getAttribute('class')).includes('dialog-fullscreen'));
+      if (method==='click') await fullscreenDialog.getByRole('button',{name:'退出全屏看图',exact:true}).click();
+      else await page.keyboard.press('Escape');
+      await fullscreenDialog.waitFor({state:'detached'});
+    }
+    for (const title of ['外层已命名的采用图','外层已命名的空图片']) {
+      const card=showcase.getByRole('article',{name:title,exact:true});
+      assert.equal(await card.locator('h3').count(),0);
+      await contained(card,`${width}px / 隐藏重复标题图片卡`);
+      assert.equal(await card.locator('.cover').count(),1);
+    }
+    await showcase.getByRole('article',{name:'外层已命名的采用图',exact:true}).locator('.cover').click();
+    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    for (const name of ['16:9图片区域','16:9空图片区域']) {
+      const card=showcase.getByRole('article',{name,exact:true});
+      const rect=await card.locator('.cover').boundingBox();
+      assert.ok(Math.abs(rect.width / rect.height - 16 / 9)<.01);
+      await contained(card,`${width}px / ${name}`);
+    }
+    const ratioImage=showcase.getByRole('article',{name:'16:9图片区域',exact:true}).locator('img');
+    assert.equal(await ratioImage.evaluate(el=>getComputedStyle(el).maxHeight),'none');
+    assert.equal(await ratioImage.evaluate(el=>getComputedStyle(el).objectFit),'contain');
+    const dimensionsCard=showcase.getByRole('article',{name:'仅保留尺寸的采用图',exact:true});
+    await dimensionsCard.getByText('尺寸：',{exact:true}).waitFor();
+    assert.equal(await dimensionsCard.locator('.asset-media-field').count(),1);
+    assert.equal(await dimensionsCard.getByText('读取中',{exact:true}).count(),0);
+    assert.match(await dimensionsCard.locator('.asset-media-field').innerText(), /^尺寸：\s*\d+ × \d+$/);
+    assert.equal(await dimensionsCard.locator('.file-entry-main').count(),0);
+    await contained(dimensionsCard,`${width}px / 仅尺寸图片卡`);
+    const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});
+    assert.equal(await defaultCard.getByText('文件：',{exact:true}).count(),1);
+    assert.equal(await defaultCard.getByText('采用版本：',{exact:true}).count(),1);
+    const emptyDimensionsCard=showcase.getByRole('article',{name:'仅保留尺寸的空图片',exact:true});
+    assert.equal(await emptyDimensionsCard.locator('.asset-media-field').count(),0);
+    await contained(emptyDimensionsCard,`${width}px / 仅尺寸空图片卡`);
+    await dimensionsCard.locator('.cover').click();
+    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    console.log(`图片卡片：${width}px普通／紧凑无图同高占位、默认与自定义提示、仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
     await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
+    const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });
+    const referenceSummary = sampleDocument.getByText('参考资料', { exact: true });
+    const referenceContent = sampleDocument.getByText('这里是与示例正文关联的参考资料。', { exact: true });
+    await sampleDocument.getByText('章节导航', { exact: true }).waitFor();
+    assert.deepEqual(await sampleDocument.locator(':scope > details > summary').allTextContents(), ['文档信息', '章节导航', '参考资料']);
+    assert.equal(await referenceContent.isVisible(), false);
+    await referenceSummary.click();
+    await referenceContent.waitFor();
+    await contained(referenceContent, `${width}px / 文档参考入口`);
+    await referenceSummary.click();
+    assert.equal(await referenceContent.isVisible(), false);
+    const liveDocument = showcase.getByRole('region', { name: '文档内的实时状态', exact: true });
+    await liveDocument.getByText('制作状态：待启动', { exact: true }).waitFor();
+    await liveDocument.getByText('章节导航', { exact: true }).click();
+    await liveDocument.getByRole('button', { name: '切换示例制作状态', exact: true }).click();
+    const changedStatus = liveDocument.getByText('制作状态：待审阅', { exact: true });
+    await changedStatus.waitFor();
+    await liveDocument.getByRole('navigation', { name: '章节导航', exact: true }).waitFor();
+    assert.equal(await showcase.getByRole('button', { name: '读取新版本', exact: true }).count(), 0);
+    await contained(changedStatus, `${width}px / 文档内的实时状态`);
+    for (const [name, tag] of [['正文视频示例', 'video'], ['正文音频示例', 'audio'], ['正文原文件示例', null]]) {
+      await showcase.getByRole('link', { name, exact: true }).click();
+      const preview = page.getByRole('dialog', { name, exact: true });
+      if (tag) await preview.locator(`${tag}[controls]`).waitFor();
+      else await preview.getByRole('link', { name: /查看/ }).waitFor();
+      await preview.getByRole('button', { name: '关闭', exact: true }).click();
+    }
     const release = showcase.locator('.release-films');
     const releaseCategories = release.getByRole('navigation', { name: '成片交付分类', exact: true });
     assert.deepEqual(await releaseCategories.getByRole('button').allTextContents(), ['片头', '片尾', 'EP003', '其他文件']);
@@ -336,12 +533,15 @@ try {
     assert.equal(await showcase.getByRole('link', { name: '下载原图', exact: true }).count(), 1);
     await showcase.getByRole('button', { name: '选集与分段', exact: true }).click();
     const episodeButtons = showcase.locator('.episode-grid-pairs .episode-button');
-    assert.equal(await episodeButtons.count(), 4);
-    assert.deepEqual(await episodeButtons.locator('.episode-button-duration').allTextContents(), ['1分20秒', '2分5.5秒*', '9.4秒']);
+    assert.equal(await episodeButtons.count(), 5);
+    assert.deepEqual(await episodeButtons.locator('.episode-button-duration').allTextContents(), ['1分20秒', '2分5.5秒*', '9.4秒', '20秒*']);
+    assert.deepEqual(await episodeButtons.filter({has:page.locator('.episode-button-duration')}).evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height)),[48,48,48,48]);
+    await episodeButtons.last().click();
+    await showcase.getByText('已选择：V001-穿搭展示',{exact:true}).waitFor();
     const episodeBounds = await episodeButtons.evaluateAll(nodes => nodes.map(node => {
       const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width };
     }));
-    assert.equal(episodeBounds[0].y === episodeBounds[1].y, width > 700, '选集最多两列，手机换行');
+    assert.equal(episodeBounds[0].y, episodeBounds[1].y, '桌面选集保持两列');
     assert.ok(episodeBounds[2].y > episodeBounds[0].y, '第三集另起一行');
     for (const button of await episodeButtons.all()) {
       await contained(button, `${width}px / 选集按钮及其时长`);
@@ -383,6 +583,7 @@ try {
     assert.deepEqual(forbidden, [], '测试不得访问API、外部网络或写入业务');
     assert.deepEqual(errors, [], '浏览器错误');
     console.log(`公共组件布局检查：${width}px普通/宽屏、最新/旧候选、展示页同规格样式、父容器及菜单边界通过。`);
+    await checkCandidateMessages(page, width);
     await page.close();
   }
 } finally {

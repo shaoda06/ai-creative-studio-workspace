@@ -30,7 +30,8 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.store = t.TaskStore(self.root / 'runtime', self.root)
         self.store.queue_notifications = False
         self.session_name_reader = self.enterContext(patch.object(t, 'read_thread_name', AsyncMock(return_value='制作会话')))
-        self.data = t.TaskInput(project=str(self.project), title='测试图', task_type='image',
+        # Existing fixtures verify legacy files remain unchanged.
+        self.data = t.TaskInput(record_format='legacy', project=str(self.project), title='测试图', task_type='image',
             url='http://comfy.invalid:8188', workflow={'1': {'class_type': 'SaveImage', 'inputs': {'seed': 9223372036854775807}}},
             record_dir=str(self.record), attempt_name='提交尝试.json', request_name='请求.json', response_name='提交响应.json',
             outputs=[dict(node_id='1', output_key='images', index=0, path=str(self.project / '候选/result.png'), response_name='取回响应.json')],
@@ -53,6 +54,15 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.store.rows[key]['state'].pop('scene_round_required', None)
         self.store.rows[key]['state'].pop('content_review_required', None)
         self.store.save(key)
+
+    async def test_archived_project_rejects_new_input_but_restores_history(self):
+        (self.project / '.archived').write_text('历史入口')
+        with self.assertRaisesRegex(ValueError, '不能在旧入口提交新任务'):
+            self.store.resolve_input(self.data.model_copy(deep=True))
+        recorded = self.data.model_copy(deep=True)
+        self.store.resolve_input(recorded, recorded=True)
+        self.assertEqual(recorded.project, str(self.project))
+        self.assertEqual(recorded.record_dir, str(self.record))
 
     async def test_websocket_opens_before_post_and_same_client_id(self):
         await self.store.prepare_only(self.data)
@@ -289,7 +299,8 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         run.assert_called_once()
         args = run.call_args.args[0]
         self.assertEqual(args[:5], ['/codex/app/cli', 'queue', '--thread', 'authorized-target', '--message'])
-        self.assertIn('本地任务ID：task', args[5])
+        self.assertIn('通知编号：', args[5])
+        self.assertIn('读取报告：', args[5])
         self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         event = json.loads(self.store.db.execute('SELECT event FROM task_events ORDER BY id DESC LIMIT 1').fetchone()[0])
         self.assertEqual(event['delivery_receipt'], 'Queued message queue-id')
@@ -309,6 +320,26 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.rows['task']['state']['notification'], 'delivery_unknown')
         event = json.loads(self.store.db.execute('SELECT event FROM task_events ORDER BY id DESC LIMIT 1').fetchone()[0])
         self.assertIn('queue unavailable', event['error'])
+
+    @unittest.skipIf(t.os.name == 'nt', 'POSIX env shebang reproduction')
+    async def test_cli_queue_uses_registered_node_with_minimal_service_path(self):
+        node = t.shutil.which('node')
+        self.assertIsNotNone(node, 'Node is required for the desktop notification test')
+        cli = self.root / 'codex-fixture'
+        cli.write_text('#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n')
+        cli.chmod(0o755)
+        empty_bin = self.root / 'empty-bin'
+        empty_bin.mkdir()
+        self.store.queue_notifications = True
+        self.data.desktop.cli = str(cli)
+        self.data.desktop.node = node
+        with patch.dict(t.os.environ, {'PATH': str(empty_bin)}):
+            before = t.subprocess.run([str(cli)], capture_output=True, encoding='utf-8')
+            self.assertEqual(before.returncode, 127)
+            result = await self.store.desktop_call(self.data, 'send', '完成通知')
+            self.assertEqual(t.os.environ['PATH'], str(empty_bin))
+        self.assertEqual(json.loads(result['receipt']),
+                         ['queue', '--thread', 'authorized-target', '--message', '完成通知'])
 
     async def test_legacy_task_uses_service_cli_without_changing_stored_context(self):
         self.store.queue_notifications = True
@@ -401,9 +432,10 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
             await self.store.notifiers['task']
             await self.store.notifiers['second']
             self.assertEqual(sum(item.args[1] == 'send' for item in call.await_args_list), 1)
-            self.assertIn('本地任务ID：task', call.await_args_list[-1].args[2])
-            self.assertIn('本地任务ID：second', call.await_args_list[-1].args[2])
+            self.assertIn('通知编号：', call.await_args_list[-1].args[2])
             batch = self.store.rows['task']['state']['notices'][0]['batch_id']
+            self.assertEqual(set(json.loads(self.store.db.execute('SELECT task_ids FROM notification_batches WHERE id=?', (batch,)).fetchone()[0])), {'task', 'second'})
+            self.assertIn(batch, call.await_args_list[-1].args[2])
             self.assertEqual(self.store.rows['second']['state']['notification'], 'delivery_unknown')
             with self.assertRaises(ValueError):
                 self.store.acknowledge(batch, 'another-thread')

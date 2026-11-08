@@ -54,7 +54,7 @@ function ReleaseFilmList({ videos, category }: { videos: FileItem[]; category: s
   </>;
 }
 
-function ReleaseFilmPlayer({ item }: { item: FileItem }) {
+export function ReleaseFilmPlayer({ item }: { item: FileItem }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   return <>

@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { TaskApiContext } from './TaskApiContext';
 import { FloatingMessage } from './Notifications';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -75,8 +77,9 @@ function date(value: string | null | undefined) {
 export function TaskDetailDialog({ id, updatedAt, nodes, close, openTask }: {
   id: string; updatedAt?: string; nodes: { url: string; name: string }[]; close: () => void; openTask?: (id: string) => void;
 }) {
-  const query = useQuery<Detail>({ queryKey: ['task-detail', id], queryFn: async () => {
-    const response = await fetch(`/api/comfy/tasks/${encodeURIComponent(id)}/detail`);
+  const api = useContext(TaskApiContext);
+  const query = useQuery<Detail>({ queryKey: ['task-detail', api, id], queryFn: async () => {
+    const response = await fetch(`${api}/comfy/tasks/${encodeURIComponent(id)}/detail`);
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || '任务详情读取失败');
     return body;

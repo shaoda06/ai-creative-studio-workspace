@@ -1,108 +1,19 @@
-"""Download selected approved videos and stage-specific director files."""
+"""Download explicitly selected videos and stage-specific director files."""
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from zipfile import ZIP_STORED, ZipFile
+from zipfile import ZipFile, ZIP_STORED
 
 from fastapi.responses import FileResponse
-from backend.services.jianying_draft import draft_files
-from backend.services.jianying_package import encode_jypack
-from backend.parsers.video_products import default_product
+import sys
 
-STAGES = {'后处理': '03-后处理', '二采': '02-二采', '一采': '01-一采'}
-KINDS = {'videos': '已采用视频', 'director': '导演包', 'canvas': '画布'}
-DOWNLOAD_DIRECTORY = Path(__file__).resolve().parents[2] / 'runtime' / 'downloads'
+_SKILL = Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-handoff/scripts"
+sys.path.insert(0, str(_SKILL))
+from drama_delivery import (STAGES, KINDS, VideoFiles, video_archive_name, video_member_name, indexed_episode, append_revision, completed_episode_videos, resources)
+sys.path.insert(0, str(_SKILL.parents[1] / 'studio-jianying/scripts'))
+import jianying_export
 
-
-def video_archive_name(name, episode):
-    label = episode if episode in ('片头', '片尾') else f'第{int(episode[2:])}集'
-    return f'{name}-{label}-已采用视频.zip'
-
-
-def video_member_name(path, scene_number, segment_number):
-    return f'第{scene_number}场-第{segment_number}段-已采用{path.suffix}'
-
-
-def indexed_episode(episode, data):
-    selected = next((item for item in data['catalogues']['09-剧集制作']['children']
-                     if item['name'] == episode), None)
-    if selected is None:
-        raise FileNotFoundError('剧集不存在')
-    return selected
-
-
-class VideoFiles(list):
-    """All revision files, with one timeline clip per segment."""
-    def __init__(self):
-        super().__init__()
-        self.timeline_members = set()
-
-
-def append_revision(files, store, name, video, scene_number, segment_number):
-    primary = default_product(video)
-    for product in video.get('products') or [video]:
-        path = store.file(name, product['key'])
-        stat = path.stat()
-        if product['fileRevision'] != f'{stat.st_mtime_ns}-{stat.st_size}':
-            raise ValueError('已采用文件已变化，请等待页面同步后重新下载')
-        member = video_member_name(path, scene_number, segment_number)
-        if product['key'] != primary['key']:
-            member = f'第{scene_number}场-第{segment_number}段-{path.name}'
-        else:
-            files.timeline_members.add(member)
-        files.append((path, member))
-
-
-def completed_episode_videos(store, name, episode, data):
-    selected = indexed_episode(episode, data)
-    if not selected['productionComplete']:
-        raise ValueError('本集制作尚未完成')
-    if not selected['scenes'] or selected.get('productionIssues'):
-        raise ValueError('本集分段资料尚未齐备')
-    files = VideoFiles()
-    for scene_number, scene in enumerate(selected['scenes'], 1):
-        segments = selected['segments'][scene]
-        if not segments:
-            raise ValueError('本集分段资料尚未齐备')
-        for segment_number, segment in enumerate(segments, 1):
-            videos = [video for video in segment['videos'] if video['stage'] == '后处理' and video['approved']]
-            if len(videos) != 1:
-                raise ValueError('本集尚未全部批准后处理已采用')
-            append_revision(files, store, name, videos[0], scene_number, segment_number)
-    return files
-
-
-def resources(store, name, episode, data, scene=None):
-    selected = indexed_episode(episode, data)
-    if scene is not None and scene not in selected['scenes']:
-        raise FileNotFoundError('场次不存在')
-    result = {stage: {kind: VideoFiles() if kind == 'videos' else [] for kind in KINDS} for stage in STAGES}
-    for scene_number, selected_scene in enumerate(selected['scenes'], 1):
-        if scene is not None and selected_scene != scene:
-            continue
-        for segment_number, segment in enumerate(selected['segments'][selected_scene], 1):
-            for video in segment['videos']:
-                if video['approved']:
-                    append_revision(result[video['stage']]['videos'], store, name, video, scene_number, segment_number)
-
-    root = store.project(name)
-    episode_root = root / '09-剧集制作' / episode
-    for stage, folder in STAGES.items():
-        stage_root = next((base / folder for base in (
-            episode_root / '06-阶段采用视频', episode_root / '其他资料/阶段采用视频',
-            episode_root / '06-生成结果') if (base / folder).is_dir()), None)
-        if stage_root is None:
-            continue
-        for selected_scene in selected['scenes']:
-            if scene is not None and selected_scene != scene:
-                continue
-            directory = stage_root / (selected_scene + '-场次') / '导演包'
-            for pattern, kind in (('*-导演包.mmxpack.zip', 'director'), ('*.workflow.json', 'canvas')):
-                for source in sorted(directory.glob(episode + '-' + selected_scene + '-' + pattern)):
-                    path = store.file(name, source.relative_to(root).as_posix())
-                    result[stage][kind].append((path, selected_scene + '-场次/导演包/' + source.name))
-    return result
-
+DOWNLOAD_DIRECTORY = Path(__file__).resolve().parents[2] / "runtime" / "downloads"
 
 class VideoZipResponse(FileResponse):
     """Remove the request's ZIP after sending, failure, or cancellation."""
@@ -112,6 +23,8 @@ class VideoZipResponse(FileResponse):
             await super().__call__(scope, receive, send)
         finally:
             Path(self.path).unlink()
+            if hasattr(self, 'cleanup'):
+                self.cleanup.close()
 
 
 def clear_downloads():
@@ -119,26 +32,30 @@ def clear_downloads():
     DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
     for path in DOWNLOAD_DIRECTORY.glob('videos-*.zip'):
         path.unlink()
+    for path in DOWNLOAD_DIRECTORY.glob('director-*'):
+        import shutil
+        shutil.rmtree(path)
 
 
-def zip_response(files, filename, archive_format='zip'):
+def zip_response(files, filename, archive_format='zip', *, timeline_members=None, videos_only=False):
     # Videos are already compressed. Keep their original bytes.
     DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
     with ExitStack() as stack:
         with NamedTemporaryFile(dir=DOWNLOAD_DIRECTORY, prefix='videos-', suffix='.zip', delete=False) as archive:
             path = Path(archive.name)
         stack.callback(path.unlink)
-        with ZipFile(path, 'w', compression=ZIP_STORED) as bundle:
-            members = set()
-            for source, member in files:
-                if member in members:
-                    raise ValueError('同一分段存在多个已采用，请核对采用记录后重新下载')
-                members.add(member)
-                bundle.write(source, member)
-            for member, content in draft_files(files, Path(filename).stem, timeline_members=getattr(files, 'timeline_members', None)).items():
-                bundle.writestr(member, content.encode('utf-8'))
+        members = [member for _, member in files]
+        if len(set(members)) != len(members):
+            raise ValueError('同一分段存在多个已采用，请核对采用记录后重新下载')
+        if videos_only and archive_format == 'zip':
+            with ZipFile(path, 'w', compression=ZIP_STORED) as bundle:
+                for source, member in files:
+                    bundle.write(source, member)
+        else:
+            jianying_export.export_archive(files, path, Path(filename).stem,
+                                           getattr(files, 'timeline_members', None) if timeline_members is None else timeline_members,
+                                           archive_format)
         if archive_format == 'jypack':
-            encode_jypack(path)
             filename = str(Path(filename).with_suffix('.jypack'))
         response = VideoZipResponse(archive.name, media_type=(
             'application/vnd.bytedance.jypack' if archive_format == 'jypack' else 'application/zip'), filename=filename)

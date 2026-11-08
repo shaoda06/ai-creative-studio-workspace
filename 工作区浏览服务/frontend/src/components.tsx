@@ -11,6 +11,7 @@ import { Loading } from './components/Loading';
 import { ChapterNavigation } from './components/ChapterNavigation';
 import type { ChapterHeading } from './components/ChapterNavigation';
 import { FileActions } from './components/FileActions';
+import { DownloadButton } from './components/DownloadButton';
 export { FileActions, Original } from './components/FileActions';
 
 export const PreviewContext = createContext<(item: FileItem) => void>(() => {});
@@ -28,30 +29,59 @@ function CodeBlock({ text, languages }: { text: string; languages?: LanguageGrou
   const content = selected ? selected.text : text;
   return <div className="code-block"><div className="code-toolbar">{languages && <TabNav label={languages.label} items={languages.items} selected={language} onChange={setLanguage} />}<div className="code-copy"><CopyButton key={language} label="复制" text={content} /></div></div><pre><code>{selected ? content.trim().replace(/\n{3,}/g, '\n\n') : content}</code></pre>{selected?.html && <div className="language-notes" dangerouslySetInnerHTML={{ __html: selected.html }} />}</div>;
 }
-export function Rich({ html = '', languages = {} }: { html?: string; languages?: Record<string, LanguageGroup> }) {
+function previewFileKind(path: string) {
+  if (/\.(md|json|txt|log)$/i.test(path)) return 'markdown';
+  if (/\.(png|jpe?g|webp|gif)$/i.test(path)) return 'image';
+  if (/\.(mp4|webm|mov)$/i.test(path)) return 'video';
+  if (/\.(mp3|wav|ogg|flac|m4a)$/i.test(path)) return 'audio';
+  return 'file';
+}
+
+export function Rich({ html = '', languages = {}, fieldTable = false, spacedHeadings = false }: { html?: string; languages?: Record<string, LanguageGroup>; fieldTable?: boolean; spacedHeadings?: boolean }) {
   const preview = useContext(PreviewContext);
-  const blocks = useMemo(() => {
-    if (!html.includes('<pre>') && !html.includes('<pre ')) return null;
+  const content = useMemo(() => {
+    const hasCode = html.includes('<pre>') || html.includes('<pre ');
+    if (!hasCode && !html.includes('data-doc="..')) return { html, blocks: null };
     const document = new DOMParser().parseFromString(html, 'text/html');
-    return Array.from(document.body.children).map(element => ({ html: element.outerHTML, code: element.tagName === 'PRE', text: element.textContent || '', languageGroup: element.getAttribute('data-language-pair') }));
+    for (const link of document.querySelectorAll('a[data-doc=".."],a[data-doc^="../"]')) {
+      if (/^\/api\/(?:workspaces\/[^/]+\/)?projects\/[^/]+\/files\//.test(link.getAttribute('href') || '')) {
+        link.replaceWith(...link.childNodes);
+      }
+    }
+    return { html: document.body.innerHTML, blocks: hasCode ? Array.from(document.body.children).map(element => ({
+      html: element.outerHTML, code: element.tagName === 'PRE', text: element.textContent || '',
+      languageGroup: element.getAttribute('data-language-pair'),
+    })) : null };
   }, [html]);
-  return <div className="prose" onClick={event => {
+  const videoDownloads = useMemo(() => {
+    if (!content.html.includes('data-doc=')) return [];
+    const document = new DOMParser().parseFromString(content.html, 'text/html');
+    const videos = new Map<string, string>();
+    document.querySelectorAll<HTMLAnchorElement>('a[data-doc][href]').forEach(link => {
+      if (link.target !== '_blank' && previewFileKind(link.dataset.doc!.split('#')[0]) === 'video') videos.set(link.getAttribute('href')!, link.textContent || '视频');
+    });
+    return Array.from(videos, ([url, name]) => ({ url, name }));
+  }, [content.html]);
+  return <><div className={`prose${fieldTable ? ' prose-field-table' : ''}${spacedHeadings ? ' prose-spaced-headings' : ''}`} onClick={event => {
     const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-doc]');
     if (anchor && anchor.target !== '_blank') {
       event.preventDefault();
       const key = anchor.dataset.doc!;
-      const kind = /\.(png|jpe?g|webp|gif)$/i.test(key) ? 'image' : 'markdown';
+      const kind = previewFileKind(key);
       preview({ kind, name: anchor.textContent || '文档', key: key + new URL(anchor.href).hash, url: anchor.href });
     }
-  }} dangerouslySetInnerHTML={blocks ? undefined : { __html: html }}>{blocks?.map((block, index) => {
+  }} dangerouslySetInnerHTML={content.blocks ? undefined : { __html: content.html }}>{content.blocks?.map((block, index) => {
     if (!block.code) return <div className="rich-fragment" key={index} dangerouslySetInnerHTML={{ __html: block.html }} />;
     return <CodeBlock key={index} text={block.text} languages={block.languageGroup ? languages[block.languageGroup] : undefined} />;
-  })}</div>;
+  })}</div>{videoDownloads.map(({ url, name }) => <div key={url}><FileActions url={url} downloadOnly downloadLabel={`下载 ${name}`} /></div>)}</>;
 }
 export function FileLink({ item, showOriginal = true, showStatus = true }: { item: FileItem; showOriginal?: boolean; showStatus?: boolean }) {
   const preview = useContext(PreviewContext);
   const target = item.kind === 'reference' && item.media ? { ...item.media, name: item.name, prompts: item.prompts } : item;
-  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{showOriginal && <FileActions url={target.url} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
+  return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{(showOriginal || target.kind === 'video' || previewFileKind((target.key || target.name).split('#')[0]) === 'video') && <FileActions url={target.url} downloadOnly={!showOriginal} />}{item.jianying && <>
+    <DownloadButton url={item.jianying.jypack} label="下载剪映包" title={`生成剪映包：${item.name}`} pack />
+    <DownloadButton url={item.jianying.zip} label="下载 ZIP" title={`生成 ZIP：${item.name}`} pack />
+  </>}{item.director !== undefined && <DownloadButton url={item.director} label="下载导演包" title={`按需生成导演包：${item.name}`} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
 }
 export function FileTree({ items, showOriginal = true, showStatus = true }: { items: FileItem[]; showOriginal?: boolean; showStatus?: boolean }) {
   const entries: FileItem[] = [];
@@ -86,10 +116,14 @@ export function Groups({ groups = [], chapter = false }: { groups?: Group[]; cha
     {open && <div id={contentId} className="groups-content">{folders}</div>}
   </section> : <details className="groups"><summary>其他资料</summary>{folders}</details>;
 }
-export function Document({ value: latest, showOriginal = true, showChapters = true }: { value: RecordData; showOriginal?: boolean; showChapters?: boolean }) {
+export function Document({ value: latest, showOriginal = true, showChapters = true, chaptersInitiallyOpen = true, spacedHeadings = false, beforeBody, transformBody }: {
+  value: RecordData; showOriginal?: boolean; showChapters?: boolean; chaptersInitiallyOpen?: boolean; spacedHeadings?: boolean; beforeBody?: ReactNode;
+  transformBody?: (html: string) => string;
+}) {
   const [value, setValue] = useState(latest);
   const changed = (value.html || value.bodyHtml) !== (latest.html || latest.bodyHtml) || value.headerHtml !== latest.headerHtml;
-  const body = value.bodyHtml || value.contentHtml || value.html || '';
+  const sourceBody = value.bodyHtml || value.contentHtml || value.html || '';
+  const body = useMemo(() => transformBody ? transformBody(sourceBody) : sourceBody, [sourceBody, transformBody]);
   const presentation = useMemo(() => {
     if (body.includes('故事剧本正文')) {
       const document = new DOMParser().parseFromString(body, 'text/html');
@@ -176,8 +210,9 @@ export function Document({ value: latest, showOriginal = true, showChapters = tr
     {changed && <FloatingMessage>本文有新版本，当前阅读位置保持不变。<button onClick={() => setValue(latest)}>读取新版本</button></FloatingMessage>}
     <div className="meta document-meta-inline">{value.confirmationHtml && <Rich html={value.confirmationHtml.match(/^<span class="status-badge.*?<\/span>/s)?.[0]} />}{value.meta && Object.entries(value.meta).filter(([key]) => key !== '确认状态').map(([key, text]) => <span key={key}>{key}：{String(text)}</span>)}{showOriginal && <FileActions url={value.url} />}</div>
     {value.headerHtml && <DocumentInformation><Rich html={value.headerHtml} /></DocumentInformation>}
-    {showChapters && <ChapterNavigation headings={headings} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />}
-    <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} /><Groups groups={latest.groups} chapter /></div>
+    {showChapters && <ChapterNavigation headings={headings} initiallyOpen={chaptersInitiallyOpen} onNavigate={id => ref.current!.querySelectorAll('[id]').forEach(el => { if (el.id === id) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); (el as HTMLElement).tabIndex = -1; (el as HTMLElement).focus({ preventScroll: true }); } })} />}
+    {beforeBody}
+    <div ref={ref}><Rich html={presentation.html} languages={presentation.languages} spacedHeadings={spacedHeadings} /><Groups groups={latest.groups} chapter /></div>
   </div>;
 }
 export function Dialog({ title, children, close, headerActions, size = "default", showHeader = true, closeDisabled = false }: { title: string; children: ReactNode; close: () => void; headerActions?: ReactNode; size?: "default" | "compact" | "fullscreen"; showHeader?: boolean; closeDisabled?: boolean }) {
@@ -185,29 +220,30 @@ export function Dialog({ title, children, close, headerActions, size = "default"
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   return <dialog ref={ref} className={size === "default" ? undefined : `dialog-${size}`} aria-label={title} onCancel={event => { event.preventDefault(); if (!closeDisabled) close(); }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
 }
-export function Preview({ project, item, revision, close }: { project: string; item: FileItem; revision: number; close: () => void }) {
+export function Preview({ project, item, revision, close, baseUrl = projectUrl(project), showFileActions = true }: { project: string; item: FileItem; revision: number; close: () => void; baseUrl?: string; showFileActions?: boolean }) {
   // Keep the opened item and revision until the user chooses to load newer text.
   const [openedRevision, setOpenedRevision] = useState(revision);
   const [mediaError, setMediaError] = useState('');
   const kind = item.kind;
-  const text = ['markdown', 'json', 'text', 'log', 'outline'].includes(kind) || /\.(md|json|txt|log)(#.*)?$/i.test(item.key || item.name);
   const key = (item.key || '').split('#')[0];
-  const query = useQuery({ queryKey: ['document', project, key, openedRevision], queryFn: () => get<RecordData>(`${projectUrl(project)}/document?path=${encodeURIComponent(key)}`), enabled: text && !item.doc });
+  const fileKind = previewFileKind(key || item.name);
+  const text = ['markdown', 'json', 'text', 'log', 'outline'].includes(kind) || fileKind === 'markdown';
+  const query = useQuery({ queryKey: ['document', baseUrl, key, openedRevision], queryFn: () => get<RecordData>(`${baseUrl}/document?path=${encodeURIComponent(key)}`), enabled: text && !item.doc });
   useEffect(() => {
     const hash = item.key?.split('#')[1];
     if (hash && query.data) requestAnimationFrame(() => {
       document.querySelectorAll('dialog [id]').forEach(el => { if (el.id === decodeURIComponent(hash)) el.scrollIntoView(); });
     });
   }, [query.data, item.key]);
-  const image = kind === 'image' || /\.(png|jpe?g|webp|gif)$/i.test(key || item.name);
-  const video = kind === 'video' || /\.(mp4|webm|mov)$/i.test(key || item.name);
-  const audio = kind === 'audio' || /\.(mp3|wav|ogg|flac|m4a)$/i.test(key || item.name);
+  const image = kind === 'image' || fileKind === 'image';
+  const video = kind === 'video' || fileKind === 'video';
+  const audio = kind === 'audio' || fileKind === 'audio';
   return <Dialog title={item.name} close={close}>
-    {kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
+    {showFileActions && !video && kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
     {text && !item.doc && revision !== openedRevision && <FloatingMessage>项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></FloatingMessage>}
-    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div><FileActions url={item.url} /></div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
+    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div>{showFileActions && <FileActions url={item.url} />}</div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
       image ? <img className="preview-image" src={item.url} alt={item.name} onError={() => setMediaError('图片无法加载，请下载原文件查看。')} /> :
-      video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请使用原文件入口。')} /> :
+      video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请关闭预览后重新打开，或从外层目录、资料详情下载视频查看。')} /> :
       audio ? <audio controls preload="metadata" src={item.url} onError={() => setMediaError('音频无法加载，请使用原文件入口。')} /> : <p>此格式暂不支持页内预览，请打开原文件。</p>}
     {mediaError && <FloatingMessage tone="error">{mediaError}</FloatingMessage>}
     {item.prompts && <details><summary>对应提示词</summary><p>英文</p><pre>{item.prompts.english}</pre><p>中文</p><pre>{item.prompts.chinese}</pre></details>}

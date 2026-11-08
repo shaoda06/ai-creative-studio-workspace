@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { TaskApiContext } from './TaskApiContext';
 import { useEffect, useRef, useState } from 'react';
 import './NodeEditor.css';
 import { FloatingMessage, useNotify } from './Notifications';
@@ -9,6 +11,7 @@ interface Row extends SavedNode {
 }
 
 export function NodeEditor({ close }: { close: () => void }) {
+  const api = useContext(TaskApiContext);
   const [config, setConfig] = useState<Config | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [initialRows, setInitialRows] = useState<Row[]>([]);
@@ -32,7 +35,7 @@ export function NodeEditor({ close }: { close: () => void }) {
   async function load(signal?: AbortSignal) {
     setLoading(true); setError('');
     try {
-      const response = await fetch('/api/comfy/config/read', { method: 'POST', signal, cache: 'no-store' });
+      const response = await fetch(`${api}/comfy/config/read`, { method: 'POST', signal, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail);
       accept(data);
@@ -69,7 +72,7 @@ export function NodeEditor({ close }: { close: () => void }) {
   async function save(andClose = false) {
     setSaving(true); setError('');
     try {
-      const response = await fetch('/api/comfy/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(`${api}/comfy/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ revision: config!.revision, nodes: rows.map(({ url, original_url, no_auth, username, password }) =>
           ({ url, original_url, auth_mode: no_auth ? 'none' : 'basic', ...(!no_auth ? { username, password } : {}) })) }) });
       const data = await response.json();

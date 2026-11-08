@@ -23,4 +23,3 @@
 .node-editor-confirm p{margin:0 0 10px}
 .node-editor-confirm>div{display:flex;flex-wrap:wrap;gap:8px}
 .node-editor-confirm button{font-size:12px;padding:6px 9px}
-@media(max-width:450px){.node-editor-auth{grid-template-columns:1fr;gap:0}}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nora 主旨简介与世界观"
+  short_description: "连续短剧主旨、简介与世界规则，依七章模板维护设定及批准范围"
+  default_prompt: "使用 $nora-drama-worldbuilding 依据定位与原稿整理本次主旨、简介及世界观。"

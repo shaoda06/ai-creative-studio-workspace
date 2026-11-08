@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 创意与音画"
+  short_description: "Iris 商业视频创意与音画二级业务阶段，完成创意、内容主线和音画正文，按生产资料整理创意交付稿。"
+  default_prompt: "使用 $iris-commercial-creative 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

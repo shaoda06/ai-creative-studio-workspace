@@ -1,6 +1,7 @@
 """Temporary projects/PNGs, no remote generation or real conversation notices."""
 import hashlib
 import json
+from pathlib import Path
 import re
 import struct
 import unittest
@@ -45,15 +46,17 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         app = FastAPI()
         app.state.comfy_tasks = self.store
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/register-results', main.agent_register_results, methods=['POST'])
-        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(tasks.SKILL / 'scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         repair_file = self.record / '登记修复请求.json'
         repair_file.write_text(json.dumps({'task': repair}, ensure_ascii=False))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True)
-            config.write_text(json.dumps(dict(url=url, token=self.store.token)))
+            config.write_text(json.dumps(dict(url=url, token=self.store.token, workspace=str(self.root))))
             with patch.object(registration, 'batch_tasks', return_value=(['task'], None)), \
                     patch.object(main, 'store', self.store.projects):
                 process = await asyncio.create_subprocess_exec(sys.executable, '-B', str(cli),
@@ -118,7 +121,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
     def setup_image(self, kind='人物', scope='03-人物资料'):
         self.draft = self.project / scope / '其他资料/工作稿/CH001-参考图-工作稿.md'
         self.draft.parent.mkdir(parents=True)
-        template = (tasks.SKILL / 'references/模板' / image.TEMPLATES[kind]).read_text('utf-8-sig')
+        template = image.template_path(tasks.SKILL, kind).read_text('utf-8-sig')
         text = re.search(r'````markdown\n(.*?)\n````', template, re.S)[1]
         text = text[:text.index('### 审阅-生成记录-001-001')]
         self.draft.write_text(image.fields(text, {'用户采用状态': '未送审', '图片类型': '服装参考图', '人物状态': '大学', '服装状态': '日常'}))
@@ -225,7 +228,11 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(current['results'][0]['status'], 'completed')
             self.assertEqual(current['delivery']['image_count'], 1)
             changes = self.store.db.total_changes
-            self.assertEqual(self.store.read_report(batch, self.data.thread_id), current)
+            repeated = self.store.read_report(batch, self.data.thread_id)
+            self.assertEqual({k: v for k, v in repeated.items() if k not in ('new_task_ids', 'should_notify_user')},
+                             {k: v for k, v in current.items() if k not in ('new_task_ids', 'should_notify_user')})
+            self.assertFalse(repeated['should_notify_user'])
+            self.assertEqual(repeated['new_task_ids'], [])
             self.assertEqual(self.store.db.total_changes, changes)
 
     async def test_queued_notice_contains_identity_not_expiring_status(self):
@@ -237,7 +244,10 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
             self.store.queue_notice('task', 'terminal', 'terminal', '完成')
             await self.store.notifiers['task']
         prompt = next(c.args[2] for c in send.call_args_list if c.args[1] == 'send')
-        self.assertIn('本地任务ID：task', prompt)
+        batch = self.store.rows['task']['state']['notices'][0]['batch_id']
+        self.assertIn('通知编号：' + batch, prompt)
+        self.assertIn('来源会话：' + self.data.thread_id, prompt)
+        self.assertIn(self.data.title, prompt)
         self.assertIn('最新', prompt)
         self.assertNotIn('browser_pending', prompt)
         self.assertNotIn('网页缺少本批图片', prompt)
@@ -251,7 +261,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
             if len(calls) == 1:
                 raise ValueError('temporarily unavailable')
             return original(*args)
-        with patch.object(registration, 'verify', side_effect=flaky), patch.object(image, 'png', wraps=image.png) as checked, patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()):
+        with patch.object(registration, 'verify', side_effect=flaky), patch.object(image.image_files, 'png', wraps=image.image_files.png) as checked, patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()):
             report = await self.store.prepare_report(['task'])
             self.assertTrue(report['user_message_ready'], report)
             self.assertEqual(checked.call_count, 1)
@@ -298,17 +308,17 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text.count('### 审阅-生成记录-001-001'), 1)
         self.assertEqual(result['tasks'][0]['closeout']['display_outputs'][0]['display_path'], self.rel(formal))
 
-    async def test_approved_upscale_notifies_only_when_closeout_fails(self):
+    async def test_approved_upscale_notifies_after_closeout_without_second_approval(self):
         source, formal = self.setup_upscale()
-        with patch.object(self.store, 'desktop_call', AsyncMock()) as send, \
+        with patch.object(self.store, 'desktop_call', AsyncMock(return_value={})) as send, \
                 patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()):
             self.store.queue_notice('task', 'terminal', 'terminal', '超分完成')
             await self.store.notifiers['task']
-            send.assert_not_awaited()
+            self.assertEqual(sum(c.args[1] == 'send' for c in send.call_args_list), 1)
         self.assertEqual(formal.read_bytes(), png(8, 6))
         self.assertEqual(source.read_bytes(), png())
         self.assertEqual(self.store.rows['task']['state']['closeout']['status'], 'completed')
-        self.assertEqual(self.store.rows['task']['state']['notification'], 'not_required')
+        self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         text = self.draft.read_text()
         self.assertIn('用户说就用这版', text)
         self.assertIn('- 结论：批准采用', text)
@@ -383,6 +393,8 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         out = self.setup_image()
         with patch.object(image, 'apply', side_effect=OSError('temporary write failure')), self.assertRaises(OSError):
             registration.register(self.store, 'task')
+        # Frozen PNG bytes cannot be edited in place; simulate an external path replacement.
+        out.unlink()
         out.write_bytes(png(5, 3))
         with self.assertRaisesRegex(ValueError, '证据发生变化'):
             registration.register(self.store, 'task')
@@ -400,7 +412,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
     async def test_other_asset_templates_keep_their_own_fixed_fields(self):
         for kind in ('场景', '道具'):
             with self.subTest(kind=kind):
-                template = (tasks.SKILL / 'references/模板' / image.TEMPLATES[kind]).read_text('utf-8-sig')
+                template = image.template_path(tasks.SKILL, kind).read_text('utf-8-sig')
                 generation = '- 图片类型：服装参考图\n'
                 text = image.review_text(tasks.SKILL, dict(kind=kind, review='审阅-生成记录-003-001', generation='生成记录-003'), generation, '[候选](a.png)', '4×3、PNG、可解码', '[凭据](a.json)', 'now')
                 self.assertIn('- 结论：待确认', text)
@@ -416,7 +428,7 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
                 calls.append(1)
                 raise OSError('temporary write failure')
             return replace(path, target)
-        with patch.object(image.Path, 'replace', fail_once), patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()), patch.object(image, 'png', wraps=image.png) as checked:
+        with patch.object(image.Path, 'replace', fail_once), patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()), patch.object(image.image_files, 'png', wraps=image.image_files.png) as checked:
             result = await self.store.prepare_report(['task'])
             self.assertTrue(result['user_message_ready'], result)
             self.assertEqual(checked.call_count, 1)
@@ -612,13 +624,15 @@ class ImageCloseoutTests(unittest.IsolatedAsyncioTestCase):
         app = FastAPI()
         app.state.comfy_tasks = self.store
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/report', main.agent_result_report, methods=['POST'])
-        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(tasks.SKILL / 'scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_text(json.dumps({'url': url, 'token': self.store.token}))
+            config.write_text(json.dumps({'url': url, 'token': self.store.token, 'workspace': str(self.root)}))
             with patch.object(registration, 'register', side_effect=AssertionError('report must not register')), patch.object(image, 'png', side_effect=AssertionError('report must not decode')):
                 reports = []
                 for extra in ([], ['--details']):

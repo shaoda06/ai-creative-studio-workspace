@@ -41,12 +41,14 @@ class PreparationTests(unittest.IsolatedAsyncioTestCase):
         text = json.dumps(mapping)
         if not path.exists() or path.read_text('utf-8') != text:
             path.write_text(text, 'utf-8')
-        manifest = self.project / '09-剧集制作/EP001/其他资料/工作稿/EP001-C001-场次修改轮次.json'
+        manifest = self.project / '09-剧集制作/EP001/其他资料/工作稿/EP001-修改轮次.json'
         manifest.parent.mkdir(parents=True, exist_ok=True)
-        manifest.write_text(json.dumps({'episode': 'EP001', 'scene': 'C001', 'rounds': [{'number': 1,
-            'script': {'file': 'round-document.md', 'version': 'v1'}, 'storyboard': {'file': 'round-document.md', 'version': 'v1'},
-            'segments': [{'id': f'P{i+1:03d}', 'stage': '一采' if data.task_type == 'video-first-pass' else '二采',
-                          'run': 'R001', 'duration': group['durationSec']} for i, group in enumerate(timeline['segments'])]}]}), 'utf-8')
+        manifest.write_text(json.dumps({'episode': 'EP001', 'rounds': [{'number': 1,
+            'created_at': '2026-10-31T00:00:00+08:00',
+            'script': {'file': 'round-document.md', 'version': 'v1'},
+            'scenes': {'C001': {'storyboard': {'file': 'round-document.md', 'version': 'v1'},
+                'segments': [{'id': f'P{i+1:03d}', 'stage': '一采' if data.task_type == 'video-first-pass' else '二采',
+                             'run': 'R001', 'duration': group['durationSec']} for i, group in enumerate(timeline['segments'])]}}}]}), 'utf-8')
 
     async def asyncSetUp(self):
         await base.TaskTests.asyncSetUp(self)
@@ -388,7 +390,7 @@ class CandidateIdentityTests(unittest.TestCase):
             adopted = project/'09-剧集制作/片尾/06-阶段采用视频/01-一采/C001-场次/片尾-C001-P001-R003-一采.mp4'
             adopted.parent.mkdir(parents=True); adopted.write_bytes(b'completed output')
             mapping = {'selected_indices':[0], 'segments':[{'segment':'片尾-C001-P001','round':'R003'}]}
-            data = SimpleNamespace(project=project, task_type='video-first-pass',segment_plan=None)
+            data = SimpleNamespace(project=project, task_type='video-first-pass',segment_plan=None,video_plan=None)
             with self.assertRaisesRegex(ValueError,'使用新R'):
                 checks.check_existing_video_identity(data,mapping)
             mapping['segments'][0]['round']='R005'
@@ -402,7 +404,7 @@ class CandidateIdentityTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             project=Path(temp); candidate=project/'09-剧集制作/EP001/其他资料/候选视频/EP001-C001-P001-R001-后处理.mov'
             candidate.parent.mkdir(parents=True); candidate.write_bytes(b'output')
-            data=SimpleNamespace(project=project,task_type='video-postprocess',segment_plan=None)
+            data=SimpleNamespace(project=project,task_type='video-postprocess',segment_plan=None,video_plan=None)
             mapping={'selected_indices':[0],'segments':[{'segment':'EP001-C001-P001','round':'R001'}]}
             with self.assertRaisesRegex(ValueError,'使用新R'):
                 checks.check_existing_video_identity(data,mapping)

@@ -4,7 +4,6 @@ import type { ReactNode, Ref } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TaskDetailDialog } from './TaskDetailDialog';
 import type { SegmentVideo as VideoItem } from '../api';
-import { Original } from '../components';
 
 export const candidateLabel = (number: number, approved = false) => {
   const digits = '零一二三四五六七八九';
@@ -51,6 +50,14 @@ export const videoTaskMessages: Record<string, string> = {
   collection_failed: '视频取回失败，请查看任务详情', cancelled: '任务已取消', resolved: '任务已结案',
   needs_attention: '任务状态待核对', submission_unknown: '提交结果待核对',
 };
+
+export function workVideoState(video: VideoItem) {
+  if (video.url) return '已取回';
+  const taskStatus = video.taskStatus?.split(/[；;]/)[0];
+  const status = taskStatus === '未记录' ? '无后台状态记录'
+    : videoTaskMessages[taskStatus] || (taskStatus && /^[\u4e00-\u9fff]+$/.test(taskStatus) ? taskStatus : '任务状态待核对');
+  return `${status} · 未取回`;
+}
 
 // A media clock can keep advancing after the browser loses its video renderer.
 // loadedmetadata and error alone do not report that state.
@@ -220,13 +227,12 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
         <label className="scene-continuous"><input type="checkbox" checked={repeat && !continuous} disabled={continuous || !loaded?.url} onChange={event => setRepeat(event.target.checked)} />重复播放</label>
         {continuousControl}
         <button className="video-layout-toggle" aria-pressed={wide} onClick={onToggleWide}>{wide ? '恢复布局' : '宽屏显示'}</button>
-        {loaded?.url && <Original url={loaded.downloadUrl || loaded.url} label="查看视频原文件" />}
       </div>
     </div>
     {loaded?.previewNote && <p className="muted">{loaded.previewNote}</p>}
   {updated && <FloatingMessage>视频已有更新<button onClick={() => { setPlayOnLoad(video.current ? !video.current.paused : false); setLoaded(current); setSource(cachedSource || current.url); attempts.current = 0; pendingSeek.current = null; restore.current = null; setRecovering(false); setError(false); onTimeChange(0); onFileRevision?.(current.reviewFileRevision || current.fileRevision); }}>加载新文件</button></FloatingMessage>}
     {detailId && <TaskDetailDialog id={detailId} updatedAt={task.data?.updated_at} nodes={[]} close={() => setDetailId('')} openTask={setDetailId} />}
     {recovering && <p role="status">正在恢复视频画面…</p>}
-    {error && <FloatingMessage tone="error">视频画面恢复失败。<button onClick={() => { attempts.current = 0; recoverPlayback(); }}>重新加载视频</button>，也可打开原文件检查。</FloatingMessage>}
+    {error && <FloatingMessage tone="error">视频画面恢复失败。<button onClick={() => { attempts.current = 0; recoverPlayback(); }}>重新加载视频</button>，也可到资源下载中下载视频检查。</FloatingMessage>}
   </section>;
 }

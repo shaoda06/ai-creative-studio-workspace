@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chloe AI视频带货"
+  short_description: "Chloe 自营带货业务入口，组织账号定位、选品、脚本、资产、视频制作、剪映交接与带货复盘。"
+  default_prompt: "使用 $chloe-commerce-video 按实际对象、当前阶段与有效授权处理任务。"

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from tests.http_case import HttpTestCase
 from backend import main
 from backend.parsers import project as parser
-from backend.services.projects import ProjectStore
+from backend.services.projects import ProjectStore, CACHE_SCHEMA
 from backend.services.revision_notes import NoteChange, RevisionNotes
 
 
@@ -151,7 +151,7 @@ class ProjectLoadingTests(HttpTestCase):
         self.assertFalse(scene['formal'][0]['approved'])
         self.assertEqual(scene['auxiliary'], [])
         self.assertIsNone(scene['cover'])
-        self.assertEqual(json.loads(cache.read_text('utf-8'))['schema'], 21)
+        self.assertEqual(json.loads(cache.read_text('utf-8'))['schema'], CACHE_SCHEMA)
         self.assertEqual(self.store.snapshot(self.project), snapshot)
         self.assertEqual(image.read_bytes(), b'unchanged scene image fixture')
 

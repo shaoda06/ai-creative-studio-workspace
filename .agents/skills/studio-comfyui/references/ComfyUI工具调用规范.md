@@ -1,0 +1,59 @@
+# ComfyUI工具调用规范
+
+## 提交与准备
+
+使用工作区已有Python环境，从工作区根调用：
+
+~~~sh
+python3 .agents/skills/studio-comfyui/scripts/comfyui_dispatch.py --project /实际项目目录 --plan 相对项目的任务清单.json --prepare-only
+~~~
+
+任务清单是调用方业务接入的准备入口，业务阶段负责解释其模板、类型和来源。--prepare-only只准备、不上传、不提交；已有有效生成授权且准备通过时移除此参数入队。返回prepared或enqueued分别表示对应步骤完成。参数完整说明使用--help，历史命令入口继续转调同一实现。
+
+准备成功的`next_action: continue-caller-workflow`表示回到调用方按当前授权与阶段接续，不要求用户审阅准备资料，也不授权后台自动入队。H3提示词完成后的处理见[提示词自检与执行接续](../../studio-h3/references/参数与基准规范.md#提示词自检与执行接续)。
+
+无业务工作稿的图片技术任务可用旧式明确参数入口：--project、--task-type image、--workflow实际API文件、--record-dir项目内执行目录、--task-title、--output-plan、--image-plan。所有JSON文件路径按当前命令目录解析，记录和输出路径按项目边界核对。image-plan例如：
+
+~~~json
+{"adapter":"technical","images":[{"path":"生成结果/图片.png","width":1024,"height":1024}]}
+~~~
+
+output-plan仍显式提供输出节点、images索引、项目内目标和取回凭据名。technical只保存实际结果和技术报告，不填写人物卡或业务采用；未指定adapter的既有业务计划仍使用原业务登记及安全要求。新任务与恢复均保留真实会话上下文、原服务和请求，不能用技术适配伪称业务已采用。
+
+## 配置与通信
+
+scripts/comfyui_config.py读取实际工作区comfyui-config.json，按既有格式和认证执行；不输出密码或复制凭据到请求。通信实现为scripts/comfyui_client.py，所有文件访问保留项目边界。日常任务不自动查询库存或安装节点。
+
+## 状态和恢复
+
+查询与报告由[后台客户端](../../studio-workspace-browser/SKILL.md)完成。超时先查原任务；已取回成果的登记失败只修复登记；取回失败只请求原任务取回重试。真实错误保留，不自动换节点、重提或改配置。业务采用和网页同步按对应接入分别处理。
+
+## 无短剧资料的视频技术任务
+
+明确API入口在上述逐项参数基础上提供`--task-type video-first-pass`、`video-second-pass`或`video-postprocess`及`--video-plan`，其JSON为：
+
+~~~json
+{"adapter":"technical","metadata":"ffprobe"}
+~~~
+
+原生H3分段输出使用`--output-plan`空数组及`--segment-plan`，逐一填写实际运行组序、导演台/报告节点、远端output根和本机成果位置。其他视频使用明确`outputs`映射。任务组清单也支持`video_plan`同一适配，提供`canvas`、`output_nodes`、明确`outputs`或`segment_plan`、`record_dir`和本次授权；不填短剧mapping、人物卡或EP。
+
+工具只装配实际模式与参考槽位，后台保存取回凭据和ffprobe报告，不创建短剧候选审阅、修改轮次或采用。未知adapter报错；省略adapter的现行/历史短剧请求继续遵循其原业务检查。技术任务不得用来冒充短剧已完成或已采用。
+
+## 工作流资源登记与下载
+
+工作流仍保持唯一物理位置，scripts/workflow_paths.py同时登记逻辑分类与工具实际目录。浏览服务使用原分类URL列出并下载明确工作流/API文件，不假设资源都在旧主技能根内；只允许登记目录中的直接文件，并保留所属目录边界和越界拒绝。目录归属变化不修改模型参数或项目任务副本。
+
+## 工作区共用资产任务
+
+任务根目录可以是工作区 `projects/项目名/`，也可以是该工作区的 `综合资料/`。共用资产任务向 `comfyui_dispatch.py --project` 传入后者，直接引用其中的资源具体版本；不为入队复制图片或创建视频项目。连接配置仍读取所属工作区的 `comfyui-config.json`。
+
+后台以保留标识 `@shared` 保存共用任务范围，恢复时映射回所属工作区的 `综合资料/`；记录、上传和输出路径均相对此范围保存，不能越出范围。该标识不作为普通项目列出。图片技术处理使用 `image_plan.adapter=technical`，技术收尾核对输入、尺寸及取回凭据，业务采用按调用阶段已确认规则回写。对同一资源处理时，在输出指定原 `resource_id` 和 `base_file`，结果登记为该资源的新版本，保留原文件及来源关系。
+
+具名项目层中，上述资料根为选定项目目录：视频使用`工作区/项目名称/projects/视频目录`，共用任务使用`工作区/项目名称/综合资料`。后台连接仍归登记的工作区，任务以`项目名称::视频目录`或`项目名称::@shared`保存归属。项目未单独配置节点时读取工作区根目录的comfyui-config.json；不复制配置或资源。
+
+## 项目直接使用共用输入
+
+项目任务的 `uploads[].file` 可使用 `@shared/资源/图片/IMG-编号/V001/实际文件.png` 或同一工作区该准确资源文件的绝对路径。仅接受已登记且保存完整的具体版本，直接上传原文件，不复制到项目。`@shared/` 相对所属工作区的 `综合资料/`；记录保留此路径及资源版本，恢复时重新检查输入。输出、任务目录及工作流文件仍留在所属项目，不允许用共用输入路径写回共用区或读取其他项目。
+
+路径接口 `project_paths.input_file` 检查并返回输入原文件，`input_key` 返回可迁移路径，`input_reference` 返回准确资源身份；`project_file` 继续限定项目自身文件。记录转换复用已检查路径，文件读取与任务准备仍检查原文件，不因路径缓存跳过输入检查。

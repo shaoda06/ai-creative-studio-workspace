@@ -1,4 +1,5 @@
 """Explicit submission membership; remote execution remains task-by-task."""
+from project_paths import scope_name
 import asyncio
 import json
 from pathlib import Path
@@ -48,7 +49,7 @@ class TaskGroups:
             self.validate_registration(data)
         group_id = str(uuid.uuid4())
         ids = [str(uuid.uuid4()) for _ in inputs]
-        group = dict(id=group_id, title=title.strip(), project=Path(inputs[0].project).name,
+        group = dict(id=group_id, title=title.strip(), project=scope_name(inputs[0].project, self.workspace),
                      thread_id=inputs[0].thread_id, task_ids=ids, created_at=self.client.now())
         # No await until all members and the group are committed. The scheduler
         # cannot see a partial group, including after an HTTP interruption/restart.
@@ -130,8 +131,6 @@ class TaskGroups:
         if not group_id or not self.group_status(group_id)['terminal']:
             return
         ids = self.groups[group_id]['task_ids']
-        if self.group_status(group_id)['status'] == 'completed' and all(self.rows[member]['input'].task_type == 'image-upscale' for member in ids):
-            return
         outcomes = [self.notice_outcome(member) for member in ids]
         if outcomes == self.groups[group_id].get('notified_terminal'):
             return

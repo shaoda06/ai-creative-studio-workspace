@@ -6,12 +6,15 @@ import vm from 'node:vm';
 
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const ts = require('typescript');
-const source = readFileSync(new URL('../frontend/src/components/SegmentStageStrip.tsx', import.meta.url), 'utf8');
-const exports = {};
-vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
-  module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
-} }).outputText, { exports, require: () => ({}) });
-const { segmentStageStatus } = exports;
+const load = (file, dependencies = {}) => {
+  const source = readFileSync(new URL('../frontend/src/components/' + file + '.tsx', import.meta.url), 'utf8');
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText, { exports, require: name => dependencies[name] || {} });
+  return exports;
+};
+const { segmentStageStatus } = load('SegmentStageStrip', { './SegmentVideo': load('SegmentVideo') });
 const video = (stage, run, approved = false, extra = {}) => ({ stage, run, approved, ...extra });
 
 test('all three adopted stages remain green, including an earlier adoption with a newer candidate', () => {
@@ -19,7 +22,7 @@ test('all three adopted stages remain green, including an earlier adoption with 
     video('二采', 'R001', true), video('后处理', 'R001', true)];
   for (const stage of ['一采', '二采', '后处理']) {
     assert.equal(segmentStageStatus(videos, stage).symbol, '✓');
-    assert.match(segmentStageStatus(videos, stage).detail, /已采纳/);
+    assert.match(segmentStageStatus(videos, stage).detail, /已采用/);
   }
   assert.match(segmentStageStatus(videos, '一采').detail, /R005/);
 });

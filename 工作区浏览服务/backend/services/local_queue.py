@@ -1,12 +1,17 @@
 """Durable local FIFO; only the service performs uploads and remote submission."""
+from project_paths import scope_name
 import argparse
 import asyncio
 from copy import deepcopy
+from functools import partial
 import json
 import hashlib
 from pathlib import Path
+import project_paths as paths
 import time
 import uuid
+import execution_records as recordio
+import project_resources as resourceio
 from websockets.exceptions import WebSocketException
 
 LOCAL = ('local_queued', 'paused')
@@ -41,6 +46,7 @@ class LocalQueue:
         self.db.execute('INSERT INTO task_events(task_id, event) VALUES (?, ?)',
                         (key, json.dumps(event, ensure_ascii=False)))
         self.db.commit()
+        row['_archive_event_dirty'] = True
         self.write_records(key)
         self.publish()
 
@@ -48,6 +54,29 @@ class LocalQueue:
         row = self.rows[key]
         directory = Path(row['input'].record_dir)
         directory.mkdir(parents=True, exist_ok=True)
+        if row.get('_resource_association_input') is not row['input']:
+            if resourceio.enabled(row['input'].project):
+                payload = self.portable_input(row['input'])
+                refs = {'inputs': resourceio.refs_in(row['input'].project, payload['uploads']),
+                        'outputs': resourceio.refs_in(row['input'].project, [payload['outputs'], payload.get('segment_plan')])}
+                association = directory / '资源关联.json'
+                if not recordio.exists(association) or recordio.read(association) != refs:
+                    recordio.write(association, refs, compact=False if association.is_file() else row['input'].record_format == 'compact')
+            row['_resource_association_input'] = row['input']
+        if row['input'].record_format == 'compact':
+            # Live progress stays in SQLite. Keep a portable terminal snapshot;
+            # do not rewrite a project archive for every sampler update.
+            if not row.pop('_archive_event_dirty', False) and row['state']['status'] not in TERMINAL and row['state']['status'] != 'collecting':
+                return
+            converter = self.record_paths(key)
+            events = [json.loads(value) for value, in self.db.execute(
+                'SELECT event FROM task_events WHERE task_id=? ORDER BY id', (key,))]
+            summary = {**{name: value for name, value in converter.convert(row['state'], relative=True).items()
+                          if name not in ('client_id', 'notices', 'segment_monitor')},
+                       'record_dir': converter.relative_file(directory), 'remote_url': row['input'].url,
+                       'outputs': self.portable_input(row['input'])['outputs']}
+            recordio.write_entries(directory, {'后台过程记录.json': events, '后台任务状态.json': summary})
+            return
         prepared = self.completion_input(key)
         if prepared:
             history = directory / '后台过程记录.json'
@@ -87,6 +116,7 @@ class LocalQueue:
                          if row['input'].record_dir == data.record_dir), None)
         if existing is not None:
             row = self.rows[existing]
+            data.record_format = row['input'].record_format
             self.check_duplicate(existing, data)
             row['input'].desktop = data.desktop
             if data.source_session_name:
@@ -110,7 +140,7 @@ class LocalQueue:
     def new_queue_row(self, key, data):
         now = self.client.now()
         return {'input': data, 'state': {
-            'id': key, 'project': Path(data.project).name, 'title': data.title, 'task_type': data.task_type,
+            'id': key, 'project': scope_name(data.project, self.workspace), 'title': data.title, 'task_type': data.task_type,
             'prompt_id': None, 'client_id': str(uuid.uuid4()), 'status': 'paused' if data.start_paused else 'local_queued',
             'preparation_required': True,
             'content_review_required': True,
@@ -228,7 +258,7 @@ class LocalQueue:
         data = row['input']
         self.record(key, 'preflight', 'started', _changes={'status': 'preparing', 'phase': 'preflight', 'preparation_attempt': row['state'].get('preparation_attempt', 0) + 1})
         if data.task_type == 'image-upscale':
-            from backend.services.image_closeout import validate_plan
+            from backend.services.image_tasks import validate_plan
             validate_plan(data)  # Also protects already-prepared legacy RTX tasks before any upload.
         # Re-check the endpoint and files at the moment of execution, not just at enqueue time.
         if self.client.Client(data.url, data.timeout).url not in self.remote_urls():
@@ -264,6 +294,7 @@ class LocalQueue:
                     raise ValueError('准备资料已变化：' + path + '；请返回准备阶段')
             await self.check_target_cache(key, prepared['workflow'])
             return prepared['workflow']
+        write_receipt = partial(recordio.write, new=True, compact=True) if data.record_format == 'compact' else self.client.write_new
         uploaded_materials = {}
         upload_cache = {}
         saved_uploads = {}
@@ -295,8 +326,8 @@ class LocalQueue:
             receipt = Path(data.record_dir) / item['response-name']
             upload_key = (remote_url, source, item['subfolder'])
             upload_bindings.append((item, source, receipt, upload_key))
-            if receipt.exists():
-                evidence = self.client.strict_json(receipt.read_bytes())
+            if recordio.exists(receipt):
+                evidence = recordio.read(receipt)
                 if evidence.get('url') != remote_url or evidence.get('ok') is not True:
                     raise ValueError('已有上传凭据不完整，需核对后恢复')
                 uploaded = checked_source(source, evidence.get('data'))
@@ -308,7 +339,7 @@ class LocalQueue:
                 uploaded = saved_uploads[receipt]
             elif upload_key in upload_cache:
                 uploaded, original_receipt = upload_cache[upload_key]
-                self.client.write_new(receipt, {'ok': True, 'url': remote_url, 'time': self.client.now(),
+                write_receipt(receipt, {'ok': True, 'url': remote_url, 'time': self.client.now(),
                                                 'data': uploaded, 'reused_from': original_receipt.name})
                 self.record(key, 'upload', 'reused', file=str(source), remote=uploaded,
                             receipt=str(receipt), reused_from=str(original_receipt))
@@ -317,7 +348,7 @@ class LocalQueue:
                 stamp = source_stamps[source]
                 uploaded = await asyncio.to_thread(self.client.upload, self.client_for(data),
                                                    argparse.Namespace(file=str(source), subfolder=item['subfolder']), source=source)
-                self.client.write_new(receipt, {'ok': True, 'url': self.client_for(data).url,
+                write_receipt(receipt, {'ok': True, 'url': self.client_for(data).url,
                                                'time': self.client.now(), 'data': uploaded})
                 self.record(key, 'upload', 'success', file=str(source), remote=uploaded)
                 current = source.stat()
@@ -365,9 +396,11 @@ class LocalQueue:
                             [data.record_dir, *(item['file'] for item in data.uploads)])
             self.save(key, phase='upload_binding')
             await asyncio.to_thread(save_uploaded_workflow, data.project, Path(data.record_dir), data.workflow, workflow,
-                                    uploaded_materials, binding_results, path_scope=path_scope)
+                                    uploaded_materials, binding_results, path_scope=path_scope,
+                                    business_mapping=not (data.video_plan or {}).get("adapter") == "technical")
             self.record(key, 'upload_binding', 'success', _changes={'uploads_bound': True})
-        if data.task_type.startswith('video-'):
+        from backend.services.video_tasks import business as business_video
+        if business_video(data):
             self.save(key, phase='generation_context')
             await asyncio.to_thread(self.generation_context.prepare_generation_context,
                                     data.project, Path(data.record_dir), workflow, data.task_type, uploaded_materials,
@@ -377,21 +410,15 @@ class LocalQueue:
         record = Path(data.record_dir)
         files.update(record.glob('*.api.json'))
         files.update(record.glob('*.workflow.json'))
-        mapping_file = record / '输入映射.json'
-        if mapping_file.exists():
-            files.add(mapping_file)
-            mapping = json.loads(mapping_file.read_text('utf-8-sig'))
-            for context in mapping.get('generation_contexts', []):
-                files.update(Path(data.project) / name for name in context.get('prompts', {}).values())
-                if context.get('storyboard'):
-                    files.add(Path(data.project) / context['storyboard']['file'])
-                files.update(Path(data.project) / ref['file'] for refs in context.get('references', {}).values() for ref in refs)
+        if business_video(data):
+            from drama_uploaded_sources import frozen_sources
+            files.update(frozen_sources(data.project, record))
         final_stamps = {str(path): (stamp.st_size, stamp.st_mtime_ns) for path in files for stamp in [path.stat()]}
         for source, stamp in source_stamps.items():
             if final_stamps[str(source)] != stamp:
                 raise ValueError('本机素材已不同于上传／核验时，请返回准备阶段')
         phase_files = {name: stamp for name, stamp in final_stamps.items()
-                       if Path(name).relative_to(data.project).as_posix() not in report['sources']
+                       if paths.input_key(data.project, name) not in report['sources']
                        or name.endswith(('.api.json', '.workflow.json'))}
         row['_prepared_run'] = {'workflow': workflow, 'files': phase_files}
         self.record(key, 'preflight', 'success', _changes={'prepared_files': {
@@ -533,7 +560,7 @@ class LocalQueue:
         data = self.rows[key]['input']
         try:
             if result is None:
-                result = self.client.strict_json((Path(data.record_dir) / data.history_name).read_bytes())['data']
+                result = recordio.read(Path(data.record_dir) / data.history_name)['data']
             await self.finish_collection(key, result)
         except (self.client.ClientError, OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
             self.record(key, 'collection', 'failed', _changes={'status': 'collection_failed', 'error': str(error),

@@ -280,7 +280,7 @@ class CloseoutTests(unittest.IsolatedAsyncioTestCase):
     async def test_registration_after_written_draft_reuses_journal_and_no_duplicate_review(self):
         _, draft = self.setup_video()
         await self.collect_and_notice()
-        from backend.services import result_registration as registration
+        import drama_video_results as registration
         write = registration.write_json
         def interrupted(path, value):
             if value.get('status') == 'registered': raise OSError('report write interrupted')
@@ -465,13 +465,15 @@ class CloseoutTests(unittest.IsolatedAsyncioTestCase):
         app.state.comfy_tasks = self.store
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/ack', main.agent_notice_ack, methods=['POST'])
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/register-results', main.agent_register_results, methods=['POST'])
-        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(t.SKILL / 'scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True)
-            config.write_text(json.dumps({'url':url,'token':self.store.token}), 'utf-8')
+            config.write_text(json.dumps({'url':url,'token':self.store.token,'workspace':str(self.root)}), 'utf-8')
             with patch.object(main, 'store', self.projects), patch.object(t.client,'submit') as submit, \
                     patch.object(t.client,'status') as remote, patch.object(t.client,'download') as download:
                 for action in ('ack','register-results'):

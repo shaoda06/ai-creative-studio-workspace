@@ -1,38 +1,59 @@
-# Nora AI短剧工作区
+# AI Creative Studio Workspace
 
-`nora-ai-drama-workspace` 是用于AI连续短剧策划、剧本开发、资料与素材管理、ComfyUI制作及迭代的工作区模板。包含通用工作规则、Nora短剧技能、配套工作流与工具，以及Krea2本地风格库。真实短剧项目由使用者在本地创建，不随模板提供。
+`nora-ai-drama-workspace` 是用于AI视频创作、资料与素材管理、制作及迭代的工作区模板。包含统一业务入口、Nora短剧、Iris商业视频、Chloe带货及共用运营阶段、共用生成工具、配套工作流，以及Krea2本地风格库。三个业务资料区及真实项目由使用者在本地初始化，不随公共仓库提供。
 
 ## 开始使用
 
-1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
-2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md) 或 [Krea2技能](.agents/skills/krea2-style-library/SKILL.md)。
-3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-ai-short-drama/references/流程规范/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
-4. 新增外部技能默认安装到本工作区 `.agents/skills/{技能名}/`，已有可用安装复用。该工作区是本README所在目录，不是某部短剧的项目目录。当前独立安装的外部技能按 `.gitignore` 排除；新增技能默认可被Git发现，提交前核对来源、许可及是否需要随模板提供。
-5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/nora-generation/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
+在Codex中选择本总目录。Nora、Iris、Chloe是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
 
-不需要ComfyUI即可进行策划、剧本和资料整理。执行生成时，使用者须自行准备能够运行配套工作流的ComfyUI服务；本工作区不附带模型权重、不自动安装服务端节点，也不保证任意后端都兼容。随包节点资源的存放、获授权安装及验证按[节点与安装包](.agents/skills/nora-ai-short-drama/维护规范.md#comfyui节点与安装包)执行；任务核对遵循执行规范。
+统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，各业务共用的运营由[运营一级业务](.agents/skills/studio-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续，自营带货由[Chloe一级业务](.agents/skills/chloe-commerce-video/SKILL.md)接续。
+
+1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
+2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属业务工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
+3. 发起新短剧时，告知题材、素材和目标，由技能按阶段创建项目。三个ComfyUI适配技能已随主技能提供，是本工作区直接使用的真源，不重复复制安装。其余依赖按主技能的[来源与获取规则](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)按需补齐。
+4. 新增外部技能默认安装到本工作区 `.agents/skills/{技能名}/`，已有可用安装复用。该工作区是本README所在目录，不是某部短剧的项目目录。当前独立安装的外部技能按 `.gitignore` 排除；新增技能默认可被Git发现，提交前核对来源、许可及是否需要随模板提供。
+5. 初始化项目工作区时，按下方[FFmpeg初始化与运行](#ffmpeg初始化与运行)落实媒体处理依赖；服务地址询问及配置按[主技能的工作区ComfyUI配置](.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行。
+
+不需要ComfyUI即可进行策划、剧本和资料整理。执行生成时，使用者须自行准备能够运行配套工作流的ComfyUI服务；本工作区不附带模型权重、不自动安装服务端节点，也不保证任意后端都兼容。随包节点资源的存放、获授权安装及验证按[节点与安装包](.agents/skills/studio-entry/维护规范.md#comfyui节点与安装包)执行；任务核对遵循执行规范。
+
+## 初始化业务工作区
+
+各业务分别维护初始化流程，按需要启用；已有资料区直接接续。命令从本README所在的Studio总目录运行，Python 3.10及以上即可创建骨架，无需启动网页或连接生成服务：
+
+```sh
+python3 .agents/skills/nora-drama-positioning/scripts/workspace_init.py --workspace 'workspaces/Nora Workspace' --register
+python3 .agents/skills/iris-commercial-brief/scripts/workspace_init.py --workspace 'workspaces/Iris Workspace' --register
+python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'workspaces/Chloe Workspace' workspace --register
+```
+
+三个入口分别见[Nora初始化](.agents/skills/nora-drama-positioning/references/工作区与初始化规范.md)、[Iris初始化](.agents/skills/iris-commercial-brief/references/工作区与初始化规范.md)、[Chloe初始化](.agents/skills/chloe-positioning/references/工作区与初始化规范.md)。脚本只补缺，不覆盖已有README、业务资料、配置或独立Git。Chloe还需使用project命令建档；项目名称必须由用户提供或明确选定，没有名称时先讨论，不能用待命名跳过。未确定的账号方向保持待确定，不创建示例订单、剧集、视频或媒体。
+
+`--register`接入同一个浏览服务：Nora使用默认目录，Iris与Chloe写入本地空间登记；省略时只建资料区。完成初始化后按服务README安装依赖、构建并启动；初始化本身不启动、重启服务，不提交生成。
+
+旧版使用者先保留自己的项目、提示词、配置和任务库，再按所属业务迁移到实际资料区。Git更新及初始化都不会自动搬迁旧`projects/`或旧提示词库，也不覆盖现有业务决定。
 
 ## 会话组织
 
-会话职责、编号、标题、并行与逐集接续统一维护于[会话与进度管理规范](.agents/skills/nora-ai-short-drama/references/流程规范/会话与进度管理规范.md)，此处不另列会话清单。
+会话职责、编号、标题、并行与逐集接续统一维护于[会话与进度管理规范](.agents/skills/nora-serial-drama/references/会话与进度管理规范.md)，此处不另列会话清单。
 
 ## 目录
 
 | 位置 | 用途 |
 | --- | --- |
 | `AGENTS.md` | 工作区约定、默认依赖安装位置及本地Git提交规则 |
-| `.agents/skills/nora-ai-short-drama/` | 短剧主控、共用规则、模板、脚本及[配套工作流](.agents/skills/nora-ai-short-drama/references/comfyui-workflow)；视频工作流用途见[H3执行规范](.agents/skills/nora-generation/references/ComfyUI-H3视频执行规范.md#0-制作策略与工作流配置) |
-| 主控同级的7个业务技能 | [开发、写作、资产、分镜、视频提示词、生成执行、审查](.agents/skills/nora-ai-short-drama/SKILL.md#按任务读取)；现行规则归所属技能，四个适配short-drama技能随仓库保存 |
-| `.agents/skills/nora-social-operations/` | Nora模块化运营子技能，管理账号、个人页、封面、发布包、复盘和制作反馈 |
-| `sd-combat-engine/`、`sd-xuanhuan-engine/`、`sd-real-engine/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
-| 主技能内 `dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
-| `.agents/skills/krea2-style-library/` | 风格库使用与维护指引 |
-| `.agents/skills/nora-prompt-library/` | [提示词管理子技能](.agents/skills/nora-prompt-library/SKILL.md)，由Nora主控按需调用或独立使用，管理共用提示词两库 |
-| `共享提示词/` | 随公共仓库分发的提示词；网页新建默认保存到这里，一份提示词对应一个MD文件 |
-| `提示词管理/` | 仅本地保存的提示词与原有资料库，不入Git；与共享内容在同一页面管理 |
+| `.agents/skills/studio-entry/` | 统一业务路由与共用能力登记；H3工作流由studio-h3维护，视频处理工作流由studio-video-processing维护，统一按studio-comfyui中的登记定位 |
+| 一级业务及其二级阶段 | 连续短剧D01–D12、运营六阶段；阶段内仅规则、模板及脚本，不再嵌套业务子技能 |
+| `.agents/skills/studio-social-operations/` | 工作区通用运营一级路由及六个共享二级业务阶段，管理账号、个人页、封面、发布包、复盘和制作反馈 |
+| `studio-combat-methods/`、`studio-fantasy-combat/`、`studio-realistic-combat/` | 位于 `.agents/skills/`，由业务技能按戏型选择通用、玄幻、写实打戏方法 |
+| `.agents/skills/studio-comfyui/dependencies/` | 三个ComfyUI适配技能的真源；节点源码目录或ZIP安装包统一放在其 `ComfyUI节点资源/` 子目录，保留来源、版本与许可证 |
+| `.agents/skills/studio-krea2-style-library/` | 风格库使用与维护指引 |
+| `.agents/skills/studio-prompt-library/` | [提示词管理子技能](.agents/skills/studio-prompt-library/SKILL.md)，由各业务按需调用或独立使用，管理统一提示词库中的公开与隐私内容 |
+| `提示词库/` | 统一提示词资料目录；`公开/` 随公共仓库保存和分发，`隐私/` 仅本地保存且不入Git；网页统一管理，一份提示词对应一个MD文件 |
 | `工作区浏览服务/` | React＋FastAPI浏览服务、双击启动、共用解析器与开发历史 |
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
-| `projects/` | 使用者真实短剧项目，模板仅保留目录说明 |
+| `workspaces/Nora Workspace/projects/` | Nora真实短剧及角色项目 |
+| `workspaces/Iris Workspace/projects/` | Iris商业订单，原Git历史独立保留 |
+| `workspaces/Chloe Workspace/` | Chloe具名项目，各项目独立维护综合资料与共用资产，项目内projects保存单条视频 |
 | `综合资料/` | 跨项目资料、未分类资料和本机过程资料，模板仅保留目录说明 |
 
 技能历史版本、真实服务库存、项目、个人配置和工具缓存仍可留在本机，但由 `.gitignore` 排除。不要把它们的本地存在误认为已被Git备份。
@@ -41,11 +62,11 @@
 
 ### 短剧流程技能
 
-流程依赖的使用条件与边界读取[主技能依赖入口](.agents/skills/nora-ai-short-drama/references/流程规范/技能依赖与协作规范.md#适用平台与技能依赖)；准确获取来源、版本与许可读取[依赖获取资料](.agents/skills/nora-ai-short-drama/维护规范.md#6-依赖获取与适配资料)。随包的三个ComfyUI适配版保留各自 `LICENSE`；第三方技能许可不由本仓库MIT许可证重新授权。
+流程依赖的使用条件与边界读取[主技能依赖入口](.agents/skills/nora-serial-drama/references/技能依赖与协作规范.md#适用平台与技能依赖)；准确获取来源、版本与许可读取[依赖获取资料](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。随包的三个ComfyUI适配版保留各自 `LICENSE`；第三方技能许可不由本仓库MIT许可证重新授权。
 
 ### 本工作区技能与风格资源
 
-[Nora短剧技能](.agents/skills/nora-ai-short-drama/SKILL.md)与[Krea2风格库技能](.agents/skills/krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora由主控、7个核心业务技能、模块化社交媒体运营子技能和3个按需打戏专项组成；原18项登记包含4个适配业务技能和14个方法／工具依赖。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护；`facial-expression`与`camera-language`仅保留旧引用兼容入口。
+[统一入口](.agents/skills/studio-entry/SKILL.md)与[Krea2风格库技能](.agents/skills/studio-krea2-style-library/SKILL.md)由本工作区维护并随仓库提供。Nora以统一入口和一级业务流程组织制作，前期四阶段、资料设计、单集剧本、分镜设计、专项审查及图片阶段已有对应二级入口，视频提示词、视频制作与交接同样由D09–D11维护。原18项来源登记保留追溯，其中故事开发的适配资源按实际阶段维护。Krea2技能是独立可选工具。[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)为本地独立专项，按任务读取字幕、转写讲解或抽帧分析，不增加核心制作阶段；主控与资产技能提供调用入口。[创作技法学习与维护](.agents/skills/studio-creative-techniques/SKILL.md)统一承接技巧材料的学习收录、创作查用与真实反馈；表情拆解方法、表情参考表和镜头指南分别维护，分镜及图片／视频提示词按需调用。转场、特效与动作知识按主题归位，已有专业参考原位维护。
 
 | 资源 | 来源与作者 |
 | --- | --- |
@@ -60,7 +81,7 @@
 - [Python](https://www.python.org/downloads/)：原固定脚本使用3.9及以上标准库；新浏览服务使用3.10及以上和独立虚拟环境，依赖见服务目录。
 - [FFmpeg](https://ffmpeg.org/download.html)：本地音视频裁剪、解码及合成依赖；安装与调用统一按[FFmpeg初始化与运行](#ffmpeg初始化与运行)。
 - [Node.js](https://nodejs.org/)：浏览服务构建使用22及以上。
-- [ComfyUI](https://github.com/Comfy-Org/ComfyUI)：由使用者独立部署的图片／视频生成后端。本仓库携带工作流及[已登记的节点源码或安装包](.agents/skills/nora-ai-short-drama/维护规范.md#comfyui节点与安装包)，不携带模型权重，不自动部署服务端节点或依赖。服务地址与认证按[工作区共用配置](.agents/skills/nora-generation/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行；节点、模型与兼容性问题按执行规范处理，这里的技能依赖清单不是后端安装清单。
+- [ComfyUI](https://github.com/Comfy-Org/ComfyUI)：由使用者独立部署的图片／视频生成后端。本仓库携带工作流及[已登记的节点源码或安装包](.agents/skills/studio-entry/维护规范.md#comfyui节点与安装包)，不携带模型权重，不自动部署服务端节点或依赖。服务地址与认证按[工作区共用配置](.agents/skills/studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#工作区-comfyui-配置)执行；节点、模型与兼容性问题按执行规范处理，这里的技能依赖清单不是后端安装清单。
 
 ## 环境
 
@@ -88,7 +109,7 @@ FFmpeg是工作区的本地音视频处理依赖。只在初始化项目工作�
 
 ## 工作区浏览服务
 
-Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页自动发现 `projects/` 项目，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
+Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows）.bat)，Mac双击 [启动（Mac）.command](工作区浏览服务/启动（Mac）.command)，由系统托管启动后自动打开 `http://127.0.0.1:8782/`。首页按登记空间发现Nora、Iris与Chloe的projects项目；Chloe使用通用资料页，统一提供项目浏览、Krea2风格库及开发记录。页面打开期间自动检测文件变化，局部更新列表；正在阅读的文档由用户选择切换新版本，不自动整页刷新。局域网使用本机局域网IP加8782端口，风格库管理开放本机及局域网IP地址，保留同源请求和操作凭证校验。双击对应系统的停止脚本结束本工作区服务；关闭Codex或网页不停止服务，不设开机或登录自启。Agent发布重启也走同一托管入口，详见[日常启动](工作区浏览服务/README.md#日常启动)。
 
 首次安装、构建、开发及测试说明见[服务README](工作区浏览服务/README.md)。服务需要Python 3.10＋及项目依赖，前端构建需要Node.js 22＋、pnpm 11；已构建后普通浏览不需要Node.js；ComfyUI后台的Codex会话通知需要本机Node，具体接入见服务README。项目页面由浏览服务读取源资料展示，不再生成或维护项目静态HTML。
 
@@ -96,23 +117,23 @@ Windows双击 [启动（Windows）.bat](工作区浏览服务/启动（Windows�
 
 从[工作区浏览服务](工作区浏览服务/README.md)的“风格库”进入，提供搜索、分类、预览、提示词复制及资源更新管理。服务的启动、停止与访问方式统一见服务README。
 
-当前资源随工作区提供；检查、准备、审阅差异、应用和恢复均由使用者手动触发，不会自动升级。风格操作与文件结构见[使用说明](工作区浏览服务/Krea2风格库/使用说明.md)，agent检索与维护见[krea2-style-library](.agents/skills/krea2-style-library/SKILL.md)。
+当前资源随工作区提供；检查、准备、审阅差异、应用和恢复均由使用者手动触发，不会自动升级。风格操作与文件结构见[使用说明](工作区浏览服务/Krea2风格库/使用说明.md)，agent检索与维护见[studio-krea2-style-library](.agents/skills/studio-krea2-style-library/SKILL.md)。
 
 ## 维护与检查
 
-修改短剧技能前读取其[维护规范](.agents/skills/nora-ai-short-drama/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
+修改短剧技能前读取其[维护规范](.agents/skills/studio-entry/维护规范.md)，使用 `skill-creator`。三个ComfyUI技能只在随包真源中维护，不从远端自动覆盖；吸收上游更新时检查适配差异并保留来源版本和许可证。Krea2的使用与维护规则集中在对应技能，不另设局部AGENTS。
 
 按影响范围选择已有测试，不因普通文档修改运行全部测试。下列命令均在工作区根目录执行：
 
 ```sh
 # ComfyUI通信客户端：本地测试，不访问生产服务。
-python3 -B -m unittest discover -s .agents/skills/nora-ai-short-drama/references/comfyui-scripts -p 'test_*.py'
+python3 -B -m unittest discover -s .agents/skills/studio-comfyui/scripts -p 'test_*.py'
 # 工作流脚本。
-python3 -B -m unittest discover -s .agents/skills/nora-ai-short-drama/scripts -p 'test_*.py'
+python3 -B -m unittest discover -s .agents/skills/nora-drama-production/scripts -p 'test_*.py'
 # 项目浏览服务：在该目录执行资料解析、API与同步测试。
 (cd 工作区浏览服务 && python3 -X utf8 -B -m unittest discover -s tests -v)
 # 仅检查本地画布/API配对，不验证远端兼容性。
-python3 -B .agents/skills/nora-ai-short-drama/scripts/workflow_baselines.py
+python3 -B .agents/skills/studio-comfyui/scripts/workflow_baselines.py
 # Krea2：临时目录与本机临时端口测试，不联网更新资源。
 python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_更新工具 -p 'test_*.py'
 ```
@@ -121,7 +142,9 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## Git边界
 
-采用 `.gitignore` 排除清单：新增文件和目录默认可被Git发现，无需逐项放行；只有新增不应入库的内容类别时才补充忽略规则。真实项目、综合资料内容、根目录 `.codex/` 本机配置、已明确列出的外部安装技能、历史归档、`state/` 库存缓存及Krea2 `work/` 备份不入库。`projects/` 和 `综合资料/` 仅保留各自README，新增项目和过程资料仍自动排除。可被Git发现不等于自动提交；提交范围按[工作区Git提交规则](AGENTS.md#git-提交与推送)核对，其中公开提示词的新增、修改和删除随正常工作区提交一并归入，隐私提示词继续排除。 `.agents/plugins/` 不整目录忽略；其中的配置提交前仍需核对本机路径和实际分发用途。
+采用 `.gitignore` 排除清单：通用规则、技能、脚本、模板、源码和获准分发的资源可被Git发现；实际 `workspaces/`、总层综合资料内容、本机配置、运行库、缓存、历史归档及按需安装的外部技能不入库。Nora、Iris、Chloe统一通过各自初始化流程创建本地README和资料目录；Iris已有独立Git仍保持独立，不合并历史。公开提示词的新增、修改和删除按[提交规则](AGENTS.md#git-提交与推送)一并归入，隐私、回收站和临时文件继续排除。
+
+开发记录与测试只分发通用实现、检查结果及独立示例。真实项目、客户订单、台词、账号决定、素材标识、任务和会话ID、个人路径及业务验收明细保存在本地资料中。原始画布及Krea2资源的分发范围沿各自来源与许可说明维护。
 
 每次完成获授权维护并通过检查后，agent按上述规则，将本次任务与公开提示词变更归入同次本地提交；纯讨论和只读检查不提交，推送须另有明确要求。提交前查看差异和暂存清单，不混入并发修改。Git只保存被跟踪且已提交的文件；真实项目需另行安排私有版本管理或备份。
 
@@ -132,3 +155,8 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 本工作区原创技能、脚本及文档采用根目录 [MIT许可证](LICENSE)，允许修改、再分发和商用，保留版权及许可声明。
 
 第三方内容不因放入本仓库自动改为MIT：三个ComfyUI适配技能保留各自许可证；Krea2风格文本、预览图及来源限制以对应上游来源的许可声明为准。
+
+
+## 分层README规范
+
+一级子工作区按[工作区结构与README规范](.agents/skills/studio-entry/references/一级子工作区结构与README规范.md)及其模板建立；业务项目分别按[Nora项目规范](.agents/skills/nora-drama-positioning/references/项目README规范.md)、[Iris项目建档规范](.agents/skills/iris-commercial-brief/references/项目建档与README规范.md)或[Chloe视频建档规范](.agents/skills/chloe-creative/references/视频项目与脚本规范.md)等所属业务入口维护；公共运营只规定[接入信息要求](.agents/skills/studio-operations-setup/references/运营项目README规范.md)，不另定项目结构。它们的结构规则与模板各归所属维护入口，不复制到资料区形成另一套现行规范。

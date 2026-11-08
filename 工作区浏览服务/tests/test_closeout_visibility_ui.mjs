@@ -28,8 +28,8 @@ try {
   server = await preview({ ...config, preview: { host: '127.0.0.1', port: 0 } });
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   browser = await chromium.launch({ headless: true });
-  for (const width of [1362, 390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 918 } });
+  for (const width of [1280, 1366, 1920]) {
+    const page = await browser.newPage({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
     const errors = [], requests = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => {
@@ -42,7 +42,7 @@ try {
         status: 'completed', category: 'history', remote_url: 'http://fixture.invalid', enqueued_url: 'http://fixture.invalid',
         created_at: '2026-10-27T01:00:00Z', notification: 'acknowledged', collected: 1, expected: 1,
         closeout: { status: 'browser_pending', error: '模拟资料解析冲突' } };
-      if (url.pathname === '/api/comfy/history') return route.fulfill({ json: { items: [summary], total: 1, next_offset: null } });
+      if (url.pathname === '/api/task-monitor/history') return route.fulfill({ json: { items: [summary], total: 1, next_offset: null } });
       if (url.pathname === '/api/comfy/tasks/fixture/detail') return route.fulfill({ json: { summary, events: [], outputs: [], records: [], notification_batches: [], resolution_evidence: [], replacement_tasks: [] } });
       throw new Error('unexpected API: ' + url.pathname);
     });

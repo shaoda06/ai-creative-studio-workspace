@@ -1,3 +1,10 @@
+import type { ReactNode } from 'react';
+import { get } from '../api';
+import type { WorkspaceSpace } from '../api';
+import { Result } from '../components';
+import { TabSelect } from './TabSelect';
+import { useContext } from 'react';
+import { TaskApiContext } from './TaskApiContext';
 import { UnderlineTabs } from './UnderlineTabs';
 import { FloatingMessage, useNotify } from './Notifications';
 import { PointerTooltip } from './PointerTooltip';
@@ -20,18 +27,34 @@ interface RemoteNode {
 const nodeConnectionLabels = { connecting: '正在连接', connected: '已连接', reconnecting: '连接中断，正在自动重连' };
 const actionLabels: Record<string, string> = { immediate: '已接受立即提交请求', insert: '已移到队首', pause: '已暂停', resume: '已恢复排队', cancel: '已取消' };
 
-export function TaskSidebar() {
+export function TaskSidebar({ spaceId = 'nora' }: { spaceId?: string }) {
+  const routeSpace = spaceId;
+  const [selected, setSelected] = useState(routeSpace);
+  const [open, setOpen] = useState(false);
+  const spaces = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
+  useEffect(() => { if (!open && !document.querySelector('[data-node-config-unsaved="true"]')) setSelected(routeSpace); }, [routeSpace, open]);
+  const api = selected === 'nora' ? '/api' : `/api/workspaces/${selected}`;
+  const controls = (disabled: boolean) => <><div className="comfy-node-heading"><TabSelect label="节点配置所属空间" size="compact" disabled={disabled} selected={selected} onChange={setSelected}
+    items={(spaces.data || []).map(space => ({ value: space.id, label: space.name }))} /></div>
+    <Result loading={false} error={spaces.error} retry={spaces.refetch} retrying={spaces.isFetching} /></>;
+  return <TaskApiContext.Provider value={api}><ScopedTaskSidebar key={api} open={open} setOpen={setOpen} controls={controls} /></TaskApiContext.Provider>;
+}
+
+function ScopedTaskSidebar({ open, setOpen, controls }: { open: boolean; setOpen: (value: boolean) => void; controls: (disabled: boolean) => ReactNode }) {
+  const api = useContext(TaskApiContext);
   const notify = useNotify();
   const sidebar = useRef<HTMLElement>(null);
-  const [open, setOpen] = useState(false);
   const [editingNodes, setEditingNodes] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailApi, setDetailApi] = useState(api);
+  const showDetails = (id: string, ownerApi = api) => { setDetailApi(ownerApi); setDetailId(id); };
   const [tasks, setTasks] = useState<(Task | LocalQueueTask)[]>([]);
   const [localCategory, setLocalCategory] = useState<keyof typeof localQueueStates>('queued');
   const [localRows, setLocalRows] = useState<LocalQueueTask[]>([]);
   const localRef = useRef<LocalQueueTask[]>([]);
   const dragToken = useRef<string | null>(null);
   const dragUrl = useRef<string | null>(null);
+  const dragApi = useRef(api);
   const dragTimer = useRef<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState('');
@@ -50,9 +73,9 @@ export function TaskSidebar() {
     return () => document.removeEventListener('pointerdown', outside, true);
   }, [open]);
   const taskQuery = useQuery({
-    queryKey: ['task-sidebar'],
+    queryKey: ['task-sidebar', 'global'],
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/comfy/tasks?include_history=false', { signal });
+      const response = await fetch('/api/task-monitor', { signal });
       if (!response.ok) throw new Error('任务列表刷新失败');
       return response.json();
     },
@@ -80,7 +103,7 @@ export function TaskSidebar() {
   useEffect(() => {
     return () => {
       window.clearInterval(dragTimer.current);
-      if (dragToken.current) void fetch('/api/comfy/drag', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+      if (dragToken.current) void fetch(`${dragApi.current}/comfy/drag`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: dragToken.current, release: true }) });
     };
   }, []);
@@ -115,12 +138,12 @@ export function TaskSidebar() {
     : selectedNode?.connection === 'reconnecting' ? selectedNode.updated_at
       ? '远端连接中断，显示上次队列，正在自动重连' : '远端暂未连接，正在自动重连'
     : selectedNode?.queue_error;
-  const write = useCallback(async (path: string, value: unknown, method = 'POST') => {
-    const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+  const write = useCallback(async (path: string, value: unknown, method = 'POST', ownerApi = api) => {
+    const response = await fetch(ownerApi + path.slice(4), { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
     const data = await response.json();
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
     return data;
-  }, []);
+  }, [api]);
   const reload = useCallback(async () => {
     const snapshot = (await refreshTasks({ throwOnError: true })).data!;
     localRef.current = snapshot.local_tasks;
@@ -130,66 +153,67 @@ export function TaskSidebar() {
     setHistoryUpdates(snapshot.history_updated_at);
     return snapshot.local_tasks as LocalQueueTask[];
   }, [refreshTasks]);
-  const action = useCallback(async (id: string, operation: string) => {
+  const action = useCallback(async (id: string, operation: string, ownerApi = api) => {
     setBusy(true); setPendingAction('正在处理任务操作…');
     try {
-      await write(`/api/comfy/tasks/${id}/action`, { action: operation });
-      notify(`${localRef.current.find(task => task.id === id)?.title || id}：${actionLabels[operation]}`);
+      await write(`/api/comfy/tasks/${id}/action`, { action: operation }, 'POST', ownerApi);
+      notify(`${localRef.current.find(task => task.id === id && (task.api_prefix ?? api) === ownerApi)?.title || id}：${actionLabels[operation]}`);
       try { await reload(); } catch (error) { notify(`操作已完成，但列表刷新失败：${(error as Error).message}`, 'error'); }
     }
     catch (error) { notify(`操作失败：${(error as Error).message}`, 'error'); }
     finally { setBusy(false); setPendingAction(''); }
-  }, [write, reload, notify]);
-  const transfer = useCallback(async (id: string, url: string) => {
+  }, [write, reload, notify, api]);
+  const transfer = useCallback(async (id: string, url: string, ownerApi = api) => {
     setBusy(true); setPendingAction('正在转移任务…');
     try {
-      await write(`/api/comfy/tasks/${id}/transfer`, { url });
-      notify(`${localRef.current.find(task => task.id === id)?.title || id}：已转移到${nodes.find(node => node.url === url)?.name || url}`);
+      await write(`/api/comfy/tasks/${id}/transfer`, { url }, 'POST', ownerApi);
+      notify(`${localRef.current.find(task => task.id === id && (task.api_prefix ?? api) === ownerApi)?.title || id}：已转移到${nodes.find(node => node.url === url)?.name || url}`);
       try { await reload(); } catch (error) { notify(`操作已完成，但列表刷新失败：${(error as Error).message}`, 'error'); }
     }
     catch (error) { notify(`转移失败：${(error as Error).message}`, 'error'); }
     finally { setBusy(false); setPendingAction(''); }
-  }, [write, reload, notify, nodes]);
-  const startDrag = useCallback(async (id: string) => {
+  }, [write, reload, notify, nodes, api]);
+  const startDrag = useCallback(async (id: string, ownerApi = api) => {
     if (dragToken.current) return false;
     setBusy(true); setPendingAction('正在准备队列排序…'); setDragError('');
     try {
       const url = selectedNode!.url;
-      const result = await write('/api/comfy/drag', { url });
+      dragApi.current = ownerApi;
+      const result = await write('/api/comfy/drag', { url }, 'POST', dragApi.current);
       dragToken.current = result.token;
       dragUrl.current = url;
       const fresh = await reload();
-      if (!fresh.some(task => task.id === id && task.status === 'local_queued' && task.remote_url === url)) {
-        await write('/api/comfy/drag', { token: result.token, release: true });
+      if (!fresh.some(task => task.id === id && task.status === 'local_queued' && task.remote_url === url && (task.api_prefix ?? api) === dragApi.current)) {
+        await write('/api/comfy/drag', { token: result.token, release: true }, 'POST', dragApi.current);
         dragToken.current = null;
         throw new Error('这项任务已经开始提交，请选择其他排队任务');
       }
       dragTimer.current = window.setInterval(() => {
-        void write('/api/comfy/drag', { token: dragToken.current }).catch(error => setDragError(error.message));
+        void write('/api/comfy/drag', { token: dragToken.current }, 'POST', dragApi.current).catch(error => setDragError(error.message));
       }, 5000);
       return true;
     } catch (error) {
       if (dragToken.current) {
-        try { await write('/api/comfy/drag', { token: dragToken.current, release: true }); }
+        try { await write('/api/comfy/drag', { token: dragToken.current, release: true }, 'POST', dragApi.current); }
         catch (releaseError) { notify(`排序保护解除失败：${(releaseError as Error).message}`, 'error'); }
         dragToken.current = null;
       }
       dragUrl.current = null;
       notify(`无法开始排序：${(error as Error).message}`, 'error'); return false;
     } finally { setBusy(false); setPendingAction(''); }
-  }, [write, reload, selectedNode?.url, notify]);
+  }, [write, reload, selectedNode?.url, notify, api]);
   const endDrag = useCallback(async () => {
     const token = dragToken.current;
     if (!token) return;
     setBusy(true); setPendingAction('正在保存队列顺序…');
     try {
-      await write('/api/comfy/order', { token, ids: localRef.current.filter(task => task.status === 'local_queued' && task.remote_url === dragUrl.current).map(task => task.id) }, 'PUT');
+      await write('/api/comfy/order', { token, ids: localRef.current.filter(task => task.status === 'local_queued' && task.remote_url === dragUrl.current && (task.api_prefix ?? api) === dragApi.current).map(task => task.id) }, 'PUT', dragApi.current);
       notify('已更新队列顺序');
     }
     catch (error) { notify(`排序失败：${(error as Error).message}`, 'error'); }
     finally {
       window.clearInterval(dragTimer.current);
-      try { await write('/api/comfy/drag', { token, release: true }); }
+      try { await write('/api/comfy/drag', { token, release: true }, 'POST', dragApi.current); }
       catch (error) { notify(`排序保护解除失败：${(error as Error).message}`, 'error'); }
       dragToken.current = null;
       dragUrl.current = null;
@@ -197,17 +221,17 @@ export function TaskSidebar() {
       setBusy(false);
       setPendingAction('');
     }
-  }, [write, reload, notify]);
+  }, [write, reload, notify, api]);
   const reorderLocal = useCallback((sourceId: string, targetId: string) => {
     const current = localRef.current;
-    const source = current.findIndex(task => task.id === sourceId && task.status === 'local_queued' && task.remote_url === dragUrl.current);
-    const target = current.findIndex(task => task.id === targetId && task.status === 'local_queued' && task.remote_url === dragUrl.current);
+    const source = current.findIndex(task => task.id === sourceId && task.status === 'local_queued' && task.remote_url === dragUrl.current && (task.api_prefix ?? api) === dragApi.current);
+    const target = current.findIndex(task => task.id === targetId && task.status === 'local_queued' && task.remote_url === dragUrl.current && (task.api_prefix ?? api) === dragApi.current);
     if (source === -1 || target === -1 || source === target) return;
     const next = [...current];
     const [moved] = next.splice(source, 1); next.splice(target, 0, moved);
     localRef.current = next;
     setLocalRows(next);
-  }, []);
+  }, [api]);
   return <><aside ref={sidebar} className="comfy-sidebar" data-open={open} aria-label="生成任务进度">
     <button className="comfy-sidebar-toggle" aria-expanded={open} aria-controls="comfy-task-list"
       aria-label={open ? '收起任务进度' : '展开任务进度'} onClick={() => {
@@ -234,12 +258,14 @@ export function TaskSidebar() {
         </span>
       </span></button>
     <div id="comfy-task-list" className="comfy-task-content" data-view={editingNodes ? 'nodes' : 'tasks'} hidden={!open}>
-      {editingNodes ? <NodeEditor close={() => setEditingNodes(false)} /> : <>
+      <div>{editingNodes ? controls(busy || dragToken.current !== null) : <div className="comfy-node-heading"><strong>全部工作区任务</strong></div>}{!editingNodes && <>
       <div className="comfy-node-heading"><UnderlineTabs scrollable label="远端节点" selected={selectedNode?.url || ''} disabled={busy || dragToken.current !== null}
         onChange={url => setSelectedUrl(url)} items={nodes.map(node => ({ value: node.url, label: node.name,
           tooltip: connection === 'connected' ? nodeConnectionLabels[node.connection] : '等待后台连接恢复',
           icon: <span className="comfy-node-dot" data-connection={connection === 'connected' ? node.connection : 'connecting'} aria-hidden="true" /> }))} /><button className="comfy-node-edit" disabled={busy || dragToken.current !== null}
         onClick={() => setEditingNodes(true)}>编辑</button></div>
+      </>}</div>
+      {editingNodes ? <NodeEditor close={() => setEditingNodes(false)} /> : <>
       <section className="comfy-queue" aria-label="远端队列">
       <div className="comfy-task-heading"><strong>远端</strong>
       <div className="comfy-node-counts" aria-label="当前节点任务数量">
@@ -250,7 +276,8 @@ export function TaskSidebar() {
       {visibleTasks.length === 0 && <p className="comfy-empty">{!selectedNode ? '暂无配置的远端节点'
         : !selectedNode.updated_at ? selectedNode.connection === 'reconnecting' ? '尚未获取到远端队列' : '正在读取远端队列…'
         : '该节点暂无队列任务'}</p>}
-      <div className="comfy-task-items">{visibleTasks.map(task => <TaskCard key={task.id} task={task} onDetails={setDetailId} />)}</div>
+      <div className="comfy-task-items">{visibleTasks.map(task => <TaskCard key={`${task.source === 'external' ? 'external' : task.api_prefix}:${task.id}`} task={task}
+        onDetails={id => showDetails(id, task.source === 'external' ? api : task.api_prefix)} />)}</div>
       </div>
       </section>
       <section className="comfy-queue" aria-label="本地队列">
@@ -259,12 +286,13 @@ export function TaskSidebar() {
             onChange={setLocalCategory} items={(Object.keys(localQueueStates) as (keyof typeof localQueueStates)[]).map(status => ({ value: status, label: `${localQueueStates[status]}（${localCounts[status]}）` }))} />
         </div>
         {localCategory === 'history' ? <TaskHistory
-          updatedAt={historyUpdatedAt} total={localCounts.history} onDetails={setDetailId} /> :
+          updatedAt={historyUpdatedAt} total={localCounts.history} onDetails={showDetails} /> :
         <div className="comfy-queue-body" key={`${selectedNode?.url}:${localCategory}`}>
           {localTasks.length === 0 && <p className="comfy-empty">暂无{localQueueStates[localCategory]}任务</p>}
-          <div className="comfy-task-items">{localTasks.map(task => <LocalQueueCard key={task.id} task={task}
-            position={localPositions.get(task.id)}
-            busy={busy || dragToken.current !== null} onAction={action} onTransfer={transfer} onDragStart={startDrag} onDragEnd={endDrag} onDetails={setDetailId}
+          <div className="comfy-task-items">{localTasks.map(task => <LocalQueueCard key={`${task.api_prefix}:${task.id}`} task={task}
+            position={task.queue_position ?? localPositions.get(task.id)}
+            busy={busy || dragToken.current !== null} onAction={(id, operation) => action(id, operation, task.api_prefix)} onTransfer={(id, url) => transfer(id, url, task.api_prefix)}
+            onDragStart={id => startDrag(id, task.api_prefix)} onDragEnd={endDrag} onDetails={id => showDetails(id, task.api_prefix)}
             onReorder={task.status === 'local_queued' ? reorderLocal : undefined} />)}</div>
         </div>}
       </section>
@@ -272,7 +300,7 @@ export function TaskSidebar() {
     </div>
   </aside>{pendingAction && <FloatingMessage key={pendingAction}>{pendingAction}</FloatingMessage>}
   {dragToken.current && dragError && <FloatingMessage tone="error">排序保护续期失败：{dragError}</FloatingMessage>}
-  {detailId && <TaskDetailDialog key={detailId} id={detailId}
+  {detailId && <TaskApiContext.Provider value={detailApi}><TaskDetailDialog key={`${detailApi}:${detailId}`} id={detailId}
     updatedAt={historyUpdatedAt ?? undefined}
-    nodes={nodes} close={() => setDetailId(null)} openTask={setDetailId} />}</>;
+    nodes={nodes} close={() => setDetailId(null)} openTask={setDetailId} /></TaskApiContext.Provider>}</>;
 }

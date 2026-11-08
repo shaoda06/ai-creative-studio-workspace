@@ -7,4 +7,7 @@
 .stage-download-group>summary{font-size:15px;font-weight:600;cursor:pointer}
 .stage-download-group .stage-download-count{display:inline-block;margin-left:8px;font-size:13px;font-weight:400}
 .stage-download-actions{display:grid;gap:12px;margin-top:12px}
-@media(max-width:700px){.stage-downloads{gap:28px}.stage-download-section{padding-bottom:28px}}
+.stage-download-packages{display:flex;align-items:center;flex-wrap:wrap}
+
+.stage-download-note{display:inline;margin-left:12px;font-size:13px;font-weight:400}
+.stage-download-file{display:grid;justify-items:start;gap:6px;min-width:0}

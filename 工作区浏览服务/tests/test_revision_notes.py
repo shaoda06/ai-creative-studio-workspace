@@ -37,9 +37,39 @@ class RevisionNotesTests(HttpTestCase):
     def put(self, value=None, url=None):
         return self.client.put(url or self.url, json=value or self.value, headers={'Origin': 'http://localhost:8782'})
 
+    def test_archived_project_keeps_notes_readable_and_rejects_all_writes(self):
+        (self.project / '.archived').write_text('已迁移历史')
+        for url, value in [(self.url, self.value),
+                           (self.url + '/export', {'notes': [], 'rounds': []}),
+                           ('/api/projects/示例项目/revision-notes/EP001/export', {'notes': [], 'rounds': []})]:
+            with self.subTest(url=url):
+                response = self.put(value, url)
+                self.assertEqual(response.status_code, 409)
+                self.assertIn('只读历史入口', response.json()['detail'])
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertFalse(list(self.project.rglob('*修改意见*')))
+
     def test_read_empty_does_not_create_files(self):
         self.assertEqual(self.client.get(self.url).json(), {'episode': 'EP001', 'scene': 'C001', 'notes': {}, 'rounds': {}})
         self.assertFalse((self.project / '09-剧集制作/EP001/其他资料').exists())
+
+    def test_dialogue_edits_survive_text_only_clients_and_detect_concurrent_changes(self):
+        edit = {'shot': 'EP001-C001-SH001', 'index': 0, 'speaker': '女主', 'original': '快走！', 'replacement': '先走！\n我跟上。'}
+        value = self.value | {'text': '', 'dialogueEdits': [edit], 'expectedDialogueEdits': []}
+        saved = self.put(value)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(saved.json()['dialogueEdits'], [edit])
+        stale = value | {'dialogueEdits': [edit | {'replacement': '别走！'}]}
+        self.assertEqual(self.put(stale).status_code, 409)
+        # A page opened before this feature edits only free-form text.
+        legacy = self.value | {'text': '普通意见', 'expectedText': ''}
+        self.assertEqual(self.put(legacy).json()['dialogueEdits'], [edit])
+        export = {'notes': [legacy | {'text': '导出修改意见', 'expectedText': '普通意见'}], 'rounds': []}
+        self.assertEqual(self.put(export, self.url + '/export').status_code, 200)
+        note = self.client.get(self.url).json()['notes']['P001/一采/R001']
+        self.assertEqual(note['dialogueEdits'], [edit])
+        cleared = value | {'text': '', 'dialogueEdits': [], 'expectedDialogueEdits': [edit], 'expectedText': '导出修改意见'}
+        self.assertEqual(self.put(cleared).json()['dialogueEdits'], [])
 
     def test_disk_persistence_unicode_and_independent_versions(self):
         first = self.put()

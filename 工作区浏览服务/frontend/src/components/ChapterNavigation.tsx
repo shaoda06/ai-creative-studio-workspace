@@ -3,8 +3,8 @@ import { useId, useMemo, useState } from 'react';
 export type ChapterHeading = { id: string; text: string; level: number };
 type Chapter = ChapterHeading & { children: Chapter[] };
 
-export function ChapterNavigation({ headings, onNavigate }: { headings: ChapterHeading[]; onNavigate: (id: string) => void }) {
-  const [open, setOpen] = useState(true);
+export function ChapterNavigation({ headings, onNavigate, initiallyOpen = true }: { headings: ChapterHeading[]; onNavigate: (id: string) => void; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
   const chapters = useMemo(() => {
     const roots: Chapter[] = [];
     const parents: Chapter[] = [];

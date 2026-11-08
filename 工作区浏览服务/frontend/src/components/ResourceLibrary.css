@@ -1,0 +1,6 @@
+.resource-library { display: grid; gap: 1rem; }
+.resource-library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.resource-family-grid, .resource-version-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; align-items: start; }
+.resource-family { display: grid; gap: .5rem; text-align: left; overflow-wrap: anywhere; }
+.resource-version { min-width: 0; overflow-wrap: anywhere; }
+.resource-upload-form { display: grid; gap: 1rem; }

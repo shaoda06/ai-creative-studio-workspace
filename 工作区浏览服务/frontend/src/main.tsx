@@ -1,11 +1,13 @@
 import { PageCheckStatus } from './components/PageCheckStatus';
-import { Component, lazy, Suspense, useState } from 'react';
+import { Component, lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHashRouter, RouterProvider, Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { get } from './api';
-import { Dialog, Document, Result } from './components';
+import type { WorkspaceSpace } from './api';
+import { ProjectSpace, FilesProject } from './ProjectSpace';
+import { Result } from './components';
 import { AppShell } from './components/AppShell';
 import { EntryCard } from './components/EntryCard';
 import { Loading } from './components/Loading';
@@ -25,25 +27,18 @@ class PageBoundary extends Component<{ children: ReactNode }, { error: Error | n
   }
 }
 function Home() {
-  const [indexOpen, setIndexOpen] = useState(false);
-  const projects = useQuery({ queryKey: ['projects'], queryFn: () => get<{ id: string; name: string }[]>('/api/projects'), refetchInterval: 5000 });
-  const index = useQuery({ queryKey: ['project-index'], queryFn: () => get<{ title: string; html: string }>('/api/project-index'), enabled: indexOpen, refetchInterval: 5000 });
+  const spaces = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
   return <div className="home">
-    <PageCheckStatus queries={[projects]} />
+    <PageCheckStatus queries={[spaces]} />
     <div className="section-heading"><h2>共用工具</h2></div>
     <div className="grid"><EntryCard to="/assets/person" title="资产管理" description="人物资料、服装、道具与图片相册" /><EntryCard to="/prompts" title="提示词管理" description="分类整理、编辑与搜索常用提示词" /><EntryCard to="/krea2" title="Krea2 风格库" description="预览、提示词与资源更新" /><EntryCard to="/workflows" title="内置工作流" description="下载画布版与 API 版工作流" /></div>
-    <div className="section-heading"><h2>短剧项目</h2><span className="muted">按<button type="button" className="link" aria-label="查看项目总索引" onClick={() => setIndexOpen(true)}>项目总索引</button>排序</span></div>
-    <Result page loading={projects.isPending} error={projects.error} retry={projects.refetch} retrying={projects.isFetching} />
-    <div className="grid">{projects.data?.map((item, index) => <EntryCard key={item.id} to={`/projects/${encodeURIComponent(item.id)}`} title={`${String(index + 1).padStart(2, '0')}-${item.name}`} description="进入项目浏览" icon="▤" />)}</div>
-    {projects.data?.length === 0 && <p className="muted">暂无项目。项目资料保存到工作区 projects 目录后会出现在这里。</p>}
-    {indexOpen && <Dialog title="项目总索引" close={() => setIndexOpen(false)}>
-      <Result loading={index.isPending} error={index.error} retry={index.refetch} retrying={index.isFetching} />
-      {index.data && <div className="project-index-document"><Document value={index.data} showOriginal={false} /></div>}
-    </Dialog>}
+    <div className="section-heading"><h2>一级项目空间</h2></div>
+    <Result page loading={spaces.isPending} error={spaces.error} retry={spaces.refetch} retrying={spaces.isFetching} />
+    <div className="grid">{spaces.data?.map(space => <EntryCard key={space.id} to={`/spaces/${space.id}`} title={space.name} description={`${space.projects.length}个业务项目`} icon="▤" />)}</div>
   </div>;
 }
 function App() {
-  return <AppShell><Suspense fallback={<Loading page />}><Routes><Route path="/" element={<Home />} /><Route path="/projects/:name" element={<Project />} /><Route path="/krea2" element={<Krea />} /><Route path="/workflows" element={<Workflows />} /><Route path="/prompts" element={<Prompts />} /><Route path="/assets/:kind?/:id?" element={<Assets />} /><Route path="/history" element={<History />} /><Route path="*" element={<p>入口不存在。<Link to="/">回到工作区</Link></p>} /></Routes></Suspense></AppShell>;
+  return <AppShell><Suspense fallback={<Loading page />}><Routes><Route path="/" element={<Home />} /><Route path="/projects/:name" element={<Project />} /><Route path="/spaces/:spaceId" element={<ProjectSpace />} /><Route path="/spaces/:spaceId/contexts/:context" element={<ProjectSpace />} /><Route path="/spaces/:spaceId/projects/:name" element={<FilesProject />} /><Route path="/krea2" element={<Krea />} /><Route path="/workflows" element={<Workflows />} /><Route path="/prompts" element={<Prompts />} /><Route path="/assets/:kind?/:id?" element={<Assets />} /><Route path="/history" element={<History />} /><Route path="*" element={<p>入口不存在。<Link to="/">回到工作区</Link></p>} /></Routes></Suspense></AppShell>;
 }
 const router = createHashRouter([{ path: '*', element: <PageBoundary><App /></PageBoundary> }]);
 createRoot(document.getElementById('root')!).render(<PageBoundary><QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider></PageBoundary>);

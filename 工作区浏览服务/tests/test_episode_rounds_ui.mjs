@@ -15,7 +15,7 @@ let missing = false;
 const unexpected = [], writes = [];
 const video = (scene, run) => ({ key: `${scene}-${run}`, run, stage: '一采', url: missing && run === 'R003' ? '' : `/fixture/${scene}-${run}.mp4`, candidateNumber: Number(run.slice(1)), approved: false,
   fileRevision: '', deliveryStatus: '已取回', taskStatus: '成功', checkedAt: '', context: { scriptHtml: `<p>${scene}-${run}</p>`, shots: [], prompts: {}, references: { common: [], segment: [] }, issues: [] } });
-const doc = title => ({ kind: 'document', key: title + '.md', name: title, version: 'v01', doc: { title, html: `<p>${title}的正文</p>` } });
+const doc = title => ({ kind: 'document', key: title + '.md', name: title, version: 'v01', doc: { title, url: `/fixture/${title}.md`, html: `<h2>镜头正文</h2><p>${title}的正文</p>` } });
 const round = (scene, number, run, shared = true) => ({ number, episodeRound: shared, created_at: '2026-10-26T00:00:00+08:00', script: doc('剧本' + number), storyboard: doc(scene + '分镜' + number), issues: [],
   segments: [{ id: 'P001', duration: 2, stage: '一采', run, scriptHtml: `<p>${scene}-${run}分镜</p>` }] });
 const episode = name => ({ kind: 'group', name, title: '轮次示例', children: [], materials: [], previousEpisode: null, warnings: [], productionIssues: [], script: doc('当前剧本'), scenes: ['C001', 'C002'],
@@ -30,7 +30,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
   if (!url.startsWith('/api/')) return next();
   if (req.method !== 'GET') { writes.push(url); res.writeHead(405); return res.end(); }
   let data;
-  if (url === '/api/projects') data = [{ id: '轮次示例', name: '轮次示例' }];
+  if (url === '/api/workspaces') data = [{ id: 'nora', name: 'Nora示例空间', view: 'serial-drama', projects: [{ id: '轮次示例', name: '轮次示例' }] }];
+  else if (url === '/api/projects') data = [{ id: '轮次示例', name: '轮次示例' }];
   else if (url.endsWith('/status')) data = { revision: 1, updating: false, checking: false };
   else if (url.endsWith('/overview')) data = { active: [], warnings: [], directories: [{ name: '00-项目定位', label: '项目定位' }, { name: '09-剧集制作', label: '剧集制作' }] };
   else if (url.endsWith('/sections/00-项目定位')) data = { exists: false, groups: [] };
@@ -45,14 +46,17 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 try {
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
   missing = false;
-  const context = await browser.newContext({ viewport: { width, height: 916 } });
+  const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('轮次示例'));
   await page.getByRole('button', { name: '剧集制作', exact: true }).click();
+  const episodeCard=page.locator('[data-episode=EP001]');
+  await episodeCard.waitFor();
+  assert.equal(await episodeCard.evaluate(el=>el.getBoundingClientRect().height),48);
   await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
   const choose = page.getByRole('combobox', { name: '修改轮次', exact: true });
   const scene = id => page.getByRole('button', { name: new RegExp('^场次 ' + id + ' ·') });
@@ -60,7 +64,25 @@ try {
   const chooseRound = async n => { if (await choose.getAttribute('data-value') === String(n)) return; await choose.click(); await page.getByRole('option', { name: new RegExp(`^第${n}轮(?:当前)?$`) }).click(); };
   const waitRun = async run => page.waitForFunction(run => document.querySelector('[aria-label="版本切换"]')?.getAttribute('data-value')?.endsWith(run), run);
   await choose.waitFor(); assert.equal(await choose.getAttribute('data-value'), '9');
+  assert.deepEqual(await page.locator('.episode-detail').evaluate(detail => {
+   const panel = getComputedStyle(detail.closest('.panel'));
+   const tabs = getComputedStyle(detail.querySelector('.scene-workspace-tabs'));
+   const content = getComputedStyle(detail.querySelector('.episode-scene-content'));
+   const breadcrumb = document.querySelector('.breadcrumbs');
+   return [panel.backgroundColor, panel.borderRadius, panel.padding,
+    tabs.marginTop, tabs.gap, content.paddingTop,
+    Boolean(breadcrumb.closest('.page-heading-stacked')), getComputedStyle(breadcrumb).marginBottom];
+  }), ['rgb(255, 255, 255)', '10px', '23px', '20px', '12px 20px', '20px', true, '0px']);
+
   assert.equal(await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).count(), 0);
+  await page.getByRole('navigation',{name:'场次内容',exact:true}).getByRole('button',{name:'场次分镜',exact:true}).click();
+  await page.locator('.scene-storyboard details.chapters').waitFor();
+  assert.equal(await page.locator('.scene-storyboard .file-action-links').count(),0);
+  assert.equal(await page.locator('.scene-storyboard details.chapters').getAttribute('open'),null);
+  await page.locator('.scene-storyboard details.chapters > summary').click();
+  await page.locator('.scene-storyboard nav[aria-label="章节导航"] button.chapter-link').first().click();
+  assert.equal(await page.locator('.scene-storyboard .prose :focus').count(),1);
+  await page.getByRole('navigation',{name:'场次内容',exact:true}).getByRole('button',{name:'分段制作',exact:true}).click();
   const repeat = page.getByRole('checkbox', { name: '重复播放', exact: true });
   const wide = () => page.getByRole('button', { name: /^(宽屏显示|恢复布局)$/ });
   await repeat.check(); await wide().click();

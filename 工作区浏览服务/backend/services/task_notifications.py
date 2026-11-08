@@ -50,13 +50,6 @@ class TaskNotifications:
                 notice['delivery'] = 'not_required'
                 self.record(key, 'notification', 'already_notified',
                             _changes={'notification': 'not_required', 'notice_wait_reason': None})
-            elif (data.task_type == 'image-upscale' and state['status'] == 'completed'
-                    and state.get('closeout', {}).get('status') == 'completed'
-                    and (not state.get('group_id') or self.group_status(state['group_id'])['status'] == 'completed'
-                         and all(self.rows[member]['input'].task_type == 'image-upscale' for member in self.group_members(key)))):
-                notice['delivery'] = 'not_required'
-                self.record(key, 'notification', 'not_required', message='超分完成并正式保存，正常结果静默',
-                            _changes={'notification': 'not_required', 'notice_wait_reason': None})
             elif (not state.get('group_id') and state.get('reported_outcome') == self.notice_outcome(key)):
                 notice['delivery'] = 'acknowledged'
                 self.record(key, 'notification', 'already_received', message='本次实际结果已通过report读取，不再发送',
@@ -290,7 +283,9 @@ class TaskNotifications:
             if any(group['issues'] for group in report['groups']):
                 report['handoff'].update(next_action='repair-group-silently',
                     user_notification='decision-or-blocker-only')
-        rounds = round_results(self, [key for key in ids if not self.rows[key]['state'].get('group_id')])
+        from backend.services.video_tasks import business as business_video
+        rounds = round_results(self, [key for key in ids if not self.rows[key]['state'].get('group_id')
+                                     and business_video(self.rows[key]['input'])])
         if rounds:
             report['rounds'] = rounds
         return report
@@ -303,15 +298,16 @@ class TaskNotifications:
             scope = '任务：\n' + '\n'.join(
                 f'- {self.rows[task["id"]]["state"]["project"]}：{self.rows[task["id"]]["input"].title}'
                 for task in report['tasks'])
-        script = self.workspace / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
-        rules = self.workspace / '.agents/skills/nora-generation/references/ComfyUI-任务监控规范.md'
+        skills = Path(__file__).resolve().parents[3] / '.agents/skills'
+        script = skills / 'studio-workspace-browser/scripts/browser_tasks.py'
+        rules = skills / 'studio-workspace-browser/references/ComfyUI-任务监控规范.md'
         return ('后台任务有更新\n\n'
                 + scope + '\n\n'
                 'Agent将读取最新结果并继续处理。需要你决定的事项，会单独说明。\n\n'
                 'Agent接续信息\n'
                 f'通知编号：{notification_id}\n来源会话：{thread_id}\n\n'
                 '读取报告：\n```text\n'
-                f'python "{script}" report --notification-id {notification_id}\n```\n\n'
+                f'python "{script}" report --notification-id {notification_id} --workspace "{self.workspace}"\n```\n\n'
                 f'接续规范：[后台通知接续](<{rules}#后台通知接续>)\n'
                 '先读取该章节，再静默读取报告并按规范接续；以本次报告为准。')
 

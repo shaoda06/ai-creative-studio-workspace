@@ -1,3 +1,4 @@
+import execution_records as recordio
 """Retrieve native H3 segments only from a completed task’s final report."""
 import argparse
 import asyncio
@@ -13,6 +14,10 @@ class SegmentTarget(BaseModel):
     index: int = Field(ge=0)
     path: str
     response_name: str
+    resource_id: str | None = None
+    version: str | None = None
+    resource_key: str | None = None
+    base_file: str | None = None
 
 
 class SegmentPlan(BaseModel):
@@ -22,37 +27,24 @@ class SegmentPlan(BaseModel):
     targets: list[SegmentTarget] = Field(default_factory=list)
 
 
-REPORT = re.compile(r'^Segment (\d+)(?:/\d+)?: (一采 mp4|mp4) (saved|updated after continuity trim) → (.+)$', re.M)
+import sys
+_SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
+for _name in ('studio-h3', 'nora-drama-production'):
+    sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
+from h3_results import remote_file, export_paths, REPORT
+from drama_video_segments import targets as drama_targets, validate as drama_validate
 
 
-def remote_file(root, absolute):
-    cls = PureWindowsPath if re.match(r'^[A-Za-z]:[\\/]', root) else PurePosixPath
-    root, absolute = cls(root), cls(absolute.strip())
-    if not root.is_absolute() or not absolute.is_absolute() or '..' in absolute.parts:
-        raise ValueError('分段来源必须是已核实output根目录内的绝对路径')
-    relative = absolute.relative_to(root)
-    if not relative.parts or relative.parts[0] != 'minimax_seg_export' or relative.suffix != '.mp4':
-        raise ValueError('分段来源不属于原生MP4导出目录')
-    return {'filename': relative.name, 'subfolder': relative.parent.as_posix(), 'type': 'output'}
+
 
 
 def targets(data, mapping=None, *, segment_context=None):
     from backend.services.comfy_tasks import paths
-    project = segment_context['project'] if segment_context is not None else Path(data.project).resolve()
-    if mapping is None:
-        mapping = json.loads((Path(data.record_dir) / '输入映射.json').read_text('utf-8-sig'))
-    stage = {'video-first-pass': '一采', 'video-second-pass': '二采'}[data.task_type]
-    result = []
-    for index in mapping['selected_indices']:
-        segment = mapping['segments'][index]
-        identity = f"{segment['segment']}-{segment['round']}-{stage}"
-        record = (segment_context['entries'][index]['directory'] if segment_context is not None
-                  else paths.project_file(project, segment['local_execution_dir'], recorded=True))
-        episode = segment['segment'].split('-')[0]
-        explicit = next((item for item in data.segment_plan.targets if item.index == index), None)
-        candidate = Path(explicit.path) if explicit else project / '09-剧集制作' / episode / '其他资料/候选视频' / (identity + '.mp4')
-        result.append({'index': index, 'identity': identity, 'record': record, 'candidate': candidate, 'response_name': explicit.response_name if explicit else f'最终取回-{index:03d}.json'})
-    return result
+    from backend.services.video_tasks import technical
+    if technical(data):
+        return [dict(index=item.index, identity=f'segment-{item.index:03d}', record=Path(data.record_dir),
+                     candidate=Path(item.path), response_name=item.response_name) for item in data.segment_plan.targets]
+    return drama_targets(data, mapping, segment_context=segment_context)
 
 
 def validate_h3_stage(task_type):
@@ -65,53 +57,33 @@ def validate(data, *, mapping=None, timelines=None, path_scope=None):
     from backend.services.comfy_tasks import generation_context
     plan = data.segment_plan
     validate_h3_stage(data.task_type)
-    if mapping is None:
-        mapping = json.loads((Path(data.record_dir) / '输入映射.json').read_text('utf-8-sig'))
-    context = generation_context.validate_segment_context(data.project, data.workflow, data.task_type, mapping,
-                                                           timelines=timelines, path_scope=path_scope)
-    director = data.workflow[plan.director_node]
-    if director is not context['director'] or plan.report_node not in data.workflow:
-        raise ValueError('分段计划必须绑定实际导演台及报告节点')
-    # Require the report node's input to be this director's report output (slot 5).
-    if [plan.director_node, 5] not in data.workflow[plan.report_node]['inputs'].values():
-        raise ValueError('报告节点未连接该导演台report输出')
-    timeline = context['timeline']
-    if timeline['output'].get('exportMode') != 'segments':
-        raise ValueError('分段取回需要原生segments导出')
-    selected = context['indices']
-    explicit = plan.targets
-    if explicit and (len(explicit) != len(selected) or {item.index for item in explicit} != set(selected)):
-        raise ValueError('本机成果目标必须逐一对应实际执行分段')
-    if len({Path(item.path) for item in explicit}) != len(explicit):
-        raise ValueError('分段目标路径不能重复')
-    for item in targets(data, mapping, segment_context=context):
-        if item['candidate'].exists():
-            raise ValueError('本轮候选已存在；核对原任务，不得重复提交')
-    remote_file(plan.output_root, plan.output_root.rstrip('/\\') + '/minimax_seg_export/validation/seg_0000.mp4')
-    return context
+    from backend.services.video_tasks import technical
+    if technical(data):
+        director = data.workflow[plan.director_node]
+        if director['class_type'] != 'MiniMaxH3Director':
+            raise ValueError('分段计划必须绑定实际导演台')
+        timeline = json.loads(director['inputs']['timeline_data'])
+        selected = sorted(timeline['runSelection']) if timeline.get('runSelectEnabled') else list(range(len(timeline['segments'])))
+        if (not selected or len(selected) != len(set(selected))
+                or any(type(index) is not int or index < 0 or index >= len(timeline['segments']) for index in selected)):
+            raise ValueError('技术任务运行组序无效')
+        if plan.report_node not in data.workflow or [plan.director_node, 5] not in data.workflow[plan.report_node]['inputs'].values():
+            raise ValueError('报告节点未连接该导演台report输出')
+        if timeline['output'].get('exportMode') != 'segments':
+            raise ValueError('分段取回需要原生segments导出')
+        if len(plan.targets) != len(selected) or {item.index for item in plan.targets} != set(selected):
+            raise ValueError('技术任务须逐一提供运行组的成果路径')
+        if len({item.path for item in plan.targets}) != len(plan.targets):
+            raise ValueError('分段目标路径不能重复')
+        for item in plan.targets:
+            if Path(item.path).exists():
+                raise ValueError('技术任务成果已存在，沿原任务恢复，不重复提交')
+        remote_file(plan.output_root, plan.output_root.rstrip('/\\') + '/minimax_seg_export/validation/seg_0000.mp4')
+        return dict(director=director, timeline=timeline, indices=selected)
+
+    return drama_validate(data, mapping=mapping, timelines=timelines, path_scope=path_scope)
 
 
-def export_paths(data, result):
-    """Read the original final report using the task's actual export stage."""
-    # Standalone SelfLift exports its completed first pass as the final segment MP4.
-    pre_refine = data.task_type == 'video-first-pass'
-    director_inputs = data.workflow[data.segment_plan.director_node]['inputs']
-    if pre_refine:
-        pre_refine = not (director_inputs.get('selflift') and not director_inputs.get('refine'))
-    timeline = json.loads(director_inputs['timeline_data'])
-    refine = data.workflow[director_inputs['refine'][0]]['inputs'] if director_inputs.get('refine') else {}
-    pre_refine_by_index = {}
-    for index, group in enumerate(timeline['segments']):
-        mode = group.get('taskType') or group.get('task_type') or timeline.get('global', {}).get('taskType') or director_inputs.get('task_type', 'r2v')
-        pre_refine_by_index[index] = pre_refine and not (mode.startswith('fl2v') and refine.get('skip_fl2v'))
-    outputs = result['history'].get('outputs', {}).get(data.segment_plan.report_node, {})
-    text = '\n'.join(value for values in outputs.values() if isinstance(values, list)
-                     for value in values if isinstance(value, str))
-    paths = {}
-    for match in REPORT.finditer(text):
-        if (match[2] == '一采 mp4') == pre_refine_by_index[int(match[1]) - 1]:
-            paths[int(match[1]) - 1] = match[4].strip()
-    return paths, pre_refine_by_index
 
 
 async def finish(store, key, result):
@@ -162,7 +134,7 @@ async def finish(store, key, result):
             if proof[-1] is not None and verified.get(str(receipt_path)) == proof:
                 pass
             elif receipt_exists:
-                receipt = store.client.strict_json(receipt_path.read_bytes())
+                receipt = recordio.read(receipt_path)
                 downloaded = receipt['data']
                 if (receipt['prompt_id'] != state['prompt_id'] or downloaded['remote'] != source
                         or project_paths.project_file(data.project, downloaded['path'], recorded=True) != candidate
@@ -172,10 +144,15 @@ async def finish(store, key, result):
                 downloaded = await asyncio.to_thread(store.client.download, store.client_for(data), argparse.Namespace(
                     filename=source['filename'], subfolder=source['subfolder'], type='output', output=str(candidate), sha256=None))
                 downloaded['path'] = store.record_paths(key).relative_file(downloaded['path'])
-                store.client.write_new(receipt_path, {'time': store.client.now(), 'prompt_id': state['prompt_id'],
-                                                     'identity': target['identity'], 'data': downloaded})
-                proof = (state['prompt_id'], source, saved_files(receipt_path, candidate)[0])
+                recordio.write(receipt_path, {'time': store.client.now(), 'prompt_id': state['prompt_id'],
+                                                     'identity': target['identity'], 'data': downloaded}, new=True, compact=data.record_format == 'compact')
                 fresh = True
+            import project_resources as resourceio
+            managed = resourceio.enabled(data.project)
+            if managed:
+                await asyncio.to_thread(resourceio.finish, data.project, candidate)
+            if managed or fresh:
+                proof = (state['prompt_id'], source, saved_files(receipt_path, candidate)[0])
             verified[str(receipt_path)] = proof
             item.update(remote=source, path=str(candidate), receipt=str(receipt_path), bytes=proof[-1][1][0], check='已取回', error=None)
             collected += 1

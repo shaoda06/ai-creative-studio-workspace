@@ -12,6 +12,8 @@ from tests.test_image_closeout import png
 from tests import test_image_closeout as image_tests
 
 
+import execution_records as recordio
+
 class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
     request = image_tests.ImageCloseoutTests.request
     output = image_tests.ImageCloseoutTests.output
@@ -51,7 +53,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                     draft='05-道具资料/其他资料/工作稿/PR001-参考图-工作稿.md',
                     formal='05-道具资料/PR001-保温杯/参考图/PR001-基础-道具参考图.png')
         documents = plans.Documents(self.project)
-        with patch.object(plans, 'choose_seed', return_value=101):
+        with patch('drama_image_plans.choose_seed', return_value=101):
             task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
         self.assertEqual(Path(task['outputs'][0]['path']).name, 'PR001-基础-道具参考图-候选-v01.png')
         self.assertFalse((self.project / spec['draft']).exists())
@@ -62,7 +64,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         documents = plans.Documents(self.project)
         for view, expected in [('V001', 'v01'), ('V002', 'v01'), ('V001', 'v02')]:
             spec['formal'] = f'04-场景资料/SC001-办公室/参考图/SC001-EP001-C001-{view}-场景参考图.png'
-            with patch.object(plans, 'choose_seed', return_value=101):
+            with patch('drama_image_plans.choose_seed', return_value=101):
                 task = plans.build_image(self.project, t.SKILL, spec, documents, '2026-10-24')
             self.assertEqual(Path(task['outputs'][0]['path']).name,
                              f'SC001-EP001-C001-{view}-场景参考图-候选-{expected}.png')
@@ -154,6 +156,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.store, 'enqueue', side_effect=AssertionError('must not enqueue')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
+        self.assertEqual(result['next_action'], 'continue-caller-workflow')
         self.assertFalse(self.store.rows)
         self.payload.prepare_only = False
         result = await plans.execute(self.store, self.payload)
@@ -199,7 +202,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         mapping = json.loads((self.record / '输入映射.json').read_text())
         task = dict(task_type='video-first-pass', title='目录测试', record_dir=self.rel(self.record / '新任务'),
             canvas=self.rel(source), mapping=mapping, output_nodes=['403', '504', '506'], segment_plan={})
-        with patch('backend.services.video_records.prepare_records'):
+        with patch('drama_video_records.prepare_records'):
             result = plans.build_video(self.project, task, plans.Documents(self.project))
         api = result['workflow']
         for key in ('504', '506'):
@@ -216,7 +219,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         task = dict(task_type='video-postprocess', title='后处理', record_dir='执行附件/后处理测试',
             canvas='post.workflow.json', mapping=mapping, output_nodes=['16'])
         documents = plans.Documents(self.project)
-        with patch('backend.services.video_records.prepare_records'):
+        with patch('drama_video_records.prepare_records'):
             result = plans.build_video(self.project, task, documents)
         prefix = '测试项目/视频生成/EP001/C001/后处理/EP001-C001-P002-R003-后处理'
         self.assertEqual(result['workflow']['16']['inputs']['filename_prefix'], prefix)
@@ -258,12 +261,12 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_committed_group_recovers_after_journal_write_failure(self):
         self.write_plan(self.spec(), self.spec('CH002'))
-        write = plans.write_json
+        write = plans.write_journal
         def fail(path, value):
             if str(path).endswith('-装配结果.json') and value.get('accepted'):
                 raise OSError('journal temporarily unavailable')
             return write(path, value)
-        with patch.object(plans, 'write_json', side_effect=fail), self.assertRaises(OSError):
+        with patch.object(plans, 'write_journal', side_effect=fail), self.assertRaises(OSError):
             await plans.execute(self.store, self.payload)
         first = list(self.store.rows)
         self.assertEqual(len(first), 2)
@@ -446,7 +449,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError, '实际准备失败'):
                 await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        original = json.loads(journal_file.read_text())
+        original = plans.read_journal(journal_file)
         task['prompt']['rewritten_prompt'] += '\n衣装的银色刺绣清晰可见。'
         self.write_plan(task)
         with self.assertRaisesRegex(ValueError, '--reprepare'):
@@ -456,10 +459,14 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('no remote')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
-        saved = json.loads(journal_file.read_text())
+        saved = plans.read_journal(journal_file)
         self.assertEqual(saved['tasks'][0]['record_dir'], original['tasks'][0]['record_dir'])
-        archive = json.loads(self.plan_file.with_name('任务清单-装配结果-准备归档-001.json').read_text())
-        self.assertEqual(archive['source'], original['source'])
+        self.assertFalse(list(self.plan_file.parent.glob('*装配结果-准备归档-*.json')))
+        self.assertEqual(len(saved['preparation_history']), 1)
+        self.assertEqual(saved['preparation_history'][0]['reports'], [])
+        changes = saved['preparation_history'][0]['source_changes']
+        self.assertEqual(changes[0]['before'], original['source']['tasks'][0]['prompt']['rewritten_prompt'])
+        self.assertIn('银色刺绣', changes[0]['after'])
         draft = (self.project/task['draft']).read_text()
         self.assertIn('银色刺绣', draft)
         self.assertNotIn('### 生成记录-002', draft)
@@ -479,7 +486,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.payload.prepare_only = True
         await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        original = json.loads(journal_file.read_text())
+        original = plans.read_journal(journal_file)
         self.assertNotIn('record_dir', original['source']['tasks'][0])
         self.data.record_dir = str(self.record.resolve())
         self.payload.reprepare = True
@@ -488,7 +495,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('no remote')):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
-        saved = json.loads(journal_file.read_text())
+        saved = plans.read_journal(journal_file)
         self.assertEqual(saved['tasks'][0]['record_dir'], original['tasks'][0]['record_dir'])
         self.assertFalse(self.store.rows)
 
@@ -503,7 +510,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(self.spec())
         await plans.execute(self.store, self.payload)
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
-        journal = json.loads(journal_file.read_text())
+        journal = plans.read_journal(journal_file)
         journal['accepted'] = []
         journal_file.write_text(json.dumps(journal))
         self.payload.reprepare = self.payload.prepare_only = True
@@ -512,7 +519,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.store.rows), 1)
         self.assertFalse(list(self.plan_file.parent.glob('*准备归档*')))
 
-    async def test_reprepare_build_failure_preserves_original_and_archives_report(self):
+    async def test_reprepare_build_failure_preserves_original_without_full_snapshot(self):
         task = self.spec()
         self.write_plan(task)
         self.payload.prepare_only = True
@@ -520,7 +527,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         journal_file = self.plan_file.with_name('任务清单-装配结果.json')
         original = journal_file.read_bytes()
         record = Path(json.loads(original)['tasks'][0]['record_dir'])
-        report = json.loads((record/'执行检查报告.json').read_text())
+        report = recordio.read((record/'执行检查报告.json'))
         draft = (self.project/task['draft']).read_bytes()
         task['prompt']['rewritten_prompt'] += '\n银色刺绣。'
         self.write_plan(task)
@@ -530,8 +537,8 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 await plans.execute(self.store, self.payload)
         self.assertEqual(journal_file.read_bytes(), original)
         self.assertEqual((self.project/task['draft']).read_bytes(), draft)
-        archive = json.loads(self.plan_file.with_name('任务清单-装配结果-准备归档-001.json').read_text())
-        self.assertEqual(archive['preparation_reports'][0]['report'], report)
+        self.assertFalse(list(self.plan_file.parent.glob('*装配结果-准备归档-*.json')))
+        self.assertEqual(recordio.read(record/'执行检查报告.json'), report)
         self.assertFalse(self.store.rows)
         result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'prepared')
@@ -561,8 +568,10 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         task.pop('authorization')
         self.write_plan(task)
         self.payload.prepare_only = True
-        await plans.execute(self.store, self.payload)
-        task['authorization'] = '准备结果展示后用户批准生成'
+        prepared = await plans.execute(self.store, self.payload)
+        self.assertEqual(prepared['next_action'], 'continue-caller-workflow')
+        self.assertFalse(self.store.rows)
+        task['authorization'] = '用户明确要求开始生成'
         self.write_plan(task)
         self.payload.prepare_only = False
         result = await plans.execute(self.store, self.payload)
@@ -574,7 +583,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(self.spec())
         first = await plans.execute(self.store, self.payload)
         journal = self.plan_file.with_name('任务清单-装配结果.json')
-        saved = json.loads(journal.read_text())
+        saved = plans.read_journal(journal)
         saved['accepted'] = []
         journal.write_text(json.dumps(saved))
         with patch.object(self.store, 'prepare_only', side_effect=AssertionError('accepted task must not be rechecked')):
@@ -648,7 +657,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.store, 'enqueue', side_effect=AssertionError('local must not enqueue')), \
                 patch.object(t.client.Client, 'json', side_effect=AssertionError('local must not contact remote')):
             result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
         self.assertEqual(result['tasks'][0]['provider'], 'local')
         self.assertIsNone(result['tasks'][0]['local_task_id'])
         with Image.open(formal) as output:
@@ -686,8 +695,9 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(formal.exists())
         self.payload.prepare_only = False
         await plans.execute(self.store, self.payload)
-        receipt = next(self.project.rglob('*规格处理-001-处理结果.json'))
-        proof = json.loads(receipt.read_text())
+        archive = next(self.project.rglob('执行档案.json'))
+        receipt = next(name for name in json.loads(archive.read_text())['records'] if name.endswith('规格处理-001-处理结果.json'))
+        proof = recordio.read(archive.parent / receipt)
         self.assertEqual(proof['crop_anchor'], [0.5, 0])
         self.assertEqual(proof['crop_box'], [0.0, 0.0, 4.0, 2.0])
 
@@ -705,7 +715,9 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.write_plan(spec)
         self.payload.prepare_only = True
         await plans.execute(self.store, self.payload)
-        source.write_bytes(source.read_bytes())
+        changed = source.with_name('外部替换.png')
+        changed.write_bytes(source.read_bytes())
+        changed.replace(source)
         self.payload.prepare_only = False
         with self.assertRaisesRegex(ValueError, '准备资料已变化'):
             await plans.execute(self.store, self.payload)
@@ -720,7 +732,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(formal.exists())
         with patch('PIL.ImageOps.fit', side_effect=AssertionError('do not process again')):
             result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
 
     async def test_local_record_repair_resumes_without_processing_or_queueing(self):
         from copy import deepcopy
@@ -738,7 +750,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(images, 'apply_updates', side_effect=user_edit):
             result = await plans.execute(self.store, self.payload)
         self.assertEqual(result['status'], 'failed')
-        journal = json.loads(self.plan_file.with_name(self.plan_file.stem + '-装配结果.json').read_text())
+        journal = plans.read_journal(self.plan_file.with_name(self.plan_file.stem + '-装配结果.json'))
         task = journal['tasks'][0]
         original = self.plan_file.read_bytes()
         expected = images.record_updates(task['image_plan'])
@@ -753,7 +765,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(self.store, 'enqueue', side_effect=AssertionError('no queue')):
             for _ in range(2):
                 result = await plans.execute(self.store, self.payload)
-                self.assertEqual(result['status'], 'completed')
+                self.assertEqual(result['status'], 'completed', result)
         self.assertTrue(formal.exists())
         self.assertIn('已正式保存（用户备注）', progress.read_text())
         self.assertEqual(self.plan_file.read_bytes(), original)
@@ -789,7 +801,7 @@ class SubmissionPlanTests(unittest.IsolatedAsyncioTestCase):
         spec['archive'] = '03-人物资料/其他资料/历史版本/服装-归档.png'
         self.write_plan(spec)
         result = await plans.execute(self.store, self.payload)
-        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['status'], 'completed', result)
         self.assertEqual((self.project / spec['archive']).read_bytes(), b'previous formal')
         self.assertNotEqual(formal.read_bytes(), b'previous formal')
 

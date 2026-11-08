@@ -46,7 +46,7 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
             self.store.queue_notice('task', 'terminal', 'terminal', '完成')
             await self.store.notifiers['task']
         self.assertEqual(len(observations), 1)
-        self.assertIn('browser_tasks.py report', observations[0])
+        self.assertRegex(observations[0], r'browser_tasks\.py"? report --notification-id ')
         self.assertNotIn('请先调用 browser_tasks.py ack', observations[0])
         self.assertEqual(self.store.rows['task']['state']['notification'], 'sent')
         self.assertTrue(candidate.is_file())
@@ -266,7 +266,7 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
         def observed(path, *args, **kwargs):
             if path.name == registration.REPORT: reports.append(path)
             return read(path, *args, **kwargs)
-        with patch.object(Path, 'read_text', observed), patch.object(registration, 'digest', wraps=registration.digest) as digest:
+        with patch.object(Path, 'read_text', observed), patch('drama_video_results.digest', wraps=__import__('drama_video_results').digest) as digest:
             result = await registration.closeout(self.store, self.projects, batch, self.data.thread_id, updates)
         self.assertTrue(result['user_message_ready'])
         self.assertEqual(len(reports), 0)  # Initial register creates its report and passes that object to updates.
@@ -296,13 +296,15 @@ class CompletionDeliveryTests(unittest.IsolatedAsyncioTestCase):
         app.state.comfy_tasks = self.store
         # Only report is exposed: separate ack/register calls would fail this integration test.
         app.add_api_route('/api/internal/comfy/notifications/{batch_id}/report', main.agent_result_report, methods=['POST'])
-        cli = self.root / '.agents/skills/nora-ai-short-drama/scripts/browser_tasks.py'
+        cli = self.root / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py'
         cli.parent.mkdir(parents=True)
-        shutil.copyfile(t.SKILL / 'scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/browser_tasks.py', cli)
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-workspace-browser/scripts/workspace_connection.py', cli.with_name('workspace_connection.py'))
+        shutil.copyfile(Path(__file__).resolve().parents[2] / '.agents/skills/studio-comfyui/scripts/execution_records.py', cli.with_name('execution_records.py'))
         async with serving(app) as url:
-            config = self.root / '工作区浏览服务/runtime/task-service.json'
+            config = self.root / '工作区浏览服务/runtime/workspaces/nora/task-service.json'
             config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_text(json.dumps({'url': url, 'token': self.store.token}), 'utf-8')
+            config.write_text(json.dumps({'url': url, 'token': self.store.token, 'workspace': str(self.root)}), 'utf-8')
             with patch.object(registration, 'register', side_effect=AssertionError('no registration')), \
                     patch.object(t.client, 'submit', side_effect=AssertionError('no submission')), \
                     patch.object(t.client, 'status', side_effect=AssertionError('no remote')):

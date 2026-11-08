@@ -318,6 +318,9 @@ class EpisodeDownloadTests(HttpTestCase):
                     self.assertEqual([item['extra_info'] for item in imported], members)
                     for item, segment in zip(imported, segments):
                         material = materials[segment['material_id']]
+                        # A local clip has no preassigned client-library ID.
+                        # Reusing its timeline-object ID here breaks Link Media.
+                        self.assertEqual(material['material_id'], '')
                         self.assertEqual(item['metetype'], 'video')
                         self.assertEqual(item['duration'], material['duration'])
                         self.assertEqual(item['roughcut_time_range'], segment['source_timerange'])
@@ -365,13 +368,17 @@ class EpisodeDownloadTests(HttpTestCase):
                     self.assertEqual(set(archive.namelist()), set(expected) | {
                         'draft_info.json', 'draft_content.json', 'draft_meta_info.json'})
                     self.assertEqual(archive.read('draft_info.json'), archive.read('draft_content.json'))
+                    doc = json.loads(archive.read('draft_info.json'))
+                    materials = {item['id']: item for item in doc['materials']['videos']}
+                    for segment in doc['tracks'][0]['segments']:
+                        self.assertEqual(materials[segment['material_id']]['material_id'], '')
                 self.assertEqual(list((self.root / 'downloads').iterdir()), [])
 
     def test_native_format_rejects_unknown_format_and_cleans_up_encoding_failure(self):
         self.video('后处理', 'C001', 'P001')
         url = self.url + '/后处理/videos?scene=C001'
         self.assertEqual(self.client.get(url + '&format=unknown').status_code, 422)
-        with patch.object(episode_downloads, 'encode_jypack', side_effect=OSError('write failed')):
+        with patch.object(episode_downloads.jianying_export, 'encode_jypack', side_effect=OSError('write failed')):
             with self.assertRaisesRegex(OSError, 'write failed'):
                 self.client.get(url + '&format=jypack')
         self.assertEqual(list((self.root / 'downloads').iterdir()), [])

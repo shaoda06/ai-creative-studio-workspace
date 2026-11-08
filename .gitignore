@@ -4,6 +4,7 @@
 /.codex/
 /comfyui-config.json
 /提示词管理/
+/提示词库/隐私/
 
 # 已独立安装、由上游按需获取的技能，不随本模板重复分发。
 /.agents/skills/h3-prompt-writing/
@@ -16,10 +17,12 @@
 /.agents/skills/fastapi/
 /.agents/skills/humanizer-zh/
 /.agents/skills/dialogue/
+/.agents/skills/herk-edit-kit/
+/.agents/skills/video-use/
+/.agents/skills/ghost-editor/
+/.agents/skills/video-talkcraft/
 
-# 真实项目和本机过程资料不公开，保留目录用途说明。
-/projects/*
-!/projects/README.md
+# 总层综合资料留本地，仅保留目录用途说明。
 /综合资料/*
 !/综合资料/README.md
 
@@ -40,8 +43,13 @@
 /工作区浏览服务/frontend/*.tsbuildinfo
 /工作区浏览服务/runtime/
 
-# 共享提示词允许使用与其他目录同名的分类；仅正文纳入共享。
-!/共享提示词/**/
-!/共享提示词/**/*.md
-/共享提示词/.trash/
-/共享提示词/**/.prompt-*.tmp
+# 公开提示词允许使用与其他目录同名的分类；隐私、回收站和临时写入不入库。
+!/提示词库/公开/**/
+!/提示词库/公开/**/*.md
+/提示词库/公开/.trash/
+/提示词库/公开/**/.prompt-*.tmp
+
+# 三个业务资料区均由各自初始化流程在本地创建；模板和脚本随技能分发。
+/workspaces/
+# 旧根项目入口保留忽略，不随公共仓库提供。
+/projects

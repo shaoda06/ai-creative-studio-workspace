@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 视频生产"
+  short_description: "Iris 商业视频生产二级业务阶段，按批准备内容和真实输入，管理H3一采审阅与二采接续、候选及按需样片说明。"
+  default_prompt: "使用 $iris-commercial-production 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

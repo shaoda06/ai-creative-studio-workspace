@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog, Document, FileTree, PreviewContext } from '../components';
+import { Dialog, Document, FileTree, Preview, PreviewContext } from '../components';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { TabSelect } from './TabSelect';
@@ -26,12 +26,13 @@ const options = [
   { value: 'long', label: '这是一条较长的选项名称，用来查看菜单在窄屏下的换行效果' },
 ];
 const sampleText = '这是一段公共组件演示文字。';
-const longSampleText = '这是长文字演示，用来检查手机上的换行与关闭入口，不读取或修改项目资料。'.repeat(4) + 'LongUnbrokenReference'.repeat(10);
+const longSampleText = '这是长文字演示，用来检查桌面窗口内的换行与关闭入口，不读取或修改项目资料。'.repeat(4) + 'LongUnbrokenReference'.repeat(10);
 const longSampleTitle = '长标题与正文换行演示：' + 'DocumentRevisionReference'.repeat(4);
 const sampleDocument = { html: '<h1>示例阅读文档</h1><p>这里的内容仅用于演示，不属于任何项目。</p><h2 id="demo-overview">内容概览</h2><p>可以展开章节导航、跳到指定章节，也可以复制示例文字。</p><h3 id="demo-detail">阅读细节</h3><p>正文沿用网站的字体、段落与表格样式。</p><h2 id="demo-checks">示例清单</h2><ul><li>打开文档弹窗</li><li>查看章节与正文</li><li>关闭后继续浏览组件</li></ul><table><thead><tr><th>状态</th><th>说明</th></tr></thead><tbody><tr><td>示例</td><td>不读取或修改真实项目资料</td></tr></tbody></table>' };
 const sampleItems = Array.from({ length: 18 }, (_, i) => `示例记录 ${String(i + 1).padStart(2, '0')}`);
 
 export function ComponentShowcase({ onImplementation }: { onImplementation: () => void }) {
+  const [spacePreview, setSpacePreview] = useState(false);
   const [category, setCategory] = useState('controls');
   const [clicks, setClicks] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -80,6 +81,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-stack">
             <label>单行输入<input aria-label="单行输入示例" placeholder="输入中文或很长的标题，查看窄屏显示效果…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
             <label>多行输入<textarea aria-label="多行输入示例" placeholder="输入多行正文…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
+            <label>一行高台词输入<textarea aria-label="一行高台词输入示例" rows={1} placeholder="输入新台词…" value={fieldDraft} onChange={event => setFieldDraft(event.target.value)} disabled={fieldsDisabled} /></label>
             <label>只读输入<input aria-label="只读输入示例" value="可以选择复制，不能修改的示例文字" readOnly /></label>
             <div className="component-demo-row"><span className="component-draft" style={{ flex: 1, minWidth: 0 }}>长说明文字与连续英文：LongSwitchDescriptionLongSwitchDescription</span><Switch label="长说明开关示例" checked={longSwitch} disabled={fieldsDisabled} onChange={setLongSwitch} /></div>
           </div>
@@ -94,22 +96,35 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p className="component-draft">已选择：{options.find(item => item.value === selection)!.label}</p>
       </Example>}
       {category === 'messages' && <>
-        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，手机上换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
+        <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，在桌面窗口内换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">
           <div className="component-demo-row"><button onClick={() => showNotice('演示：操作成功')}>显示成功提示</button><button onClick={() => showNotice('演示：操作失败，请重试', 'error')}>显示错误提示</button><button onClick={() => showNotice(longSampleText, 'error')}>显示长错误提示</button><button disabled={pending} onClick={() => setPending(true)}>显示持续提示</button></div>
           <p>演示状态：{pending ? '进行中' : '未进行'}</p>
           <div className="component-demo-row"><button disabled={!pending} onClick={() => { setPending(false); showNotice('演示已结束'); }}>结束演示</button><button className="link" onClick={clearNotices}>清除演示消息</button></div>
         </Example>
-        <Example title="页面内说明" rule="与当前内容相关的说明留在正文中，悬停或聚焦文字可查看详情。操作反馈使用左下角消息。" usage="剧集制作的分段说明与资料状态">
-          <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: '示例资料待确认。', actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
+        <Example title="页面内说明" rule="与当前内容相关的说明留在正文中，悬停或聚焦文字可查看详情。操作反馈使用左下角消息。" usage="Nora 剧集制作与 Iris 视频制作的分段说明和资料状态">
+          <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: <details><summary>当前候选有 2 项资料关联问题</summary><p>参考素材尚未关联本地原文件。</p><p>分镜快照尚未关联。</p></details>, actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
         </Example>
       </>}
+      {category === 'reading' && <Example title="项目空间预览" rule="不同项目空间使用同一预览组件；预览关闭后保留当前项目位置。演示使用静态正文，不访问真实项目。" usage="统一项目资料浏览"><button onClick={() => setSpacePreview(true)}>打开项目空间文档</button></Example>}
+      {spacePreview && <Preview project="demo-space" baseUrl="/api/workspaces/demo/projects/example" item={{ kind: 'document', name: '项目空间示例', doc: sampleDocument }} revision={0} close={() => setSpacePreview(false)} />}
       {category === 'reading' && <Example title="文档弹窗" rule="弹窗复用正文排版和章节导航。点击关闭、按Esc或点击遮罩可退出，回到原阅读位置。长标题不挤压关闭按钮，正文连续长串也会换行；fullscreen规格使用深灰蓝半透明蒙版，内容四周留白；无顶部栏时右上角保留独立关闭叉号。" usage="开发记录、项目总索引、项目文档预览">
         <div className="component-demo-row"><button onClick={() => setDialog('示例阅读文档')}>打开示例文档</button><button onClick={() => { setDialogBusy(false); setDialog('紧凑弹窗示例'); }}>打开紧凑弹窗</button><button onClick={() => setDialog(longSampleTitle)}>打开长内容弹窗</button><button onClick={() => { setDialogBusy(false); setDialog('全屏查看示例'); }}>打开全屏示例</button></div>
         <p>打开后可展开章节、跳转正文，或复制示例文字。</p>
       </Example>}
       {category === 'lists' && <>
+        <Example title="彩色状态标记" rule="共用status-badge样式，鼠标悬停统一显示小手。提示文字及点击行为由原调用方决定，标记本身不新增操作。" usage="作品进度、制作列表、文档状态">
+          <div className="component-demo-row">{['blue', 'orange', 'green', 'red', 'gray'].map((color, index) => <span key={color} className={`status-badge status-${color}`}>{['进行中', '待确认', '已完成', '受阻', '未开始'][index]}</span>)}</div>
+        </Example>
         <Example title="目录与文件" rule="目录按需展开，点击文件进入阅读。这里仅展示示例文件。" usage="项目文档目录、参考资料">
           <PreviewContext.Provider value={item => setDialog(item.name)}><FileTree showOriginal={false} items={[{ kind: 'group', name: '示例目录', files: [{ kind: 'markdown', name: '示例说明', key: 'demo-note', statusHtml: '<span class="status-badge status-gray">示例</span>' }, { kind: 'group', name: '子目录', files: [{ kind: 'markdown', name: '阅读示例', key: 'demo-reading', statusHtml: '<span class="status-badge status-gray">示例</span>' }] }] }]} /></PreviewContext.Provider>
+        </Example>
+        <Example title="清单打包下载" rule="已登记的媒体清单复用公共下载按钮；点击才请求打包，ZIP按需。此示例的正常按钮仅下载固定示例文本，不生成真实剪映包或导演包；空入口禁用。" usage="登记项目空间的剪映媒体清单与导演包重建清单">
+          <PreviewContext.Provider value={item => setDialog(item.name)}><FileTree showOriginal={false} showStatus={false} items={[
+            { kind: 'file', name: '很长的剪映媒体清单名称示例.jianying.json', key: 'demo-package', jianying: { jypack: '/api/component-samples/file', zip: '/api/component-samples/file' } },
+            { kind: 'file', name: '导演包重建清单示例.director.json', key: 'demo-director', director: '/api/component-samples/file' },
+            { kind: 'file', name: '导演包缺少重建资料的示例', key: 'demo-director-disabled', director: null },
+            { kind: 'file', name: '不可下载的示例清单', key: 'demo-package-disabled', jianying: { jypack: null, zip: null } },
+          ]} /></PreviewContext.Provider>
         </Example>
         <Example title="分页与空状态" rule="示例每页6项，首页和末页会禁用对应方向；无内容时不显示分页。逐页图片阅读可关闭条目总数；arrows规格为图片框左右的圆形按钮，首张隐藏上一张、末张隐藏下一张；与示例页码同步，普通分页仍首尾禁用。" usage="版本记录、资产列表、风格库、导演分镜表">
           <div className="component-demo-row"><span>显示空列表</span><Switch label="显示空列表" checked={empty} onChange={setEmpty} /></div>

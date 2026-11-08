@@ -6,29 +6,49 @@ from typing import Annotated, Any, Literal
 import json
 import re
 import os
+import zipfile
 from ipaddress import ip_address, ip_network
 from urllib.parse import quote, urlsplit
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ValidationError
 
 from backend.parsers import project as parser
+from backend.parsers import documents
 from backend.services.projects import ProjectStore
-from project_index import INDEX_NAME
+import execution_records as recordio
+from backend.services.workspaces import Workspaces, project_tree, scope_links
+from backend.services.project_packages import package_response
+from backend.services.director_packages import package_response as director_package_response, spec_response as director_spec_response
+from workspace_project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
 from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
 from backend.services import krea2
 from backend.services.comfy_tasks import DesktopConnection, TaskInput, TaskStore, client as comfy_client
 from backend.services.workflows import catalogue as workflow_catalogue
-from workflow_paths import workflow_directories, workflow_root
+from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
+from backend.services import task_monitor
+from backend.services import production
+from iris_works import project_works
+from backend.services.iris_presentation import presentation as iris_presentation, work_view as iris_work_view
+from backend.services.review_notes import ProjectReviewNotes, ReviewNotes
 from backend.services import node_config
 from backend.services.prompts import WorkspacePromptLibrary
 from backend.routes.prompts import create_router as prompt_router
 from backend.services.assets import AssetLibrary
 from backend.routes.assets import create_router as asset_router
+from backend.routes.project_resources import create_router as resource_router
+from backend.chloe_overview import account_overview
+from backend.chloe_production import router as chloe_production_router
+from backend.chloe_review import router as chloe_review_router
+from backend.chloe_publication import router as chloe_publication_router, write_router as chloe_publication_write_router
+from backend.chloe_models import router as chloe_models_router
+from backend.chloe_resource_library import router as chloe_resource_library_router
+from backend.chloe_clothing import router as chloe_clothing_router
+from backend.chloe_reference_assets import SCENES, VOICES, asset_router as chloe_asset_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -38,11 +58,14 @@ from backend.services.revision_notes import Episode, Scene, NoteChange, Revision
 from backend.services.episode_revision_notes import EpisodeRevisionNotes, EpisodeNotes, EpisodeExportChanges
 
 TOOL = Path(__file__).resolve().parent.parent
-WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', TOOL.parent)).resolve()
-WORKFLOWS = workflow_root(WORKSPACE / '.agents/skills/nora-ai-short-drama')
+PUBLIC_ROOT = TOOL.parent
+DEFAULT_WORKSPACE = PUBLIC_ROOT / 'workspaces/Nora Workspace'
+WORKSPACE = Path(os.environ.get('NORA_WORKSPACE', DEFAULT_WORKSPACE if DEFAULT_WORKSPACE.is_dir() else PUBLIC_ROOT)).resolve()
+WORKFLOWS = workflow_root()
 ENVIRONMENT = os.environ.get('NORA_SERVICE_ENV', 'production')
 revision_notes = RevisionNotes()
-prompt_library = WorkspacePromptLibrary(WORKSPACE / '提示词管理', WORKSPACE / '共享提示词')
+production_notes = ProjectReviewNotes()
+prompt_library = WorkspacePromptLibrary(PUBLIC_ROOT / '提示词库/隐私', PUBLIC_ROOT / '提示词库/公开')
 VERSION = json.loads((TOOL / 'frontend/package.json').read_text('utf-8'))['version']
 FRONTEND_RELEASE = TOOL / 'frontend/dist/release.json'
 store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/project-cache', version=VERSION)
@@ -50,16 +73,35 @@ store = ProjectStore(WORKSPACE / 'projects', cache_directory=TOOL / 'runtime/pro
 async def lifespan(app):
     clear_downloads()
     prompt_library.initialize()
-    tasks = TaskStore(TOOL / 'runtime', WORKSPACE)
+    spaces = app.state.workspaces = Workspaces(WORKSPACE, TOOL / 'runtime', store, VERSION)
+    old_databases = [TOOL / 'runtime/comfy-tasks.sqlite',
+                     *(space.root / '工作区浏览服务/runtime/comfy-tasks.sqlite' for space in spaces.items.values())]
+    for database in old_databases:
+        if database.is_file():
+            raise RuntimeError('旧任务库尚未迁移，停止启动以免显示空任务历史：' + str(database))
+    tasks = TaskStore(spaces.get('nora').runtime, WORKSPACE)
     tasks.projects = store
     app.state.comfy_tasks = tasks
+    spaces.get('nora').tasks = tasks
+    for space in list(spaces.items.values())[1:]:
+        space.tasks = TaskStore(space.runtime, space.root)
+        space.tasks.projects = space.projects
     config_path = TOOL / 'runtime/service.json'
     config = json.loads(config_path.read_text('utf-8-sig')) if config_path.is_file() else {}
     port = int(os.environ.get('NORA_SERVICE_PORT', config.get('port', 8782)))
-    (TOOL / 'runtime/task-service.json').write_text(
-        json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token}), encoding='utf-8')
+    connection = spaces.get('nora').runtime / 'task-service.json'
+    connection.write_text(json.dumps({'url': f'http://127.0.0.1:{port}', 'token': tasks.token,
+                                      'workspace': str(WORKSPACE)}), encoding='utf-8')
+    connection.chmod(0o600)
     await tasks.start()
     await tasks.remote_queues.start()
+    for space in list(spaces.items.values())[1:]:
+        (space.runtime / 'task-service.json').write_text(json.dumps({
+            'url': f'http://127.0.0.1:{port}', 'api_prefix': space.api,
+            'token': space.tasks.token, 'workspace': str(space.root)}), encoding='utf-8')
+        (space.runtime / 'task-service.json').chmod(0o600)
+        await space.tasks.start()
+        await space.tasks.remote_queues.start()
     diagnostics = app.state.request_diagnostics = RequestDiagnostics(TOOL / 'runtime')
     diagnostics.start()
     try:
@@ -67,15 +109,42 @@ async def lifespan(app):
     finally:
         await diagnostics.close()
         await tasks.close()
+        for space in list(spaces.items.values())[1:]:
+            await space.tasks.close()
 
 
 app = FastAPI(title='Nora工作区浏览服务', version=VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(RequestDiagnosticsMiddleware)
 
 
+def task_store(request: Request):
+    return getattr(request.state, 'workspace_tasks', request.app.state.comfy_tasks)
+
+
+def workspace_reply(request: Request, value):
+    space = getattr(request.state, 'workspace_space', None)
+    if space is None:
+        return value
+    review_page = getattr(production.adapter(space), 'review_page', None) if space.production_adapter else None
+    return scope_links(value, space.api, (lambda project: review_page(space, project)) if review_page else None)
+
+
 @app.get('/api/comfy/tasks')
 async def comfy_tasks(request: Request, include_history: bool = True) -> dict[str, Any]:
-    return request.app.state.comfy_tasks.public(include_history=include_history)
+    return task_store(request).public(include_history=include_history)
+
+
+@app.get('/api/task-monitor')
+async def global_task_monitor(request: Request):
+    return task_monitor.snapshot(request.app.state.workspaces)
+
+
+@app.get('/api/task-monitor/history')
+async def global_task_history(request: Request, q: str = '',
+                              result: Literal['all', 'completed', 'abnormal', 'cancelled', 'resolved'] = 'all',
+                              offset: Annotated[int, Query(ge=0)] = 0,
+                              limit: Annotated[int, Query(ge=1, le=100)] = 20):
+    return task_monitor.history(request.app.state.workspaces, q, result, offset, limit)
 
 
 @app.get('/api/comfy/config')
@@ -93,7 +162,7 @@ async def read_comfy_config(request: Request, response: Response) -> dict[str, A
 
 def node_config_response(request: Request, response: Response, *, credentials=False):
     response.headers['Cache-Control'] = 'no-store'
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     try:
         return node_config.snapshot(tasks, *node_config.read_config(tasks), credentials=credentials)
     except node_config.ConfigConflict as error:
@@ -112,7 +181,7 @@ async def save_comfy_config(request: Request, response: Response) -> dict[str, A
         # Validation responses must not echo a submitted credential-bearing object.
         raise HTTPException(422, '节点配置请求格式不正确') from error
     try:
-        return node_config.save_config(request.app.state.comfy_tasks, edit, credentials=True)
+        return node_config.save_config(task_store(request), edit, credentials=True)
     except node_config.ConfigConflict as error:
         raise HTTPException(409, str(error)) from error
     except comfy_client.ClientError as error:
@@ -128,15 +197,19 @@ async def comfy_history(request: Request, url: str | None = None, q: str = '',
                         result: Literal['all', 'completed', 'abnormal', 'cancelled', 'resolved'] = 'all',
                         offset: Annotated[int, Query(ge=0)] = 0,
                         limit: Annotated[int, Query(ge=1, le=100)] = 20) -> dict[str, Any]:
-    return task_history(request.app.state.comfy_tasks, url, q, result, offset, limit)
+    return task_history(task_store(request), url, q, result, offset, limit)
 
 
 @app.get('/api/comfy/tasks/{key}/detail')
 async def comfy_task_detail(key: str, request: Request) -> dict[str, Any]:
-    if key not in request.app.state.comfy_tasks.rows:
+    if key not in task_store(request).rows:
         raise HTTPException(404, '任务不存在')
     try:
-        return await task_detail(request.app.state.comfy_tasks, key)
+        space = getattr(request.state, 'workspace_space', None)
+        workspaces = getattr(request.app.state, 'workspaces', None)
+        archive = workspaces.task_history_archives.get((space.id if space else 'nora', key)) if workspaces else None
+        value = await task_detail(task_store(request), key, archive)
+        return scope_links(value, space.api) if space else value
     except (OSError, ValueError, KeyError) as error:
         raise HTTPException(503, '任务详情读取失败：' + str(error)) from error
 
@@ -150,7 +223,7 @@ async def comfy_events() -> Response:
 
 @app.post('/api/internal/comfy/submit')
 async def comfy_submit(request: Request, data: TaskInput) -> dict[str, Any]:
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     # Local agent only. No token/connection metadata is returned to browser readers.
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
@@ -175,7 +248,7 @@ async def comfy_submit(request: Request, data: TaskInput) -> dict[str, Any]:
 
 @app.post('/api/internal/comfy/prepare')
 async def comfy_prepare(request: Request, data: TaskInput) -> dict[str, Any]:
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
         raise HTTPException(403, '仅允许本机Agent通过专用凭证检查')
@@ -210,11 +283,12 @@ def queue_write(request: Request):
 
 
 app.include_router(prompt_router(prompt_library, queue_write))
-app.include_router(asset_router(AssetLibrary(WORKSPACE / '综合资料/资产管理'), queue_write))
+app.include_router(asset_router(AssetLibrary(PUBLIC_ROOT / '综合资料/资产管理'), queue_write))
+app.include_router(resource_router(lambda request: store, queue_write))
 
 
 def agent_request(request: Request):
-    tasks = request.app.state.comfy_tasks
+    tasks = task_store(request)
     if (request.client.host not in ('127.0.0.1', '::1') or request.headers.get('origin') is not None
             or not secrets.compare_digest(request.headers.get('x-nora-task-token', ''), tasks.token)):
         raise HTTPException(403, '仅允许本机Agent通过专用凭证调用')
@@ -225,7 +299,7 @@ def agent_request(request: Request):
 async def local_task_action(key: str, data: QueueAction, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.task_action(key, data.action)
+        return task_store(request).task_action(key, data.action)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -234,7 +308,7 @@ async def local_task_action(key: str, data: QueueAction, request: Request) -> di
 async def local_task_transfer(key: str, data: TransferInput, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.transfer(key, data.url)
+        return task_store(request).transfer(key, data.url)
     except (ValueError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -243,7 +317,7 @@ async def local_task_transfer(key: str, data: TransferInput, request: Request) -
 async def local_queue_drag(data: DragInput, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        return request.app.state.comfy_tasks.drag(data.token, data.release, data.url)
+        return task_store(request).drag(data.token, data.release, data.url)
     except (ValueError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -252,8 +326,8 @@ async def local_queue_drag(data: DragInput, request: Request) -> dict[str, Any]:
 async def local_queue_order(data: QueueOrder, request: Request) -> dict[str, Any]:
     queue_write(request)
     try:
-        request.app.state.comfy_tasks.reorder(data.ids, data.token)
-        return request.app.state.comfy_tasks.public()
+        task_store(request).reorder(data.ids, data.token)
+        return task_store(request).public()
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -349,7 +423,7 @@ async def agent_notice_ack(batch_id: str, data: NoticeReceipt, request: Request)
 async def agent_result_report(batch_id: str, data: NoticeReceipt, request: Request) -> dict[str, Any]:
     tasks = agent_request(request)
     try:
-        return tasks.read_report(batch_id, data.thread_id)
+        return workspace_reply(request, tasks.read_report(batch_id, data.thread_id))
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
@@ -360,7 +434,9 @@ async def agent_register_results(batch_id: str, data: ResultRegistrationInput, r
     try:
         locks = tasks.__dict__.setdefault('_closeout_locks', {})
         async with locks.setdefault(batch_id, asyncio.Lock()):
-            return await result_closeout(tasks, store, batch_id, data.thread_id, data.record_updates, data.image_plans, data.image_repairs)
+            space = getattr(request.state, 'workspace_space', None)
+            return workspace_reply(request, await result_closeout(tasks, space.projects if space else store,
+                batch_id, data.thread_id, data.record_updates, data.image_plans, data.image_repairs))
     except (ValueError, OSError, KeyError, TypeError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -447,10 +523,8 @@ def workflows() -> list[dict]:
 
 @app.get('/api/workflows/files/{filename:path}')
 def workflow_file(filename: str) -> FileResponse:
-    path = (WORKFLOWS / filename).resolve()
-    if (not path.is_relative_to(WORKFLOWS.resolve())
-            or path.parent not in tuple(folder.resolve() for folder, _ in workflow_directories(WORKFLOWS)) or not path.is_file()
-            or not filename.endswith(('.workflow.json', '.api.json'))):
+    path = workflow_download(WORKFLOWS, filename)
+    if path is None:
         raise HTTPException(404, '工作流文件不存在')
     return FileResponse(path, media_type='application/json', filename=path.name)
 
@@ -549,24 +623,54 @@ def completed_episode_download(name: str, episode: Episode,
 @app.get('/api/projects/{name}/episodes/{episode}/downloads')
 def episode_download_list(name: str, episode: Episode, scene: Scene | None = None) -> dict[str, Any]:
     try:
-        files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)
+        data = entry(name, '09-剧集制作', episode, mode='playback')['data']
+        files = episode_resources(store, name, episode, data, scene)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     prefix = '/api/projects/' + quote(name, safe='') + '/episodes/' + episode + '/downloads/'
     file_prefix = '/api/projects/' + quote(name, safe='') + '/files/'
-    return {stage: {kind: {'count': len(items),
+    result = {stage: {kind: {'count': len(items),
                          'url': prefix + quote(stage, safe='') + '/videos' + ('?scene=' + scene if scene else '') if kind == 'videos' and items else None,
                          'files': [] if kind == 'videos' else [
-                             {'name': path.name, 'url': file_prefix + quote(path.relative_to(store.project(name)).as_posix(), safe='/') + '?download=true'}
+                             {'name': path.name.replace('.director.json', '.mmxpack.zip'),
+                              'url': ('/api/projects/' + quote(name, safe='') + '/director-download?path=' + quote(path.relative_to(store.project(name)).as_posix(), safe='')
+                                      if path.name.endswith('.director.json') else file_prefix + quote(path.relative_to(store.project(name)).as_posix(), safe='/') + '?download=true')}
                              for path, _ in items]}
                     for kind, items in groups.items()} for stage, groups in files.items()}
+    selected = data['catalogues']['09-剧集制作']['children']
+    selected = next(item for item in selected if item['name'] == episode)
+    if scene:
+        segments = selected['segments'][scene]
+        for stage in ('一采', '二采'):
+            if not result[stage]['director']['files'] and segments and all(
+                    sum(video['approved'] and video['stage'] == stage for video in segment['videos']) == 1 for segment in segments):
+                result[stage]['director'].update(count=1, url=prefix + quote(stage, safe='') + '/director?scene=' + scene)
+    return result
 
 
 @app.get('/api/projects/{name}/episodes/{episode}/downloads/{stage}/{kind}')
 def episode_download(name: str, episode: Episode, stage: Literal['一采', '二采', '后处理'],
-                     kind: Literal['videos'], scene: Scene | None = None,
+                     kind: Literal['videos', 'director'], request: Request, scene: Scene | None = None,
                      archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     try:
+        if kind == 'director':
+            if scene is None or stage == '后处理':
+                raise HTTPException(422, '导演包下载需要指定场次及一采或二采')
+            if not management_request(request):
+                raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
+            import scene_finalize
+            import video_approve
+            root = store.project(name)
+            parts = [part for current_scene, part in scene_finalize.indexed_parts(root, episode) if current_scene == episode + '-' + scene]
+            identities = [scene_finalize.selected(root, part, stage) for part in parts]
+            if not parts or not all(identities):
+                raise ValueError('本场该阶段尚未全部采用')
+            plan = {'episode': episode, 'scene': scene, 'stage': stage,
+                    'items': [video_approve.adopted_source(root, identity, stage) for identity in identities]}
+            prepared = scene_finalize.prepare(root, plan)
+            return director_spec_response(store, name, {'name': prepared['pack'].name, 'node_id': prepared['node'],
+                'url': prepared['url'], 'workflow': prepared['workflow'],
+                'media': {remote: local.relative_to(root).as_posix() for remote, local in prepared['media'].items()}})
         files = episode_resources(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'], scene)[stage][kind]
         if not files:
             raise FileNotFoundError(('本场' if scene else '本集') + '该阶段没有可下载的' + KINDS[kind])
@@ -575,7 +679,7 @@ def episode_download(name: str, episode: Episode, stage: Literal['一采', '二�
         return zip_response(files, filename, archive_format)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
-    except ValueError as error:
+    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
 
@@ -592,14 +696,46 @@ def document(name: str, path: Annotated[str, Query()]) -> dict[str, Any]:
     raise HTTPException(404, '没有可用的文档预览，请打开原文件')
 
 
-@app.get('/api/projects/{name}/files/{path:path}')
-def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
+def director_response(projects, name, path, request):
+    if not management_request(request):
+        raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
     try:
-        target = store.file(name, path, v)
+        return director_package_response(projects, name, path)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
-    response = FileResponse(target, filename=target.name if download else None,
-                            media_type='application/octet-stream' if download else None)
+    except (ValueError, KeyError, zipfile.BadZipFile, comfy_client.ClientError) as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@app.get('/api/projects/{name}/director-download')
+def director_download(name: str, path: str, request: Request):
+    return director_response(store, name, path, request)
+
+
+@app.get('/api/projects/{name}/files/{path:path}')
+def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
+    return project_file_response(store, name, path, request, v, download)
+
+
+def project_file_response(projects, name, path, request, v=None, download=False):
+    if download and path.endswith('.mmxpack.zip'):
+        manifest = path.removesuffix('.mmxpack.zip') + '.director.json'
+        try:
+            projects.file(name, manifest)
+        except FileNotFoundError:
+            pass
+        else:
+            return director_response(projects, name, manifest, request)
+    try:
+        target = projects.file(name, path, v)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    if not target.is_file():
+        response = Response(recordio.text(target), media_type='application/json',
+            headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote(target.name, safe='')} if download else {})
+    else:
+        response = FileResponse(target, filename=target.name if download else None,
+                                media_type='application/octet-stream' if download else None)
     if not download:
         # Project documents may contain scripts. Keep previews interactive without
         # granting them the workbench origin or access to its management APIs.
@@ -631,7 +767,9 @@ def save_episode_revision_export(name: str, episode: Episode, value: EpisodeExpo
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save(store.project(name), episode, value)
+        return EpisodeRevisionNotes(revision_notes).save(store.project(name, writable=True), episode, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -655,7 +793,9 @@ def save_revision_note(name: str, episode: Episode, scene: Scene, value: NoteCha
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save_note(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_note(store.project(name, writable=True), episode, scene, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -669,7 +809,9 @@ def save_revision_export(name: str, episode: Episode, scene: Scene, value: Expor
     if not local_write_request(request):
         raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
     try:
-        return EpisodeRevisionNotes(revision_notes).save_scene_export(store.project(name), episode, scene, value)
+        return EpisodeRevisionNotes(revision_notes).save_scene_export(store.project(name, writable=True), episode, scene, value)
+    except PermissionError as error:
+        raise HTTPException(409, str(error)) from error
     except NotesChangedError as error:
         raise HTTPException(409, str(error)) from error
     except FileNotFoundError as error:
@@ -761,6 +903,303 @@ def history_document(path: Annotated[str, Query()], page: Annotated[int, Query(g
         return {'title': target.stem, 'html': parser.markdown(introduction + ''.join(entries[start:start + page_size]), path),
                 'page': page, 'pageSize': page_size, 'total': total}
     return {'title': target.stem, 'html': parser.markdown(text, path)}
+
+
+@app.get('/api/workspaces')
+def workspace_list(request: Request):
+    return request.app.state.workspaces.public()
+
+
+async def select_workspace(workspace_id: str, request: Request):
+    try:
+        space = request.app.state.workspaces.get(workspace_id)
+        if 'context' in request.path_params:
+            space = space.select(request.path_params['context'])
+    except KeyError as error:
+        raise HTTPException(404, '项目空间未登记') from error
+    request.state.workspace_space = space
+    request.state.workspace_tasks = space.tasks
+    return space
+
+
+spaces_router = APIRouter(dependencies=[Depends(select_workspace)])
+# The registered spaces use the exact same task handlers and authorization.
+for route in list(app.routes):
+    path = getattr(route, 'path', '')
+    if path.startswith(('/api/comfy/', '/api/internal/comfy/')):
+        spaces_router.add_api_route(path[4:], route.endpoint, methods=list(route.methods),
+                                    response_model=route.response_model)
+
+
+@spaces_router.get('/service')
+def workspace_service(request: Request):
+    space = request.state.workspace_space
+    return {**service(), 'workspace': str(space.root), 'space': space.id}
+
+
+@spaces_router.get('/projects')
+def workspace_projects(request: Request):
+    return request.state.workspace_space.projects.discover()
+
+
+@spaces_router.get('/account-overview')
+def workspace_account_overview(request: Request):
+    space = request.state.workspace_space
+    if space.view != 'chloe-commerce':
+        raise HTTPException(404, '该空间未接入带货账号概况')
+    try:
+        return account_overview(space.root)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}')
+def workspace_project(name: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        value = project_tree(space.projects, name, space.api)
+        if space.production_adapter:
+            value['productionSection'] = production.adapter(space).production_section(space.projects.project(name))
+        if space.view == 'iris-commercial':
+            value['works'] = project_works(space.projects, name)
+            value['irisPresentation'] = iris_presentation(space.projects, name, space.api, value['files'])
+        return value
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}')
+def workspace_work(name: str, work: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        if space.view != 'iris-commercial':
+            raise FileNotFoundError('该项目空间未启用作品目录')
+        return iris_work_view(space.projects, name, space.api, work, production.adapter(space))
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(409, '作品资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production')
+@spaces_router.get('/projects/{name}/works/{work}/production')
+def workspace_production(name: str, request: Request, work: str | None = None):
+    space = request.state.workspace_space
+    try:
+        api = space.api + '/projects/' + quote(name, safe='')
+        return production.adapter(space).production_data(space.projects.project(name), api, work)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '视频制作资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production-works')
+def workspace_production_works(name: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        return production.workbench(space).items(space.projects, name, space.api)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-detail')
+def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None):
+    space = request.state.workspace_space
+    try:
+        return production.workbench(space).detail(space.projects, name, space.api, work, view)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品制作资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-downloads')
+def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole',
+                                   round_number: Annotated[int | None, Query(alias='round', ge=1)] = None,
+                                   view: Literal['current', 'archive'] | None = None):
+    space = request.state.workspace_space
+    try:
+        if round_number is not None and not hasattr(production.workbench(space), 'download_files'):
+            raise HTTPException(404, '当前业务未接入轮次下载')
+        options = {'round_number': round_number} if round_number is not None else {}
+        return production.workbench(space).downloads(space.projects, name, space.api, work, scene, view, **options)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品下载资料读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-download')
+def workspace_production_download(name: str, work: str, request: Request,
+                                  round_number: Annotated[int, Query(alias='round', ge=1)],
+                                  stage: Literal['一采', '二采', '后处理'] | None = None,
+                                  archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
+    if not management_request(request):
+        raise HTTPException(403, '视频打包仅允许本机或局域网工作台访问')
+    space = request.state.workspace_space
+    adapter = production.workbench(space)
+    if not hasattr(adapter, 'download_files'):
+        raise HTTPException(404, '当前业务未接入轮次下载')
+    try:
+        files, filename = adapter.download_files(space.projects, name, work, round_number, stage)
+        return zip_response(files, filename, archive_format, videos_only=True)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-director')
+def workspace_production_director(name: str, work: str, request: Request, path: str | None = None,
+                                  record: str | None = None):
+    if not management_request(request):
+        raise HTTPException(403, '导演包导出仅允许本机或局域网工作台访问')
+    space = request.state.workspace_space
+    try:
+        adapter = production.workbench(space)
+        if (path is None) == (record is None):
+            raise ValueError('请指定一份导演包清单或一条实际执行记录')
+        spec = adapter.director_spec(space.projects, name, work, path) if record is None else adapter.execution_director_spec(
+            space.projects, name, work, record)
+        return director_spec_response(space.projects, name, spec)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (ValueError, KeyError, IndexError, zipfile.BadZipFile, comfy_client.ClientError) as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production-notes')
+@spaces_router.get('/projects/{name}/works/{work}/production-notes')
+def workspace_production_notes(name: str, request: Request, work: str | None = None) -> ReviewNotes:
+    space = request.state.workspace_space
+    try:
+        return production_notes.read(production.adapter(space).notes_path(space.projects.project(name), work))
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(503, '修改意见读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-notes/archive')
+def workspace_archived_production_notes(name: str, work: str, request: Request) -> EpisodeNotes:
+    space = request.state.workspace_space
+    try:
+        archived = production.workbench(space).archive_episode(space.projects.project(name), work)
+        if archived is None:
+            raise FileNotFoundError('本作品没有登记历史制作归档')
+        return EpisodeRevisionNotes(revision_notes).read(*archived)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(503, '历史修改意见读取失败：' + str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/production-context')
+@spaces_router.get('/projects/{name}/works/{work}/production-context')
+def workspace_production_context(name: str, source: str, identity: str, request: Request, work: str | None = None):
+    space = request.state.workspace_space
+    try:
+        return production.adapter(space).legacy_context(space.projects.project(name), space.api + '/projects/' + quote(name, safe=''), source, identity, work)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError) as error:
+        raise HTTPException(409, '历史生成资料读取失败：' + str(error)) from error
+
+
+def update_production_notes(name, request, changes, work=None, view=None):
+    if not local_write_request(request):
+        raise HTTPException(403, '修改意见仅限本机或局域网地址，并要求同源请求')
+    space = request.state.workspace_space
+    try:
+        business = production.adapter(space)
+        project = space.projects.project(name, writable=True)
+        data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work, legacy_fallback=work is None)
+        identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
+        if work:
+            production.workbench(space).validate_notes(project, work, identities, changes, view)
+        elif changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
+            raise ValueError('意见必须对应项目中已有的分段与候选版本')
+        return production_notes.save(business.notes_path(project, work), changes)
+    except (PermissionError, NotesChangedError, ValueError) as error:
+        raise HTTPException(409, str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except OSError as error:
+        raise HTTPException(503, '修改意见未保存：' + str(error)) from error
+
+
+@spaces_router.put('/projects/{name}/production-notes')
+@spaces_router.put('/projects/{name}/works/{work}/production-notes')
+def save_workspace_production_note(name: str, request: Request, value: NoteChange, work: str | None = None,
+                                   view: Literal['current', 'archive'] | None = None) -> RevisionNote:
+    return update_production_notes(name, request, ExportChanges(notes=[value], rounds=[]), work, view).notes[value.key()]
+
+
+@spaces_router.put('/projects/{name}/production-notes/export')
+@spaces_router.put('/projects/{name}/works/{work}/production-notes/export')
+def save_workspace_production_export(name: str, request: Request, value: ExportChanges, work: str | None = None,
+                                     view: Literal['current', 'archive'] | None = None) -> ReviewNotes:
+    return update_production_notes(name, request, value, work, view)
+
+
+@spaces_router.get('/projects/{name}/document')
+def workspace_document(name: str, path: str, request: Request):
+    space = request.state.workspace_space
+    try:
+        target = space.projects.file(name, path)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    if target.suffix.lower() == '.md':
+        text = target.read_text('utf-8-sig')
+        value = {'title': next((line[2:].strip() for line in text.splitlines() if line.startswith('# ')), target.stem),
+                 'html': documents.markdown(text, path), 'url': quote(path, safe='/')}
+        return scope_links(view(value, name), space.api)
+    if target.suffix.lower() in ('.json', '.txt', '.log'):
+        return documents.plain_text_preview(target)[0]
+    raise HTTPException(404, '没有可用的文档预览，请打开原文件')
+
+
+@spaces_router.get('/projects/{name}/jianying-download')
+def workspace_package(name: str, path: str, request: Request,
+                      archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'jypack'):
+    try:
+        return package_response(request.state.workspace_space.projects, name, path, archive_format)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@spaces_router.get('/projects/{name}/director-download')
+def workspace_director_download(name: str, path: str, request: Request):
+    return director_response(request.state.workspace_space.projects, name, path, request)
+
+
+@spaces_router.get('/projects/{name}/files/{path:path}')
+def workspace_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
+    return project_file_response(request.state.workspace_space.projects, name, path, request, v, download)
+
+
+spaces_router.include_router(resource_router(lambda request: request.state.workspace_space.projects, queue_write,
+                                            prefix='/projects/{name}/resources'))
+spaces_router.include_router(chloe_production_router)
+spaces_router.include_router(chloe_publication_router)
+spaces_router.include_router(chloe_review_router)
+spaces_router.include_router(chloe_publication_write_router, dependencies=[Depends(queue_write)])
+spaces_router.include_router(chloe_models_router)
+spaces_router.include_router(chloe_resource_library_router)
+spaces_router.include_router(chloe_clothing_router)
+spaces_router.include_router(chloe_asset_router(SCENES))
+spaces_router.include_router(chloe_asset_router(VOICES))
+app.include_router(spaces_router, prefix='/api/workspaces/{workspace_id}')
+app.include_router(spaces_router, prefix='/api/workspaces/{workspace_id}/contexts/{context}')
 
 
 app.frontend('/', directory=TOOL / 'frontend/dist', fallback='index.html')

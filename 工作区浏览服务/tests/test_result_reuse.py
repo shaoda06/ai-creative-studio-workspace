@@ -3,7 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from backend.services import comfy_tasks as t, comfy_segments as segments
 from backend.services.collection_retry import saved_files
@@ -12,6 +12,8 @@ from backend.services.result_summary import outputs, summary
 from backend.parsers.project import SourceChangedError
 from tests import test_result_closeout as closeout_tests
 
+
+import execution_records as recordio
 
 class ReuseTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = closeout_tests.CloseoutTests.asyncSetUp
@@ -22,7 +24,8 @@ class ReuseTests(unittest.IsolatedAsyncioTestCase):
     collect_and_notice = closeout_tests.CloseoutTests.collect_and_notice
 
     def test_metadata_observation_also_answers_receipt_existence(self):
-        receipt, candidate = Mock(), Mock()
+        receipt, candidate = MagicMock(spec=Path), Mock()
+        receipt.__fspath__.return_value = str(self.root / 'missing-receipt.json')
         receipt.stat.side_effect = FileNotFoundError()
         self.assertEqual(saved_files(receipt, candidate), (None, False))
         receipt.stat.assert_called_once(); candidate.stat.assert_not_called()
@@ -210,13 +213,13 @@ class ReuseTests(unittest.IsolatedAsyncioTestCase):
         report=self.record/'执行检查报告.json'
         report.write_text(json.dumps({'ok':True,'prepared_input':{'mapping':{'selected_indices':[0],
             'segments':[{'segment':'EP001-C001-P001','round':'R001'}]}}}), 'utf-8')
-        read=Path.read_text
+        read=recordio.read
         reads=[]
         def observed(path,*args,**kwargs):
             if path.name=='输入映射.json': raise AssertionError('fixed mapping must not be reread')
             if path==report: reads.append(path)
             return read(path,*args,**kwargs)
-        with patch.object(Path,'read_text',observed):
+        with patch.object(recordio,'read',observed):
             summary(self.store,'task')
             register(self.store,'task')
             self.assertEqual(len(reads),1)

@@ -1,0 +1,79 @@
+{
+  "font_family": "PingFang SC",
+  "font_pt": 11,
+  "line_height": 1.7,
+  "heading_pt": [
+    21,
+    18,
+    14,
+    12,
+    11,
+    11
+  ],
+  "heading_weight": 600,
+  "page_number_pt": 8,
+  "page_number_bottom_pt": 24,
+  "pages": {
+    "portrait": {
+      "width_mm": 210,
+      "height_mm": 297,
+      "margin_mm": [
+        18,
+        19,
+        18,
+        19
+      ],
+      "image_max_height_mm": 218
+    },
+    "landscape": {
+      "width_mm": 297,
+      "height_mm": 210,
+      "margin_mm": [
+        12,
+        10,
+        13,
+        10
+      ],
+      "image_max_height_mm": 160
+    }
+  },
+  "watermark": {
+    "count": 3,
+    "font_pt": 28,
+    "font_weight": 600,
+    "angle_degrees": 34,
+    "opacity": 0.12,
+    "color": "#555555",
+    "layer": "over",
+    "positions_mm": {
+      "portrait": [
+        [
+          105,
+          65
+        ],
+        [
+          105,
+          148
+        ],
+        [
+          105,
+          231
+        ]
+      ],
+      "landscape": [
+        [
+          148.5,
+          65
+        ],
+        [
+          148.5,
+          105
+        ],
+        [
+          148.5,
+          145
+        ]
+      ]
+    }
+  }
+}

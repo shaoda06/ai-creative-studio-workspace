@@ -17,6 +17,10 @@ const video = (scene, run, stage = '一采') => ({ key: `${scene}-${stage}-${run
     { id: `EP001-${scene}-SH001`, duration: 0.3, html: '<p>第一镜</p>' },
     { id: `EP001-${scene}-SH002`, duration: 0.6, html: '<p>第二镜</p>' },
     { id: `EP001-${scene}-SH003`, duration: 1.1, html: '<p>第三镜</p>' },
+  ] : [], dialogues: scene === 'C001' ? [
+    { shot: `EP001-${scene}-SH002`, index: 0, speaker: '女主', original: run === 'R002' ? '还吃！快走啊！' : '快走！' },
+    { shot: `EP001-${scene}-SH002`, index: 1, speaker: '男主（画外）', original: '刚泡好的，别浪费啊。' },
+    { shot: `EP001-${scene}-SH003`, index: 0, speaker: '女主', original: '这句保留。' },
   ] : [], prompts: {}, references: { common: [], segment: [] }, issues: [] } });
 const doc = title => ({ kind: 'document', name: title, key: title + '.md', version: 'v01', doc: { title, html: `<p>${title}</p>` } });
 const round = (scene, number) => ({ number, episodeRound: true, created_at: '2026-10-26T00:00:00+08:00', script: doc('剧本'), storyboard: doc(scene), issues: [],
@@ -78,6 +82,7 @@ const server = await createServer({ configFile: false, cacheDir: path.join(scree
       }
     } else { const scene = url.split('/').at(-1); data = scene === 'EP001' ? saved : saved.scenes[scene]; }
   } else if (req.method !== 'GET') { unexpected.push(`${req.method} ${url}`); res.statusCode = 405; data = {}; }
+  else if (url === '/api/workspaces') data = [{ id: 'nora', name: 'Nora示例空间', view: 'serial-drama', projects: [{ id: '意见示例', name: '意见示例' }] }];
   else if (url === '/api/projects') data = [{ id: '意见示例', name: '意见示例' }];
   else if (url.endsWith('/status')) data = { revision: 1, updating: false, checking: false };
   else if (url.endsWith('/overview')) data = { active: [], warnings: [], directories: [{ name: '00-项目定位', label: '项目定位' }, { name: '09-剧集制作', label: '剧集制作' }] };
@@ -92,9 +97,9 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
   reset(); legacy = false; conflict = false; failRead = false;
-  const context = await browser.newContext({ viewport: { width, height: 916 } });
+  const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('意见示例'));
@@ -108,6 +113,45 @@ try {
   await page.screenshot({ path: path.join(screenshots, `scene-dots-${width}.png`) });
   const contentTab = name => page.locator('.segment-script [aria-label="分段文字内容"] button').filter({ hasText: new RegExp('^' + name + '$') });
   const pendingNote = 'C001切场前的待保存意见';
+  const firstLine = page.getByRole('textbox', { name: 'SH002 女主 第1句 新台词', exact: true });
+  const secondLine = page.getByRole('textbox', { name: 'SH002 男主（画外） 第2句 新台词', exact: true });
+  assert.equal(await page.locator('.revision-dialogue').count(), 3, '逐句列出，多人同镜和无修改的原句都保留');
+  assert.equal(await firstLine.inputValue(), '');
+  const lineHeight = await firstLine.evaluate(el => { const s = getComputedStyle(el); return { rows: el.rows, height: el.getBoundingClientRect().height, expected: parseFloat(s.lineHeight) + parseFloat(s.paddingTop) + parseFloat(s.paddingBottom) + parseFloat(s.borderTopWidth) + parseFloat(s.borderBottomWidth) }; });
+  assert.equal(lineHeight.rows, 1);
+  assert.ok(lineHeight.height <= lineHeight.expected + 1, '新台词输入框保持一行高');
+  await firstLine.fill('先把面放下！\n跟我走！');
+  await secondLine.fill('再等我一下。');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 2);
+  await secondLine.fill('');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 1, '留空只移除本句修改');
+  await secondLine.fill('再等我一下。');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  await page.reload();
+  await page.getByRole('button', { name: '剧集制作', exact: true }).click();
+  await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
+  await page.getByRole('button', { name: '修改意见', exact: true }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '刷新从保存记录恢复新台词');
+  const version = page.getByRole('combobox', { name: '版本切换', exact: true });
+  await version.click(); await page.getByRole('option', { name: /^候选一/ }).click();
+  assert.equal(await firstLine.inputValue(), '', '另一候选的新台词独立');
+  assert.ok((await page.locator('.revision-dialogue').first().textContent()).includes('快走！'));
+  await version.click(); await page.getByRole('option', { name: /^候选二/ }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！');
+  await page.getByRole('button', { name: '宽屏显示', exact: true }).click();
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '宽屏保留输入');
+  await firstLine.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(screenshots, `dialogue-wide-${width}.png`) });
+  await page.getByRole('button', { name: '恢复布局', exact: true }).click();
+  await firstLine.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(screenshots, `dialogue-${width}.png`) });
+  await page.getByRole('textbox', { name: '修改意见', exact: true }).fill('');
+  await page.locator('.revision-note-state[data-state="saved"]').waitFor();
+  await page.getByRole('button', { name: '导出修改意见', exact: true }).click();
+  assert.ok((await page.getByRole('dialog').textContent()).includes('新台词：先把面放下！'), '只有新台词没有普通意见，也能导出');
+  await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   const flushed = page.waitForResponse(response => response.url().endsWith('/revision-notes/EP001/C001') && response.request().method() === 'PUT');
   await page.getByRole('textbox', { name: '修改意见', exact: true }).fill(pendingNote);
   await scene('C002').click();
@@ -118,6 +162,8 @@ try {
   assert.equal(await page.getByRole('textbox', { name: '修改意见', exact: true }).inputValue(), '00.00.0秒，SH001：C002第一段', '不得把上场意见带到本场');
   await scene('C001').click();
   assert.equal(await page.getByRole('textbox', { name: '修改意见', exact: true }).inputValue(), pendingNote);
+  assert.equal(await firstLine.inputValue(), '先把面放下！\n跟我走！', '切场回来保留新台词');
+  assert.equal(saved.scenes.C001.notes['round/9/P001/一采/R002'].dialogueEdits.length, 2, '普通意见保存不会清掉新台词');
   await contentTab('提示词').click(); await scene('C002').click();
   assert.equal(await contentTab('提示词').getAttribute('aria-current'), 'page', '手动切场保持提示词');
   await contentTab('分镜脚本').click(); await scene('C001').click();
@@ -137,11 +183,10 @@ try {
   await open();
   const dialog = page.getByRole('dialog'), notes = dialog.locator('.revision-export-note');
   assert.equal(await notes.count(), 3);
-  const titles = await notes.locator('strong').allTextContents();
-  assert.match(titles[0], /C001.*P001.*一采.*R002.*候选二/);
-  assert.match(titles[1], /C001.*P002.*二采.*R004.*候选四/);
-  assert.match(titles[2], /C002.*P001.*一采.*R003.*候选三/);
-  const summary = dialog.getByRole('textbox', { name: '第9轮 本轮汇总意见', exact: true });
+  const titles = await notes.locator(':scope > h3').allTextContents();
+  assert.deepEqual(titles, ['分段 P001', '分段 P002', '分段 P001']);
+  assert.deepEqual(await dialog.locator('.revision-export-scene > h2').allTextContents(), ['场次 C001', '场次 C002']);
+  const summary = dialog.getByRole('textbox', { name: '第9轮 本轮总体意见', exact: true });
   assert.equal(await summary.count(), 1);
   assert.equal(await dialog.getByText('旧整场意见', { exact: true }).count(), 0);
   await summary.fill('整集节奏自然，不要字幕');
@@ -157,14 +202,21 @@ try {
   const copy = dialog.getByRole('button', { name: '复制', exact: true });
   await page.evaluate(() => { window.__copied = ''; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied = text; } } }); });
   await copy.click(); const copied = await page.evaluate(() => window.__copied);
-  assert.ok(copied.indexOf('C001 / 第9轮 / P001') < copied.indexOf('C001 / 第9轮 / P002'));
+  assert.ok(copied.startsWith('# EP001｜第9轮修改意见'));
+  assert.ok(copied.includes('- 本集：意见示例'));
+  const firstScene = copied.slice(copied.indexOf('## 场次 C001'), copied.indexOf('## 场次 C002'));
+  assert.ok(firstScene.indexOf('### 分段 P001') < firstScene.indexOf('### 分段 P002'));
+  assert.ok(firstScene.indexOf('#### 台词修改') < firstScene.indexOf('#### 普通修改意见'));
+  assert.ok(!copied.includes('审看版本') && !/R\d{3}/.test(copied) && !copied.includes('候选'));
+  assert.ok(copied.includes('## 本轮汇总意见'));
   assert.ok(copied.indexOf('SH003') < copied.indexOf('SH004'));
-  assert.ok(copied.indexOf('SH004') < copied.indexOf('C002 / 第9轮 / P001'));
+  assert.ok(copied.indexOf('SH004') < copied.indexOf('## 场次 C002'));
   assert.ok(!copied.includes('旧轮意见不可带入') && !copied.includes('组合外版本不可带入'));
   assert.ok(copied.includes('本轮汇总意见') && copied.includes('整集节奏自然，不要字幕'));
+  assert.ok(copied.includes('**原台词**：还吃！快走啊！') && copied.includes('**修改为**：先把面放下！\n跟我走！'), '导出包含逐句原台词和新台词');
   await summary.fill('未保存的复制内容');
   await copy.click();
-  assert.ok((await page.evaluate(() => window.__copied)).startsWith('【未保存草稿：'));
+  assert.ok((await page.evaluate(() => window.__copied)).startsWith('> **未保存草稿**：'));
   assert.equal(saved.rounds[9].text, '整集节奏自然，不要字幕');
   conflict = true; await summary.fill('不能丢的输入');
   await dialog.getByRole('button', { name: '保存', exact: true }).click();
@@ -179,19 +231,24 @@ try {
   await open(); assert.equal(await summary.inputValue(), '整集节奏自然，不要字幕');
   await dialog.getByRole('button', { name: '全部历史意见', exact: true }).click();
   assert.ok((await notes.allTextContents()).some(t => t.includes('第8轮')));
+  await copy.click();
+  const historyText = await page.evaluate(() => window.__copied);
+  assert.ok(historyText.startsWith('# EP001｜全部历史修改意见') && historyText.includes('## 第8轮'));
+  assert.ok(historyText.includes('一采 · R001') && historyText.includes('旧轮意见不可带入'), '历史保留非本轮版本的来源，不按当前候选覆盖');
   assert.equal(await dialog.getByRole('textbox', { name: 'C001 第5轮 整场总体意见（历史只读）', exact: true }).inputValue(), '旧整场意见');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   const choose = page.getByRole('combobox', { name: '修改轮次', exact: true });
   await choose.click(); await page.getByRole('option', { name: /^第8轮/ }).click();
   assert.equal(await scene('C001').locator('.round-new-dot').count(), 1, '切换历史轮次后重新计算C001');
   assert.equal(await scene('C002').locator('.round-new-dot').count(), 1, '历史轮次首次生成的C002显示标记');
-  await open(); assert.equal(await dialog.getByRole('textbox', { name: '第8轮 本轮汇总意见', exact: true }).inputValue(), '');
+  await open(); assert.equal(await dialog.getByRole('textbox', { name: '第8轮 本轮总体意见', exact: true }).inputValue(), '');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   // Real player time -> historical shot start -> cursor insertion -> in-memory autosave.
   await page.getByRole('button', { name: /^场次 C001 ·/ }).click();
   await page.getByRole('button', { name: /^分段 P001，/ }).click();
   await page.getByRole('button', { name: '修改意见', exact: true }).click();
   const editor = page.getByRole('textbox', { name: '修改意见', exact: true });
+  assert.equal(await firstLine.inputValue(), '', '同一候选在不同轮次的台词意见不串用');
   const pass = page.getByRole('button', { name: 'SH003 本镜通过', exact: true });
   assert.equal(await page.getByRole('button', { name: /SH\d+ 本镜通过/ }).count(), 3);
   for (const cell of await page.locator('.shot-timeline-cell').all()) {
@@ -230,6 +287,7 @@ try {
   assert.equal(await page.locator('.segment-video video').evaluate(video => video.currentTime), 0, '通过操作不跳转或播放视频');
   const firstPass = page.getByRole('button', { name: 'SH001 本镜通过', exact: true });
   await firstPass.focus(); await firstPass.press('Enter');
+  await page.waitForFunction(() => document.querySelector('#revision-note-text')?.value.endsWith('00.00.0秒，SH001：这个分镜没问题'));
   assert.ok((await editor.inputValue()).endsWith('00.00.0秒，SH001：这个分镜没问题'), '第一镜按钮使用首镜真实0秒');
   await page.locator('.revision-note-state[data-state="saved"]').waitFor();
   await page.screenshot({ path: path.join(screenshots, `shot-pass-${width}.png`) });
@@ -253,6 +311,10 @@ try {
   await reconcile.getByRole('textbox', { name: '本页待保存意见', exact: true }).fill('核对后的合并意见');
   await page.screenshot({ path: path.join(screenshots, `conflict-${width}.png`) });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  // Acknowledge the persistent conflict error before using the low-height dialog.
+  await page.locator('.floating-message').filter({ hasText: '意见已在其他页面更新' }).getByRole('button', { name: '关闭通知', exact: true }).click();
+  assert.ok(await reconcile.isVisible(), '关闭错误提示不取消核对');
+  assert.equal(await reconcile.getByRole('textbox', { name: '本页待保存意见', exact: true }).inputValue(), '核对后的合并意见');
   await reconcile.getByRole('button', { name: '保存核对后的本页意见', exact: true }).click();
   await page.locator('.revision-note-state[data-state="saved"]').waitFor();
   assert.equal(saved.scenes.C001.notes[noteId].text, '核对后的合并意见');
@@ -299,7 +361,7 @@ try {
   assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
   await context.close(); console.log(`PASS ${width}px: 整集汇总排序、候选身份、统一总体意见、跨场恢复、旧历史及冲突保留输入`);
  }
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
  legacy = true; reset();
  for (const [scene, value] of Object.entries(saved.scenes)) {
   value.notes = Object.fromEntries(Object.values(value.notes).map(note => {
@@ -307,7 +369,7 @@ try {
    return [key(value), value];
   }));
  }
- const context = await browser.newContext({ viewport: { width, height: 916 } });
+ const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
  const page = await context.newPage();
  await page.goto(base + '/tests/project-switch.html#/projects/' + encodeURIComponent('意见示例'));
  await page.getByRole('button', { name: '剧集制作', exact: true }).click();
@@ -317,9 +379,9 @@ try {
  const dialog = page.getByRole('dialog');
  await dialog.getByRole('button', { name: '当前组合意见', exact: true }).waitFor();
  assert.equal(await dialog.locator('.revision-export-note').count(), 3);
- const legacyTitles = await dialog.locator('.revision-export-note strong').allTextContents();
- assert.ok(legacyTitles[0].includes('C001 / 第5轮') && legacyTitles[2].includes('C002 / 第7轮'));
- const summary = dialog.getByRole('textbox', { name: '本轮汇总意见', exact: true });
+ const legacyTitles = await dialog.locator('.revision-export-scene > h2').allTextContents();
+ assert.deepEqual(legacyTitles, ['场次 C001 · 第5轮', '场次 C002 · 第7轮']);
+ const summary = dialog.getByRole('textbox', { name: '本轮总体意见', exact: true });
  assert.equal(await summary.count(), 1);
  assert.equal(await dialog.locator('.revision-export-note textarea:not([readonly])').count(), 0);
  await summary.fill('当前这一轮的整集汇总意见');
@@ -340,7 +402,7 @@ try {
  await page.evaluate(() => { window.__copied = ''; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied = text; } } }); });
  await dialog.getByRole('button', { name: '复制', exact: true }).click();
  const copied = await page.evaluate(() => window.__copied);
- assert.ok(copied.includes('本轮汇总意见（C001第5轮、C002第7轮）') && copied.includes('当前这一轮的整集汇总意见'));
+ assert.ok(copied.includes('- 场次组合：C001第5轮、C002第7轮') && copied.includes('## 本轮汇总意见') && copied.includes('当前这一轮的整集汇总意见'));
  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
  failRead = true;
  await page.getByRole('button', { name: '导出修改意见', exact: true }).click();

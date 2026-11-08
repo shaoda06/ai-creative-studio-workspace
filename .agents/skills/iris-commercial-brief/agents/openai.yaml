@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iris 需求与参考"
+  short_description: "Iris 商业视频需求与参考二级业务阶段，理解客户资料与参考，形成有来源的制作简报和需求确认稿。"
+  default_prompt: "使用 $iris-commercial-brief 按本阶段规则处理当前任务，保留实际输入、授权和业务确认边界。"

@@ -29,6 +29,7 @@ import { AudioPreviewButton, useAudioPreview } from './components/AudioPreviewBu
 import { ReferenceLibrary } from './components/ReferenceLibrary';
 import { CoverLibrary } from './components/CoverLibrary';
 import { AccountLibrary } from './components/AccountLibrary';
+import { ResourceLibrary } from './components/ResourceLibrary';
 
 type AssetSelection = { id: string; name: string };
 type AssetNavigation = { asset: AssetSelection | null; onAssetChange: (asset: AssetSelection | null) => void };
@@ -69,13 +70,16 @@ function ProjectPage({ name }: { name: string }) {
     return () => window.clearTimeout(timer);
   }, [name, retryAt, syncing, refetch]);
   const revision = status.data?.revision || 1;
-  const production = useQuery<RecordData>({ queryKey: ['section', name, section, revision], enabled: false, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
+  const production = useQuery<RecordData>({ queryKey: ['section', name, section, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/sections/${encodeURIComponent(section)}`), enabled: false, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const episodeItem = production.data?.children?.find((item: FileItem) => item.name === episode);
   const episodeTitle = episodeItem?.title || (episode === '片头' || episode === '片尾' ? '全剧通用' : '题名未记录');
-  const overview = useQuery({ queryKey: ['overview', name, revision], queryFn: () => get<RecordData>(`${projectUrl(name)}/overview`), enabled: !!status.data, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
+  const overview = useQuery<RecordData>({ queryKey: ['overview', name, revision], queryFn: async () => {
+    const value = await get<RecordData>(`${projectUrl(name)}/overview`);
+    return { ...value, directories: [...value.directories.filter((item: RecordData) => item.name !== '资源'), { name: '资源', label: '项目资源' }] };
+  }, enabled: !!status.data, placeholderData: (previous, query) => query?.queryKey[1] === name ? previous : undefined });
   const releaseCount = section === '98-成片交付' && production.data?.key === '98-成片交付' ? releaseVideos(production.data.children).length : null;
   const sectionTitle = (overview.data?.directories.find((dir: RecordData) => dir.name === section)?.label || section.replace(/^\d+-/, '')) + (releaseCount === null ? '' : `（${releaseCount}）`);
-  const episodeDetail = useQuery<FileItem>({ queryKey: ['episode', name, episode, revision], enabled: false });
+  const episodeDetail = useQuery<FileItem>({ queryKey: ['episode', name, episode, revision], queryFn: () => get<FileItem>(`${projectUrl(name)}/episodes/${episode}`), enabled: false });
   const episodeWarnings = section === '09-剧集制作' && episodeDetail.data?.name === episode
     ? episodeDetail.data.warnings || [] : [];
   const warnings = [...new Set<string>([...(overview.data?.warnings || []), ...(production.data?.warnings || []), ...episodeWarnings])];
@@ -99,14 +103,15 @@ function ProjectPage({ name }: { name: string }) {
     <Result page loading={status.isPending || overview.isPending} error={status.error || overview.error} retry={status.error ? status.refetch : overview.refetch} retrying={status.isFetching || overview.isFetching} />
     {overview.data && <>
       {warnings.length > 0 && <details className="notice"><summary>资料提示（{warnings.length}）</summary>{warnings.map((warning: string) => <p key={warning}>{warning}</p>)}</details>}
-      {controlsRoot && createPortal(<TabNav wide label="项目栏目" groups={[{ label: '相关资料', values: ['03-人物资料', '04-场景资料', '05-道具资料'] }, { label: '参考素材', values: ['07-参考音频', '08-参考视频'] }, { label: '发布资料', values: releaseSections.filter(value => overview.data.directories.some((dir: RecordData) => dir.name === value)) }]} items={[...overview.data.directories].sort((a: RecordData, b: RecordData) => Number(releaseSections.includes(a.name)) - Number(releaseSections.includes(b.name)) || Number(['07-参考音频', '08-参考视频'].includes(a.name)) - Number(['07-参考音频', '08-参考视频'].includes(b.name)) || releaseSections.indexOf(a.name) - releaseSections.indexOf(b.name)).map((dir: RecordData) => ({ value: dir.name, label: dir.label }))} selected={section} onChange={openSection} />, controlsRoot)}
+      {controlsRoot && createPortal(<TabNav wide label="项目栏目" groups={[{ label: '相关资料', values: ['03-人物资料', '04-场景资料', '05-道具资料'] }, { label: '参考素材', values: ['07-参考音频', '08-参考视频'] }, { label: '发布资料', values: releaseSections.filter(value => overview.data.directories.some((dir: RecordData) => dir.name === value)) }]} items={[...overview.data.directories].sort((a: RecordData, b: RecordData) => Number(a.name === '资源') - Number(b.name === '资源') || Number(releaseSections.includes(a.name)) - Number(releaseSections.includes(b.name)) || Number(['07-参考音频', '08-参考视频'].includes(a.name)) - Number(['07-参考音频', '08-参考视频'].includes(b.name)) || releaseSections.indexOf(a.name) - releaseSections.indexOf(b.name)).map((dir: RecordData) => ({ value: dir.name, label: dir.label }))} selected={section} onChange={openSection} />, controlsRoot)}
       {visited.filter(label => overview.data.directories.some((dir: RecordData) => dir.name === label)).map(label => <SectionPane key={name + '/' + label + '/' + (entries[label] || 0)} project={name} section={label} revision={revision} active={label === section} asset={label === section ? asset : null} onAssetChange={value => { setAsset(value); if (value) requestAnimationFrame(() => { currentPath.current!.scrollIntoView({ block: 'start' }); currentPath.current!.focus({ preventScroll: true }); }); }} episode={episode} onEpisodeChange={value => { setEpisode(value); if (value) requestAnimationFrame(() => { currentPath.current!.scrollIntoView({ block: 'start' }); currentPath.current!.focus({ preventScroll: true }); }); }} />)}
     </>}
     {preview && <Preview key={preview.key || preview.url} project={name} item={preview} revision={revision} close={() => setPreview(null)} />}
   </PreviewContext.Provider></BreadcrumbActionsContext.Provider></BreadcrumbSelectorContext.Provider>;
 }
 function SectionPane({ project, section, revision, active, episode, onEpisodeChange, asset, onAssetChange }: { project: string; section: string; revision: number; active: boolean; episode: string | null; onEpisodeChange: (episode: string | null) => void } & AssetNavigation) {
-  const query = useQuery({ queryKey: ['section', project, section, revision], queryFn: () => get<RecordData>(`${projectUrl(project)}/sections/${encodeURIComponent(section)}`), enabled: active, placeholderData: previous => previous });
+  const query = useQuery({ queryKey: ['section', project, section, revision], queryFn: () => get<RecordData>(`${projectUrl(project)}/sections/${encodeURIComponent(section)}`), enabled: active && section !== '资源', placeholderData: previous => previous });
+  if (section === '资源') return <section className="panel" hidden={!active}><ResourceLibrary project={project} active={active} /></section>;
   return <section className="panel" hidden={!active}><Result page loading={active && query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (section !== '09-剧集制作' || active) && <Section value={query.data} project={project} section={section} revision={revision} active={active} asset={asset} onAssetChange={onAssetChange} episode={episode} onEpisodeChange={onEpisodeChange} />}</section>;
 }
 function Section({ value, project, section, revision, active, episode, onEpisodeChange, asset, onAssetChange }: { value: RecordData; project: string; section: string; revision: number; active: boolean; episode: string | null; onEpisodeChange: (episode: string | null) => void } & AssetNavigation) {

@@ -44,7 +44,8 @@ const server = await createServer({ configFile: false, root: fileURLToPath(new U
   if (!url.startsWith('/api/')) return next();
   if (req.method !== 'GET') { writes.push(url); res.writeHead(405); return res.end(); }
   let data;
-  if (url === '/api/projects') data = [{ id: '时长示例', name: '时长示例' }];
+  if (url === '/api/workspaces') data = [{ id: 'nora', name: 'Nora示例空间', view: 'serial-drama', projects: [{ id: '时长示例', name: '时长示例' }] }];
+  else if (url === '/api/projects') data = [{ id: '时长示例', name: '时长示例' }];
   else if (url.endsWith('/status')) data = { revision: 1, updating: false, checking: false };
   else if (url.endsWith('/overview')) data = { active: [], warnings: [], directories: [{ name: '00-项目定位', label: '项目定位' }, { name: '09-剧集制作', label: '剧集制作' }] };
   else if (url.endsWith('/sections/00-项目定位')) data = { exists: false, groups: [] };
@@ -64,9 +65,9 @@ try {
  assert.equal(helpers.formatProductionDuration(null), '时长未记录');
  const planned = helpers.sceneDurationEntries(episode('EP002'), 'C001');
  assert.equal(helpers.formatProductionDuration(helpers.sumProductionDuration(planned, new Map())), '1分5.5秒*');
- for (const width of [1362, 390, 320]) {
+ for (const width of [1280, 1366, 1920]) {
   broken = true;
-  const context = await browser.newContext({ viewport: { width, height: 916 } });
+  const context = await browser.newContext({ viewport: { width, height: width === 1280 ? 640 : width === 1366 ? 768 : 1080 } });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -121,7 +122,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-episode="片头"] .episode-button-duration')?.textContent === '4秒');
   assert.deepEqual(await sharedButtons.locator('.episode-button-duration').allTextContents(), ['4秒', '4秒'], '片头片尾列表只统计默认打开的第一套方案，不累加独立方案');
   const boxes = await buttons.evaluateAll(nodes => nodes.map(node => { const b = node.getBoundingClientRect(); return { x: b.x, y: b.y, right: b.right }; }));
-  assert.equal(boxes[0].y === boxes[1].y, width > 700);
+  assert.equal(boxes[0].y === boxes[1].y, true);
   assert.ok(boxes[2].y > boxes[0].y, '列表一行最多两集');
   for (const button of await buttons.all()) {
     const durationBox = await button.locator('.episode-button-duration').boundingBox();
@@ -156,5 +157,5 @@ try {
  assert.ok(media.includes('/fixture/final.webm'));
  assert.ok(!media.includes('/fixture/process.webm'), '不读取过程产物');
  assert.ok(!media.includes('/fixture/unused-candidate.webm'), '不累加其他候选');
- console.log(JSON.stringify({ passed: true, viewports: [1362,390,320], screenshots }));
+ console.log(JSON.stringify({ passed: true, viewports: [1280, 1366, 1920], screenshots }));
 } finally { await browser.close(); await server.close(); }

@@ -1,27 +1,15 @@
-"""Jianying 11.6 draft archive headers, leaving media and JSON untouched.
+"""Compatibility module; current implementation is maintained by its skill."""
+import importlib.util
+from pathlib import Path
+import sys
 
-The native importer's rewriteDraftPackageZipSignature restores JY to PK for
-local file headers, central directory headers and the end-of-directory record.
-ZIP64 extension records retain their standard signatures. This is a container
-format, not a replacement for Jianying's own import/entitlement checks.
-"""
-from struct import unpack_from
-from zipfile import ZipFile
-
-
-def encode_jypack(path):
-    """Convert a ZIP produced by our exporter (no archive comment) in place."""
-    with ZipFile(path) as archive:
-        members = archive.infolist()
-        central_offset = archive.start_dir
-    with path.open('r+b') as stream:
-        for member in members:
-            stream.seek(member.header_offset)
-            stream.write(b'JY')
-            stream.seek(central_offset)
-            header = stream.read(46)
-            stream.seek(central_offset)
-            stream.write(b'JY')
-            central_offset += 46 + sum(unpack_from('<3H', header, 28))
-        stream.seek(-22, 2)
-        stream.write(b'JY')
+_PATH = Path(__file__).resolve().parents[3] / '.agents/skills/studio-jianying/scripts/jianying_package.py'
+_spec = importlib.util.spec_from_file_location('nora_jianying_package', _PATH)
+_module = sys.modules.get('nora_jianying_package')
+if _module is None:
+    sys.path.insert(0, str(_PATH.parent))
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = _module
+    _spec.loader.exec_module(_module)
+sys.modules[__name__] = _module
+globals().update({name: value for name, value in vars(_module).items() if not name.startswith("_")})

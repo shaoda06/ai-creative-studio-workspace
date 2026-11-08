@@ -31,7 +31,7 @@ await new Promise(resolve => files.listen(0, '127.0.0.1', resolve));
 const fileBase = 'http://127.0.0.1:' + files.address().port;
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
 try {
-  for (const viewport of [{ width: 1362, height: 918 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     const page = await browser.newPage({ viewport }), errors = [];
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', route => {

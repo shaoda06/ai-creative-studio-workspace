@@ -5,6 +5,7 @@ import postcss from 'postcss';
 const owners = {
   LinkButton: 'components/LinkButton.tsx',
   AssetMediaCard: 'components/AssetMediaCard.tsx',
+  AudioReferenceCard: 'components/AudioReferenceCard.tsx',
   Dialog: 'components.tsx', TabSelect: 'components/TabSelect.tsx',
   SearchField: 'components/SearchField.tsx', Switch: 'components/Switch.tsx',
   TabNav: 'components/TabNav.tsx', UnderlineTabs: 'components/UnderlineTabs.tsx',
@@ -16,6 +17,9 @@ const classes = {
   'link-button': ['LinkButton', 'components/LinkButton.css'],
   'round-new-dot': ['RoundNewDot', 'components/RoundNewDot.css'],
   'asset-media-details': ['AssetMediaCard', 'style.css'],
+  'asset-media-card-heading': ['AssetMediaCard', 'style.css'],
+  'asset-media-card-title': ['AssetMediaCard', 'style.css'],
+  'audio-reference-card': ['AudioReferenceCard', 'components/AudioReferenceCard.css'],
   'dialog-close': ['Dialog', 'style.css'],
   'tab-select': ['TabSelect', 'components/TabSelect.css', 'style.css'],
   tabs: ['TabNav', 'style.css', 'components/TabNav.css'], 'underline-tabs': ['UnderlineTabs', 'style.css'],

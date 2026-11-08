@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import errno
 import stat
+import execution_records as recordio
 
 DELAYS = (10, 30, 60)
 
@@ -40,12 +41,18 @@ def saved_files(receipt, candidate):
     try:
         receipt_stamp = receipt.stat()
     except FileNotFoundError:
-        return None, False
+        try:
+            receipt_stamp = recordio.entry_stamp(receipt)
+        except FileNotFoundError:
+            return None, False
     try:
         candidate_stamp = candidate.stat()
     except FileNotFoundError:
         return None, True
-    stamps = receipt_stamp, candidate_stamp
-    proof = tuple((value.st_size, value.st_mtime_ns) for value in stamps) if all(
-        stat.S_ISREG(value.st_mode) for value in stamps) else None
+    if isinstance(receipt_stamp, tuple):
+        proof = (receipt_stamp, (candidate_stamp.st_size, candidate_stamp.st_mtime_ns)) if stat.S_ISREG(candidate_stamp.st_mode) else None
+    else:
+        stamps = receipt_stamp, candidate_stamp
+        proof = tuple((value.st_size, value.st_mtime_ns) for value in stamps) if all(
+            stat.S_ISREG(value.st_mode) for value in stamps) else None
     return proof, True

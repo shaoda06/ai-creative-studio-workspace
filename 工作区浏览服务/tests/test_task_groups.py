@@ -250,6 +250,20 @@ class GroupNotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sender.await_count, 2)
         self.assertTrue(self.reports()[-1][1]['user_message_ready'])
 
+    async def test_repaired_upscale_closeout_wakes_agent_after_error_read(self):
+        self.task('one', kind='image-upscale')
+        self.group('group', ['one'])
+        self.store.save('one', closeout=dict(status='registration_failed', error='record conflict'), closeout_retry_stop='requires_attention')
+        sender = AsyncMock(return_value={})
+        await self.notice('one', sender)
+        self.store.read_report(self.reports()[-1][0], 'isolated-thread')
+        self.store.save('one', closeout=dict(status='completed', display_outputs=[]))
+        with patch.object(self.store, 'desktop_call', sender), patch('backend.services.task_notifications.asyncio.sleep', AsyncMock()):
+            self.store.wake_group('one')
+            await self.store.notifiers['one']
+        self.assertEqual(sender.await_count, 2)
+        self.assertTrue(self.reports()[-1][1]['user_message_ready'])
+
     async def test_mixed_media_delivery_preserves_all_members_and_upscale_identity(self):
         self.task('image'); self.task('upscale', kind='image-upscale'); self.task('video', kind='video-first-pass')
         self.group('mixed', ['image', 'upscale', 'video'])
@@ -267,7 +281,7 @@ class GroupNotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report['new_task_ids'], ['one'])
         self.assertNotIn('reported_outcome', self.store.rows['two']['state'])
 
-    async def test_new_group_upscale_silent_but_failed_group_still_finishes(self):
+    async def test_upscale_group_notifies_once_after_all_members_complete(self):
         self.task('one', kind='image-upscale'); self.task('two', kind='image-upscale', status='running')
         self.group('group', ['one', 'two'])
         sender = AsyncMock(return_value={})
@@ -275,7 +289,9 @@ class GroupNotificationTests(unittest.IsolatedAsyncioTestCase):
         sender.assert_not_awaited()
         self.store.save('two', status='completed', closeout=dict(status='completed', display_outputs=[]))
         await self.notice('two', sender)
-        sender.assert_not_awaited()
+        self.assertEqual(sum(c.args[1] == 'send' for c in sender.call_args_list), 1)
+        self.assertEqual({x['id'] for x in self.reports()[-1][1]['tasks']}, {'one', 'two'})
+        self.assertTrue(self.reports()[-1][1]['user_message_ready'])
         self.assertFalse(self.store.notification_pending('isolated-thread'))
 
     async def test_terminal_sent_receipt_survives_restart_without_resending(self):

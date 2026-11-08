@@ -1,25 +1,24 @@
 from pathlib import Path
+import execution_records as recordio
+from backend.services.project_files import ProjectFiles
 import logging
 import json
 import os
 import re
 import stat
-import sys
 import threading
 import time
+import project_resources as resourceio
 
 from backend.parsers.project import SourceChangedError, build_data, live_task_record, live_revision_notes, FORMAL_SECTIONS
 from backend.parsers.generation import load_context
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/nora-ai-short-drama/scripts'))
-from project_index import read_index
-
 logger = logging.getLogger(__name__)
 
 # Increment only when the parsed project data or interpretation becomes incompatible.
-CACHE_SCHEMA = 24
+CACHE_SCHEMA = 27
 
-class ProjectStore:
+class ProjectStore(ProjectFiles):
     """Parse on demand; keep the last complete result while a change is read."""
 
     def __init__(self, root: Path, *, cache_directory: Path | None = None, version: str = ''):
@@ -31,18 +30,34 @@ class ProjectStore:
         self.entries = {}
         self.lock = threading.Lock()
 
-    def project(self, name: str) -> Path:
-        path = (self.root / name).resolve()
-        if path.parent != self.root or not path.is_dir() or name.startswith('.'):
-            raise FileNotFoundError('项目不存在')
-        return path
+    def prune_cache(self):
+        """Retire managed caches that this store can no longer load, once at startup."""
+        if self.cache_directory is None:
+            return {'files': 0, 'bytes': 0}
+        removed = {'files': 0, 'bytes': 0}
+        for path in sorted(self.cache_directory.rglob('*.json')):
+            with path.open(encoding='utf-8') as stream:
+                header = stream.read(4096)
+            workspace = re.search(r'"workspace"\s*:\s*("(?:\\.|[^"\\])*")', header)
+            schema = re.search(r'"schema"\s*:\s*(\d+)', header)
+            if workspace is None:
+                logger.warning('未识别的缓存头，保留供检查：%s', path)
+                continue
+            relative = path.relative_to(self.cache_directory)
+            name = relative.stem if len(relative.parts) == 1 else relative.parts[0]
+            if (json.loads(workspace[1]) != str(self.root) or schema is None
+                    or int(schema[1]) != CACHE_SCHEMA or not (self.root / name).is_dir()):
+                size = path.stat().st_size
+                path.unlink()
+                removed['files'] += 1
+                removed['bytes'] += size
+        for path in sorted(self.cache_directory.rglob('*'), reverse=True):
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+        logger.info('失效项目缓存清理：%s', removed)
+        return removed
 
-    def discover(self):
-        projects = {p.name for p in self.root.iterdir()
-                    if p.is_dir() and not p.name.startswith('.') and p.resolve().parent == self.root}
-        _, indexed = read_index(self.root)
-        names = dict.fromkeys([*indexed, *sorted(projects)])
-        return [{'id': name, 'name': name} for name in names if name in projects]
+
 
     def snapshot(self, path: Path):
         # mtime and size detect edits, additions, removal and renames without reading media.
@@ -89,6 +104,7 @@ class ProjectStore:
         number = episode[1]
         prefix = '09-剧集制作/' + number + '/'
         dependencies = {'项目进度.md', '00-项目定位/项目基本定位.md', '06-分集大纲/分集索引.md',
+                        '资源/资源索引.json',
                         '06-分集大纲/' + number + '-分集大纲.md', *data.get('sources', {}), *data.get('dependencies', [])}
         return {key: value for key, value in snapshot.items() if key.startswith(prefix) or key in dependencies}
 
@@ -249,20 +265,35 @@ class ProjectStore:
         path = (root / relative).resolve()
         if not path.is_relative_to(root) or any(p.startswith('.') for p in Path(relative).parts):
             raise FileNotFoundError('文件不存在或不在项目内')
+        requested = path.relative_to(root).as_posix()
+        path = resourceio.resolve_file(root, path)
         identity = re.fullmatch(r'((?:EP\d{3,}|片头|片尾))-C\d{3,}-P\d{3,}-R\d{3,}-(一采|二采|后处理)', path.stem)
         if revision and identity:
             if path.is_file():
                 stat = path.stat()
                 if revision == str(stat.st_mtime_ns) + '-' + str(stat.st_size):
                     return path
+                index = resourceio.read_index(root)
+                stamp = index.get('alias_stamps', {}).get(requested) if index else None
+                if stamp and revision == f"{stamp['mtime_ns']}-{stamp['bytes']}" and resourceio.matches_recorded_stamp(root, requested, [stamp['bytes'], stamp['mtime_ns']]):
+                    return path
             history = root / '09-剧集制作' / identity[1] / '其他资料/历史版本'
-            for archive in [*history.glob(path.stem + '-运行中取回-*' + path.suffix),
-                            *history.glob(path.stem + '-替换前-*' + path.suffix)]:
-                if archive.is_file() and archive.resolve().is_relative_to(root):
-                    stat = archive.stat()
+            archives = [*history.glob(path.stem + '-运行中取回-*' + path.suffix),
+                        *history.glob(path.stem + '-替换前-*' + path.suffix)]
+            index = resourceio.read_index(root)
+            if index:
+                archives += [root / key for key in index['aliases'] if Path(key).parent == history.relative_to(root)
+                             and Path(key).suffix == path.suffix and any(Path(key).stem.startswith(path.stem + marker) for marker in ('-运行中取回-', '-替换前-'))]
+            for archive in archives:
+                actual = resourceio.resolve_file(root, archive)
+                if actual.is_file() and actual.is_relative_to(root):
+                    stat = actual.stat()
                     if revision == str(stat.st_mtime_ns) + '-' + str(stat.st_size):
-                        return archive
+                        return actual
+                    stamp = index.get('alias_stamps', {}).get(archive.relative_to(root).as_posix()) if index else None
+                    if stamp and revision == f"{stamp['mtime_ns']}-{stamp['bytes']}" and resourceio.matches_recorded_stamp(root, archive, [stamp['bytes'], stamp['mtime_ns']]):
+                        return actual
             raise FileNotFoundError('该视频文件版本不可用，请加载新文件')
-        if not path.is_file():
+        if not path.is_file() and (not (path.parent / recordio.ARCHIVE).resolve().is_relative_to(root) or not recordio.exists(path)):
             raise FileNotFoundError('文件不存在或不在项目内')
         return path

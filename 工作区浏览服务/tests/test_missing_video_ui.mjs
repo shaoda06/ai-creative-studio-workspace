@@ -68,6 +68,7 @@ try {
   await page.route('**/episodes/EP001', async route => {
     const response = await route.fetch();
     const data = await response.json();
+    data.episodeRounds = []; data.episodeRoundIssues = [];
     data.scenes = ['C001']; data.previousEpisode = null; data.productionIssues = []; data.warnings = [];
     data.segments = { C001: segments };
     data.sceneRounds = { C001: [{ number: 1, issues: [], script: null, storyboard: { kind: 'document', name: '分镜', version: 'v06' },
@@ -77,7 +78,7 @@ try {
   await page.goto(base + '/#/projects/' + encodeURIComponent(project), { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: '剧集制作', exact: true }).click();
   await page.getByRole('button').filter({ hasText: 'EP001' }).first().click();
-  await page.getByRole('combobox', { name: '场次修改轮次', exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '修改轮次', exact: true }).waitFor();
   const scene = page.locator('.episode-scene-content');
   const placeholder = page.locator('.segment-video .video-placeholder');
   const select = id => page.getByRole('button', { name: new RegExp('^分段 ' + id + '，') }).first().click();
@@ -123,9 +124,9 @@ try {
     if (status === 'running') {
       await placeholder.scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(out, 'running.png') });
-      await page.setViewportSize({ width: 390, height: 844 });
+      await page.setViewportSize({ width: 1280, height: 640 });
       await placeholder.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: path.join(out, 'mobile-running.png') });
+      await page.screenshot({ path: path.join(out, 'minimum-desktop-running.png') });
       await page.setViewportSize({ width: 1355, height: 925 });
     }
     assert.equal(await placeholder.getByRole('button', { name: '查看任务详情' }).count(), 1);
@@ -142,10 +143,17 @@ try {
   brokenStatus = false;
   liveStatus = 'queued';
   await placeholder.getByRole('status').filter({ hasText: /^任务已提交$/ }).waitFor({ timeout: 10000 });
-  assert.ok(!(await scene.innerText()).includes('已有视频不可播放'));
+  assert.ok(!(await scene.innerText()).includes('视频画面恢复失败'));
   await select('P003');
-  await page.locator('.segment-video video').dispatchEvent('error');
-  await page.getByRole('alert').filter({ hasText: '已有视频不可播放，请打开原文件检查。' }).waitFor();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.locator('.segment-video video').evaluate(element => {
+      Object.defineProperty(element, 'error', { configurable: true, value: { code: 3 } });
+      element.dispatchEvent(new Event('error'));
+    });
+    await page.waitForTimeout(4100);
+  }
+  await page.getByRole('alert').filter({ hasText: '视频画面恢复失败。' }).waitFor();
+  await page.locator('.floating-message').filter({ hasText: '视频画面恢复失败。' }).getByRole('button', { name: '关闭通知', exact: true }).click();
   await page.getByRole('checkbox', { name: '连续播放', exact: true }).check();
   await page.locator('.segment-video video').dispatchEvent('ended');
   assert.equal(await page.getByRole('button', { name: /^分段 P003，/ }).first().getAttribute('aria-pressed'), 'true');
@@ -159,9 +167,9 @@ try {
   await select('P001');
   assert.equal(await scene.getByRole('region', { name: '场次提示' }).count(), 0, 'returning to the round clears the shared notice while progress stays separate');
   assert.equal(await scene.locator('.scene-video-preparation').count(), 1);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1280, height: 640 });
   await placeholder.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: path.join(out, 'mobile-not-generated.png') });
+  await page.screenshot({ path: path.join(out, 'minimum-desktop-not-generated.png') });
   assert.deepEqual(errors, []);
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(writes, []);

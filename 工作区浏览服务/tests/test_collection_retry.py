@@ -8,15 +8,24 @@ import http.client
 import io
 import json
 from pathlib import Path
+from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 import urllib.error
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from PIL import Image
+from backend.routes.project_resources import create_router
 from backend.services import comfy_tasks as t
 from backend.services.collection_retry import failure
+from backend.services.project_files import ProjectFiles
 from backend.services.task_details import task_detail
 from tests import test_comfy_tasks as base
 
+
+import execution_records as recordio
+import media_files
 
 class CollectionTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = base.TaskTests.asyncSetUp
@@ -63,7 +72,7 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
             self.assertAlmostEqual(actual, expected, delta=.3)
         state = self.store.rows['task']['state']
         self.assertEqual((state['status'], state['collection_attempt'], state['collection_auto_retry']), ('completed', 4, 3))
-        events = json.loads((self.record / '后台过程记录.json').read_text('utf8'))
+        events = recordio.read(self.record / '后台过程记录.json')
         self.assertEqual([event['delay_seconds'] for event in events if event['result'] == 'scheduled'], [10, 30, 60])
         self.assertEqual([event['failures'][0]['http_status'] for event in events if event['result'] == 'attempt_failed'], [503] * 3)
 
@@ -125,6 +134,103 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
         state = self.store.rows['task']['state']
         self.assertEqual((state['status'], state['collected']), ('completed', 2))
         self.assertEqual(state['ended_at'], '2026-10-10T22:00:00+08:00')
+
+    async def test_managed_outputs_keep_distinct_versions_and_receipts_on_retry(self):
+        t.resourceio.initialize(self.project, managed=True)
+        first = self.data.outputs[0]
+        first.resource_key = '图片/同一候选目标'
+        self.data.outputs.append(first.model_copy(update={'index': 1,
+            'path': str(self.project / '候选/second.png'), 'response_name': 'second.json'}))
+        self.data = t.TaskInput.model_validate(t.resourceio.route_task(self.project, self.data.model_dump()))
+        self.seed('collecting')
+        self.store.save('task', expected=2)
+        png = io.BytesIO()
+        Image.new('RGB', (8, 8), 'red').save(png, format='PNG')
+        calls = []
+
+        def download(remote, args):
+            calls.append((args.filename, args.output))
+            if args.filename == '1.png' and len(calls) == 2:
+                raise TimeoutError('retry the same output')
+            target = Path(args.output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(png.getvalue())
+            return {'path': str(target), 'bytes': target.stat().st_size,
+                    'remote': {key: getattr(args, key) for key in ('filename', 'subfolder', 'type')}}
+
+        result = self.result(2)
+        with patch.object(t.client, 'download', download), patch.object(t.asyncio, 'sleep', AsyncMock()):
+            await self.store.finish_collection('task', result)
+            self.assertEqual(await self.store.collect('task', result), [])
+        self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
+        first, second = self.data.outputs
+        self.assertEqual(calls, [('0.png', first.path), ('1.png', second.path), ('1.png', second.path)])
+        self.assertEqual((first.resource_id, first.version, second.resource_id, second.version),
+                         (first.resource_id, 'V001', first.resource_id, 'V002'))
+        self.assertTrue(Path(first.path).samefile(second.path))
+        self.assertEqual(len(t.resourceio.read_index(self.project)['files']), 2)
+        for index, output in enumerate((first, second)):
+            receipt = recordio.read(self.record / output.response_name)['data']
+            self.assertEqual(receipt['remote']['filename'], f'{index}.png')
+            self.assertEqual(self.project / receipt['path'], Path(output.path))
+
+    async def test_upload_overlaps_background_collection_without_extra_media_data(self):
+        t.resourceio.initialize(self.project, managed=True)
+        self.data = t.TaskInput.model_validate(t.resourceio.route_task(self.project, self.data.model_dump()))
+        self.seed('collecting')
+        target = Path(self.data.outputs[0].path)
+        app = FastAPI()
+        app.include_router(create_router(lambda request: ProjectFiles(self.project.parent), lambda: None))
+        http = TestClient(app)
+        png = io.BytesIO()
+        Image.new('RGB', (8, 8), 'red').save(png, format='PNG')
+        raw = png.getvalue()
+        copying, collecting, release = Event(), Event(), Event()
+        original_copy = media_files.shutil.copyfile
+        original_finish = t.resourceio.finish
+
+        def copy(source, destination):
+            copying.set()
+            if not release.wait(timeout=8):
+                raise TimeoutError('upload did not resume')
+            return original_copy(source, destination)
+
+        def finish(project, path, **options):
+            if Path(path) == target:
+                collecting.set()
+            return original_finish(project, path, **options)
+
+        def download(remote, args):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+            return {'path': str(target), 'bytes': len(raw),
+                    'remote': {key: getattr(args, key) for key in ('filename', 'subfolder', 'type')}}
+
+        url = '/api/projects/' + self.project.name + '/resources'
+        with patch.object(media_files.shutil, 'copyfile', side_effect=copy), \
+             patch.object(t.resourceio, 'finish', side_effect=finish), patch.object(t.client, 'download', side_effect=download):
+            upload = asyncio.create_task(asyncio.to_thread(http.post, url, files={'file': ('上传.png', raw)}))
+            try:
+                self.assertTrue(await asyncio.to_thread(copying.wait, 5))
+                collect = asyncio.create_task(self.store.collect('task', self.result()))
+                self.assertTrue(await asyncio.to_thread(collecting.wait, 5))
+            finally:
+                release.set()
+            response, problems = await asyncio.gather(upload, collect)
+
+        self.assertEqual(problems, [])
+        self.assertEqual(response.status_code, 200, response.text)
+        imported = response.json()
+        uploaded = self.project / imported['file']
+        self.assertNotEqual(uploaded, target)
+        self.assertTrue(uploaded.samefile(target))
+        version = t.resourceio.reference(self.project, target)
+        self.assertNotEqual(t.resourceio.label(version), t.resourceio.label(imported))
+        self.assertEqual(version['producer'], '执行附件/任务001')
+        self.assertEqual(t.resourceio.reference(self.project, uploaded)['origin'], 'user_upload')
+        receipt = recordio.read(self.record / self.data.outputs[0].response_name)['data']
+        self.assertEqual((self.project / receipt['path'], receipt['remote']['filename']), (target, '0.png'))
+        self.assertEqual(uploaded.read_bytes(), raw)
 
     async def test_429_uses_retry_after_and_malformed_header_requires_attention(self):
         self.seed('collecting')
@@ -194,8 +300,6 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
         self.seed('collecting')
         self.data.task_type = 'video-second-pass'
         self.data.segment_plan = t.segments.SegmentPlan(director_node='d', report_node='r', output_root='/comfy/output')
-        self.data.workflow = {'d': {'class_type': 'MiniMaxH3Director', 'inputs': {
-            'timeline_data': json.dumps({'segments': [{}, {}]})}}}
         self.data.outputs = []
         self.data.workflow['d'] = {'inputs': {'timeline_data': json.dumps({'segments': [{}, {}]})}}
         items = [{'index': index, 'identity': f'EP003-C001-P00{index + 1}-R001-二采',
@@ -214,7 +318,7 @@ class CollectionTests(unittest.IsolatedAsyncioTestCase):
             await self.store.finish_collection('task', result)
         self.assertEqual(counts, {'seg_0000.mp4': 1, 'seg_0001.mp4': 2})
         self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
-        events = json.loads((self.record / '后台过程记录.json').read_text('utf8'))
+        events = recordio.read(self.record / '后台过程记录.json')
         successes = [event for event in events if event['stage'] == 'download' and event['result'] == 'success']
         self.assertEqual(len(successes), 2)
 

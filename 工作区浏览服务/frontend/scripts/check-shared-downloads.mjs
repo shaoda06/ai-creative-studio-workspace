@@ -6,12 +6,28 @@ import { tmpdir } from 'node:os';
 export async function checkSharedDownloads(page, width) {
   await page.mouse.move(0, 0); // Compare normal styles before the explicit hover checks below.
   const fixture = page.getByTestId('downloads');
-  const styles = await fixture.locator('.download-control').evaluateAll(elements => elements.slice(0, 4).map(el => {
+  const breadcrumb = fixture.getByTestId('episode-breadcrumb');
+  const boundary = await breadcrumb.evaluate(el => {
+    const parent = el.getBoundingClientRect();
+    return { left: parent.left, right: parent.right, width: el.clientWidth, scroll: el.scrollWidth,
+      items: [...el.querySelectorAll('.breadcrumb-actions, .episode-heading-actions, button')].map(child => {
+        const r = child.getBoundingClientRect(); return { left: r.left, right: r.right };
+      }) };
+  });
+  assert.ok(boundary.scroll <= boundary.width + 1 && boundary.items.every(r => r.left >= boundary.left - 1 && r.right <= boundary.right + 1),
+    `${width}px / 单集路径操作区越界: ${JSON.stringify(boundary)}`);
+  assert.equal(await breadcrumb.getByRole('button', { name: '剪映布局检查', exact: true }).isDisabled(), true);
+  const episodeSaved = page.waitForEvent('download');
+  await breadcrumb.getByRole('button', { name: '本集打包下载', exact: true }).click();
+  const episodeFile = await episodeSaved;
+  assert.equal(episodeFile.suggestedFilename(), 'episode-layout.txt');
+  assert.equal(await readFile(await episodeFile.path(), 'utf8'), '双按钮布局检查');
+  const styles = await fixture.locator('.download-control').evaluateAll(elements => elements.slice(2, 6).map(el => {
     const style = getComputedStyle(el);
     return Object.fromEntries(['fontSize', 'fontWeight', 'lineHeight', 'padding', 'borderRadius', 'color', 'backgroundColor', 'borderColor'].map(key => [key, style[key]]));
   }));
   for (const style of styles) assert.deepEqual(style, styles[0], `${width}px / 页面容器不能覆盖下载外观`);
-  assert.equal(styles[0].fontSize, '15px');
+  assert.equal(styles[0].fontSize, '14px');
   const hoverStyles = [];
   for (const control of [fixture.getByRole('button', { name: '下载检查', exact: true }), fixture.locator('.file-action-links .download-control')]) {
     await control.hover();
@@ -88,6 +104,56 @@ export async function checkSharedDownloads(page, width) {
   assert.equal(await readFile(await packFile.path(), 'utf8'), 'native-container-fixture');
   await page.unroute('**/component-samples/native-pack?*');
   while (await closes.count()) await closes.first().click();
+  const manifests = fixture.getByTestId('manifest-downloads');
+  let manifestRequests = 0;
+  await page.route('**/component-samples/manifest-check?*', route => {
+    manifestRequests++;
+    const format = new URL(route.request().url()).searchParams.get('format');
+    return route.fulfill({ headers: { 'Content-Disposition': `attachment; filename="manifest.${format}"` }, body: 'explicit-manifest-fixture' });
+  });
+  assert.equal(manifestRequests, 0, '清单展示不打包');
+  for (const [label, format] of [['下载剪映包', 'jypack'], ['下载 ZIP', 'zip'], ['下载导演包', 'mmxpack.zip']]) {
+    const buttons = manifests.getByRole('button', { name: label, exact: true });
+    assert.equal(await buttons.nth(1).isDisabled(), true);
+    const saved = page.waitForEvent('download');
+    await buttons.first().click();
+    const file = await saved;
+    assert.equal(file.suggestedFilename(), `manifest.${format}`);
+    assert.equal(await readFile(await file.path(), 'utf8'), 'explicit-manifest-fixture');
+  }
+  assert.equal(manifestRequests, 3, '一点击一请求');
+  await page.unroute('**/component-samples/manifest-check?*');
+  for (const stage of ['后处理', '二采', '一采']) {
+    const packages = fixture.getByLabel(stage + '交接包', { exact: true });
+    const buttons = packages.locator('.stage-download-packages button');
+    assert.deepEqual(await buttons.allTextContents(), ['视频 ZIP 包', '剪映草稿包']);
+    const boxes = await buttons.evaluateAll(items => items.map(item => { const b = item.getBoundingClientRect(); return { top: b.top, left: b.left, right: b.right }; }));
+    assert.equal(boxes[0].top, boxes[1].top, stage + '交接包按钮同行');
+    assert(boxes[0].right < boxes[1].left, stage + '视频包在左');
+  }
+  const directorGroup = fixture.getByLabel('一采画布与导演包', { exact: true });
+  assert.equal(await directorGroup.getAttribute('open'), '');
+  await page.route('**/component-samples/director-check', route => route.fulfill({
+    headers: { 'Content-Disposition': 'attachment; filename="scene.mmxpack.zip"' }, body: 'native-director-fixture',
+  }));
+  const directorSaved = page.waitForEvent('download');
+  await directorGroup.getByRole('button', { name: '下载导演包', exact: true }).click();
+  const directorFile = await directorSaved;
+  assert.equal(directorFile.suggestedFilename(), 'scene.mmxpack.zip');
+  assert.equal(await readFile(await directorFile.path(), 'utf8'), 'native-director-fixture');
+  await page.unroute('**/component-samples/director-check');
+  const showcase = page.getByTestId('showcase');
+  await showcase.getByRole('button', { name: '列表与分页', exact: true }).click();
+  await page.route('**/api/component-samples/file', route => route.fulfill({
+    headers: { 'Content-Disposition': 'inline; filename="component-sample.txt"' }, body: 'fixed sample only',
+  }));
+  const showcaseButtons = showcase.getByRole('button', { name: '下载剪映包', exact: true });
+  assert.equal(await showcaseButtons.nth(1).isDisabled(), true);
+  const showcaseSaved = page.waitForEvent('download');
+  await showcaseButtons.first().click();
+  assert.equal((await showcaseSaved).suggestedFilename(), 'component-sample.txt');
+  await page.unroute('**/api/component-samples/file');
+  while (await closes.count()) await closes.first().click();
   await fixture.screenshot({ path: join(tmpdir(), `nora-download-${width}.png`) });
-  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试通过。`);
+  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试及清单剪映/ZIP/导演包点击下载、场次按需导演包与空入口禁用通过。`);
 }
