@@ -226,7 +226,7 @@ def listing(request: Request, kind: str = '', owner: str = '', q: str = '',
     space = request_space(request)
     entries, scopes = catalog(space.root, space.api)
     entries = [v for v in entries if (not kind or v['kind'] == kind) and (not owner or v['owner'] == owner)
-               and (not q or q.casefold() in (v['name']+' '+v['title']+' '+resources.label(v)).casefold())]
+               and (not q or q.casefold() in (v['display_name']+' '+v['name']+' '+v['title']+' '+resources.label(v)).casefold())]
     total = len(entries)
     page = min(page, max(1, (total+page_size-1)//page_size))
     return {'items': entries[(page-1)*page_size:page*page_size], 'owners': scopes,

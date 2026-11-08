@@ -52,7 +52,7 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
       <UnderlineTabs label="资源类型" items={['','图片','视频','音频'].map(value=>({value,label:value||'全部'}))} selected={kind} onChange={value=>{setKind(value);setPage(1);}} />
       <div className="toolbar">
         <TabSelect label="资源归属" selected={owner} onChange={value=>{setOwner(value);setPage(1);}} items={[{value:'',label:'全部归属'},...(listing.data?.owners||[])]} />
-        <SearchField label="搜索资源" placeholder="搜索文件名或资源编号" value={search} onChange={value=>{setSearch(value);setPage(1);}} />
+        <SearchField label="搜索资源" placeholder="搜索标题、文件名或资源编号" value={search} onChange={value=>{setSearch(value);setPage(1);}} />
         {listing.data && <span className="muted">共 {listing.data.total} 个版本</span>}
       </div>
       <Result loading={listing.isPending} error={listing.error} retry={listing.refetch} retrying={listing.isFetching} />

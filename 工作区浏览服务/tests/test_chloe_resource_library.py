@@ -104,6 +104,29 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         self.assertEqual(filtered['total'],1);self.assertEqual(filtered['items'][0]['facts']['width'],60)
         self.assertEqual(self.client.get(self.api+'/resource-library',params={'q':'no matches'}).json()['total'],0)
 
+    def test_search_display_titles_and_original_names_and_ids(self):
+        self.label_visuals()
+        before=self.snapshot()
+        for kind, title, count, ref in (
+            ('图片','隔离模特 · 正面面部',2,self.second),
+            ('视频','隔离穿搭展示 · P001 · 一采',1,self.clip),
+            ('音频','隔离声音 · 原始参考',1,self.audio),
+        ):
+            for query in (title,title.split(' · ')[-1]):
+                with self.subTest(kind=kind,query=query):
+                    result=self.client.get(self.api+'/resource-library',params={'q':query,'kind':kind}).json()
+                    self.assertEqual(result['total'],count)
+                    self.assertTrue(all(v['display_name']==title for v in result['items']))
+            for query in (Path(ref['absolute_file']).name.upper(),ref['resource_id']+'@'+ref['version']):
+                with self.subTest(original_query=query):
+                    result=self.client.get(self.api+'/resource-library',params={'q':query,'kind':kind}).json()
+                    self.assertIn(ref['file'],[v['file'].removeprefix(v['owner']+'/') for v in result['items']])
+        combined=self.client.get(self.api+'/resource-library',params={'q':'隔离模特','kind':'图片','owner':'综合资料','page_size':1,'page':2}).json()
+        self.assertEqual((combined['total'],combined['page'],len(combined['items'])),(2,2,1))
+        excluded=self.client.get(self.api+'/resource-library',params={'q':'隔离模特','owner':self.video.relative_to(self.root).as_posix()}).json()
+        self.assertEqual(excluded['total'],0)
+        self.assertEqual(self.snapshot(),before)
+
     def test_exact_lineage_and_shared_references(self):
         data=detail_data(self.root,self.api,'综合资料',self.second['resource_id'],self.second['version'])
         self.assertEqual([v['version'] for v in data['versions']],['V002','V001'])

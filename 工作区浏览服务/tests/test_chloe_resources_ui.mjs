@@ -45,7 +45,7 @@ try{
    if(path===fixture.api+'/resource-library'){
     if(fail)return route.fulfill({status:503,json:{detail:'隔离读取错误'}});
     const q=(params.get('q')||'').toLowerCase(),kind=params.get('kind'),owner=params.get('owner');
-    const items=fixture.items.filter(v=>(!kind||v.kind===kind)&&(!owner||v.owner===owner)&&(!q||(v.name+' '+v.title+' '+v.resource_id+'@'+v.version).toLowerCase().includes(q)));
+    const items=fixture.items.filter(v=>(!kind||v.kind===kind)&&(!owner||v.owner===owner)&&(!q||(v.display_name+' '+v.name+' '+v.title+' '+v.resource_id+'@'+v.version).toLowerCase().includes(q)));
     const size=12,current=Math.min(Number(params.get('page')||1),Math.max(1,Math.ceil(items.length/size)));
     return route.fulfill({json:{items:items.slice((current-1)*size,current*size),total:items.length,page:current,page_size:size,owners:fixture.owners}});
    }
@@ -60,6 +60,16 @@ try{
   const url=server.resolvedUrls.local[0]+'#/spaces/test/contexts/'+encodeURIComponent('隔离甲项目')+'?section=resources';
   await page.goto(url);
   await page.locator('.chloe-resource-item').first().waitFor();
+  assert.equal(await page.getByRole('searchbox',{name:'搜索资源'}).getAttribute('placeholder'),'搜索标题、文件名或资源编号');
+  for(const [query,count] of [['隔离模特 · 正面面部',2],['隔离穿搭展示 · P001 · 一采',1],['隔离声音 · 原始参考',1]]){
+   await page.getByRole('searchbox',{name:'搜索资源'}).fill(query);
+   await page.waitForFunction(({query,count})=>{
+    const titles=[...document.querySelectorAll('.chloe-resource-item h3')].map(el=>el.textContent);
+    return titles.length===count&&titles.every(title=>title===query);
+   },{query,count});
+  }
+  await page.getByRole('searchbox',{name:'搜索资源'}).fill('');
+  await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===12);
   assert.equal(await page.locator('.chloe-resource-item').count(),12);
   await page.getByRole('button',{name:'下一页',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===2);
