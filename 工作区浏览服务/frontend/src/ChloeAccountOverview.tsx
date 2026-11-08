@@ -37,8 +37,8 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
       {!attention.length ? <p className="muted">暂无待用户决定或受阻的视频事项。</p> :
         <div className="chloe-overview-pending">
           {attention.map(({ progress }) => <article className="chloe-overview-task" key={progress['视频编号']}>
-            <small>{progress['视频编号']} · {progress['处理状态']}</small><h3>{progress['当前问题']}</h3>
-            <p>{progress['视频名称']}</p><p className="muted">下一步：{progress['下一步']}</p>
+            <small>{progress['视频编号']} · {progress['视频名称']} · {progress['处理状态']}</small><h3>{progress['当前问题']}</h3>
+            <p className="muted">下一步：{progress['下一步']}</p>
           </article>)}
         </div>}
     </section>

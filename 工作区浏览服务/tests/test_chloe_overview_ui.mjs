@@ -67,6 +67,12 @@ try {
     assert.match(await page.locator('.chloe-overview-attention').innerText(),/待用户决定：1 · 受阻：0/);
     assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['视频','当前阶段','视频状态','处理状态','下一步']);
     assert.equal(await page.locator('.chloe-overview-task').count(),1);
+    const pendingProgress = samples.working.videos.find(item=>item.progress['处理状态']!=='正常').progress;
+    const task = page.locator('.chloe-overview-task');
+    assert.equal(await task.locator('small').innerText(),[pendingProgress['视频编号'],pendingProgress['视频名称'],pendingProgress['处理状态']].join(' · '));
+    assert.equal(await task.locator('p').count(),1);
+    assert.equal(await task.locator('h3').innerText(),pendingProgress['当前问题']);
+    assert.equal(await task.locator('p').innerText(),'下一步：'+pendingProgress['下一步']);
     assert.equal(await page.locator('.chloe-overview-videos tbody tr').count(),3);
     await page.screenshot({path:output+`/${width}-working.png`,fullPage:true});
     scenario = 'new'; await page.reload();
@@ -79,6 +85,10 @@ try {
     await page.getByText('抖音、小红书',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','0','1']);
     assert.equal(await page.locator('.chloe-overview-task').count(),2);
+    const pendingBox = await page.locator('.chloe-overview-pending').boundingBox();
+    const taskBoxes = await Promise.all((await page.locator('.chloe-overview-task').all()).map(el=>el.boundingBox()));
+    assert.ok(taskBoxes.every(box=>Math.abs(box.width-pendingBox.width)<1 && Math.abs(box.x-pendingBox.x)<1));
+    assert.ok(taskBoxes[1].y>=taskBoxes[0].y+taskBoxes[0].height,'pending cards each occupy a separate full row');
     assert.match(await page.locator('.chloe-overview-attention').innerText(),/待用户决定：1 · 受阻：1/);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1));
     for (const element of await page.locator('.chloe-overview, .chloe-overview-fields dd, .chloe-overview-task, .chloe-overview-videos').all()) {
