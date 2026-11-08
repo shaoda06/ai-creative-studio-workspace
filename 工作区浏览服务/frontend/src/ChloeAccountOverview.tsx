@@ -21,13 +21,16 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
   ];
   return <div className="chloe-overview">
     <section className="panel" aria-labelledby="chloe-summary-heading">
-      <h2 id="chloe-summary-heading">制作概况</h2>
+      <div className="chloe-overview-heading">
+        <h2 id="chloe-summary-heading">制作概况</h2>
+        <p className="chloe-overview-attention muted">待用户决定：{waiting.length} · 受阻：{blocked.length}</p>
+      </div>
       <dl className="chloe-overview-metrics">{metrics.map(item => <div key={item.label}>
         <dt>{item.label}</dt><dd>{item.value}</dd><small>{item.note}</small>
       </div>)}</dl>
-      <p className="chloe-overview-attention muted">待用户决定：{waiting.length} · 受阻：{blocked.length}</p>
     </section>
 
+    <div className="chloe-overview-columns">
     <section className="panel" aria-labelledby="chloe-direction-heading">
       <h2 id="chloe-direction-heading">账号方向</h2>
       <dl className="chloe-overview-fields">{Object.entries(data.direction).map(([name, value]) =>
@@ -45,6 +48,7 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
           </article>)}
         </div>}
     </section>
+    </div>
 
     <section className="panel" aria-labelledby="chloe-videos-heading">
       <h2 id="chloe-videos-heading">作品进度</h2>

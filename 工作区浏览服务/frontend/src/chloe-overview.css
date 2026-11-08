@@ -14,4 +14,6 @@
 .chloe-overview-videos th:nth-child(1) { width: 40%; }
 .chloe-overview-videos th:nth-child(2), .chloe-overview-videos th:nth-child(3) { width: 20%; }
 
-.chloe-overview-attention { margin: 18px 0 0; }
+.chloe-overview-heading { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
+.chloe-overview-attention { margin: 0; }
+.chloe-overview-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 20px; }
