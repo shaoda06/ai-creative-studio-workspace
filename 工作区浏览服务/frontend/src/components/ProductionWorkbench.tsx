@@ -25,7 +25,7 @@ import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
-export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false, workStatusLabels = [] }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean; workStatusLabels?: readonly string[] }) {
+export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false, showHeadingDownloads = true, workStatusLabels = [] }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean; showHeadingDownloads?: boolean; workStatusLabels?: readonly string[] }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
   const namespace = access.namespace(project);
@@ -183,7 +183,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   };
   const renderActions = () => <div className="episode-heading-actions">
       <PointerTooltip text={sharedSelected ? "按当前轮次的选中场次统计；* 表示含计划时长" : "按当前轮次统计；* 表示含计划时长"}><span className="muted" aria-label={`${unitLabel}时长`}>{sharedSelected ? current!.name : unitLabel}时长：{formatProductionDuration(sharedSelected ? durations.scenes[selectedScene] : durations.total)}</span></PointerTooltip>
-      {workMode && handoff && <div className="episode-heading-actions" role="group" aria-label="整片交接下载">
+      {showHeadingDownloads && workMode && handoff && <div className="episode-heading-actions" role="group" aria-label="整片交接下载">
         {handoffs.length > 1 ? <TabSelect label="选择交接版本" selected={handoff.key} onChange={setHandoffKey}
           items={handoffs.map(item => ({ value: item.key, label: workPackageLabel(item) }))} />
           : <span className="muted">{workPackageLabel(handoff)}{handoff.count ? `（${handoff.count}段）` : ''}</span>}
@@ -192,7 +192,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         {handoff.zip && <DownloadButton key={handoff.zip} url={handoff.zip} pack
           label="本片 ZIP 下载" title={`按交接清单打包本轮 ${handoff.count} 段视频`} />}
       </div>}
-      {!workMode && episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
+      {showHeadingDownloads && !workMode && episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
       url={access.package(project, current!.name) + '?format=jypack'} label="剪映草稿包"
       title="下载全部后处理已采用视频的剪映草稿包；双击或拖入剪映导入，需对应会员权限" />
       <DownloadButton key={current!.name} pack

@@ -28,6 +28,9 @@ try:
  print(json.dumps({'items':status_items['制作中'],'statusItems':status_items,'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':browser.downloads(x.projects,x.project.name,x.api,'V001')}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
+// Explicit handoff fixture: hide only heading duplicates, retain resource downloads.
+fixture.downloads.workPackages=[{key:'test.jianying.json',label:'隔离交接',version:'',purpose:'剪映交接',rounds:[1],count:2,jypack:'/isolated-draft',zip:'/isolated-zip'}];
+fixture.downloads['后处理'].videos={count:2,url:'/isolated-zip',files:[],packages:[{name:'隔离交接',count:2,url:'/isolated-zip'}]};
 // A real reference-video entry must retain an outside download when its popup is simplified.
 const previewDetail=JSON.parse(JSON.stringify(fixture.detail),(key,value)=>{
  if(value && typeof value==='object' && value.references?.common && value.prompts){
@@ -105,6 +108,8 @@ try {
   assert.ok(page.url().includes('video='));
   const tabs=page.getByRole('navigation',{name:'作品制作内容'});
   await tabs.waitFor();
+  assert.equal(await page.getByRole('group',{name:'整片交接下载'}).count(),0);
+  assert.equal(await page.getByLabel('本片时长',{exact:true}).count(),1);
   assert.deepEqual(await page.locator('.episode-detail').evaluate(detail => {
    const panel = getComputedStyle(detail.closest('.panel'));
    const tabs = getComputedStyle(detail.querySelector('.scene-workspace-tabs'));
@@ -121,6 +126,7 @@ try {
   await page.locator('.scene-storyboard').waitFor();
   assert.equal(await page.getByRole('region',{name:'修改场次分镜正文',exact:true}).count(),0);
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
+  await page.getByRole('region',{name:'后处理交接包',exact:true}).getByRole('button',{name:'剪映草稿包',exact:true}).waitFor();
   await page.locator('details[aria-label="一采画布与导演包"] > summary').click();
   await page.getByText('E001 · 导演包',{exact:false}).first().waitFor();
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();

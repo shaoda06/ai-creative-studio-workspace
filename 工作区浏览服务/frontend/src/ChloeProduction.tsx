@@ -34,7 +34,7 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
     <section className="panel">
     <Result page loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
     <TaskApiContext value={taskApi}>
-      {list.data && <ProductionWorkbench inlineListHeading workStatusLabels={chloeVideoStatuses} project={selected || baseUrl} items={list.data} selected={selected} onSelect={onSelect} revision={0}
+      {list.data && <ProductionWorkbench showHeadingDownloads={false} inlineListHeading workStatusLabels={chloeVideoStatuses} project={selected || baseUrl} items={list.data} selected={selected} onSelect={onSelect} revision={0}
         statistics={{ total: list.data.length, completed: 0, notStarted: 0, running: 0 }} />}
     </TaskApiContext>
     </section>
