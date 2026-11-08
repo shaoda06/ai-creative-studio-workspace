@@ -112,6 +112,9 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p>打开后可展开章节、跳转正文，或复制示例文字。</p>
       </Example>}
       {category === 'lists' && <>
+        <Example title="彩色状态标记" rule="共用status-badge样式，鼠标悬停统一显示小手。提示文字及点击行为由原调用方决定，标记本身不新增操作。" usage="作品进度、制作列表、文档状态">
+          <div className="component-demo-row">{['blue', 'orange', 'green', 'red', 'gray'].map((color, index) => <span key={color} className={`status-badge status-${color}`}>{['进行中', '待确认', '已完成', '受阻', '未开始'][index]}</span>)}</div>
+        </Example>
         <Example title="目录与文件" rule="目录按需展开，点击文件进入阅读。这里仅展示示例文件。" usage="项目文档目录、参考资料">
           <PreviewContext.Provider value={item => setDialog(item.name)}><FileTree showOriginal={false} items={[{ kind: 'group', name: '示例目录', files: [{ kind: 'markdown', name: '示例说明', key: 'demo-note', statusHtml: '<span class="status-badge status-gray">示例</span>' }, { kind: 'group', name: '子目录', files: [{ kind: 'markdown', name: '阅读示例', key: 'demo-reading', statusHtml: '<span class="status-badge status-gray">示例</span>' }] }] }]} /></PreviewContext.Provider>
         </Example>

@@ -29,6 +29,8 @@ try {
       const url = new URL(route.request().url()), path = url.pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
+      if (path === '/api/history') return route.fulfill({json:[]});
+      if (path === '/api/history/document') return route.fulfill({json:{title:'隔离版本记录',html:'<p>隔离示例</p>',headings:[]}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
       if (path === '/api/workspaces') return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
       if (path.endsWith('/production-videos')) return route.fulfill({json:[]});
@@ -82,6 +84,7 @@ try {
     }
     for (const badge of await page.locator('.chloe-overview-videos .status-badge').all()) {
       assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[await badge.innerText()]);
+      assert.equal(await badge.evaluate(el=>getComputedStyle(el).cursor),'pointer');
     }
     assert.equal(await page.locator('.chloe-overview-videos .status-badge').count(),6);
     const waitingBadge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:'待用户决定'});
@@ -133,6 +136,17 @@ try {
       const badge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:status});
       assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[status]);
     }
+    const blockedBadge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:'受阻'});
+    await blockedBadge.hover();
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(),'人工后期等待补充素材');
+    await page.mouse.move(0,0);
+    await tooltip.waitFor({state:'detached'});
+    await blockedBadge.focus();
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(),'人工后期等待补充素材');
+    await page.keyboard.press('Escape');
+    await tooltip.waitFor({state:'detached'});
     const pendingBox = await page.locator('.chloe-overview-pending').boundingBox();
     const taskBoxes = await Promise.all((await page.locator('.chloe-overview-task').all()).map(el=>el.boundingBox()));
     assert.ok(taskBoxes.every(box=>Math.abs(box.width-pendingBox.width)<1 && Math.abs(box.x-pendingBox.x)<1));
@@ -152,6 +166,15 @@ try {
     for (const removed of ['overview','voices']) {
       await page.goto(server.resolvedUrls.local[0]+'#/examples/chloe/'+removed);
       await page.getByText('入口不存在。',{exact:false}).waitFor();
+    }
+    await page.goto(server.resolvedUrls.local[0]+'#/history');
+    await page.getByRole('button',{name:'公共组件',exact:true}).click();
+    await page.getByRole('button',{name:'列表与分页',exact:true}).click();
+    const statusExample = page.locator('section').filter({has:page.getByRole('heading',{name:'彩色状态标记',exact:true})});
+    assert.equal(await statusExample.locator('.status-badge').count(),5);
+    for (const badge of await statusExample.locator('.status-badge').all()) {
+      await badge.hover();
+      assert.equal(await badge.evaluate(el=>getComputedStyle(el).cursor),'pointer');
     }
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();

@@ -62,8 +62,8 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
           <tbody>{videos.map(({ project, progress }) => <tr key={progress['视频编号']}>
             <td><Link className="chloe-overview-work-link" title={`${progress['视频编号']} ${progress['视频名称']}`} to={`${page}?section=production&video=${encodeURIComponent(project)}`}>{progress['视频编号']} {progress['视频名称']}</Link></td><td>{progress['当前阶段']}</td>
             {['视频状态', '处理状态'].map(field => <td key={field}>
-              <PointerTooltip text={field === '处理状态' && progress[field] === '待用户决定' ? progress['当前问题'] : undefined}>
-                <span className={`status-badge status-${statusColors[progress[field]]}`} tabIndex={field === '处理状态' && progress[field] === '待用户决定' ? 0 : undefined}>{progress[field]}</span>
+              <PointerTooltip text={field === '处理状态' && ['待用户决定', '受阻'].includes(progress[field]) ? progress['当前问题'] : undefined}>
+                <span className={`status-badge status-${statusColors[progress[field]]}`} tabIndex={field === '处理状态' && ['待用户决定', '受阻'].includes(progress[field]) ? 0 : undefined}>{progress[field]}</span>
               </PointerTooltip>
             </td>)}
           </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
