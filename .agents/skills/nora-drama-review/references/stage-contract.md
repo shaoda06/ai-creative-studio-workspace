@@ -12,8 +12,8 @@
 | ID | Class | Knowledge |
 |---|---|---|
 | REV-01 | structural_invariant | Run mechanical checks before spending creative review attention. |
-| REV-02 | structural_invariant | A finding names a visible file and heading/shot/prompt ID, and includes evidence, impact, required fix, owner, severity and status. |
-| REV-03 | reviewed_invariant | Semantic invention cites the source fact and conflicting downstream fact. |
+| REV-02 | structural_invariant | Use the [shared finding method](../../studio-creative-techniques/references/审查与返修方法.md#说明一个问题); add Nora’s diagnostic ID when defined, owner, severity and status. |
+| REV-03 | reviewed_invariant | Cite the source fact and conflicting downstream fact as described by the [shared finding method](../../studio-creative-techniques/references/审查与返修方法.md#说明一个问题). |
 | REV-04 | craft_default | Prefer a reviewer who did not author the current targets; disclose self-review, and keep reviewer findings separate from owner edits. |
 | REV-05 | craft_default | Diagnose repeated structure or generic language with location and impact; do not label output merely "AI-ish". |
 | REV-06 | taste_option | Alternatives remain notes unless they violate an accepted creator constraint. |
@@ -24,7 +24,7 @@
 | REV-11 | reviewed_invariant | A calibration finding carries `disposition` (keep, post_production, targeted_edit, resubmit, rewrite) and `disposition_rationale` before any revision text, justified by whether the defect is text-controllable and whether it has already recurred. Dispositions that call for no change leave `required_change` empty rather than inventing one. Resubmitting identical text and appending quality adjectives are not repairs; a recurring defect routes to a structural change instead. Findings outside project calibration use `not_applicable`. |
 | REV-12 | craft_default | When the project's rhythm profile has status `accepted`, review checks the episode against it by arithmetic on the accepted values only and reports a deviation as a non-blocking finding citing field, accepted value, measured value, and location; the creator may keep the episode with a stated reason. A missing or proposed profile leaves the check inactive, and no finding compares against another project's or a suite-wide number. |
 | REV-13 | craft_default | Beyond the whole-episode read, three local passes each read one part only: an opening-hook pass on the first segment, which also reads the first beat alone as the opening frame, an ending-suspense pass on the last segment, and a reversal-density pass on the middle. |
-| REV-14 | craft_default | A revision request is a patch at a cited location with a preserve set, never a whole-episode rewrite; a strong hook, payoff line, or comic beat removed by polishing is logged with its prior location and quote so the owner can restore it. |
+| REV-14 | craft_default | Use the [review and re-review rules](review-method.md#revision-and-re-review) for scoped patch requests and strong Nora beats lost in revision. |
 
 ## 规则分级
 
