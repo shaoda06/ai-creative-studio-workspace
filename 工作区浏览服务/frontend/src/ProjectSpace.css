@@ -1,5 +1,1 @@
-.grid.chloe-project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .project-archive-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-@media (max-width: 640px) {
-  .grid.chloe-project-grid { grid-template-columns: minmax(0, 1fr); }
-}

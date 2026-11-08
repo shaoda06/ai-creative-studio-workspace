@@ -48,7 +48,7 @@ export function ProjectSpace() {
           items={[{ value: '', label: '全部原因' }, ...reasons.map(value => ({ value, label: value }))]}
           onChange={value => setSearch(value ? { archive: '1', reason: value } : { archive: '1' })} />}
       </div>
-      <div className={space.view === 'chloe-commerce' ? 'grid chloe-project-grid' : 'grid'}>{visible.map(project => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(project.number).padStart(2, '0')}-${project.name}`} description={archived ? `已归档 · ${project.archive!.reason}` : '进行中 · 查看项目资料与素材'} icon="▤" />)}</div>
+      <div className="grid">{visible.map(project => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(project.number).padStart(2, '0')}-${project.name}`} description={archived ? `已归档 · ${project.archive!.reason}` : '进行中 · 查看项目资料与素材'} icon="▤" />)}</div>
       {!visible.length && <p className="muted">{archived ? reason ? '没有符合此原因的归档项目。' : '暂无已归档项目。' : '暂无进行中的项目。'}</p>}
     </>)}
     {indexOpen && <Dialog title="项目总索引" close={() => setIndexOpen(false)}><Result loading={index.isPending} error={index.error} retry={index.refetch} retrying={index.isFetching} />{index.data && <Document value={index.data} showOriginal={false} />}</Dialog>}
