@@ -98,7 +98,7 @@ class ChloeProductionTests(unittest.TestCase):
                 item=browser.items(self.projects,self.project.name,self.api)[0]
                 self.assertEqual(item['statusHtml'],f'<span class="status-badge status-{color}">{status}</span>')
                 self.assertEqual(browser.detail(self.projects,self.project.name,self.api,'V001')['statusHtml'],item['statusHtml'])
-                self.assertEqual(item['workStatusLabel'],'策划')
+                self.assertEqual(item['workStatusLabel'],status)
                 self.assertEqual(before,{p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()})
 
     def test_director_sheet_separate_source_chart_and_candidate(self):

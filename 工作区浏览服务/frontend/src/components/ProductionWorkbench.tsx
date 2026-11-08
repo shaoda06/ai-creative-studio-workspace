@@ -25,7 +25,7 @@ import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
-export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean }) {
+export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false, workStatusLabels = [] }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean; workStatusLabels?: readonly string[] }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
   const namespace = access.namespace(project);
@@ -53,7 +53,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const selectedItem = items.find(item => item.name === selected);
   const shared = items.filter(item => item.name === '片头' || item.name === '片尾');
   const episodes = items.filter(item => item.name !== '片头' && item.name !== '片尾');
-  const workCounts = new Map<string, number>();
+  const workCounts = new Map<string, number>(workStatusLabels.map(label => [label, 0]));
   if (workMode) for (const item of episodes) {
     const label = item.workStatusLabel || '未登记制作状态';
     workCounts.set(label, (workCounts.get(label) || 0) + 1);

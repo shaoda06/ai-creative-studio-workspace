@@ -93,6 +93,7 @@ try {
    const badge=card.locator('.episode-button-status .status-badge');
    await page.waitForFunction(status=>document.querySelector('.episode-button-status .status-badge')?.textContent===status,status);
    assert.equal(await badge.innerText(),status);
+   assert.deepEqual(await page.locator('.production-statistics > span').allTextContents(), ['共 1 部', ...['制作中','待发布','已发布'].map(label=>`${label} ${label===status ? 1 : 0} 部`)]);
    assert.ok((await badge.getAttribute('class')).split(' ').includes('status-'+color));
    await page.waitForFunction(()=>{const el=document.querySelector('.episode-button-duration');return el && !el.textContent.includes('读取中');});
    const duration=await card.locator('.episode-button-duration').boundingBox(), label=await badge.boundingBox(), bounds=await card.boundingBox();

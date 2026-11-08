@@ -35,7 +35,7 @@ try:
  print(json.dumps({'list':publication.listing(x.root,x.api),'detail':detail,'images':images}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
-const listItems=[{...fixture.list[0],id:'V002',project:'V002-测试'}, {...fixture.list[0],id:'V1000',project:'V1000-测试'}, ...fixture.list, {...fixture.list[0],id:'V010',project:'V010-测试'}];
+const listItems=[{...fixture.list[0],id:'V002',project:'V002-测试',status:'待发布'}, {...fixture.list[0],id:'V1000',project:'V1000-测试',status:'已发布'}, ...fixture.list, {...fixture.list[0],id:'V010',project:'V010-测试'}];
 const removable={...fixture.detail.finals[0],name:'未引用成片.webm',key:fixture.detail.finals[0].key.replace(/[^/]+$/, '未引用成片.webm'),url:fixture.detail.finals[0].url.replace(/[^/]+$/,encodeURIComponent('未引用成片.webm'))};
 fixture.detail.finals.push(removable);
 const video=await readFile(frontend+'public/component-samples/video.webm');
@@ -71,6 +71,7 @@ try {
   failList=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   const cards=page.locator('.chloe-publication-list > .project-card');
   await cards.first().waitFor();
+  assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 4 部', ...['制作中','待发布','已发布'].map(status=>`${status} ${listItems.filter(item=>item.status===status).length} 部`)]);
   assert.deepEqual((await cards.locator('h3').allTextContents()).map(text=>text.split(' · ')[0]),['V1000','V010','V002',fixture.list[0].id]);
   const card=cards.filter({has:page.getByRole('heading',{name:`${fixture.list[0].id} · ${fixture.list[0].title}`,exact:true})});
   assert.equal(await card.locator('h3').innerText(),`${fixture.list[0].id} · ${fixture.list[0].title}`);
@@ -161,6 +162,7 @@ try {
   await page.getByRole('button',{name:'下载成片',exact:true}).waitFor();
   empty=true;await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');await page.reload();
   await page.getByText('暂无视频项目。',{exact:false}).waitFor();
+  assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 0 部','制作中 0 部','待发布 0 部','已发布 0 部']);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url)]);
   await context.close();
  }

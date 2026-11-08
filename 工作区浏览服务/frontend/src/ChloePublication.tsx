@@ -1,4 +1,5 @@
 import { useChloeScope } from './chloeScope';
+import { chloeVideoStatuses } from './chloeVideoStatuses';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -34,7 +35,11 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
       <Breadcrumbs items={[{ label: '成片与发布', onClick: selected ? () => onSelect(null) : undefined }, ...(selected ? [{ label: selected }] : [])]} />
     </PageHeader>
     {selected ? <PublicationDetail key={`${baseUrl}/${selected}`} baseUrl={baseUrl} project={selected} /> : <section className="panel" aria-label="成片与发布">
-      <div className="production-list-heading"><h2>作品列表</h2></div>
+      <div className="production-list-heading"><h2>作品列表</h2>
+        {list.data && <div className="production-statistics" aria-label="作品发布统计"><span>共 <strong>{list.data.length}</strong> 部</span>
+          {chloeVideoStatuses.map(status => <span key={status}>{status} <strong>{list.data.filter(video => video.status === status).length}</strong> 部</span>)}
+        </div>}
+      </div>
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
       {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.slice().sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(video => <EntryCard compact key={video.project}
