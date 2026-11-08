@@ -1,6 +1,7 @@
 import './chloe-overview.css';
 import { Link } from 'react-router-dom';
 import { useChloeScope } from './chloeScope';
+import { PointerTooltip } from './components/PointerTooltip';
 
 const statusColors: Record<string, string> = {
   制作中: 'blue', 待发布: 'orange', 已发布: 'green',
@@ -60,7 +61,11 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
       <table className="chloe-overview-videos"><thead><tr><th scope="col">作品</th><th scope="col">当前阶段</th><th scope="col">视频状态</th><th scope="col">处理状态</th></tr></thead>
           <tbody>{videos.map(({ project, progress }) => <tr key={progress['视频编号']}>
             <td><Link className="chloe-overview-work-link" title={`${progress['视频编号']} ${progress['视频名称']}`} to={`${page}?section=production&video=${encodeURIComponent(project)}`}>{progress['视频编号']} {progress['视频名称']}</Link></td><td>{progress['当前阶段']}</td>
-            {['视频状态', '处理状态'].map(field => <td key={field}><span className={`status-badge status-${statusColors[progress[field]]}`}>{progress[field]}</span></td>)}
+            {['视频状态', '处理状态'].map(field => <td key={field}>
+              <PointerTooltip text={field === '处理状态' && progress[field] === '待用户决定' ? progress['当前问题'] : undefined}>
+                <span className={`status-badge status-${statusColors[progress[field]]}`} tabIndex={field === '处理状态' && progress[field] === '待用户决定' ? 0 : undefined}>{progress[field]}</span>
+              </PointerTooltip>
+            </td>)}
           </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
     </section>
     <p className="muted">账号方向来自账号定位；制作统计、待处理事项与进度来自各视频项目 README。</p>

@@ -84,6 +84,20 @@ try {
       assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[await badge.innerText()]);
     }
     assert.equal(await page.locator('.chloe-overview-videos .status-badge').count(),6);
+    const waitingBadge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:'待用户决定'});
+    await waitingBadge.hover();
+    const tooltip = page.getByRole('tooltip');
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(),pendingProgress['当前问题']);
+    await page.mouse.move(0,0);
+    await tooltip.waitFor({state:'detached'});
+    await waitingBadge.focus();
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(),pendingProgress['当前问题']);
+    await page.keyboard.press('Escape');
+    await tooltip.waitFor({state:'detached'});
+    await page.locator('.chloe-overview-videos .status-badge').filter({hasText:'正常'}).first().hover();
+    assert.equal(await tooltip.count(),0);
     for (const [index, video] of samples.working.videos.entries()) {
       assert.equal(await page.locator('.chloe-overview-videos tbody a').nth(index).getAttribute('href'),'#/spaces/chloe?section=production&video='+encodeURIComponent(video.project));
     }
@@ -108,6 +122,13 @@ try {
     await page.getByText('抖音、小红书',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','0','1']);
     assert.equal(await page.locator('.chloe-overview-task').count(),2);
+    await waitingBadge.hover();
+    await tooltip.waitFor();
+    assert.equal(await tooltip.innerText(),'长问题描述'.repeat(30));
+    const tipBox = await tooltip.boundingBox();
+    assert.ok(tipBox.x >= 0 && tipBox.x+tipBox.width <= width+1 && tipBox.y >= 0 && tipBox.y+tipBox.height <= height+1);
+    await page.mouse.move(0,0);
+    await tooltip.waitFor({state:'detached'});
     for (const status of ['已发布','受阻']) {
       const badge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:status});
       assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[status]);
