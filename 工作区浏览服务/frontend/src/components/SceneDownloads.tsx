@@ -71,12 +71,12 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
         {!videos.url && <p className="muted">{workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</p>}
         {workMode && selectedPackage && original.packages?.length === 1 && <p className="muted">{packageLabel(selectedPackage)}</p>}
         {original.packages && original.packages.length > 1 && <TabSelect label={`${stage}交付版本`} selected={videos.url || ''} onChange={url => setChoices(previous => ({ ...previous, [stage]: url }))} items={original.packages.map(item => ({ value: item.url, label: packageLabel(item) }))} />}
-        <div className="stage-download-actions">
-        <DownloadButton url={videos.url ? videos.url.replace(/&format=zip$/, '') + '&format=jypack' : null}
-          label="剪映草稿包" pack title={workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />
+        <div className="stage-download-actions stage-download-packages">
         <DownloadButton url={videos.url} label="视频 ZIP 包" pack title={videos.url
           ? workMode ? `下载本片${stage}交接清单，共${videos.count}份视频` : `仅下载${episode}场次${scene}的${stage}已采用视频，共${videos.count}份产物文件`
           : workMode ? `本片暂无${stage}交接清单` : `场次${scene}的${stage}暂无已采用视频`} />
+        <DownloadButton url={videos.url ? videos.url.replace(/&format=zip$/, '') + '&format=jypack' : null}
+          label="剪映草稿包" pack title={workMode ? '按本片交接清单打包；剪映需支持原生草稿包导入' : '下载后双击或拖入剪映，由剪映导入本场已采用视频；需支持原生草稿包导入及对应会员权限'} />
         </div>
       </section>
       <details className="stage-download-group" aria-label={stage + '画布与导演包'}>

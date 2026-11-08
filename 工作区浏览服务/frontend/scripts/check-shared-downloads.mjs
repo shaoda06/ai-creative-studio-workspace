@@ -123,6 +123,14 @@ export async function checkSharedDownloads(page, width) {
   }
   assert.equal(manifestRequests, 3, '一点击一请求');
   await page.unroute('**/component-samples/manifest-check?*');
+  for (const stage of ['后处理', '二采', '一采']) {
+    const packages = fixture.getByLabel(stage + '交接包', { exact: true });
+    const buttons = packages.locator('.stage-download-packages button');
+    assert.deepEqual(await buttons.allTextContents(), ['视频 ZIP 包', '剪映草稿包']);
+    const boxes = await buttons.evaluateAll(items => items.map(item => { const b = item.getBoundingClientRect(); return { top: b.top, left: b.left, right: b.right }; }));
+    assert.equal(boxes[0].top, boxes[1].top, stage + '交接包按钮同行');
+    assert(boxes[0].right < boxes[1].left, stage + '视频包在左');
+  }
   const directorGroup = fixture.getByLabel('一采画布与导演包', { exact: true });
   assert.equal(await directorGroup.getAttribute('open'), '');
   await page.route('**/component-samples/director-check', route => route.fulfill({
