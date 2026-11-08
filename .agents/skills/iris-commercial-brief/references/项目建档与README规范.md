@@ -64,6 +64,8 @@
 
 新订单由 Agent 根据已知需求填写模板；项目和作品的编号、名称、范围由 Agent 依实际资料确定，不能由脚本推定。项目使用[项目状态模板](../../iris-commercial-video/templates/项目状态.md)；每件作品使用[作品 README 模板](../templates/作品README模板.md)和[作品状态模板](../../iris-commercial-video/templates/作品状态.md)。各阶段维护本片资料并更新作品状态，跨作品事项更新项目状态。已有内容按授权合并，不用空模板覆盖。
 
+订单根目录和 README 建立后，按[共用项目总索引](../../studio-workspace-browser/references/项目总索引规范.md#共用脚本)登记项目，索引位于工作区 `projects/项目总索引.md`。F 作品不写入工作区总索引。
+
 项目建档时以实际订单根目录调用`studio-workspace-browser/scripts/project_resources.py --project <实际项目> init`建立资源索引。项目README连接[项目资源与版本管理](../../studio-workspace-browser/references/项目资源与版本管理.md)并说明原业务目录保留索引、工作稿与执行记录，媒体版本归`资源/`；已有项目先按明确授权迁移，不以建档命令直接启用未迁移旧流程。
 
 ## 作品 README 固定写法

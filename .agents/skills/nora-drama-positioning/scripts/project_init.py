@@ -8,7 +8,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
 from project_paths import project_file
-from project_index import INDEX_NAME, register_project
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-workspace-browser/scripts'))
+from workspace_project_index import INDEX_NAME, register_project
 
 
 PROJECT_DIRECTORIES = (

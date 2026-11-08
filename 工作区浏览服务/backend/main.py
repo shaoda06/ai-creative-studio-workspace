@@ -513,7 +513,11 @@ def projects() -> list[dict]:
 
 @app.get('/api/project-index')
 def project_index() -> dict[str, str]:
-    path = store.root / INDEX_NAME
+    return project_index_document(store.root)
+
+
+def project_index_document(root):
+    path = root / INDEX_NAME
     if not path.is_file():
         raise HTTPException(404, '项目总索引尚未建立')
     return {'title': path.stem, 'html': parser.markdown(path.read_text('utf-8-sig'), INDEX_NAME)}
@@ -943,6 +947,12 @@ for route in list(app.routes):
 def workspace_service(request: Request):
     space = request.state.workspace_space
     return {**service(), 'workspace': str(space.root), 'space': space.id}
+
+
+@spaces_router.get('/project-index')
+def workspace_project_index(request: Request):
+    space = request.state.workspace_space
+    return project_index_document(space.root if space.project_layout == 'nested' else space.projects.root)
 
 
 @spaces_router.get('/projects')

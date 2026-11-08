@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { get, spaceProjectPath } from './api';
+import { get, numberProjects, spaceProjectPath } from './api';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Dialog, Document, FileTree, Preview, PreviewContext, Result } from './components';
 import { EntryCard } from './components/EntryCard';
@@ -29,17 +29,17 @@ export function ProjectSpace() {
   const projects = space?.projects || [];
   const archivedProjects = projects.filter(project => project.archive?.status === 'archived');
   const reasons = [...new Set(archivedProjects.map(project => project.archive!.reason))];
-  const visible = projects.map((project, index) => ({ ...project, number: index + 1 }))
+  const visible = numberProjects(projects)
     .filter(project => (project.archive?.status === 'archived') === archived)
     .filter(project => !archived || !reason || project.archive?.reason === reason);
-  const index = useQuery({ queryKey: ['project-index'], queryFn: () => get<{ title: string; html: string }>('/api/project-index'), enabled: indexOpen });
+  const index = useQuery({ queryKey: ['project-index', spaceId], queryFn: () => get<{ title: string; html: string }>(`/api/workspaces/${spaceId}/project-index`), enabled: indexOpen });
   return <div className="home">
     {(space?.view !== 'chloe-commerce' || (space.project_layout === 'nested' && !context)) && <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />}
     {space?.view !== 'chloe-commerce' && <PageCheckStatus queries={[query]} />}
     <Result page loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && !space && <p role="alert">项目空间未登记。</p>}
     {space && (space.view === 'chloe-commerce' && (space.project_layout !== 'nested' || context) ? <ChloeWorkspace key={`${spaceId}/${context}`} workspaceQuery={query} /> : <>
-      <div className="section-heading"><h2>业务项目</h2>{space.view === 'serial-drama' && <button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button>}</div>
+      <div className="section-heading"><h2>业务项目</h2><button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button></div>
       <div className="project-archive-filters">
         <TabNav label="项目管理状态" selected={archived ? 'archived' : 'active'}
           items={[{ value: 'active', label: `进行中（${projects.length - archivedProjects.length}）` }, { value: 'archived', label: `已归档（${archivedProjects.length}）` }]}

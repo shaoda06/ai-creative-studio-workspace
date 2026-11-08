@@ -66,12 +66,12 @@ try {
   await page.getByRole('option', { name: '商业空间示例', exact: true }).click();
   await page.getByRole('link', { name: /同名示例/ }).filter({ hasText: '查看项目资料与素材' }).click();
   await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
-  assert.deepEqual((await page.getByRole('option').allTextContents()).map(text => text.replace(/当前$/, '')), ['同名示例', 'Iris独有项目']);
+  assert.deepEqual((await page.getByRole('option').allTextContents()).map(text => text.replace(/当前$/, '')), ['01-同名示例', '02-Iris独有项目']);
   assert.equal(await page.getByRole('option').filter({ hasText: '同名示例' }).getAttribute('aria-selected'), 'true');
-  await page.getByRole('option', { name: 'Iris独有项目', exact: true }).click();
+  await page.getByRole('option', { name: '02-Iris独有项目', exact: true }).click();
   await page.getByRole('heading', { name: 'Iris独有项目', exact: true }).waitFor();
   await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
-  await page.getByRole('option', { name: '同名示例', exact: true }).click();
+  await page.getByRole('option', { name: '01-同名示例', exact: true }).click();
   await page.getByRole('button', { name: 'README.md', exact: true }).click();
   await page.getByRole('dialog').getByRole('heading', { name: '商业资料隔离正文' }).waitFor();
   await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();

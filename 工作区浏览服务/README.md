@@ -48,7 +48,7 @@ Windows入口使用`pythonw`等待启动结果；构建通过`npm.cmd`执行，�
 
 ## 项目列表与排序
 
-Nora项目空间的项目卡片和顶部项目切换菜单共用原 `/api/projects` 的顺序；统一登记接口也沿用这一顺序。项目总索引、登记及排序规则见[项目初始化规范](../.agents/skills/nora-drama-positioning/references/项目初始化规范.md#项目总索引)。两处每5秒重新读取，索引修改不需要重启。项目初始化脚本直接维护总索引，服务只读，不回写项目资料。
+各工作区的项目卡片和顶部项目切换菜单共用 `/api/workspaces` 的顺序与分类内编号；Nora 原 `/api/projects` 保持同源。项目总索引、登记及排序统一见[共用项目总索引](../.agents/skills/studio-workspace-browser/references/项目总索引规范.md)。列表每5秒重新读取，索引修改无需重启；建档及归档调用共用脚本维护索引，浏览服务只读。
 
 整个项目的管理状态从项目根 README 的[归档标记](../.agents/skills/studio-archive/SKILL.md)读取；旧项目没有标记时按进行中显示。Nora、Iris 的项目列表和 Chloe 的具名账号项目列表默认显示进行中，可切换已归档并按原因筛选。归档项目仍可打开，顶部项目菜单标明归档原因。标记更新无需重启；网页只读展示，项目及 Codex 对话的实际归档／恢复由共用技能执行。历史 `.archived` 迁移只读标记保留原用途。
 

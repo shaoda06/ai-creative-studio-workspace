@@ -36,7 +36,7 @@ try {
       if (url === '/api/service') return route.fulfill({ json: { version, ready: true } });
       if (url === '/api/task-monitor') return route.fulfill({ json: { tasks: [], local_tasks: [], remote_nodes: [], local_counts: {}, history_updated_at: {} } });
       if (url === '/api/workspaces') return route.fulfill(fail ? { status: 409, json: { detail: '隔离项目：归档标记错误' } } : { json: spaces });
-      if (url === '/api/project-index') return route.fulfill({ json: { title: '项目总索引', html: '<p>隔离索引</p>' } });
+      if (/^\/api\/workspaces\/(nora|iris|chloe)\/project-index$/.test(url)) return route.fulfill({ json: { title: '项目总索引', html: `<p>${url.split('/')[3]} 隔离索引</p>` } });
       if (url === '/api/workspaces/iris/projects/归档项目1') return route.fulfill({ json: { name: '归档项目1', files: [] } });
       unexpected.push(url);
       return route.fulfill({ status: 404, json: { detail: 'Unexpected fixture request' } });
@@ -46,7 +46,7 @@ try {
       await page.getByRole('button', { name: '进行中（1）', exact: true }).waitFor();
       await page.waitForFunction(count => document.querySelectorAll('.project-card').length === count, 1);
       assert.equal(await page.locator('.project-card').count(), 1);
-      assert.match(await page.locator('.project-card').innerText(), /进行中的项目/);
+      assert.match(await page.locator('.project-card').innerText(), /01-进行中的项目/);
       await page.getByRole('button', { name: '已归档（2）', exact: true }).click();
       await page.waitForFunction(count => document.querySelectorAll('.project-card').length === count, 2);
       assert.equal(await page.locator('.project-card').count(), 2);
@@ -54,7 +54,7 @@ try {
       await page.getByRole('option', { name: space.reasons[0], exact: true }).click();
       await page.waitForFunction(count => document.querySelectorAll('.project-card').length === count, 1);
       assert.equal(await page.locator('.project-card').count(), 1);
-      assert.match(await page.locator('.project-card').innerText(), /02-归档项目1/);
+      assert.match(await page.locator('.project-card').innerText(), /01-归档项目1/);
       assert.ok((await page.locator('.project-card').innerText()).includes(space.reasons[0]));
       const expected = space.id === 'nora' ? '/projects/归档项目1' : `/spaces/${space.id}/${space.id === 'chloe' ? 'contexts' : 'projects'}/归档项目1`;
       assert.equal(decodeURIComponent(await page.locator('.project-card').getAttribute('href')), '#' + expected);
@@ -66,11 +66,14 @@ try {
       await page.getByRole('option', { name: '全部原因', exact: true }).click();
       await page.waitForFunction(count => document.querySelectorAll('.project-card').length === count, 2);
       assert.equal(await page.locator('.project-card').count(), 2);
+      await page.getByRole('button', { name: '查看项目总索引', exact: true }).click();
+      await page.getByRole('dialog').getByText(space.id + ' 隔离索引', { exact: true }).waitFor();
+      await page.keyboard.press('Escape');
       await page.screenshot({ path: path.join(screenshots, `${space.id}-${width}.png`) });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     }
     await page.goto(server.resolvedUrls.local[0] + '#/spaces/iris?archive=1');
-    await page.getByRole('link').filter({ hasText: '02-归档项目1' }).click();
+    await page.getByRole('link').filter({ hasText: '01-归档项目1' }).click();
     await page.getByRole('combobox', { name: '切换项目', exact: true }).click();
     await page.getByRole('option', { name: /归档项目1.*已归档.*停止合作/ }).waitFor();
     assert.ok(await page.evaluate(() => [...document.querySelectorAll('[role="listbox"]:popover-open')].every(el => {

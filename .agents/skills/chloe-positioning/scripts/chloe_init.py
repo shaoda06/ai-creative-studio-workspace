@@ -10,6 +10,7 @@ SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS / 'studio-workspace-browser/scripts'))
 import project_resources as resources
 from workspace_setup import register_workspace
+from workspace_project_index import register_project
 
 ASSETS = {
     '商品': ('商品资料', 'G', '商品说明.md'),
@@ -83,6 +84,7 @@ def initialize_project(value, name):
     for name in ('账号定位', '选品记录', '运营复盘'):
         write_template(root / f'综合资料/{name}.md', 'chloe-positioning', name + '模板.md')
     resource_area(root / '综合资料')
+    register_project(root, nested=True)
     return root
 
 

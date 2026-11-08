@@ -36,7 +36,7 @@ class ProjectInitializationTests(unittest.TestCase):
         self.assertTrue(report["index_added"])
         index = self.project.parent / "项目总索引.md"
         self.assertEqual(report["project_index"], str(index.resolve()))
-        self.assertEqual(index.read_text(encoding="utf-8"), "# 项目总索引\n\n| 编号 | 项目名称 |\n| --- | --- |\n| 01 | 测试 短片 |\n")
+        self.assertEqual(index.read_text(encoding="utf-8"), "# 项目总索引\n\n## 进行中\n\n| 编号 | 项目名称 |\n| --- | --- |\n| 01 | 测试 短片 |\n\n## 已归档\n\n| 编号 | 项目名称 | 归档原因 |\n| --- | --- | --- |\n")
         self.assertEqual(len(report["created"]), 22)
         self.assertEqual({path.name for path in self.project.iterdir()}, {
             "00-项目定位", "01-主旨与简介", "02-故事大纲", "03-人物资料",
@@ -170,7 +170,10 @@ class ProjectInitializationTests(unittest.TestCase):
         source = "# 项目总索引\n\n说明保留。\n\n1. 已有项目\n2. 测试 短片\n"
         index.write_text(source, encoding="utf-8")
         self.assertTrue(initialize(other)["index_added"])
-        expected = source + "3. 第二个项目\n"
+        expected = index.read_text(encoding="utf-8")
+        self.assertIn("说明保留。", expected)
+        self.assertIn("| 02 | 第二个项目 |", expected)
+        self.assertNotIn("已有项目", expected)
         self.assertEqual(index.read_text(encoding="utf-8"), expected)
         before = index.stat().st_mtime_ns
         self.assertFalse(initialize(self.project)["index_added"])
@@ -185,7 +188,8 @@ class ProjectInitializationTests(unittest.TestCase):
         index.write_text(source, encoding="utf-8")
         other = self.project.with_name("第二个项目")
         self.assertTrue(initialize(other)["index_added"])
-        self.assertEqual(index.read_text(encoding="utf-8"), source + "| 03 | 第二个项目 |\n")
+        self.assertIn("| 02 | 第二个项目 |", index.read_text(encoding="utf-8"))
+        self.assertIn("## 已归档", index.read_text(encoding="utf-8"))
         before = index.stat().st_mtime_ns
         self.assertFalse(initialize(other)["index_added"])
         initialize(other, "EP001")
@@ -198,7 +202,8 @@ class ProjectInitializationTests(unittest.TestCase):
         result = initialize(self.project)
         self.assertEqual(result["created"], [])
         self.assertTrue(result["index_added"])
-        self.assertEqual(index.read_text(encoding="utf-8"), "# 项目总索引\n\n1. 另一个项目\n2. 测试 短片\n")
+        self.assertIn("| 01 | 测试 短片 |", index.read_text(encoding="utf-8"))
+        self.assertNotIn("另一个项目", index.read_text(encoding="utf-8"))
 
     def test_repeat_and_missing_directory_repair_preserve_existing_documents(self):
         initialize(self.project)

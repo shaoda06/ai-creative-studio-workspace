@@ -15,7 +15,7 @@
 
 ## 项目索引入口
 
-从[项目目录说明](projects/README.md)及projects实际子目录查找。尚无项目时不预填项目、版本、进度或采用结果。
+项目总索引位于 `projects/项目总索引.md`，首次项目建档时按[共用项目总索引]({{skills}}/studio-workspace-browser/references/项目总索引规范.md)建立；已有索引时在此提供链接，不复制项目清单。
 
 ## 工作区专用约定
 

@@ -6,7 +6,7 @@ import re
 from urllib.parse import quote, unquote
 
 from backend.services.project_files import ProjectFiles
-from workspace_project_index import read_archive
+from workspace_project_index import ordered_projects, project_directories
 
 
 @dataclass
@@ -31,10 +31,7 @@ class Workspace:
                 'projects': self.contexts() if self.project_layout == 'nested' else self.projects.discover()}
 
     def contexts(self):
-        return [{'id': path.name, 'name': path.name, **read_archive(path)} for path in sorted(self.root.iterdir())
-                if not path.name.startswith('.') and not path.is_symlink() and path.is_dir()
-                and (path / 'README.md').is_file() and (path / 'projects').is_dir()
-                and (path / '综合资料').is_dir()]
+        return ordered_projects(self.root, project_directories(self.root, nested=True))
 
     def select(self, name):
         if self.project_layout != 'nested' or name not in {item['id'] for item in self.contexts()}:

@@ -103,7 +103,7 @@ class ProjectArchiveTests(HttpTestCase):
         with self.assertRaises(PermissionError):
             self.store.project('甲项目', writable=True)
 
-    def test_index_status_is_display_only_and_initializer_keeps_four_columns(self):
+    def test_index_status_is_display_only_and_initializer_migrates_to_two_tables(self):
         index = self.nora / 'projects/项目总索引.md'
         index.write_text('# 项目总索引\n\n| 编号 | 项目名称 | 项目管理状态 | 归档原因 |\n'
                          '| --- | --- | --- | --- |\n| 01 | 乙项目 | 已归档 | 已完成 |\n| 02 | 甲项目 | 进行中 | 无 |\n')
@@ -111,7 +111,9 @@ class ProjectArchiveTests(HttpTestCase):
         response = self.client.get('/api/projects')
         self.assertEqual([row['id'] for row in response.json()], ['乙项目', '甲项目', '新项目'])
         self.assertNotIn('archive', response.json()[0])
-        self.assertIn('| 03 | 新项目 | 进行中 | 无 |', index.read_text())
+        self.assertIn('| 03 | 新项目 |', index.read_text())
+        self.assertNotIn('项目管理状态 |', index.read_text())
+        self.assertIn('## 已归档', index.read_text())
 
     def test_chloe_markers_fit_existing_document_schema(self):
         path = self.account / 'README.md'
