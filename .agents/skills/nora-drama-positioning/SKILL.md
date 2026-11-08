@@ -23,6 +23,8 @@ license: MIT
 | 新建项目或获授权补齐目录 | [初始化规范](references/项目初始化规范.md)及[项目README规范](references/项目README规范.md)；调用所属scripts/project_init.py，登记总索引，不预填后续创作正文 |
 | 已有项目接续、正式更名或旧结构整理 | [一级业务项目接续](../nora-serial-drama/references/项目接续规范.md)，不重复初始化 |
 
+工作区级项目登记、索引格式与分类排序统一按[共用项目总索引](../studio-workspace-browser/references/项目总索引规范.md)执行；本业务只维护项目身份、目录与建档时机。
+
 ## 方法与工具
 
 方向新写或实质修订时，按问题读取[故事方法](../nora-drama-story/references/story-craft.md)、[题材卡](references/genre-cards.md)或[导演阐述](references/director-brief-craft.md)，将受众兴趣、题材机制和视觉倾向落实到定位既有字段。采用方法前遵循[开发方法使用规范](../nora-serial-drama/references/开发方法使用规范.md)，不另建外部简报或引擎。

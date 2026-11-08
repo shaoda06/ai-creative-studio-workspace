@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio 共用视频提示词"
+  short_description: "统一短剧、商业视频和带货视频的提示词准备、参考绑定、中英对应及交付前核对"
+  default_prompt: "使用 $studio-video-prompts，按当前业务依据编写或核对视频模型正文和同版中文参考。"

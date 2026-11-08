@@ -17,6 +17,7 @@ description: Iris 广告、产品介绍和品牌宣传片主控，按实际阶�
 | 用户明确最终交付后的完单复盘、经验归并 | [完单复盘](../iris-commercial-retrospective/SKILL.md)：案例复盘与有条件的通用方法 |
 | 账号运营、主页与封面、社媒发布及传播效果复盘 | 按[本业务运营接入](../iris-commercial-brief/references/社媒运营接入规范.md)提供对象与位置，再调用[Studio社媒运营](../studio-social-operations/SKILL.md) |
 | 阶段交付Markdown、PDF及附件 | [对外交付](references/对外交付.md)，内容仍归原阶段，不重写已批准方案 |
+| 整个订单项目归档或恢复（不按单件作品） | [共用项目归档](../studio-archive/SKILL.md)：标记、索引分类及关联 Codex 对话 |
 | 项目进度、变更、并行接续 | [流程与交接](references/流程与交接.md)，按事项更新项目状态或作品状态 |
 | 修改本技能、规范、模板或工具 | 使用skill-creator并读[维护规范](维护规范.md) |
 | 生成后端、模型指南、PDF或打包工具选择 | [工具适配](references/工具适配.md)，只读当前需要的一项 |

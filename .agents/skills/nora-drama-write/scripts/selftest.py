@@ -63,7 +63,8 @@ def test_duration_reports_counts_without_rates() -> None:
     """No declared rates must yield no seconds -- never a default guess."""
     report = measure_text("甲：一二三四五。\n\n他把门关上。\n")
     require(report["seconds"] is None, "seconds must stay unknown without rates")
-    require(report["counts"]["dialogue_characters"] == 6, "spoken characters counted")
+    require(report["counts"]["dialogue_characters"] == 6, "legacy count is preserved")
+    require(report["counts"]["voiced_characters"] == 5, "punctuation is not voiced")
     require(report["counts"]["action_paragraphs"] == 1, "action paragraph counted")
 
 
@@ -77,11 +78,35 @@ def test_duration_uses_the_projects_own_rates() -> None:
             },
         }
     }
-    report = measure_text("甲：一二三四五六\n\n他把门关上。\n", project)
-    # Punctuation counts as spoken time because it stands for the pause it
-    # creates; here the line is six bare characters: 6 / 3.0 + 1 * 2.0 == 4.0.
+    report = measure_text("甲：一二三，四五六。\n\n他把门关上。\n", project)
     require(report["seconds"] == 4.0, f"expected 4.0s, got {report['seconds']}")
     require(report["delta_seconds"] == -6.0, "delta is reported against the target")
+
+
+def test_mixed_dialogue_uses_separate_rates() -> None:
+    project = {
+        "format": {
+            "pacing": {
+                "spoken_characters_per_second": 2.0,
+                "spoken_words_per_second": 2.0,
+                "seconds_per_action_paragraph": 2.0,
+            },
+        },
+    }
+    report = measure_text("甲（轻声）：Don't re-open it，先别开门。\n\n他退开一步。\n", project)
+    require(report["counts"]["voiced_characters"] == 4, "four spoken Chinese characters")
+    require(report["counts"]["voiced_words"] == 3, "three English words")
+    require(report["seconds"] == 5.5, "mixed dialogue and action use their own rates")
+
+
+def test_english_requires_a_word_rate() -> None:
+    text = "甲：Do not open that door.\n"
+    report = measure_text(text, {"format": {"pacing": {"spoken_characters_per_second": 3}}})
+    require(report["counts"]["voiced_words"] == 5, "English is counted in words")
+    require(report["seconds"] is None, "a character rate does not time English")
+    require("spoken_words_per_second" in report["note"], "missing word rate is named")
+    report = measure_text(text, {"format": {"pacing": {"spoken_words_per_second": 2}}})
+    require(report["seconds"] == 2.5, "English-only dialogue only needs a word rate")
 
 
 def test_production_tags_are_not_performed_time() -> None:
@@ -95,6 +120,7 @@ def test_voice_over_is_performed_time() -> None:
     report = measure_text("[VO] 甲：一二三四五。\n")
     require(report["counts"]["dialogue_lines"] == 1, "[VO] is a spoken line")
     require(report["counts"]["dialogue_characters"] == 6, "[VO] characters are timed")
+    require(report["counts"]["voiced_characters"] == 5, "[VO] excludes punctuation in estimates")
     require(report["counts"]["production_tag_lines"] == 0, "[VO] is not a mute tag")
 
 
@@ -215,13 +241,15 @@ def main() -> int:
 
     test_duration_reports_counts_without_rates()
     test_duration_uses_the_projects_own_rates()
+    test_mixed_dialogue_uses_separate_rates()
+    test_english_requires_a_word_rate()
     test_production_tags_are_not_performed_time()
     test_voice_over_is_performed_time()
     test_one_action_paragraph_is_one_paragraph_however_many_lines()
     test_comments_are_not_production_content()
     test_an_index_from_other_bytes_is_refused()
 
-    print("14 self-tests passed")
+    print("16 self-tests passed")
     return 0
 
 

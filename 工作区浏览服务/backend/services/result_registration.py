@@ -39,10 +39,14 @@ def register(store, key):
         raise ValueError('只有全部成果取回的任务可以登记待审')
     if not data.task_type.startswith('video-'):
         from backend.services.image_tasks import register as register_image
-        return register_image(store, key, collected_outputs(store, key), Path(data.record_dir) / REPORT)
+        from backend.services.business_results import finish
+        report_path = Path(data.record_dir) / REPORT
+        return finish(data, register_image(store, key, collected_outputs(store, key), report_path), report_path, state)
     from backend.services.video_tasks import technical, register as register_technical
     if technical(data):
-        return register_technical(store, key, collected_outputs(store, key), Path(data.record_dir) / REPORT)
+        from backend.services.business_results import finish
+        report_path = Path(data.record_dir) / REPORT
+        return finish(data, register_technical(store, key, collected_outputs(store, key), report_path), report_path, state)
     return register_drama_video(store, key)
 
 
@@ -168,7 +172,9 @@ async def closeout_tasks(store, projects, ids, record_updates=(), *, batch_id=No
             continue
         for task, report in group:
             outcome = {'status': 'completed', 'report': REPORT, 'browser': browser, 'record_updates': fingerprint}
-            if not any(item.get('image') for item in report['items']) and 'business_sync' in owner:
+            if 'business_sync' in report and report['business_sync'].get('status') == 'updated':
+                outcome['business_sync'] = report['business_sync']
+            elif not any(item.get('image') for item in report['items']) and 'business_sync' in owner:
                 report['business_sync'] = outcome['business_sync'] = owner['business_sync']
                 write_json(Path(store.rows[task]['input'].record_dir) / REPORT, report)
             if any(item.get('image') for item in report['items']):

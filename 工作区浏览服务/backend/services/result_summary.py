@@ -97,6 +97,7 @@ def image_delivery(store, tasks):
             return None  # Old completed states have no ready-to-display fields; keep the full report.
         ready.append(dict(task_id=task['id'], task_type=task['task_type'], title=task['title'], review_path=task['review_path'],
             report_file=str(Path(data.record_dir) / '结果收尾报告.json'),
+            business_sync=task['closeout'].get('business_sync'),
             images=[dict(file=str(Path(data.project) / item.get('display_path', item['path'])),
                 candidate_file=str(Path(data.project) / item['path']), width=item['width'], height=item['height'],
                 format=item['format'], bytes=item['bytes'],
@@ -118,6 +119,7 @@ def video_delivery(store, tasks):
             return None  # Old completed states retain their original full report.
         ready.append(dict(task_id=task['id'], task_type=task['task_type'], title=task['title'], review_path=task['review_path'],
             report_file=str(Path(data.record_dir)/'结果收尾报告.json'),
+            business_sync=task['closeout'].get('business_sync'),
             videos=[dict(identity=item['identity'], file=str(Path(data.project)/item['path']),
                 draft_file=str(Path(data.project)/item['draft']) if item.get('draft') else None, metadata=item.get('metadata')) for item in videos]))
     return dict(completed=len(ready), video_count=sum(len(item['videos']) for item in ready), tasks=ready)

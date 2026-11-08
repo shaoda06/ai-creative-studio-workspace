@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio 项目归档"
+  short_description: "统一管理三个工作区的项目归档标记、浏览分类及关联 Codex 对话"
+  default_prompt: "使用 $studio-archive 按本次指定的项目和原因执行归档或恢复，并核对相关 Codex 对话的处理结果。"

@@ -7,13 +7,15 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 本技能是连续短剧D09业务阶段，负责依据、主体映射、正文和中文对应及内容核对；模型调用方法交[共用H3工具](../studio-h3/SKILL.md)。直接调用遵循[业务技能共同约定](../nora-serial-drama/references/主控操作规范.md#业务技能共同约定)，按下方当前任务入口接续。
 
+新写、实质修订或提交前核对时，按[共用视频提示词](../studio-video-prompts/SKILL.md)落实制作依据、素材映射、正文和同版中文参考；短剧写法、取证和交接按本阶段规范。
+
 ## 按当前任务读取
 
 | 任务 | 入口 |
 | --- | --- |
 | 新建完整分段提示词 | [阶段接续](references/提示词阶段接续规范.md)，依其顺序进入正文制作规则及对应模板 |
-| 按生成结果反馈定位或修订问题 | 先按[问题参考](../nora-serial-drama/references/制作问题与解决方案参考.md)检索现象并核对适用条件，再进入受影响正文与下方内容核对；处理结论按[经验维护](../nora-drama-handoff/references/逐集目录与资产管理规范.md#完集复盘与经验维护)回写既有项目记录，不自动生成 |
-| H3正文编写或修改 | Ref2VA先读[参考定义与保留说明](references/视频提示词制作规范.md#ref2va参考定义与保留说明)，落实到主体定义、保留说明与逐镜正文；再按[H3模式入口](references/H3提示词规范.md)，调用[h3-prompt-writing](../h3-prompt-writing/SKILL.md)的实际模式指南 |
+| 按生成结果反馈定位或修订问题 | 先按[问题参考](../nora-serial-drama/references/制作问题与解决方案参考.md)核对现象与条件，再检查受影响正文。针对具体技法的实际反馈按[共用反馈复核](../studio-creative-techniques/references/学习与反馈维护规范.md#实际反馈复核)维护相应参考。项目处理结论按[经验维护](../nora-drama-handoff/references/逐集目录与资产管理规范.md#完集复盘与经验维护)回写既有记录 |
+| H3正文编写或修改 | Ref2VA先读[参考定义与保留说明](references/视频提示词制作规范.md#ref2va参考定义与保留说明)，落实到主体定义、保留说明与逐镜正文；再按[H3模式入口](references/H3提示词规范.md)，调用[h3-prompt-writing（外部依赖）](../studio-entry/维护规范.md#6-依赖获取与适配资料)的实际模式指南 |
 | 正文涉及玄幻法术、法阵、剑气流光、灵力抽丝或粒子，包括已确认动作的转写及效果反馈 | 读取[玄幻法术使用路径](../studio-fantasy-combat/SKILL.md#法术表现的使用路径)，按其方法展开本段可见表现；将[表现核对](../studio-fantasy-combat/references/xuanhuan-elements-vfx.md#表现核对)合并到现有内容核对，不等到用户反馈效果弱才调用 |
 | 表情转写或相关实际反馈 | [表情拆解](../studio-creative-techniques/SKILL.md#表情表达)，按情境写出可见面部变化和必要过程，并落实首次使用告知与反馈更新 |
 | 镜头语言转写或相关实际反馈 | [镜头语言与表达](../studio-creative-techniques/SKILL.md#镜头表达)，将已确认镜头落实为起始关系、必要变化与落点，沿其首次使用提示与反馈复核；不在转写时另改镜头设计或模型格式 |

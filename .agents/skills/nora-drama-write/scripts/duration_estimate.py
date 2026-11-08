@@ -28,6 +28,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -59,9 +60,62 @@ class StaleIndex(Exception):
 
 
 def _spoken_characters(line: str) -> int:
-    """Count what is actually voiced: no whitespace, no bracketed directions."""
+    """Keep the legacy character count used by the declared VO share."""
     stripped = re.sub(r"（[^）]*）|\([^)]*\)", "", line)
     return len(re.sub(r"\s", "", stripped))
+
+
+WORD_SCRIPTS = ("LATIN", "CYRILLIC", "GREEK")
+WORD_JOINERS = frozenset("'’-")
+
+
+def _is_word_letter(character: str) -> bool:
+    return character.isalpha() and any(
+        script in unicodedata.name(character, "") for script in WORD_SCRIPTS
+    )
+
+
+def _voiced_units(line: str) -> tuple[int, int]:
+    """Count character-based speech and word-based speech separately."""
+    text = unicodedata.normalize("NFC", re.sub(r"（[^）]*）|\([^)]*\)", "", line))
+    characters = words = 0
+    digit_runs: list[int] = []
+    position = 0
+    while position < len(text):
+        character = text[position]
+        if _is_word_letter(character) or character.isdecimal():
+            end = position
+            has_letter = False
+            digits = 0
+            while end < len(text):
+                current = text[end]
+                if _is_word_letter(current):
+                    has_letter = True
+                elif current.isdecimal():
+                    digits += 1
+                elif not (
+                    unicodedata.category(current).startswith("M")
+                    or current in WORD_JOINERS
+                    and end + 1 < len(text)
+                    and (_is_word_letter(text[end + 1]) or text[end + 1].isdecimal())
+                ):
+                    break
+                end += 1
+            if has_letter:
+                words += 1
+            else:
+                digit_runs.append(digits)
+            position = end
+            continue
+        if character.isalnum():
+            characters += 1
+        position += 1
+
+    if words and not characters:
+        words += len(digit_runs)
+    else:
+        characters += sum(digit_runs)
+    return characters, words
 
 
 def _is_voiced(block: Mapping[str, Any]) -> bool:
@@ -93,6 +147,8 @@ def measure(screenplay: bytes, blocks: Iterable[Mapping[str, Any]]) -> dict[str,
     """Count the timed material, taking every classification from the index."""
     dialogue_lines = 0
     dialogue_characters = 0
+    voiced_characters = 0
+    voiced_words = 0
     voiceover_characters = 0
     action_paragraphs = 0
     tag_lines = 0
@@ -130,12 +186,17 @@ def measure(screenplay: bytes, blocks: Iterable[Mapping[str, Any]]) -> dict[str,
         dialogue_lines += 1
         characters = _spoken_characters(spoken.group("line"))
         dialogue_characters += characters
+        line_characters, line_words = _voiced_units(spoken.group("line"))
+        voiced_characters += line_characters
+        voiced_words += line_words
         if block.get("tag") == "VO":
             voiceover_characters += characters
 
     counts: dict[str, Any] = {
         "dialogue_lines": dialogue_lines,
         "dialogue_characters": dialogue_characters,
+        "voiced_characters": voiced_characters,
+        "voiced_words": voiced_words,
         "voiceover_characters": voiceover_characters,
         "action_paragraphs": action_paragraphs,
         "production_tag_lines": tag_lines,
@@ -179,16 +240,18 @@ def index_blocks(
 def declared_rates(project: dict[str, Any] | None) -> dict[str, Any]:
     """Read the project's own pacing rates, or report that it declared none."""
     pacing = ((project or {}).get("format") or {}).get("pacing") or {}
-    per_second = pacing.get("spoken_characters_per_second")
-    per_action = pacing.get("seconds_per_action_paragraph")
-    usable = isinstance(per_second, (int, float)) and per_second > 0 and (
-        isinstance(per_action, (int, float)) and per_action >= 0
-    )
-    return {
-        "declared": bool(usable),
-        "spoken_characters_per_second": per_second if usable else None,
-        "seconds_per_action_paragraph": per_action if usable else None,
-    }
+    rates: dict[str, Any] = {}
+    for key in ("spoken_characters_per_second", "spoken_words_per_second", "seconds_per_action_paragraph"):
+        value = pacing.get(key)
+        usable = (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+            and (value >= 0 if key == "seconds_per_action_paragraph" else value > 0)
+        )
+        rates[key] = value if usable else None
+    rates["declared"] = any(value is not None for value in rates.values())
+    return rates
 
 
 def accepted_vo_share(
@@ -269,10 +332,22 @@ def estimate(
         )
         return result
 
-    seconds = (
-        counts["dialogue_characters"] / rates["spoken_characters_per_second"]
-        + counts["action_paragraphs"] * rates["seconds_per_action_paragraph"]
+    timed_inputs = (
+        ("voiced_characters", "spoken_characters_per_second"),
+        ("voiced_words", "spoken_words_per_second"),
+        ("action_paragraphs", "seconds_per_action_paragraph"),
     )
+    missing = [rate for count, rate in timed_inputs if counts[count] and rates[rate] is None]
+    if missing:
+        result["note"] = "seconds cannot be derived; missing format.pacing rates: " + ", ".join(missing)
+        return result
+
+    seconds = 0.0
+    for count, rate in timed_inputs[:2]:
+        if counts[count]:
+            seconds += counts[count] / rates[rate]
+    if counts["action_paragraphs"]:
+        seconds += counts["action_paragraphs"] * rates["seconds_per_action_paragraph"]
     result["seconds"] = round(seconds, 1)
     if result["target_seconds"]:
         delta = seconds - result["target_seconds"]

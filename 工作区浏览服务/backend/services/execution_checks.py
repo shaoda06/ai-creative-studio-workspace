@@ -210,6 +210,8 @@ def fixed_checks(store, data, *, mapping=None, legacy=False):
     from backend.services.director_uploads import pairs
     from backend.services import comfy_segments as segments
     fixed_input_checks(store, data)
+    from backend.services.business_results import validate as validate_business_result
+    validate_business_result(data)
     if data.task_type.startswith('video-'):
         from backend.services.video_tasks import technical
         technical(data)

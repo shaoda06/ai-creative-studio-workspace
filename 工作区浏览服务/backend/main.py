@@ -504,13 +504,20 @@ def view(value, name):
 
 
 @app.get('/api/projects')
-def projects() -> list[dict[str, str]]:
-    return store.discover()
+def projects() -> list[dict]:
+    try:
+        return store.discover()
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @app.get('/api/project-index')
 def project_index() -> dict[str, str]:
-    path = store.root / INDEX_NAME
+    return project_index_document(store.root)
+
+
+def project_index_document(root):
+    path = root / INDEX_NAME
     if not path.is_file():
         raise HTTPException(404, '项目总索引尚未建立')
     return {'title': path.stem, 'html': parser.markdown(path.read_text('utf-8-sig'), INDEX_NAME)}
@@ -907,7 +914,10 @@ def history_document(path: Annotated[str, Query()], page: Annotated[int, Query(g
 
 @app.get('/api/workspaces')
 def workspace_list(request: Request):
-    return request.app.state.workspaces.public()
+    try:
+        return request.app.state.workspaces.public()
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 async def select_workspace(workspace_id: str, request: Request):
@@ -917,6 +927,8 @@ async def select_workspace(workspace_id: str, request: Request):
             space = space.select(request.path_params['context'])
     except KeyError as error:
         raise HTTPException(404, '项目空间未登记') from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
     request.state.workspace_space = space
     request.state.workspace_tasks = space.tasks
     return space
@@ -937,9 +949,18 @@ def workspace_service(request: Request):
     return {**service(), 'workspace': str(space.root), 'space': space.id}
 
 
+@spaces_router.get('/project-index')
+def workspace_project_index(request: Request):
+    space = request.state.workspace_space
+    return project_index_document(space.root if space.project_layout == 'nested' else space.projects.root)
+
+
 @spaces_router.get('/projects')
 def workspace_projects(request: Request):
-    return request.state.workspace_space.projects.discover()
+    try:
+        return request.state.workspace_space.projects.discover()
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @spaces_router.get('/account-overview')

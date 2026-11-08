@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom';
-import { get, spaceProjectPath } from '../api';
+import { get, numberProjects, spaceProjectPath } from '../api';
 import type { WorkspaceSpace } from '../api';
 import { Result } from '../components';
 import { TabSelect } from './TabSelect';
@@ -16,7 +16,8 @@ export function ProjectSwitcher() {
   const projectSpaceId = scopedProject?.params.spaceId || (noraProject ? 'nora' : undefined);
   const space = projects.data?.find(item => item.id === projectSpaceId);
   const items = projectSpaceId
-    ? (space?.projects || []).map(project => ({ value: spaceProjectPath(space!, project.id), label: project.name }))
+    ? numberProjects(space?.projects || []).map(project => ({ value: spaceProjectPath(space!, project.id), label: `${String(project.number).padStart(2, '0')}-${project.name}`,
+      badge: project.archive?.status === 'archived' ? `已归档 · ${project.archive.reason}` : undefined }))
     : (projects.data || []).map(space => ({ value: `/spaces/${space.id}`, label: space.name }));
   const label = projects.isPending ? (projectSpaceId ? '正在读取项目' : '正在读取工作区')
     : !items.length ? (projectSpaceId ? '暂无项目' : '暂无工作区') : projectSpaceId ? '切换项目' : '切换工作区';

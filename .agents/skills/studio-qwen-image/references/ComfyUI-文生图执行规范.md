@@ -27,7 +27,7 @@ API有效链包含10个节点。文本节点672接编码器522；主模型523经
 | 最终正向正文 | `672.inputs.value` | 每任务填`rewritten_prompt`，不把整个JSON送入模型 |
 | 宽、高 | `514.inputs.width`、`height` | 调用方明确宽高；均为32倍数 |
 | 种子 | `515.inputs.seed` | 调用方提供有效非负整数，不使用-1随机标记 |
-| 输出前缀 | `508.inputs.filename_prefix` | 每任务按[远端输出目录](../../nora-serial-drama/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
+| 输出前缀 | `508.inputs.filename_prefix` | 每任务按[远端输出目录](../../studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#远端输出目录与命名)填写，不加扩展名 |
 | 反向提示词 | `522.inputs.negative_prompt` | 默认空；本次已明确需要时通过`parameters.negative_prompt`填写并记录 |
 | 图片数量 | `514.inputs.batch_size` | 固定1；多候选使用独立任务，仍按种子规则执行 |
 | 参考预处理 | `522.inputs.resolution` | 保留0；本工作流没有参考图输入 |

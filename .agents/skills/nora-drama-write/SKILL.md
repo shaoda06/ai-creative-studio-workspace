@@ -22,13 +22,12 @@ license: MIT
 
 先明确人物当前目的、阻力、行动结果和场次退出状态，再写完整交流、动作、听者反应、停顿和声音。只对本集实际使用的选择、证据、次数或死线做对应推演，不为了检查创造输入没有的机关。故事、台词和决定因果的必要表演在剧本完成，具体机位、镜长和P段交分镜。
 
-按[山音范围](../nora-serial-drama/references/山音方法适配规范.md)自动读取当前阶段方法，无需用户点名。对白诊断使用[dialogue](../dialogue/SKILL.md)，具体表达问题使用[humanizer-zh](../humanizer-zh/SKILL.md)，均按对白规范的适用条件合并到当前正文。
+按[山音范围](../nora-serial-drama/references/山音方法适配规范.md)自动读取当前阶段方法，无需用户点名。对白诊断使用[dialogue（外部依赖）](../studio-entry/维护规范.md#6-依赖获取与适配资料)，具体表达问题使用[humanizer-zh（外部依赖）](../studio-entry/维护规范.md#6-依赖获取与适配资料)，均按对白规范的适用条件合并到当前正文。
 
 | 问题 | 方法资料 |
 | --- | --- |
 | 行动因果、选择、证据或时间容量 | [剧作手艺](references/script-craft.md) |
-| 人物声音、过去关系及接话 | [对白手艺](references/dialogue-craft.md) |
-| 声源、留白与声音过渡 | [场景声音](references/scene-sound-dramaturgy.md) |
+| 人物口吻、接话、表演、声源和声音留白 | [共用对白与场次表演](../studio-creative-techniques/references/对白与场次表演方法.md)和[共用剧本的声源写法](../studio-screenplay/SKILL.md#声源与正文写法)；本集约束按[台词设计、节奏与统计](references/对白与表演修订规范.md#台词设计节奏与统计) |
 | 同一义务的不同可拍实现 | [可替代实现](references/substitutable-realization.md) |
 | 长任务接续 | [场景交接方法](references/scene-handoff-capsule.md)，复用既有工作稿或上下文，不另建台账 |
 

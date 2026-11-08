@@ -344,8 +344,8 @@ class ChloeProductionTests(unittest.TestCase):
         prompt=folder/'提示词.md'
         template=(SKILLS/'chloe-production/templates/视频提示词模板.md').read_text()
         prompt.write_text(template.replace('{{execution}}','E001').replace('{{segment}}','P001')
-            .replace('{{按实际H3模式及真实输入角色填写完整英文模型正文；r2v普通Picture作为视觉参考，不承诺硬首帧；需要固定起始画面时先确认支持模式及相应图像输入。保留原语言对白、歌词和画面文字}}','Prepared wording, not request evidence.')
-            .replace('{{逐节对应模型正文；保留章节键、素材标签、镜号、时间及数值}}','[Shot 1]\ntime: 0-5\n动作。'))
+            .replace('{{按实际H3模式及真实输入角色填写完整模型正文}}','Prepared wording, not request evidence.')
+            .replace('{{填写同版完整中文参考}}','[Shot 1]\ntime: 0-5\n动作。'))
         self.record.write_text(self.record.read_text().replace('| H3 | 不适用 |','| H3 | [提示词](<执行记录/E001/提示词.md>) |',1))
         check(self.project)
         context=browser.production_data(self.project,self.api+'/projects/'+self.project.name,'V001')['segments'][0]['videos'][0]['context']
