@@ -85,11 +85,14 @@ class ResourceMigrationTests(unittest.TestCase):
         self.assertEqual(resources.resolve_file(self.project, one).read_bytes(), (self.project / report['aliases'][one.relative_to(self.project).as_posix()]).read_bytes())
         self.assertEqual(evidence.read_bytes(), raw)
         self.assertEqual(migration.finalize(self.project, self.audit)['version_count'], 2)
+        for reference in report['versions']:
+            self.assertEqual((self.project / reference['file']).stat().st_mode & 0o222, 0)
 
     def test_changed_source_stops_before_any_removal(self):
         one = self.picture('素材/一.png', 'red')
         two = self.picture('素材/二.png', 'blue')
         migration.stage(self.project, self.audit)
+        one.chmod(one.stat().st_mode | 0o200)
         one.unlink(); self.picture('素材/一.png', 'green')
         with self.assertRaisesRegex(ValueError, '已变化'):
             migration.finalize(self.project, self.audit)

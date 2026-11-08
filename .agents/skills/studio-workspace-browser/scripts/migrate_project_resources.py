@@ -288,7 +288,15 @@ def finalize(project, audit):
                                or not filecmp.cmp(source, target, shallow=False)):
             raise ValueError('迁移期间原文件已变化，停止移除：' + old)
     for old in report['originals']:
-        (project / old).unlink(missing_ok=True)
+        source = project / old
+        target = project / report['aliases'][old]
+        if os.name == 'nt' and source.exists():
+            source.chmod(source.stat().st_mode | 0o200)
+        try:
+            source.unlink(missing_ok=True)
+        finally:
+            if os.name == 'nt':
+                target.chmod(target.stat().st_mode & ~0o222)
     removed = []
     parents = {parent for old in report['originals'] for parent in (project / old).parents if parent != project and parent.is_relative_to(project)}
     for folder in sorted(parents, key=lambda item: len(item.parts), reverse=True):
