@@ -54,7 +54,7 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
       <h2 id="chloe-videos-heading">作品进度</h2>
       <table className="chloe-overview-videos"><thead><tr><th scope="col">作品</th><th scope="col">当前阶段</th><th scope="col">视频状态</th><th scope="col">处理状态</th></tr></thead>
           <tbody>{videos.map(({ project, progress }) => <tr key={progress['视频编号']}>
-            <td><Link to={`${page}?section=production&video=${encodeURIComponent(project)}`}><small>{progress['视频编号']}</small>{progress['视频名称']}</Link></td><td>{progress['当前阶段']}</td>
+            <td><Link className="chloe-overview-work-link" title={`${progress['视频编号']} ${progress['视频名称']}`} to={`${page}?section=production&video=${encodeURIComponent(project)}`}>{progress['视频编号']} {progress['视频名称']}</Link></td><td>{progress['当前阶段']}</td>
             <td>{progress['视频状态']}</td><td>{progress['处理状态']}</td>
           </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
     </section>

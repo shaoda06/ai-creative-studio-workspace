@@ -10,10 +10,11 @@
 .chloe-overview-task { border-left: 3px solid var(--line); padding-left: 18px; overflow-wrap: anywhere; }
 .chloe-overview-videos { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .chloe-overview-videos th { text-align: left; font-weight: 500; color: var(--muted); }
-.chloe-overview-videos th, .chloe-overview-videos td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.chloe-overview-videos th, .chloe-overview-videos td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
+.chloe-overview-work-link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chloe-overview-videos th:nth-child(1) { width: 40%; }
 .chloe-overview-videos th:nth-child(2), .chloe-overview-videos th:nth-child(3) { width: 20%; }
 
 .chloe-overview-heading { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
 .chloe-overview-attention { margin: 0; }
-.chloe-overview-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 20px; }
+.chloe-overview-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); gap: 20px; }
