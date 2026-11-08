@@ -1,1 +1,4 @@
 .episode-heading-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px}
+.production-list-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:18px}
+.production-list-heading h2{margin-bottom:0}
+.production-list-heading .production-statistics{margin:0 0 0 auto;justify-content:flex-end}

@@ -25,7 +25,7 @@ import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
 
-export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode }) {
+export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean }) {
   const access = useProductionAccess();
   const workMode = access.unitKind === 'work';
   const namespace = access.namespace(project);
@@ -281,10 +281,13 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     <div ref={cards}>
       {!workMode && <section aria-label="片头与片尾"><h2>片头与片尾</h2><div className="episode-grid episode-grid-pairs">{shared.map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!shared.length && <p className="muted">片头、片尾尚未开始制作。</p>}</section>}
-      <section aria-label={workMode ? "视频制作" : "剧集制作"}><h2>{workMode ? "作品列表" : "剧集制作"}</h2>
-        <div className="production-statistics" aria-label={workMode ? "作品制作统计" : "剧集制作统计"}><span>共 <strong>{statistics.total}</strong>{workMode ? " 部" : " 集"}</span>
-          {workMode ? [...workCounts].map(([label, count]) => <span key={label}>{label} <strong>{count}</strong> 部</span>)
-            : <><span>未开始 <strong>{statistics.notStarted}</strong> 集</span><span>进行中 <strong>{statistics.running}</strong> 集</span><span>已完成 <strong>{statistics.completed}</strong> 集</span></>}
+      <section aria-label={workMode ? "视频制作" : "剧集制作"}>
+        <div className={inlineListHeading ? 'production-list-heading' : undefined}>
+          <h2>{workMode ? "作品列表" : "剧集制作"}</h2>
+          <div className="production-statistics" aria-label={workMode ? "作品制作统计" : "剧集制作统计"}><span>共 <strong>{statistics.total}</strong>{workMode ? " 部" : " 集"}</span>
+            {workMode ? [...workCounts].map(([label, count]) => <span key={label}>{label} <strong>{count}</strong> 部</span>)
+              : <><span>未开始 <strong>{statistics.notStarted}</strong> 集</span><span>进行中 <strong>{statistics.running}</strong> 集</span><span>已完成 <strong>{statistics.completed}</strong> 集</span></>}
+          </div>
         </div>
         <div className="episode-grid episode-grid-pairs">{episodes.slice((page - 1) * 36, page * 36).map(item => <ProductionEpisodeButton key={item.key} project={project} revision={revision} item={item} onSelect={open} />)}</div>
         {!episodes.length && <p className="muted">{workMode ? "尚无作品，请先建立作品资料。" : "尚无剧集制作目录。"}</p>}

@@ -74,6 +74,13 @@ try {
   const card=page.locator('[data-episode="V001-隔离演示"]');await card.waitFor();
   assert.equal(await card.locator('strong').innerText(),'V001');
   assert.equal(await card.evaluate(el=>el.getBoundingClientRect().height),48);
+  const heading=await page.getByRole('heading',{name:'作品列表',exact:true}).boundingBox();
+  const stats=await page.locator('.production-statistics').boundingBox();
+  const header=await page.locator('.production-list-heading').boundingBox();
+  assert.ok(stats.x>heading.x+heading.width && stats.y<heading.y+heading.height,'statistics sit beside the heading');
+  assert.ok(Math.abs(stats.x+stats.width-header.x-header.width)<1,'statistics align to the right edge');
+  assert.equal(await page.locator('.production-list-heading').evaluate(el=>getComputedStyle(el).borderBottomWidth),'1px');
+  assert.ok((await card.boundingBox()).y>header.y+header.height,'divider separates heading from works');
   await card.click();
   await page.locator('.episode-detail').waitFor();
   assert.ok(page.url().includes('video='));
