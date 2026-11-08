@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { GenerationContext, SegmentVideo as VideoItem } from '../api';
 import { get, projectUrl } from '../api';
-import { FileActions, Original, PreviewContext, Rich, Result } from '../components';
+import { FileActions, Original, PreviewContext, Rich } from '../components';
+import { MessagePanel } from './MessagePanel';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { TabSelect } from './TabSelect';
@@ -144,8 +145,14 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <span className="production-latest">当前最新{latest ? selected !== latest.key && <>：{candidateLabel(latest.candidateNumber)}，<button className="production-latest-link" aria-label="切换到本段最新版本" onClick={() => onSelectionChange({ stage: latest.stage, key: latest.key })}>点击切换</button></> : '：暂无版本'}</span>
     </div>;
   return <>
-    {!wideVideo && selectors}
-    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} selectorControl={wideVideo ? selectors : undefined} key={`${current?.key || 'empty'}/${product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => setPlayback({ key: current!.key, time })} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
+    {selectors}
+    <MessagePanel key={current?.key || 'empty'} label="当前候选提示" messages={[
+      current && !current.context && detail.isPending && { id: 'loading', content: '正在读取当前候选资料…' },
+      current && !current.context && detail.error && { id: 'error', tone: 'error', content: '当前候选资料读取失败。', actions: <LinkButton disabled={detail.isFetching} onClick={() => { void detail.refetch(); }}>{detail.isFetching ? '正在读取…' : '重新读取'}</LinkButton> },
+      awaitingGeneration ? { id: 'pending', content: `这版视频还没生成。${plannedScript?.html ? `当前分镜为${plannedScript.label}；` : ''}尚无实际生成时使用的提示词和素材记录。` }
+        : context && context.issues.length > 0 && { id: 'issues', tone: 'warning', content: <details className="generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run}：当前候选有 {context.issues.length} 项资料关联问题</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details> },
+    ]} />
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => setPlayback({ key: current!.key, time })} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
       <SegmentReferences context={context} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
@@ -158,12 +165,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
           <TabNav compact label="分镜显示方式" items={[{ value: 'aligned', label: '跟视频对齐', disabled: !canAlign }, { value: 'all', label: '显示全部' }]} selected={aligned ? 'aligned' : 'all'} onChange={setScriptMode} disabled={!current} />
         </div>}
         <div className={'segment-script-content' + (aligned && tab === 'script' ? ' is-aligned' : '')} ref={scriptContent}>
-        {current && !current.context && <Result loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} />}
         {editingNotes && current ? <RevisionNoteEditor key={`${roundNumber}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} dialogues={context?.scriptHtml ? context.dialogues : undefined} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} renderShotTimeline={renderShotTimeline} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '尚无视频候选可审阅。' : tab === 'script' ? '尚未登记分镜。' : '生成后可查看本次提示词。'}</div> : <>
-          {awaitingGeneration ? <p className="notice" role="status">这版视频还没生成。{tab === 'script' && plannedScript?.html
-            ? `现在看到的是${plannedScript.label}，不是生成视频时留下的记录。`
-            : '还没有实际生成时使用的提示词和素材记录。'}</p>
-            : context.issues.length > 0 && <details className="notice generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run} 资料关联提示</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details>}
           {context.source && <p className="muted">生成资料来源：{context.source}</p>}
           {tab === 'script' ? scriptHtml ? <Rich html={aligned && activeShot ? activeShot.html : scriptHtml} /> : <div className="script-placeholder">该次分镜原文尚未关联或已缺失。</div> : <>
             <div className="segment-prompt-actions">

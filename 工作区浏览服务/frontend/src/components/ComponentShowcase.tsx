@@ -102,7 +102,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-row"><button disabled={!pending} onClick={() => { setPending(false); showNotice('演示已结束'); }}>结束演示</button><button className="link" onClick={clearNotices}>清除演示消息</button></div>
         </Example>
         <Example title="页面内说明" rule="与当前内容相关的说明留在正文中，悬停或聚焦文字可查看详情。操作反馈使用左下角消息。" usage="Nora 剧集制作与 Iris 视频制作的分段说明和资料状态">
-          <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: '示例资料待确认。', actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
+          <MessagePanel label="示例页面说明" messages={[{ id: 'info', content: '这是随页面展示的资料说明。', detail: '此处使用公共MessagePanel与详情提示组件。' }, { id: 'warning', tone: 'warning', content: <details><summary>当前候选有 2 项资料关联问题</summary><p>参考素材尚未关联本地原文件。</p><p>分镜快照尚未关联。</p></details>, actions: <button className="link" onClick={() => setDialog('示例资料说明')}>查看说明</button> }]} />
         </Example>
       </>}
       {category === 'reading' && <Example title="项目空间预览" rule="不同项目空间使用同一预览组件；预览关闭后保留当前项目位置。演示使用静态正文，不访问真实项目。" usage="统一项目资料浏览"><button onClick={() => setSpacePreview(true)}>打开项目空间文档</button></Example>}

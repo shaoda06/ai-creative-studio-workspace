@@ -1,3 +1,4 @@
+import { checkCandidateMessages } from './check-candidate-messages.mjs';
 import { checkSharedDownloads } from './check-shared-downloads.mjs';
 import { checkEpisodeDirectorSheets } from './check-episode-director-sheets.mjs';
 import { checkSharedInputs } from './check-shared-inputs.mjs';
@@ -53,11 +54,15 @@ try {
   for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
     const { width, height } = viewport;
     const page = await browser.newPage({ viewport });
-    const errors = [], forbidden = [];
+    const errors = [], forbidden = []; let contextAttempts = 0;
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
+      if (url.origin === origin && url.pathname === '/api/fixture-context') {
+        contextAttempts++;
+        return route.fulfill(contextAttempts === 1 ? { status: 503, json: { detail: '隔离读取失败' } } : { json: { scriptHtml: '<p>恢复后的分镜</p>', shots: [], issues: [], prompts: { english: 'Recovered.', chinese: '恢复后的提示词。' }, references: { common: [], segment: [] } } });
+      }
       // Local fixture responses only; no request reaches a project service.
       if (url.origin === origin && /^\/api\/projects\/director-fixture\/revision-notes\/EP001\/C00[1-4]$/.test(url.pathname) && request.method() === 'GET')
         return route.fulfill({ json: { notes: {}, rounds: {} } });
@@ -570,6 +575,7 @@ try {
     assert.deepEqual(forbidden, [], '测试不得访问API、外部网络或写入业务');
     assert.deepEqual(errors, [], '浏览器错误');
     console.log(`公共组件布局检查：${width}px普通/宽屏、最新/旧候选、展示页同规格样式、父容器及菜单边界通过。`);
+    await checkCandidateMessages(page, width);
     await page.close();
   }
 } finally {
