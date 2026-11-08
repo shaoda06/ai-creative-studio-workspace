@@ -107,7 +107,11 @@ try {
    return getComputedStyle(cell).verticalAlign==='middle' && getComputedStyle(cell).textAlign==='left' && Math.abs((left.left+right.right)/2-(box.left+box.right)/2)<2;
   }));
   const removeRow=table.getByRole('row').filter({hasText:'未引用成片.webm'});
+  const buttonStyles=await removeRow.locator('button').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button);return {font:s.fontSize,height:button.getBoundingClientRect().height};}));
+  assert(buttonStyles.every(style=>style.font==='14px' && style.height===buttonStyles[0].height));
+  assert(await removeRow.getByRole('button',{name:'删除',exact:true}).evaluate(button=>button.classList.contains('danger-button')));
   await removeRow.getByRole('button',{name:'删除',exact:true}).click();
+  assert(await page.getByRole('button',{name:'确认删除',exact:true}).evaluate(button=>button.classList.contains('danger-button')));
   await page.getByRole('dialog',{name:'删除成片',exact:true}).getByRole('button',{name:'取消',exact:true}).click();
   assert.deepEqual(writes,[]);
   await removeRow.getByRole('button',{name:'删除',exact:true}).click();

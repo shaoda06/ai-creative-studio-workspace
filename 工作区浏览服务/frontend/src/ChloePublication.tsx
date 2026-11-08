@@ -125,7 +125,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
               <td><div className="chloe-publication-toolbar chloe-publication-file-actions">
                 <button onClick={() => setPreview(file)}>预览成片</button>
                 <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
-                <button onClick={() => setRemove(file)}>删除</button>
+                <button className="danger-button" onClick={() => setRemove(file)}>删除</button>
               </div></td>
             </tr>) : <tr><td colSpan={2}>暂无成片</td></tr>}</tbody>
           </table></div></div>
@@ -143,7 +143,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     {remove && <Dialog title="删除成片" size="compact" closeDisabled={deleting} close={() => setRemove(null)}>
       <p>确定删除“{remove.name}”吗？文件将从磁盘删除，无法撤销。</p>
       <div className="chloe-publication-toolbar"><button disabled={deleting} onClick={() => setRemove(null)}>取消</button>
-        <button disabled={deleting} onClick={() => void deleteFile()}>{deleting ? '删除中…' : '确认删除'}</button></div>
+        <button className="danger-button" disabled={deleting} onClick={() => void deleteFile()}>{deleting ? '删除中…' : '确认删除'}</button></div>
     </Dialog>}
     {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext>;

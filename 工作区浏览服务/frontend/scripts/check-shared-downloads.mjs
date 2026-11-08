@@ -27,7 +27,7 @@ export async function checkSharedDownloads(page, width) {
     return Object.fromEntries(['fontSize', 'fontWeight', 'lineHeight', 'padding', 'borderRadius', 'color', 'backgroundColor', 'borderColor'].map(key => [key, style[key]]));
   }));
   for (const style of styles) assert.deepEqual(style, styles[0], `${width}px / 页面容器不能覆盖下载外观`);
-  assert.equal(styles[0].fontSize, '15px');
+  assert.equal(styles[0].fontSize, '14px');
   const hoverStyles = [];
   for (const control of [fixture.getByRole('button', { name: '下载检查', exact: true }), fixture.locator('.file-action-links .download-control')]) {
     await control.hover();
