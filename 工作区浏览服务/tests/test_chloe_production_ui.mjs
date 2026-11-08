@@ -18,7 +18,14 @@ x=ChloeProductionTests();x.setUp()
 try:
  x.test_shared_request_context_and_native_pack_refer_original()
  x.rounds([x.round(1,[('P001','E001'),('P002','E002')])])
- print(json.dumps({'items':browser.items(x.projects,x.project.name,x.api),'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':browser.downloads(x.projects,x.project.name,x.api,'V001')}))
+ status_items={}
+ path=x.project/'README.md'; original=path.read_text()
+ for status in ('制作中','待发布','已发布'):
+  path.write_text(original.replace('| 视频状态 | 制作中 |',f'| 视频状态 | {status} |'))
+  if status=='已发布':x.published_record()
+  status_items[status]=browser.items(x.projects,x.project.name,x.api)
+ path.write_text(original)
+ print(json.dumps({'items':status_items['制作中'],'statusItems':status_items,'detail':browser.detail(x.projects,x.project.name,x.api,'V001'),'downloads':browser.downloads(x.projects,x.project.name,x.api,'V001')}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
 // A real reference-video entry must retain an outside download when its popup is simplified.
@@ -34,7 +41,7 @@ await server.listen();const browser=await chromium.launch({channel:'chrome',head
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}});page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let scopedDetail=fixture.detail;
+  const errors=[],unexpected=[],writes=[];let videoStatus="制作中";let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let scopedDetail=fixture.detail;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),url=new URL(request.url()),path=decodeURIComponent(url.pathname);
@@ -50,9 +57,9 @@ try {
    }
    if(path.endsWith('/production-videos')){
     if(failList){return route.fulfill({status:409,body:'隔离读取失败'});}
-    return route.fulfill({json:fixture.items});
+    return route.fulfill({json:fixture.statusItems[videoStatus]});
    }
-   if(path.endsWith('/production-detail'))return route.fulfill({json:scopedDetail});
+   if(path.endsWith('/production-detail'))return route.fulfill({json:{...scopedDetail,statusHtml:fixture.statusItems[videoStatus][0].statusHtml}});
    if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads});
    if(path.endsWith('/production-notes')||path.endsWith('/production-notes/export')){
     if(request.method()==='PUT'){
@@ -81,6 +88,17 @@ try {
   assert.ok(Math.abs(stats.x+stats.width-header.x-header.width)<1,'statistics align to the right edge');
   assert.equal(await page.locator('.production-list-heading').evaluate(el=>getComputedStyle(el).borderBottomWidth),'1px');
   assert.ok((await card.boundingBox()).y>header.y+header.height,'divider separates heading from works');
+  for (const [status,color] of [['制作中','blue'],['待发布','orange'],['已发布','green']]) {
+   videoStatus=status;await page.reload();await card.waitFor();
+   const badge=card.locator('.episode-button-status .status-badge');
+   await page.waitForFunction(status=>document.querySelector('.episode-button-status .status-badge')?.textContent===status,status);
+   assert.equal(await badge.innerText(),status);
+   assert.ok((await badge.getAttribute('class')).split(' ').includes('status-'+color));
+   await page.waitForFunction(()=>{const el=document.querySelector('.episode-button-duration');return el && !el.textContent.includes('读取中');});
+   const duration=await card.locator('.episode-button-duration').boundingBox(), label=await badge.boundingBox(), bounds=await card.boundingBox();
+   assert.ok(label.x>=duration.x+duration.width && Math.abs(label.y+label.height/2-duration.y-duration.height/2)<2,'status stays beside duration');
+   assert.ok(label.x+label.width<=bounds.x+bounds.width,'status stays within the card');
+  }
   await card.click();
   await page.locator('.episode-detail').waitFor();
   assert.ok(page.url().includes('video='));

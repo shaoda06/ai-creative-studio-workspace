@@ -169,7 +169,10 @@ def production_data(project,api,work=None,**kwargs):
 def items(projects,name,space_api):
     project=projects.project(name)
     progress=fields(document(project,'README.md'),'定位与当前进度')
+    status=progress['视频状态']
+    color={'制作中':'blue','待发布':'orange','已发布':'green'}[status]
     return [{'kind':'group','name':name,'title':progress['视频名称'],'key':'README.md',
+             'statusHtml':f'<span class="status-badge status-{color}">{status}</span>',
              'workStatusLabel':progress['当前阶段'],'hasArchive':False}]
 
 

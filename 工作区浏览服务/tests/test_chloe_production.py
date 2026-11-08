@@ -82,6 +82,25 @@ class ChloeProductionTests(unittest.TestCase):
         initialize_video(self.root,'V001','隔离演示')
         self.assertEqual(state(self.project)['rounds'],{})
 
+    def published_record(self):
+        (self.project/'成片/隔离成片.webm').write_bytes((Path(__file__).parents[1]/'frontend/public/component-samples/video.webm').read_bytes())
+        add_row(self.project/'README.md','发布记录',['P001','[成片](<成片/隔离成片.webm>)','不适用','不适用','隔离发布文案','无','不适用','不适用',
+            '未取得','2026-11-08T12:00:00+08:00','立即发布','已发布','isolated-work','https://example.com/video/1','隔离手动发布反馈','https://example.com/video/1'])
+
+    def test_list_video_status_reads_readme_without_writing_records(self):
+        path=self.project/'README.md'
+        original=path.read_text()
+        for status,color in [('制作中','blue'),('待发布','orange'),('已发布','green')]:
+            with self.subTest(status=status):
+                path.write_text(original.replace('| 视频状态 | 制作中 |',f'| 视频状态 | {status} |'))
+                if status=='已发布':self.published_record()
+                before={p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()}
+                item=browser.items(self.projects,self.project.name,self.api)[0]
+                self.assertEqual(item['statusHtml'],f'<span class="status-badge status-{color}">{status}</span>')
+                self.assertEqual(browser.detail(self.projects,self.project.name,self.api,'V001')['statusHtml'],item['statusHtml'])
+                self.assertEqual(item['workStatusLabel'],'策划')
+                self.assertEqual(before,{p.relative_to(self.project):p.read_bytes() for p in self.project.rglob('*') if p.is_file()})
+
     def test_director_sheet_separate_source_chart_and_candidate(self):
         add_row(self.record,'执行记录',['E001','图片生成','不适用','Imagegen','不适用','不适用','隔离授权','未取得','未取得','未取得','准备中','无'])
         actual,_,resource=self.resource(kind='image')
