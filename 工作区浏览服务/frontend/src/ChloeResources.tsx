@@ -64,7 +64,7 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
             <div className="chloe-resource-actions"><LinkButton onClick={()=>setSelected(item)}>详情</LinkButton><FileActions url={item.media?.url} downloadOnly /></div>
           </div>;
           return item.kind==='图片' ? <div className="chloe-resource-item" key={item.key}>
-            <AssetMediaCard title={item.name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false}>{description}</AssetMediaCard>
+            <AssetMediaCard title={item.display_name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false}>{description}</AssetMediaCard>
           </div> : <article className="chloe-resource-item" key={item.key} aria-label={item.name}>
             <div><h3>{item.display_name}</h3>{item.kind==='音频' ?
               <div className="cover chloe-resource-audio">

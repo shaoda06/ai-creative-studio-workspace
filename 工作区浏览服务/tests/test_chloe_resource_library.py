@@ -43,6 +43,7 @@ class ChloeResourceLibraryTests(unittest.TestCase):
             source = self.base/name; shutil.copyfile(samples/name,source)
             ref = import_media(self.root, source, name, project=None if name=='tone.wav' else self.video.name)
             if name=='tone.wav': self.audio=ref
+            else: self.clip=ref
         self.voice=initialize_asset(self.root,'声音','A001','隔离声音')
         voice_doc=self.voice/'声音说明.md'
         ref=f"[共用:{self.audio['resource_id']}@{self.audio['version']}](<{os.path.relpath(self.audio['absolute_file'],self.voice)}>)"
@@ -58,6 +59,21 @@ class ChloeResourceLibraryTests(unittest.TestCase):
             return await call_next(request)
         app.include_router(router, prefix=self.api)
         self.client = TestClient(app)
+
+    def label_visuals(self):
+        doc=self.asset/'模特说明.md'
+        header='| 用途 | 资源引用 | 来源或原图引用 | 执行编号 |\n| --- | --- | --- | --- |'
+        rows=''.join(f"\n| 正面面部 | [共用:{ref['resource_id']}@{ref['version']}](<{os.path.relpath(ref['absolute_file'],self.asset)}>) | 用户上传 | 无 |" for ref in (self.first,self.second))
+        doc.write_text(doc.read_text().replace(header,header+rows))
+        self.label_clip(self.clip,'E001','一采')
+
+    def label_clip(self, ref, execution, stage):
+        doc=self.video/'制作记录.md'
+        stages='| 分段编号 | 制作阶段 | 候选版本 | 执行编号 | 输出槽位 | 模型分段序号 |\n| --- | --- | --- | --- | --- | --- |'
+        outputs='| 执行编号 | 输出槽位 | 资源引用 |\n| --- | --- | --- |'
+        link=f"[本视频:{ref['resource_id']}@{ref['version']}](<{os.path.relpath(ref['absolute_file'],self.video)}>)"
+        doc.write_text(doc.read_text().replace(stages,stages+f'\n| P001 | {stage} | R001 | {execution} | P001视频 | 0 |')
+            .replace(outputs,outputs+f'\n| {execution} | P001视频 | {link} |'))
 
     def snapshot(self):
         return {p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
@@ -159,3 +175,27 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         path=Path(self.first['absolute_file']);path.unlink()
         entry=next(v for v in catalog(self.root,self.api)[0] if v['owner']=='综合资料' and v['resource_id']==self.first['resource_id'] and v['version']=='V001')
         self.assertIsNone(entry['media'])
+
+    def test_visual_titles_follow_assets_and_exact_output_stage(self):
+        self.label_visuals()
+        newer=import_media(self.root,self.base/'video.webm','processed-clip',resource_id=self.clip['resource_id'],project=self.video.name)
+        self.label_clip(newer,'E002','后处理')
+        before=self.snapshot()
+        items=catalog(self.root,self.api)[0]
+        pictures=[v for v in items if v['resource_id']==self.first['resource_id']]
+        self.assertEqual([v['display_name'] for v in pictures],['隔离模特 · 正面面部']*2)
+        clips={v['version']:v for v in items if v['resource_id']==self.clip['resource_id']}
+        self.assertEqual(clips['V001']['display_name'],'隔离穿搭展示 · P001 · 一采')
+        self.assertEqual(clips['V002']['display_name'],'隔离穿搭展示 · P001 · 后处理')
+        self.assertEqual(clips['V001']['name'],'video.webm')
+        self.assertEqual(self.snapshot(),before)
+
+    def test_dedicated_picture_title_reads_existing_generation_purpose(self):
+        producer=self.video/'执行记录/图片参数.json'
+        producer.write_text(json.dumps({'purpose':'P001全身开场参考图'}))
+        meta=Path(self.local['absolute_file']).with_name('版本信息.json')
+        data=json.loads(meta.read_text());data['producer']=producer.relative_to(self.video).as_posix()
+        resources.write_json(meta,data)
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['resource_id']==self.local['resource_id'])
+        self.assertEqual(entry['display_name'],'隔离穿搭展示 · P001全身开场参考图')
+        self.assertEqual(entry['name'],'portrait.png')

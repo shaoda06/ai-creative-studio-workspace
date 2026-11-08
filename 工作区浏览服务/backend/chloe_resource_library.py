@@ -14,10 +14,45 @@ from backend.chloe_models import request_space, linked_html
 from backend.parsers import documents
 from backend.chloe_reference_assets import VOICES, asset_documents
 from backend.chloe_overview import fields
-from chloe_documents import MEDIA as MEDIA_REFERENCE, records
+from chloe_documents import MEDIA as MEDIA_REFERENCE, parse, records
+from chloe_init import ASSETS
 
 router = APIRouter(prefix='/resource-library')
 MEDIA = {'图片': 'image', '视频': 'video', '音频': 'audio'}
+
+
+def reference_key(path, value):
+    match = MEDIA_REFERENCE.fullmatch(value)
+    if match:
+        _, identity, version, href = match.groups()
+        return ((path.parent/href).resolve(), identity, version)
+
+
+def visual_titles(root):
+    titles = {}
+    for kind, (folder, prefix, filename) in ASSETS.items():
+        if kind == '声音':
+            continue
+        for path in sorted((root/'综合资料'/folder).glob(f'{prefix}*-*/{filename}')):
+            path = resources.local(root, path)
+            doc = parse(path.read_text('utf-8-sig'))
+            name = fields(doc, '商品身份' if kind == '商品' else '资产身份')['商品名称' if kind == '商品' else '资产名称']
+            for row in records(doc, '原始素材' if kind == '商品' else '参考版本'):
+                key = reference_key(path, row['资源引用'])
+                if key:
+                    titles.setdefault(key, []).append(name+' · '+row['用途'])
+    for path in sorted((root/'projects').glob('V*-*/制作记录.md')):
+        path = resources.local(root, path)
+        doc = parse(path.read_text('utf-8-sig'))
+        identity = fields(parse(path.with_name('README.md').read_text('utf-8-sig')), '定位与当前进度')
+        name = identity['视频名称']
+        stages = {(r['执行编号'], r['输出槽位']): r for r in records(doc, '视频分段执行')}
+        for row in records(doc, '输出记录'):
+            stage = stages.get((row['执行编号'], row['输出槽位']))
+            key = reference_key(path, row['资源引用'])
+            if stage and key:
+                titles.setdefault(key, []).append(name+' · '+stage['分段编号']+' · '+stage['制作阶段'])
+    return titles
 
 
 def owners(root):
@@ -27,15 +62,14 @@ def owners(root):
 
 def catalog(root, api):
     entries, scopes = [], []
+    visuals = visual_titles(root)
     voice_titles = {}
     for _, _, path, doc in asset_documents(root, VOICES):
         name = fields(doc, '资产身份')['资产名称']
         versions = {}
         for row in sorted(records(doc, '参考版本'), key=lambda row: row['用途'] != '声音原始参考'):
-            match = MEDIA_REFERENCE.fullmatch(row['资源引用'])
-            if match:
-                _, identity, version, href = match.groups()
-                key = ((path.parent/href).resolve(), identity, version)
+            key = reference_key(path, row['资源引用'])
+            if key:
                 purpose = '原始参考' if row['用途'] == '声音原始参考' else row['用途']
                 versions.setdefault(key, name+' · '+purpose)
         for key, title in versions.items():
@@ -52,6 +86,18 @@ def catalog(root, api):
                 if family['kind'] == '音频':
                     titles = voice_titles.get((file, version['resource_id'], version['version']), [])
                     display_name = '；'.join(dict.fromkeys(titles)) or family['name'] or file.name
+                else:
+                    titles = visuals.get((file, version['resource_id'], version['version']), [])
+                    if titles:
+                        display_name = '；'.join(dict.fromkeys(titles))
+                    elif family['kind'] == '图片' and scope != '综合资料':
+                        purpose = file.stem
+                        if version.get('producer'):
+                            producer = resources.local(owner, version['producer'])
+                            if producer.is_file() and producer.suffix == '.json':
+                                purpose = json.loads(producer.read_text('utf-8-sig')).get('purpose') or purpose
+                        name = fields(parse((owner/'README.md').read_text('utf-8-sig')), '定位与当前进度')['视频名称']
+                        display_name = name+' · '+purpose
                 entries.append({**version, 'name': file.name, 'title': family['name'], 'display_name': display_name,
                     'owner': scope, 'owner_label': label, 'file': key,
                     'key': scope+'/'+resources.label(version),

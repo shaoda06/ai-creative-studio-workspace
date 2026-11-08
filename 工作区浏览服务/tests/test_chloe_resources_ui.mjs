@@ -15,7 +15,7 @@ from PIL import Image
 from tests.test_chloe_resource_library import ChloeResourceLibraryTests
 from backend.chloe_resource_library import catalog,detail_data
 from chloe_resources import import_media
-x=ChloeResourceLibraryTests();x.setUp()
+x=ChloeResourceLibraryTests();x.setUp();x.label_visuals()
 try:
  for i in range(9):
   p=x.base/(('超长文件名用于核对桌面展示边界-'*7 if i==0 else 'sample-')+str(i)+'.png')
@@ -74,6 +74,7 @@ try{
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('UPSCALED');
   await page.waitForFunction(()=>document.querySelectorAll('.chloe-resource-item').length===1);
   const card=page.locator('.chloe-resource-item');
+  assert.equal(await card.locator('h3').innerText(),'隔离模特 · 正面面部');
   assert.equal(await card.locator('article .chloe-resource-description').count(),1,'metadata and actions inside image border');
   await card.locator('.cover').click();
   await page.getByRole('dialog').waitFor();assert.equal(await page.locator('dialog img').count(),1);await page.keyboard.press('Escape');
@@ -83,14 +84,15 @@ try{
   await page.getByRole('button',{name:'查看生成／处理记录',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('dialog[open]').length===2);await page.keyboard.press('Escape');
   await page.getByRole('combobox',{name:'资源版本'}).click();await page.getByRole('option',{name:/V001 · portrait.png/}).click();
-  await page.getByRole('heading',{name:'已记录的关联与引用（4）',exact:true}).waitFor();
-  assert.equal(await page.getByRole('link',{name:'进入对应资产／作品'}).count(),4);
+  await page.getByRole('heading',{name:'已记录的关联与引用（5）',exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'进入对应资产／作品'}).count(),5);
   assert.ok((await page.getByRole('link',{name:'进入对应资产／作品'}).first().getAttribute('href')).includes('/contexts/'));
   await page.keyboard.press('Escape');
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('');
   await page.getByRole('combobox',{name:'资源归属'}).click();await page.getByRole('option',{name:'全部归属',exact:true}).click();
   await page.getByRole('button',{name:'视频',exact:true}).click();
   const videoCard=page.locator('.chloe-resource-item');
+  assert.equal(await videoCard.locator('h3').innerText(),'隔离穿搭展示 · P001 · 一采');
   assert.equal(await videoCard.evaluate(el=>el.tagName),'ARTICLE');
   await page.waitForFunction(()=>document.querySelector('.chloe-resource-video')?.readyState>=2);
   assert.ok(await videoCard.locator('video').evaluate(el=>el.paused && el.currentTime===0 && el.videoWidth>0 && !el.controls),'decoded first frame without playing');
