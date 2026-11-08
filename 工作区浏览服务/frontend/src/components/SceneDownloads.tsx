@@ -9,7 +9,7 @@ import { DownloadButton } from './DownloadButton';
 import './SceneDownloads.css';
 
 type StagePackage = { name: string; count: number; url: string };
-type Resource = { packages?: StagePackage[]; count: number; url: string | null; files: { name: string; url: string }[]; messages?: string[] };
+type Resource = { packages?: StagePackage[]; count: number; url: string | null; files: { name: string; url: string; label?: string; description?: string }[]; messages?: string[] };
 interface WorkPackage {
   key: string; label: string; version: string; purpose: string; rounds: number[];
   count?: number; archived?: boolean; jypack: string | null; zip: string | null;
@@ -24,12 +24,15 @@ export function workPackageLabel({ label, rounds }: WorkPackage) {
 
 function OriginalDownloads({ resource, label, generated = false }: { resource: Resource; label: string; generated?: boolean }) {
   return resource.files.length
-    ? <>{resource.files.map(file => <DownloadButton key={file.url} url={file.url} label={file.name} title={`${generated ? '按需生成导演包' : '下载原文件'}：${file.name}`} />)}</>
+    ? <>{resource.files.map(file => {
+      const button = <DownloadButton key={file.url} url={file.url} label={file.label || file.name} title={`${generated ? '按需生成导演包' : '下载原文件'}：${file.name}`} />;
+      return file.description ? <div key={file.url} className="stage-download-file">{button}<small className="muted">{file.description}</small></div> : button;
+    })}</>
     : <DownloadButton url={resource.url} label={label} title={resource.url ? '按当前已采用来源临时生成导演包' : '本场该阶段暂无对应文件'} />;
 }
 
-export function SceneDownloads({ project, episode, scene, revision, segments = [], selectedRound }: {
-  project: string; episode: string; scene: string; revision: number; selectedRound?: number; segments?: NonNullable<FileItem['segments']>[string];
+export function SceneDownloads({ project, episode, scene, revision, segments = [], selectedRound, roundNote }: {
+  project: string; episode: string; scene: string; revision: number; selectedRound?: number; roundNote?: string; segments?: NonNullable<FileItem['segments']>[string];
 }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const access = useProductionAccess();
@@ -77,7 +80,7 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
           <DownloadButton key={file.url} url={file.url} label={file.name} title="下载原视频" />)}</div>}
       </details>;
       return <section className="stage-download-section" key={stage} aria-label={stage + '资源下载'}>
-      <h3>{stage}</h3>
+      <h3>{stage}{roundMode && roundNote && <small className="stage-download-note muted">{roundNote}</small>}</h3>
       {!roundMode && videoList}
       <section className="stage-download-group" aria-label={stage + '交接包'}>
         <h4>交接包 <small className="stage-download-count muted">{videos.url ? `${videos.count} 份视频` : roundMode ? '本轮暂无视频。' : workMode ? '尚未登记交接包。' : '尚无可下载的交接包。'}</small>

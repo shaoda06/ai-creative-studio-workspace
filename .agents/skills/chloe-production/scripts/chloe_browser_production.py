@@ -343,7 +343,7 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
     if round_number is not None:
         result['round']={kind:{'count':0,'url':None,'files':[]} for kind in ('videos','director','canvas')}
     result['workPackages']=[];seen=set()
-    candidates = data['candidates'].values() if round_number is None else selected_round(data, round_number)['values']
+    candidates = list(data['candidates'].values()) if round_number is None else selected_round(data, round_number)['values']
     for candidate in candidates:
         execution=candidate['execution']
         if execution in seen:continue
@@ -352,7 +352,13 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
         _,record=task_record
         target = result['round'] if round_number is not None else result[candidate['stage']]
         for path in record.glob('*.workflow.json'):
-            group=target['canvas'];group['files'].append(ref(project,api,path));group['count']+=1
+            file=ref(project,api,path)
+            if round_number is not None:
+                related=[value for value in candidates if value['execution']==execution]
+                segments='、'.join(dict.fromkeys(value['id'] for value in related))
+                stages='、'.join(dict.fromkeys(value['stage'] for value in related))
+                file.update(label=f'{segments} · {stages} · {execution}',description=candidate['record']['工具与模式'])
+            group=target['canvas'];group['files'].append(file);group['count']+=1
         request=read_record(record/task_record[0].get('request_name','请求.json'))
         task_state=read_record(record/'后台任务状态.json')
         if candidate['stage']!='后处理' and request and task_state.get('prompt_id'):

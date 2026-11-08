@@ -112,3 +112,34 @@ class ChloeRoundDownloadTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:
             workspace_production_download(self.case.project.name, 'V001', self.request, 1, '一采', 'zip')
         self.assertEqual(error.exception.status_code, 409)
+
+    def test_canvas_labels_come_from_selected_round_and_execution(self):
+        case = self.case
+        for execution in ('E001', 'E003', 'E006'):
+            folder = case.project/'执行记录'/execution
+            folder.mkdir(parents=True)
+            (folder/'任务.workflow.json').write_text('{}')
+        case.record.write_text(case.record.read_text().replace('| E006 | 视频处理 | E004 | H3 |', '| E006 | 视频处理 | E004 | RIFE插帧＋RTX超分 |'))
+        before = self.snapshot()
+        with patch.object(fixtures.browser, 'task_for', side_effect=lambda project, row: ({}, project/'执行记录'/row['执行编号'])):
+            listing = workspace_production_downloads(case.project.name, 'V001', self.request, round_number=5)
+            files = listing['round']['canvas']['files']
+            self.assertEqual([f['label'] for f in files], ['P001 · 二采 · E003', 'P002 · 后处理 · E006'])
+            self.assertEqual([f['description'] for f in files], ['H3', 'RIFE插帧＋RTX超分'])
+            self.assertEqual([f['name'] for f in files], ['任务.workflow.json']*2)
+            legacy = fixtures.browser.downloads(case.projects, case.project.name, case.api, 'V001')
+            self.assertEqual(files[0]['url'], legacy['二采']['canvas']['files'][0]['url'])
+            self.assertNotIn('label', legacy['二采']['canvas']['files'][0])
+        self.assertEqual(before, self.snapshot())
+
+        # One execution can produce multiple segments: keep one original canvas.
+        _, reference, _ = case.resource(key='same-execution-second-output')
+        fixtures.add_row(case.record, '视频分段执行', ['P002','一采','R003','E001','P002视频','0'])
+        fixtures.add_row(case.record, '输出记录', ['E001','P002视频',reference])
+        case.rounds([case.round(1, [('P001','E001'),('P002','E001')])])
+        before = self.snapshot()
+        with patch.object(fixtures.browser, 'task_for', side_effect=lambda project, row: ({}, project/'执行记录'/row['执行编号'])):
+            files = workspace_production_downloads(case.project.name, 'V001', self.request, round_number=1)['round']['canvas']['files']
+            self.assertEqual(len(files), 1)
+            self.assertEqual(files[0]['label'], 'P001、P002 · 一采 · E001')
+        self.assertEqual(before, self.snapshot())

@@ -17,9 +17,10 @@ from tests.test_chloe_production import ChloeProductionTests, browser
 x=ChloeProductionTests();x.setUp()
 try:
  x.test_shared_request_context_and_native_pack_refer_original()
+ (x.project/'执行记录/E001/任务.workflow.json').write_text('{}')
  x.candidate('P001','E003',stage='二采');x.candidate('P002','E004',stage='二采')
  x.record.write_text(x.record.read_text().replace('| E003 | 视频生成 | 不适用 |','| E003 | 视频生成 | E001 |').replace('| E004 | 视频生成 | 不适用 |','| E004 | 视频生成 | E002 |'))
- x.rounds([x.round(1,[('P001','E001'),('P002','E002')]),x.round(2,[('P001','E003'),('P002','E004')])])
+ x.rounds([x.round(1,[('P001','E001'),('P002','E002')],note='两段一采完成后统一审阅'),x.round(2,[('P001','E003'),('P002','E004')],note='整片一采已通过；本轮执行两段二采并保留原有配置，完成后统一交给用户审阅')])
  status_items={}
  path=x.project/'README.md'; original=path.read_text()
  for status in ('制作中','待发布','已发布'):
@@ -135,12 +136,14 @@ try {
   await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).waitFor();
   assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isEnabled(),true);
   assert.equal(await firstPack.count(),0);
+  assert.match(await page.locator('.stage-download-section > h3').innerText(), /第2轮.*整片一采已通过/);
   assert.equal(await page.locator('.stage-download-section').count(),1);
   assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮交接包','第2轮本轮视频','第2轮画布与导演包']);
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:'第1轮',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[aria-label="第1轮交接包"] button')?.disabled===false);
   assert.equal(await secondPack.count(),0);
+  assert.equal(await page.locator('.stage-download-section > h3').innerText(),'第1轮两段一采完成后统一审阅');
   await firstPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).click();
   await page.getByText('隔离打包失败',{exact:false}).first().waitFor();
   downloadFailure=false;
@@ -155,6 +158,10 @@ try {
   assert.deepEqual(downloadRequests.map(value=>new URLSearchParams(value).get('format')),['zip','zip','jypack']);
   await page.locator('details[aria-label="第1轮画布与导演包"] > summary').click();
   await page.getByText('E001 · 导演包',{exact:false}).first().waitFor();
+  await page.getByRole('button',{name:'P001 · 一采 · E001',exact:true}).waitFor();
+  assert.equal(await page.locator('.stage-download-file > small').innerText(),'H3');
+  await page.getByRole('button',{name:'P001 · 一采 · E001',exact:true}).hover();
+  await page.getByRole('tooltip').getByText('下载原文件：任务.workflow.json',{exact:true}).waitFor();
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const script=page.locator('.scene-storyboard');
   await script.getByRole('heading',{name:/SH001/}).waitFor();
