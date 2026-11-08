@@ -77,17 +77,22 @@ def read_record(path):
     return recordio.read(path) if recordio.exists(path) else {}
 
 
-def context_for(data, api, candidate, active=None):
+def context_for(data, api, candidate, active=None, bindings=None):
     active=set() if active is None else active
+    bindings={} if bindings is None else bindings
     execution=candidate['execution']
     if execution in active:
         raise ValueError('上游执行循环引用')
     active.add(execution)
     row=candidate['record']; task_record=task_for(data['project'],row)
-    if candidate['stage']=='后处理' and row['上游执行'] not in MISSING:
+    if candidate['stage'] in ('二采','后处理') and row['上游执行'] not in MISSING:
         source=next((v for v in data['candidates'].values() if v['execution']==row['上游执行'] and v['id']==candidate['id']),None)
         if source:
-            return context_for(data,api,source,active)
+            # The shared projection collects bindings by actual remote filename,
+            # including the original upload's source stamp. No new upload is implied.
+            upstream=context_for(data,api,source,active,bindings)
+            if candidate['stage']=='后处理':
+                return upstream
     if not task_record:
         return empty_context('尚未登记实际任务参数。')
     task,record=task_record
@@ -103,7 +108,7 @@ def context_for(data, api, candidate, active=None):
         return path.relative_to(root).as_posix()
     workspace_api=api.split('/projects/')[0]
     result=request_context(root,task,candidate['index'],request,workspace_api,
-        read_record(record/'执行检查报告.json').get('sources',{}),{},resolve_key=key,
+        read_record(record/'执行检查报告.json').get('sources',{}),bindings,resolve_key=key,
         file_link=lambda _, path:workspace_api+'/production-files/'+quote(path,safe='/'))
     result['prompts']['englishUrl']=file_url(api,(record/task.get('request_name','请求.json')).relative_to(data['project']).as_posix())
     if row['提示词或正文'] not in MISSING:

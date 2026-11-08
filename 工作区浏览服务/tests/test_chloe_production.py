@@ -359,6 +359,60 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertIn(key,pack['media'].values())
         self.assertEqual(list((self.project/'资源/图片').iterdir()),[])
 
+    def test_second_pass_reuses_upstream_bindings_without_writes(self):
+        self.plan();self.candidate('P001','E001');self.candidate('P001','E002',stage='二采')
+        shared,_,_=self.resource(kind='image',shared=True,key='portrait')
+        local_image,_,_=self.resource(kind='image',key='opening')
+        timeline={'global':{'commonEnabled':True,'refs':[{'imageFile':'remote-face.png','index':0}]},
+                  'segments':[{'prompt':'First pass.', 'refs':[{'imageFile':'remote-opening.png','index':1}]}]}
+        sources={input_key(self.project,p):[p.stat().st_size,p.stat().st_mtime_ns] for p in (shared,local_image)}
+        for execution in ('E001','E002'):
+            folder=self.project/'执行记录'/execution;folder.mkdir()
+            uploads=[]
+            if execution=='E001':
+                uploads=[{'file':input_key(self.project,p),'node':'1','input':'timeline_data','json-path':slot}
+                         for p,slot in [(shared,['global','refs',0,'imageFile']),
+                                        (local_image,['segments',0,'refs',0,'imageFile'])]]
+            else:
+                timeline['segments'][0]['prompt']='Actual second pass.'
+            task={'project':str(self.project),'record_dir':'执行记录/'+execution,'uploads':uploads}
+            (folder/'提交任务清单.json').write_text(json.dumps({'tasks':[task]}))
+            request={'prompt':{'1':{'class_type':'MiniMaxH3Director','inputs':{'timeline_data':json.dumps(timeline)}}}}
+            (folder/'请求.json').write_text(json.dumps(request))
+            (folder/'后台任务状态.json').write_text(json.dumps({'prompt_id':execution,'status':'completed'}))
+            (folder/'执行检查报告.json').write_text(json.dumps({'sources':sources if execution=='E001' else {}}))
+            self.record.write_text(self.record.read_text().replace(
+                f'| {execution} | 视频生成 | 不适用 | H3 | 不适用 | 不适用 |',
+                f'| {execution} | 视频生成 | '+('E001' if execution=='E002' else '不适用')+
+                f' | H3 | 不适用 | [参数](<执行记录/{execution}/提交任务清单.json>) |'))
+        data=state(self.project)
+        candidate=next(v for v in data['candidates'].values() if v['execution']=='E002')
+        before={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        context=browser.context_for(data,self.api+'/projects/'+self.project.name,candidate)
+        self.assertEqual(context['prompts']['english'],'Actual second pass.')
+        self.assertIn('E002/',context['prompts']['englishUrl'])
+        for group,path in [('common',shared),('segment',local_image)]:
+            item=context['references'][group][0]
+            self.assertNotIn('missing',item)
+            self.assertTrue(item['url'].endswith(browser.quote(path.relative_to(self.root).as_posix(),safe='/')))
+        self.assertEqual(before,{p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        # A new remote reference cannot be substituted with the current asset or an old slot.
+        request_path=self.project/'执行记录/E002/请求.json'
+        timeline['segments'][0]['refs'][0]['imageFile']='unrecorded.png'
+        request['prompt']['1']['inputs']['timeline_data']=json.dumps(timeline)
+        request_path.write_text(json.dumps(request))
+        context=browser.context_for(data,self.api,candidate)
+        self.assertTrue(context['references']['segment'][0]['missing'])
+        self.assertNotIn('missing',context['references']['common'][0])
+        info=shared.stat()
+        os.utime(shared,ns=(info.st_atime_ns,info.st_mtime_ns+1_000_000))
+        context=browser.context_for(data,self.api,candidate)
+        self.assertTrue(context['references']['common'][0]['missing'])
+        self.assertTrue(any('执行后变化' in issue for issue in context['issues']))
+        shared.unlink()
+        with self.assertRaisesRegex(ValueError,'共用输入尚未完整保存'):
+            browser.context_for(data,self.api,candidate)
+
     def test_registered_http_routes_and_shared_media_boundaries(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
