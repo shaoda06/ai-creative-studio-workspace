@@ -1,29 +1,33 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const { chromium } = require('playwright');
-const { createServer } = await import(require.resolve('vite'));
-const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
+const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
+const react = (await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const tool = fileURLToPath(new URL('../', import.meta.url));
 const frontend = tool+'frontend/';
 const version = JSON.parse(await readFile(frontend+'package.json', 'utf8')).version;
-const sample = JSON.parse(execFileSync(tool+'.venv/bin/python',['-c',`
+const python = join(tool, process.platform==='win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python');
+const sample = JSON.parse(execFileSync(python,['-X','utf8','-c',`
 import base64,json,os,tempfile
 from pathlib import Path
 from PIL import Image
 from backend.chloe_models import model_cards,model_detail
 from backend.chloe_clothing import clothing_cards,clothing_detail
 from backend.chloe_reference_assets import SCENES,asset_cards,asset_detail
-from chloe_init import initialize_workspace,initialize_asset,SKILLS
+from chloe_init import initialize_workspace,initialize_project,initialize_asset,SKILLS
 import sys
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
 import project_resources as resources
-with tempfile.TemporaryDirectory() as tmp:
- root=initialize_workspace(Path(tmp)/'Chloe Workspace')
+with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else None) as tmp:
+ workspace=initialize_workspace(Path(tmp)/'Chloe Workspace')
+ root=initialize_project(workspace,'示例账号')
  model=initialize_asset(root,'模特','M001','示例模特甲')
  initialize_asset(root,'模特','M002','示例模特乙')
  image=Path(tmp)/'portrait.png'
@@ -96,7 +100,7 @@ with tempfile.TemporaryDirectory() as tmp:
  media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in clothes+scenes for image in item['images']]}
  print(json.dumps({'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
-const output = await mkdtemp('/private/tmp/chloe-models-');
+const output = await mkdtemp(join(tmpdir(),'chloe-models-'));
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
@@ -183,7 +187,7 @@ try {
   assert.equal(await basePanel.getByRole('navigation',{name:'模特图片用途'}).count(),0);
   assert.equal(await basePanel.locator('[aria-label="全身三视图遮面版其他版本"] .asset-media-card').count(),1);
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
-  await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（1:1） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
   await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
@@ -221,7 +225,7 @@ try {
   assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-faceBox.x)<1 && Math.abs(bodyBox.x+bodyBox.width-headBox.x-headBox.width)<1,'基础全身三视图独占下一整行');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   const bodyCover=await bodyColumn.locator('.cover').boundingBox();
-  assert.ok(Math.abs(bodyCover.width / bodyCover.height - 4 / 3)<.01,'基础全身图区域为4:3');
+  assert.ok(Math.abs(bodyCover.width / bodyCover.height - 1)<.01,'基础全身图区域为1:1');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await headColumn.locator(selector).boundingBox();
