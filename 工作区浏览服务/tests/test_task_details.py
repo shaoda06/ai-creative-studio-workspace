@@ -125,22 +125,29 @@ class DetailTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_legacy_verified_segment_links_to_its_registered_resource(self):
         self.seed('completed')
-        original = self.project / 'candidate.mp4'
-        media = self.project / '资源/视频/VID-example/V001/candidate.mp4'
+        identity = 'EP001-C001-P001-R001-一采'
+        original = f'09-剧集制作/EP001/其他资料/候选视频/{identity}.mp4'
+        media = self.project / f'资源/视频/VID-example/V001/{identity}.mp4'
         media.parent.mkdir(parents=True)
         media.write_bytes(b'migrated media')
         self.data.outputs = []
-        self.data.segment_plan = SegmentPlan(director_node='1', report_node='2', output_root='/output', targets=[
-            dict(index=0, path=str(original), response_name='0.json')])
+        self.data.task_type = 'video-first-pass'
+        self.data.segment_plan = SegmentPlan(director_node='1', report_node='2', output_root='/output')
+        (self.record / '输入映射.json').write_text(json.dumps({'selected_indices': [0], 'segments': [
+            {'segment': 'EP001-C001-P001', 'round': 'R001', 'local_execution_dir': '执行附件'}]}))
         self.store.save('task', collected=1, segments={
-            '0': {'identity': 'segment-0', 'path': str(original), 'check': '已核对不变'}})
+            '0': {'identity': identity, 'path': original, 'check': '已核对不变'}})
         with resourceio.edit_index(self.project) as index:
-            index['aliases']['candidate.mp4'] = media.relative_to(self.project).as_posix()
+            index['aliases'][original] = media.relative_to(self.project).as_posix()
+        row = self.store.rows['task']
+        row.pop('_record_paths')
+        row['state'] = self.store.record_paths('task').convert(row['state'])
+        self.assertEqual(row['state']['segments']['0']['path'], str(media))
         output = (await task_detail(self.store, 'task'))['outputs'][0]
         self.assertEqual((output['status'], output['bytes']), ('saved', len(b'migrated media')))
-        self.assertTrue(output['url'].endswith('/candidate.mp4'))
+        self.assertTrue(output['url'].endswith('.mp4'))
         self.assertIsNone(output['downloaded_at'])
-        self.assertEqual(ProjectFiles(self.root / 'projects').file(self.project.name, 'candidate.mp4'), media)
+        self.assertEqual(ProjectFiles(self.root / 'projects').file(self.project.name, original), media)
 
     async def test_http_missing_task_and_corrupt_mapping_are_distinct(self):
         api = FastAPI()

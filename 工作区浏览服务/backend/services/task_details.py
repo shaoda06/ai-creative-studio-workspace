@@ -99,21 +99,28 @@ def task_files(data, state, events, archive=None):
     # Older direct-output tasks retain complete collection counts without individual receipts.
     collected_all = (not data.segment_plan and state.get('status') == 'completed'
                      and state.get('collected') == state.get('expected') == len(targets))
+    segments = state.get('segments', {}).values()
+    saved_paths = set(state.get('saved_outputs', []))
+    saved_paths.update(item['path'] for item in segments
+                       if item.get('path') and item.get('check') in ('已取回', '已核对不变'))
     outputs = []
     for target in targets:
         if any(item['path'] == target['path'] for item in outputs):
             continue
         info = file_info(project, target['path'], links)
+        # The input mapping can keep a candidate path after task records resolve it to a resource version.
+        path = Path(target['path']).resolve()
+        recorded_paths = {target['path']}
+        if path.is_relative_to(project) and resourceio.media_kind(path):
+            recorded_paths.add(str(resourceio.resolve_file(project, path)))
         downloads = [event for event in events if event['stage'] == 'download' and
-                     (event.get('path') == target['path'] or target['identity'] and event.get('identity') == target['identity'])]
+                     (event.get('path') in recorded_paths or target['identity'] and event.get('identity') == target['identity'])]
         latest = downloads[-1] if downloads else None
-        segment = next((item for item in state.get('segments', {}).values() if item.get('path') == target['path'] or
+        segment = next((item for item in segments if item.get('path') in recorded_paths or
                         target['identity'] and item.get('identity') == target['identity']), None)
         error = latest.get('error') if latest and latest['result'] == 'failed' else (
             segment.get('error') if not latest and segment and segment.get('check') == '取回失败' else None)
-        saved = collected_all or target['path'] in state.get('saved_outputs', []) or any(
-            item.get('path') == target['path'] and item.get('check') in ('已取回', '已核对不变')
-            for item in state.get('segments', {}).values())
+        saved = collected_all or bool(recorded_paths & saved_paths)
         saved = saved or bool(latest and latest['result'] == 'success')
         status = 'failed' if latest and latest['result'] == 'failed' or error else (
             'saved' if saved and info['available'] else 'missing' if saved else 'pending')
