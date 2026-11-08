@@ -127,7 +127,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
           { kind: 'group', name: '分平台', children: [{ kind: 'video', name: '示例竖屏版本.webm', url: video.url }] },
           { kind: 'group', name: '待导出空目录', children: [] }]} />
       </ComponentExample>
-      <ComponentExample title="原文件与下载" rule="下载统一使用描边加图标，14px文字、7px圆角和相同内边距；准备中替换为转圈图标，禁用状态降低透明度。查看和下载使用固定示例文本。下载会保存component-sample.txt，不读取项目文件；支持自定义文案、仅下载及整行居中。图片预览使用居中的仅下载规格，其他文件默认保留查看和下载。" usage="文件目录、资料卡、制作资源下载">
+      <ComponentExample title="原文件与下载" rule="下载统一使用描边加图标，14px文字、4px图文间距、7px圆角和相同内边距；准备中替换为转圈图标，禁用状态降低透明度。查看和下载使用固定示例文本。下载会保存component-sample.txt，不读取项目文件；支持自定义文案、仅下载及整行居中。图片预览使用居中的仅下载规格，其他文件默认保留查看和下载。" usage="文件目录、资料卡、制作资源下载">
         <div className="component-demo-row"><Original url={fileUrl} label="示例原文件" /><FileActions url={fileUrl} /></div>
         <DownloadButton url={fileUrl + '?download=true'} label="下载示例文件" title="组件示例文件" />
         <FileActions url={fileUrl} downloadOnly centered />
