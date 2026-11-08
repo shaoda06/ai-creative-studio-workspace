@@ -1,6 +1,6 @@
 # AI Creative Studio Workspace
 
-这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务；Nora连续短剧、Iris商业视频、Chloe视频带货和Studio社媒运营各由其一级业务组织阶段，具体做法由对应二级阶段维护。已有明确项目和阶段时直接接续，不重走全流程。全部业务技能与公共工具统一维护在总目录的 `.agents/skills/` 中。
+这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务；Nora连续短剧、Iris商业视频、Chloe视频带货和Studio社媒运营各由其一级业务组织阶段，具体做法由对应二级阶段维护。已有明确项目和阶段时直接接续，不重走全流程。Chloe 业务会话收到执行请求时，先按[会话职责分流](.agents/skills/chloe-commerce-video/references/会话组织与接续规范.md#业务会话职责分流)判断由哪个会话承接。全部业务技能与公共工具统一维护在总目录的 `.agents/skills/` 中。
 
 ## 工作区结构
 
