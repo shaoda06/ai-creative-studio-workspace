@@ -77,7 +77,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
       <PageCheckStatus queries={[query]} />
       <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
       {data && <>
-        {material ? <>
+        {material && <>
           <div className="chloe-publication-toolbar">
             <TabSelect label="选择发布资料" items={data.materials.map(item => ({ value: item.id, label: `${item.id} · ${item.fields['平台']} · ${item.fields['账号']}` }))}
               selected={material.id} onChange={setMaterialId} />
@@ -114,7 +114,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
             </div>)}
           </section>
           <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
-        </> : <p className="muted">尚未准备发布资料。进入发布环节后，Agent会结合成片及制作资料准备封面、文案、话题和挂品信息。</p>}
+        </>}
         <section aria-label="成片目录">
           <h2>成片目录</h2>
           <div className="prose"><div className="table-scroll"><table aria-label="成片文件">
