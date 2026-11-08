@@ -16,6 +16,7 @@ import { CopyButton } from './components/CopyButton';
 import { DownloadButton } from './components/DownloadButton';
 import { useNotify } from './components/Notifications';
 import './ChloePublication.css';
+import './components/EpisodeProduction.css';
 
 type Video = { project: string; id: string; title: string; status: string; finalCount: number };
 type Material = { id: string; fields: Record<string, string>; film: FileItem | null; covers: { label: string; media: FileItem | null }[] };
@@ -33,6 +34,7 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
       <Breadcrumbs items={[{ label: '成片与发布', onClick: selected ? () => onSelect(null) : undefined }, ...(selected ? [{ label: selected }] : [])]} />
     </PageHeader>
     {selected ? <PublicationDetail key={`${baseUrl}/${selected}`} baseUrl={baseUrl} project={selected} /> : <section className="panel" aria-label="成片与发布">
+      <div className="production-list-heading"><h2>作品列表</h2></div>
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
       {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.slice().sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(video => <EntryCard compact key={video.project}
