@@ -250,7 +250,7 @@ try {
   await product.click();
   await page.getByRole('option',{name:'修复版',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.segment-video video')?.currentSrc.endsWith('F002-P001-repair.webm'));
-  assert.match(await page.getByRole('link',{name:/^查看视频原文件/}).getAttribute('href'),/F002-P001-repair\.webm$/);
+  assert.equal(await page.getByRole('link',{name:/^查看视频原文件/}).count(),0);
   await product.click();
   await page.getByRole('option',{name:/^原版/}).click();
   await videoLocator.waitFor();
@@ -304,7 +304,8 @@ try {
   await page.getByRole('button',{name:'提示词',exact:true}).click();
   await page.getByText('生成资料来源：沿用原视频的生成记录',{exact:true}).waitFor();
   await page.getByRole('button',{name:/^分段 P002/}).click();
-  assert.match(await page.getByRole('link',{name:/^查看视频原文件/}).getAttribute('href'),/F001-P002-R001\.webm$/);
+  assert.ok(await page.locator('.segment-video video').isVisible());
+  assert.equal(await page.getByRole('link',{name:/^查看视频原文件/}).count(),0);
   await page.getByRole('button',{name:'切换到最新修改轮次',exact:true}).click();
   await page.getByRole('button',{name:/^分段 P001/}).click();
   await choose('F002');

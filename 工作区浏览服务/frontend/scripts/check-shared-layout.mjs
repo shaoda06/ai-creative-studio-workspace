@@ -160,10 +160,10 @@ try {
           const productBounds = await productMenu.boundingBox();
           assert.ok(productBounds.x >= 0 && productBounds.x + productBounds.width <= width, '[产物菜单越界]');
           await productMenu.getByRole('option', { name: /绿底 MP4/ }).click();
-          assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /process=1/);
+          assert.match(await business.locator('.segment-video video').getAttribute('src'), /process=1/);
           await productSelect.click();
           await productMenu.getByRole('option', { name: /透明 MOV 默认/ }).click();
-          assert.match(await business.getByRole('link', { name: /查看视频原文件/ }).getAttribute('href'), /final=1/);
+          assert.equal(await business.getByRole('link', { name: /查看视频原文件/ }).count(), 0);
           assert.match(await business.locator('.segment-video video').getAttribute('src'), /preview=1/);
         }
         await contained(selectors, context);
