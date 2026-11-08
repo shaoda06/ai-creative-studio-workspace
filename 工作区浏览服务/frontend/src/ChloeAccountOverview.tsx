@@ -66,7 +66,7 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
                 <span className={`status-badge status-${statusColors[progress[field]]}`} tabIndex={field === '处理状态' && ['待用户决定', '受阻'].includes(progress[field]) ? 0 : undefined}>{progress[field]}</span>
               </PointerTooltip>
             </td>)}
-          </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
+          </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。确定视频主题并建档后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
     </section>
     <p className="muted">账号方向来自账号定位；制作统计、待处理事项与进度来自各视频项目 README。</p>
   </div>;
