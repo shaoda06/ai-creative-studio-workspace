@@ -100,8 +100,13 @@ try{
   await page.getByRole('button',{name:'播放 video.webm',exact:true}).click();
   await page.locator('dialog video').waitFor();await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'音频',exact:true}).click();
-  await page.locator('.audio-reference-card').waitFor();
-  const audioBox=await page.locator('.chloe-resource-item').boundingBox(),gridBox=await page.locator('.chloe-resource-grid').boundingBox();assert.equal(audioBox.width,gridBox.width);
+  await page.locator('.chloe-resource-audio').waitFor();
+  const audioBox=await page.locator('.chloe-resource-item').boundingBox(),gridBox=await page.locator('.chloe-resource-grid').boundingBox();assert.ok(Math.abs(audioBox.width-(gridBox.width-48)/3)<1,'audio shares three-column card width');
+  assert.equal(await page.locator('.chloe-resource-item article').count(),0,'audio has no nested card');
+  assert.equal(await page.locator('.chloe-resource-item h3').count(),1);
+  const audioArea=await page.locator('.chloe-resource-audio').boundingBox(),playButton=await page.locator('.chloe-resource-audio button').boundingBox();
+  assert.ok(Math.abs((playButton.x+playButton.width/2)-(audioArea.x+audioArea.width/2))<1,'play button centered without overriding shared control');
+  await page.screenshot({path:output+'/'+width+'-audio.png',fullPage:true});
   await page.getByRole('button',{name:'播放tone.wav',exact:true}).click();await page.getByRole('button',{name:'暂停tone.wav',exact:true}).waitFor();
   await page.getByRole('searchbox',{name:'搜索资源'}).fill('not found');await page.getByText('暂无符合条件的资源。',{exact:true}).waitFor();
   assert.ok(await page.locator('audio').evaluate(el=>el.paused),'filter stops audio');

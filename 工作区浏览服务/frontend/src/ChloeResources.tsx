@@ -6,8 +6,7 @@ import { get } from './api';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Dialog, FileLink, Preview, PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
-import { AudioReferenceCard } from './components/AudioReferenceCard';
-import { useAudioPreview } from './components/AudioPreviewButton';
+import { AudioPreviewButton, useAudioPreview } from './components/AudioPreviewButton';
 import { FileActions } from './components/FileActions';
 import { LinkButton } from './components/LinkButton';
 import { Pagination } from './components/Pagination';
@@ -66,12 +65,15 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
           </div>;
           return item.kind==='图片' ? <div className="chloe-resource-item" key={item.key}>
             <AssetMediaCard title={item.name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false}>{description}</AssetMediaCard>
-          </div> : <article className={`chloe-resource-item${item.kind==='音频'?' is-audio':''}`} key={item.key} aria-label={item.name}>
-            {item.kind==='音频' && item.media ?
-              <AudioReferenceCard name={item.name} duration={item.facts.duration_seconds??null} playing={audio.playingId===item.key} progress={audio.currentId===item.key?audio.progress:0} onPlay={()=>audio.toggle(item.key,item.media!.url!)} /> :
-              <div><h3>{item.name}</h3>{item.media ? <button className="cover" aria-label={`播放 ${item.name}`} onClick={()=>setPreview(item.media!)}>
+          </div> : <article className="chloe-resource-item" key={item.key} aria-label={item.name}>
+            <div><h3>{item.name}</h3>{item.kind==='音频' ?
+              <div className="cover chloe-resource-audio">
+                <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 34V12l22-5v22M18 19l22-5" /><ellipse cx="12" cy="35" rx="6" ry="4" /><ellipse cx="34" cy="30" rx="6" ry="4" /></svg>
+                <div><AudioPreviewButton name={item.name} enabled={!!item.media} playing={audio.playingId===item.key} progress={audio.currentId===item.key?audio.progress:0} onClick={()=>audio.toggle(item.key,item.media!.url!)} /></div>
+                <span className="muted">{!item.media ? '原文件缺失' : audio.playingId===item.key ? '正在试听' : '音频试听'}</span>
+              </div> : item.media ? <button className="cover" aria-label={`播放 ${item.name}`} onClick={()=>setPreview(item.media!)}>
                 <video className="chloe-resource-video" src={item.media.url} preload="metadata" muted playsInline aria-hidden="true" />
-              </button> : <p className="muted">原文件缺失</p>}</div>}
+              </button> : <p className="muted">原文件缺失</p>}</div>
             {description}
           </article>;
         })}</div>
