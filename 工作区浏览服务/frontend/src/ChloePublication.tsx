@@ -8,7 +8,7 @@ import { Preview, PreviewContext, Result } from './components';
 import { PageHeader } from './components/PageHeader';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageCheckStatus } from './components/PageCheckStatus';
-import { EpisodeButton } from './components/EpisodeButton';
+import { EntryCard } from './components/EntryCard';
 import { TabSelect } from './components/TabSelect';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
@@ -25,7 +25,7 @@ const missing = new Set(['待确定', '待核实', '未取得', '不适用', '�
 export function ChloePublication({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
-  const { workspacePage } = useChloeScope();
+  const { workspacePage, page } = useChloeScope();
   const list = useQuery({ queryKey: ['chloe-publication', baseUrl], queryFn: () => get<Video[]>(`${baseUrl}/publication-videos`), refetchInterval: 5000 });
   return <>
     <PageHeader stacked title={title} actions={<Link to={workspacePage}>返回项目列表</Link>}>
@@ -34,10 +34,10 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
     {selected ? <PublicationDetail key={`${baseUrl}/${selected}`} baseUrl={baseUrl} project={selected} /> : <section className="panel" aria-label="成片与发布">
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
-      {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.map(video => <div key={video.project}>
-        <EpisodeButton item={{ kind: 'video', name: video.project, title: video.title }} displayName={video.id} onSelect={onSelect} />
-        <p className="muted">{video.status} · 成片目录内 {video.finalCount} 个视频</p>
-      </div>)}</div> : <p className="muted">暂无视频项目。已有视频的成片和发布资料会显示在这里。</p>)}
+      {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.map(video => <EntryCard key={video.project}
+        to={`${page}?section=publication&video=${encodeURIComponent(video.project)}`} title={`${video.id} · ${video.title}`}
+        description={`${video.status} · 成片目录内 ${video.finalCount} 个视频`} />)}</div>
+        : <p className="muted">暂无视频项目。已有视频的成片和发布资料会显示在这里。</p>)}
     </section>}
   </>;
 }

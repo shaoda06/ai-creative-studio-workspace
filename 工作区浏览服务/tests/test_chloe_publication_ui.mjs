@@ -62,7 +62,13 @@ try {
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');
   await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failList=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  await page.locator(`[data-episode="${fixture.detail.project}"]`).click();
+  const card=page.locator('.chloe-publication-list > .project-card').first();
+  await card.waitFor();
+  assert.equal(await card.locator('h3').innerText(),`${fixture.list[0].id} · ${fixture.list[0].title}`);
+  assert.ok((await card.locator('p').innerText()).includes(`成片目录内 ${fixture.list[0].finalCount} 个视频`));
+  assert.ok((await card.getAttribute('href')).includes('video='+encodeURIComponent(fixture.detail.project)));
+  assert.equal(await page.locator('.chloe-publication-list').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
+  await card.focus();await page.keyboard.press('Enter');
   await page.getByRole('region',{name:'视频发布资料'}).waitFor();
   for(const field of ['正文','话题','挂品链接']){
    await page.getByRole('button',{name:'复制'+field,exact:true}).click();
