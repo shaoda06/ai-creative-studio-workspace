@@ -25,7 +25,7 @@ try {
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
-      if (path === '/api/workspaces/account-demo/production-videos') return route.fulfill({json:[]});
+      if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
       if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
@@ -43,7 +43,13 @@ try {
     assert.deepEqual(await nav.getByRole('button').allTextContents(), labels);
     for (const label of labels) {
       await nav.getByRole('button',{name:label,exact:true}).click();
-      await page.getByRole('region',{name:label,exact:true}).waitFor();
+      const breadcrumb = page.getByRole('navigation',{name:'当前位置',exact:true});
+      await breadcrumb.waitFor();
+      assert.equal(await breadcrumb.count(),1);
+      const expected = label==='共用资产' ? 'AI 模特' : label;
+      await page.waitForFunction(expected=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===expected,expected);
+      assert.equal(await breadcrumb.evaluate(el=>getComputedStyle(el).cursor),'pointer');
+      assert.equal(await breadcrumb.locator('[aria-current="page"]').evaluate(el=>getComputedStyle(el).cursor),'pointer');
       assert.equal(await nav.locator('[aria-current="page"]').textContent(),label);
       const bounds = await nav.getByRole('button',{name:label,exact:true}).boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
@@ -85,10 +91,10 @@ try {
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
     assert.equal(await page.locator('.asset-media-card').count(),0);
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
-    await page.getByRole('heading',{name:'定位与当前进度',exact:true}).waitFor();
-    assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','定位与当前进度']);
+    await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
+    assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','作品进度']);
     assert.equal(await assetNav.count(),0);
-    await page.getByRole('link',{name:'返回工作区',exact:true}).click();
+    await page.goto(server.resolvedUrls.local[0]+'#/');
     await nav.waitFor({state:'detached'});
     assert.equal(await page.getByRole('navigation',{name:'Chloe栏目'}).count(),0);
     await page.getByRole('link',{name:/普通资料区/}).click();

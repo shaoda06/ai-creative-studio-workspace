@@ -105,6 +105,11 @@ try {
     for (const entry of await compactEntries.all()) await contained(entry, `${width}px / 紧凑入口卡片`);
     const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
     const singlePath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '示例当前栏目' });
+    for (const path of [singlePath, namingPath]) {
+      assert.equal(await path.evaluate(el => getComputedStyle(el).cursor), 'pointer');
+      assert.equal(await path.locator('[aria-current="page"]').evaluate(el => getComputedStyle(el).cursor), 'pointer');
+    }
+    assert.equal(await namingPath.locator('a').evaluate(el => getComputedStyle(el).cursor), 'pointer');
     const currentStyle = node => {
       const style = getComputedStyle(node);
       return [style.color, style.fontSize, style.fontWeight];

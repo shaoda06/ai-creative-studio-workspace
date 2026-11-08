@@ -75,7 +75,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const voiceQuery = useQuery({queryKey:['chloe-voice',api,voiceId],queryFn:()=>get<VoiceDetail>(`${api}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   return <>
-    {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked={current.value === 'assets'} actions={<Link to={workspacePage}>返回项目列表</Link>}>
+    {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked actions={<Link to={workspacePage}>返回项目列表</Link>}>
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#${page}?section=assets` },
         { label: assetCategory.label, href: modelId || referenceId || voiceId ? `#${page}?section=assets&asset=${assetCategory.value}` : undefined },
@@ -84,6 +84,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         ...(voiceId ? [{label:voiceQuery.data ? `${voiceId} · ${voiceQuery.data.name}` : voiceId}] : []),
         ...(currentLook ? [{label:`${currentLook.id} · ${currentLook.name}`}] : []),
       ]} />}
+      {current.value !== 'assets' && <Breadcrumbs items={[{ label: current.label }]} />}
     </PageHeader>}
     {breadcrumbActions && (referenceId || currentLook || voiceId) && createPortal(
       voiceId ? <Link to={`${page}?section=assets&asset=voices`}>返回声音列表</Link> :
