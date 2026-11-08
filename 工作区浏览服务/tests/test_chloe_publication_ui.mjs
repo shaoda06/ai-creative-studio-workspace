@@ -35,6 +35,7 @@ try:
  print(json.dumps({'list':publication.listing(x.root,x.api),'detail':detail,'images':images}))
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
+const listItems=[{...fixture.list[0],id:'V002',project:'V002-测试'}, {...fixture.list[0],id:'V1000',project:'V1000-测试'}, ...fixture.list, {...fixture.list[0],id:'V010',project:'V010-测试'}];
 const video=await readFile(frontend+'public/component-samples/video.webm');
 const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeURIComponent(url),Buffer.from(bytes,'base64')]));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -53,7 +54,7 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
-   if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:fixture.list});
+   if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
    if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:fixture.detail});
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
    if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
@@ -62,8 +63,10 @@ try {
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');
   await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failList=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  const card=page.locator('.chloe-publication-list > .project-card').first();
-  await card.waitFor();
+  const cards=page.locator('.chloe-publication-list > .project-card');
+  await cards.first().waitFor();
+  assert.deepEqual((await cards.locator('h3').allTextContents()).map(text=>text.split(' · ')[0]),['V1000','V010','V002',fixture.list[0].id]);
+  const card=cards.filter({has:page.getByRole('heading',{name:`${fixture.list[0].id} · ${fixture.list[0].title}`,exact:true})});
   assert.equal(await card.locator('h3').innerText(),`${fixture.list[0].id} · ${fixture.list[0].title}`);
   assert.ok((await card.locator('p').innerText()).includes(`成片目录内 ${fixture.list[0].finalCount} 个视频`));
   assert.ok((await card.getAttribute('href')).includes('video='+encodeURIComponent(fixture.detail.project)));
