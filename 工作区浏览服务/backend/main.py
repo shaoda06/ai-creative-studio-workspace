@@ -46,6 +46,7 @@ from backend.chloe_production import router as chloe_production_router
 from backend.chloe_review import router as chloe_review_router
 from backend.chloe_publication import router as chloe_publication_router, write_router as chloe_publication_write_router
 from backend.chloe_models import router as chloe_models_router
+from backend.chloe_resource_library import router as chloe_resource_library_router
 from backend.chloe_clothing import router as chloe_clothing_router
 from backend.chloe_reference_assets import SCENES, VOICES, asset_router as chloe_asset_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
@@ -1169,6 +1170,7 @@ spaces_router.include_router(chloe_publication_router)
 spaces_router.include_router(chloe_review_router)
 spaces_router.include_router(chloe_publication_write_router, dependencies=[Depends(queue_write)])
 spaces_router.include_router(chloe_models_router)
+spaces_router.include_router(chloe_resource_library_router)
 spaces_router.include_router(chloe_clothing_router)
 spaces_router.include_router(chloe_asset_router(SCENES))
 spaces_router.include_router(chloe_asset_router(VOICES))
