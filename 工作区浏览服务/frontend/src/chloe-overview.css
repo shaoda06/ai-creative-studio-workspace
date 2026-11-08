@@ -11,7 +11,7 @@
 .chloe-overview-videos { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .chloe-overview-videos th { text-align: left; font-weight: 500; color: var(--muted); }
 .chloe-overview-videos th, .chloe-overview-videos td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
-.chloe-overview-videos th:nth-child(1) { width: 30%; }
-.chloe-overview-videos th:nth-child(2), .chloe-overview-videos th:nth-child(3) { width: 16%; }
+.chloe-overview-videos th:nth-child(1) { width: 40%; }
+.chloe-overview-videos th:nth-child(2), .chloe-overview-videos th:nth-child(3) { width: 20%; }
 
 .chloe-overview-attention { margin: 18px 0 0; }

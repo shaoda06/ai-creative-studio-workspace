@@ -31,7 +31,8 @@ try {
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
       if (path === '/api/workspaces') return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
-      if (path === '/api/workspaces/chloe/account-overview') {
+      if (path.endsWith('/production-videos')) return route.fulfill({json:[]});
+      if (path.endsWith('/account-overview')) {
         if (fail) return route.fulfill({status:503,json:{detail:'isolated example failure'}});
         const data = structuredClone(samples[scenario]);
         if (long) {
@@ -53,7 +54,7 @@ try {
     assert.equal(await page.locator('time').count(),1);
     assert.deepEqual(await page.locator('.chloe-overview-fields dt').allTextContents(),['发布平台','目标人群','内容风格']);
     assert.deepEqual(await page.locator('.chloe-overview-fields dd').allTextContents(),['抖音','待确定','待确定']);
-    assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','定位与当前进度']);
+    assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','作品进度']);
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['0','0','0','0']);
     const metricBoxes = await Promise.all((await page.locator('.chloe-overview-metrics > div').all()).map(el=>el.boundingBox()));
     assert.ok(metricBoxes.every(box=>Math.abs(box.y-metricBoxes[0].y)<1), 'metrics stay in one row');
@@ -65,7 +66,7 @@ try {
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','1','0']);
     assert.deepEqual(await page.locator('.chloe-overview-metrics dt').allTextContents(),['视频总数','制作中','待发布','已发布']);
     assert.match(await page.locator('.chloe-overview-attention').innerText(),/待用户决定：1 · 受阻：0/);
-    assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['视频','当前阶段','视频状态','处理状态','下一步']);
+    assert.deepEqual(await page.locator('.chloe-overview-videos th').allTextContents(),['作品','当前阶段','视频状态','处理状态']);
     assert.equal(await page.locator('.chloe-overview-task').count(),1);
     const pendingProgress = samples.working.videos.find(item=>item.progress['处理状态']!=='正常').progress;
     const task = page.locator('.chloe-overview-task');
@@ -74,6 +75,20 @@ try {
     assert.equal(await task.locator('h3').innerText(),pendingProgress['当前问题']);
     assert.equal(await task.locator('p').innerText(),'下一步：'+pendingProgress['下一步']);
     assert.equal(await page.locator('.chloe-overview-videos tbody tr').count(),3);
+    assert.equal(await page.locator('.chloe-overview-videos tbody tr').first().locator('td').count(),4);
+    for (const [index, video] of samples.working.videos.entries()) {
+      assert.equal(await page.locator('.chloe-overview-videos tbody a').nth(index).getAttribute('href'),'#/spaces/chloe?section=production&video='+encodeURIComponent(video.project));
+    }
+    await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe/contexts/'+encodeURIComponent('甲项目')+'?section=overview');
+    await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
+    const workLink = page.locator('.chloe-overview-videos tbody a').first();
+    assert.equal(await workLink.getAttribute('href'),'#/spaces/chloe/contexts/'+encodeURIComponent('甲项目')+'?section=production&video='+encodeURIComponent(samples.working.videos[0].project));
+    await workLink.click();
+    assert.equal(new URLSearchParams(page.url().split('?')[1]).get('video'),samples.working.videos[0].project);
+    await page.goBack();
+    await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
+    await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=overview');
+    await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
     await page.screenshot({path:output+`/${width}-working.png`,fullPage:true});
     scenario = 'new'; await page.reload();
     await page.waitForFunction(()=>document.querySelector('.chloe-overview-fields')?.textContent.includes('待确定'));

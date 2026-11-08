@@ -1,12 +1,15 @@
 import './chloe-overview.css';
+import { Link } from 'react-router-dom';
+import { useChloeScope } from './chloeScope';
 
 export interface ChloeOverviewData {
   direction: Record<string, string>;
-  videos: { progress: Record<string, string> }[];
+  videos: { project: string; progress: Record<string, string> }[];
 }
 
 export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
   const { videos } = data;
+  const { page } = useChloeScope();
   const waiting = videos.filter(item => item.progress['处理状态'] === '待用户决定');
   const blocked = videos.filter(item => item.progress['处理状态'] === '受阻');
   const attention = videos.filter(item => item.progress['处理状态'] !== '正常');
@@ -44,12 +47,12 @@ export function ChloeAccountOverview({ data }: { data: ChloeOverviewData }) {
     </section>
 
     <section className="panel" aria-labelledby="chloe-videos-heading">
-      <h2 id="chloe-videos-heading">定位与当前进度</h2>
-      <table className="chloe-overview-videos"><thead><tr><th scope="col">视频</th><th scope="col">当前阶段</th><th scope="col">视频状态</th><th scope="col">处理状态</th><th scope="col">下一步</th></tr></thead>
-          <tbody>{videos.map(({ progress }) => <tr key={progress['视频编号']}>
-            <td><small>{progress['视频编号']}</small>{progress['视频名称']}</td><td>{progress['当前阶段']}</td>
-            <td>{progress['视频状态']}</td><td>{progress['处理状态']}</td><td>{progress['下一步']}</td>
-          </tr>)}{!videos.length && <tr><td colSpan={5} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
+      <h2 id="chloe-videos-heading">作品进度</h2>
+      <table className="chloe-overview-videos"><thead><tr><th scope="col">作品</th><th scope="col">当前阶段</th><th scope="col">视频状态</th><th scope="col">处理状态</th></tr></thead>
+          <tbody>{videos.map(({ project, progress }) => <tr key={progress['视频编号']}>
+            <td><Link to={`${page}?section=production&video=${encodeURIComponent(project)}`}><small>{progress['视频编号']}</small>{progress['视频名称']}</Link></td><td>{progress['当前阶段']}</td>
+            <td>{progress['视频状态']}</td><td>{progress['处理状态']}</td>
+          </tr>)}{!videos.length && <tr><td colSpan={4} className="muted">还没有视频项目。选定商品和视频主题后，在“视频制作”中查看制作进度。</td></tr>}</tbody></table>
     </section>
     <p className="muted">账号方向来自账号定位；制作统计、待处理事项与进度来自各视频项目 README。</p>
   </div>;

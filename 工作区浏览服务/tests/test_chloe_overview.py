@@ -19,6 +19,7 @@ class ChloeOverviewTests(unittest.TestCase):
         self.assertEqual(account_overview(FIXTURES/'new')['videos'], [])
         videos = account_overview(FIXTURES/'working')['videos']
         self.assertEqual(len(videos), 3)
+        self.assertEqual([v['project'] for v in videos], sorted(p.name for p in (FIXTURES/'working/projects').iterdir()))
         self.assertEqual(sum(v['progress']['处理状态'] == '待用户决定' for v in videos), 1)
         self.assertEqual(sum(v['progress']['当前阶段'] == '人工后期' for v in videos), 1)
         self.assertEqual([v['progress']['视频状态'] for v in videos], ['制作中','制作中','待发布'])
@@ -43,6 +44,7 @@ class ChloeOverviewTests(unittest.TestCase):
             path.write_text(text)
             videos = account_overview(root)['videos']
             self.assertEqual(videos[0]['progress']['处理状态'], '正常')
+            self.assertEqual(videos[0]['project'], path.parent.name)
             self.assertEqual(sum(v['progress']['处理状态'] == '待用户决定' for v in videos), 0)
             path.write_text(text.replace('## 定位与当前进度', '## 临时章节'))
             with self.assertRaisesRegex(ValueError, '章节名称'):
