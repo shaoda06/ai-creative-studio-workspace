@@ -26,6 +26,7 @@ try {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
+      if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
       if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
