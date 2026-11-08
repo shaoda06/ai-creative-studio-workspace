@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { get, spaceProjectPath } from './api';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Dialog, Document, FileTree, Preview, PreviewContext, Result } from './components';
@@ -10,6 +10,7 @@ import { PageHeader } from './components/PageHeader';
 import { PageCheckStatus } from './components/PageCheckStatus';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
+import { TabSelect } from './components/TabSelect';
 import { ProjectProduction } from './components/ProjectProduction';
 import { ResourceLibrary } from './components/ResourceLibrary';
 import { IrisProject } from './IrisProject';
@@ -20,8 +21,17 @@ import './ProjectSpace.css';
 export function ProjectSpace() {
   const { spaceId = '', context } = useParams();
   const [indexOpen, setIndexOpen] = useState(false);
+  const [search, setSearch] = useSearchParams();
   const query = useQuery({ queryKey: ['workspaces'], queryFn: () => get<WorkspaceSpace[]>('/api/workspaces'), refetchInterval: 5000 });
   const space = query.data?.find(item => item.id === spaceId);
+  const archived = search.get('archive') === '1';
+  const reason = search.get('reason') || '';
+  const projects = space?.projects || [];
+  const archivedProjects = projects.filter(project => project.archive?.status === 'archived');
+  const reasons = [...new Set(archivedProjects.map(project => project.archive!.reason))];
+  const visible = projects.map((project, index) => ({ ...project, number: index + 1 }))
+    .filter(project => (project.archive?.status === 'archived') === archived)
+    .filter(project => !archived || !reason || project.archive?.reason === reason);
   const index = useQuery({ queryKey: ['project-index'], queryFn: () => get<{ title: string; html: string }>('/api/project-index'), enabled: indexOpen });
   return <div className="home">
     {(space?.view !== 'chloe-commerce' || (space.project_layout === 'nested' && !context)) && <PageHeader title={space?.name || '项目空间'} actions={<Link to="/">返回工作区</Link>} />}
@@ -30,8 +40,16 @@ export function ProjectSpace() {
     {query.data && !space && <p role="alert">项目空间未登记。</p>}
     {space && (space.view === 'chloe-commerce' && (space.project_layout !== 'nested' || context) ? <ChloeWorkspace key={`${spaceId}/${context}`} workspaceQuery={query} /> : <>
       <div className="section-heading"><h2>业务项目</h2>{space.view === 'serial-drama' && <button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button>}</div>
-      <div className={space.view === 'chloe-commerce' ? 'grid chloe-project-grid' : 'grid'}>{space.projects.map((project, index) => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(index + 1).padStart(2, '0')}-${project.name}`} description="查看项目资料与素材" icon="▤" />)}</div>
-      {!space.projects.length && <p className="muted">暂无项目。</p>}
+      <div className="project-archive-filters">
+        <TabNav label="项目管理状态" selected={archived ? 'archived' : 'active'}
+          items={[{ value: 'active', label: `进行中（${projects.length - archivedProjects.length}）` }, { value: 'archived', label: `已归档（${archivedProjects.length}）` }]}
+          onChange={value => setSearch(value === 'archived' ? { archive: '1' } : {})} />
+        {archived && <TabSelect label="归档原因" selected={reason}
+          items={[{ value: '', label: '全部原因' }, ...reasons.map(value => ({ value, label: value }))]}
+          onChange={value => setSearch(value ? { archive: '1', reason: value } : { archive: '1' })} />}
+      </div>
+      <div className={space.view === 'chloe-commerce' ? 'grid chloe-project-grid' : 'grid'}>{visible.map(project => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(project.number).padStart(2, '0')}-${project.name}`} description={archived ? `已归档 · ${project.archive!.reason}` : '进行中 · 查看项目资料与素材'} icon="▤" />)}</div>
+      {!visible.length && <p className="muted">{archived ? reason ? '没有符合此原因的归档项目。' : '暂无已归档项目。' : '暂无进行中的项目。'}</p>}
     </>)}
     {indexOpen && <Dialog title="项目总索引" close={() => setIndexOpen(false)}><Result loading={index.isPending} error={index.error} retry={index.refetch} retrying={index.isFetching} />{index.data && <Document value={index.data} showOriginal={false} />}</Dialog>}
   </div>;

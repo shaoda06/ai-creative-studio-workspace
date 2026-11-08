@@ -12,8 +12,13 @@ def register_project(project):
     text, names = read_index(project.parent)
     if project.name in names:
         return False
-    table = re.search(r"^[ \t]*\|[ \t]*编号[ \t]*\|[ \t]*项目名称[ \t]*\|[ \t]*$", text, re.MULTILINE)
-    line = f"| {len(names) + 1:02d} | {project.name} |" if table else f"{len(names) + 1}. {project.name}"
+    table = re.search(r"^[ \t]*\|[ \t]*编号[ \t]*\|[ \t]*项目名称[ \t]*\|([^\r\n]*)$", text, re.MULTILINE)
+    if table:
+        columns = [value.strip() for value in table[1].split('|') if value.strip()]
+        values = {'项目管理状态': '进行中', '归档原因': '无'}
+        line = '| ' + ' | '.join([f'{len(names) + 1:02d}', project.name, *(values[column] for column in columns)]) + ' |'
+    else:
+        line = f"{len(names) + 1}. {project.name}"
     separator = "\n" if names or table else "\n\n"
     (project.parent / INDEX_NAME).write_text(
         text.rstrip() + separator + line + "\n", encoding="utf-8")

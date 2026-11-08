@@ -14,6 +14,7 @@ description: 工作区浏览服务与持久任务后台共用工具，管理服�
 | 运行、启动停止、服务发现及同步 | [服务使用](references/浏览服务使用规范.md) |
 | 新增空间、任务库位置、备份迁移及退役 | [运行资料维护](references/任务运行资料维护规范.md) |
 | 提交、任务组、报告及原任务恢复 | [ComfyUI工具](../studio-comfyui/SKILL.md)及scripts/browser_tasks.py |
+| 项目归档标记读取与列表分类 | [归档接入](references/业务接入规范.md#项目归档接入)，实际归档／恢复由[共用归档](../studio-archive/SKILL.md)执行 |
 | 业务资料展示及按媒体清单下载剪映包 | [业务接入](references/业务接入规范.md) |
 | 修改代码、接口、公共组件或发布 | [开发维护](references/浏览后台开发维护规范.md) |
 | 缓存、日志占用、隔离测试媒体及整理快照 | [存储与测试媒体维护](references/存储与测试媒体维护.md) |

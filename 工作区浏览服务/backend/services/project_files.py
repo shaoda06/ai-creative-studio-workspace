@@ -3,7 +3,7 @@ from pathlib import Path
 import execution_records as recordio
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-workspace-browser/scripts'))
-from workspace_project_index import read_index
+from workspace_project_index import read_archive, read_index
 from project_resources import resolve_file
 from project_paths import scope_root, SHARED_SCOPE
 
@@ -48,7 +48,7 @@ class ProjectFiles:
                     and not (p / ARCHIVE_MARKER).is_file()}
         _, indexed = read_index(self.root)
         names = dict.fromkeys([*indexed, *sorted(projects)])
-        return [{'id': name, 'name': name} for name in names if name in projects]
+        return [{'id': name, 'name': name, **read_archive(self.root / name)} for name in names if name in projects]
 
 
     def file(self, name, relative, revision=None):

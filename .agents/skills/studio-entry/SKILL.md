@@ -32,6 +32,7 @@ description: AI创作与制作统一入口，识别业务类型并路由一级�
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../studio-jianying/SKILL.md) |
 | 实拍剪辑、口播包装与配音解说动画 | [按需剪辑与动效工具](#按需剪辑与动效工具) |
 | Markdown与实际配图的带水印PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
+| 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 浏览器任务页、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
 | 视频读取、提示词库和风格库 | [视频读取](../studio-video-study/SKILL.md)、[提示词管理](../studio-prompt-library/SKILL.md)、[风格库](../studio-krea2-style-library/SKILL.md) |
 

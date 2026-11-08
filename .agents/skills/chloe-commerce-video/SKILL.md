@@ -13,6 +13,7 @@ description: Chloe 自营带货业务入口，组织账号定位、选品、脚�
 
 | 当前任务 | 阶段入口 |
 | --- | --- |
+| 整个账号项目归档或恢复（不按单条视频） | [共用项目归档](../studio-archive/SKILL.md)：标记、索引分类及关联 Codex 对话 |
 | 发布平台、目标人群、内容风格、工作区与具名项目初始化 | [账号定位与建档](../chloe-positioning/SKILL.md) |
 | 精选联盟选品、商品事实与原始素材 | [选品与商品资料](../chloe-selection/SKILL.md) |
 | 本条主题、卖点、文案、分镜与声音设计，新建视频项目 | [策划、脚本与分镜](../chloe-creative/SKILL.md) |
