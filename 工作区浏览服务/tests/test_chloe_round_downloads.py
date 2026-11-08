@@ -34,6 +34,9 @@ class ChloeRoundDownloadTests(unittest.TestCase):
         case.candidate('P001', 'E007', run='R002', output=False)
         case.candidate('P002', 'E008', run='R002', output=False)
         rounds.append(case.round(4, [('P001', 'E007'), ('P002', 'E008')]))
+        rounds.append(case.round(5, [('P001', 'E003'), ('P002', 'E006')]))
+        self.originals[5, 'P001'] = self.originals[2, 'P001']
+        self.originals[5, 'P002'] = self.originals[3, 'P002']
         case.rounds(rounds)
         text = case.record.read_text()
         for execution, upstream, kind in [('E003','E001','视频生成'),('E004','E002','视频生成'),('E005','E003','视频处理'),('E006','E004','视频处理')]:
@@ -66,14 +69,14 @@ class ChloeRoundDownloadTests(unittest.TestCase):
             jianying_draft.MediaInfo, 'parse', return_value=SimpleNamespace(
                 video_tracks=[SimpleNamespace(duration=2500, width=1536, height=864, frame_rate='24.000')],
                 general_tracks=[], image_tracks=[])):
-            for number, stage in enumerate(('一采', '二采', '后处理'), 1):
+            for number in (1, 2, 3, 5):
                 listing = workspace_production_downloads(self.case.project.name, 'V001', self.request, round_number=number)
                 self.assertEqual(listing['workPackages'], [])
-                self.assertEqual(listing[stage]['videos']['count'], 2)
-                self.assertIn(f'round={number}', listing[stage]['videos']['url'])
-                self.assertEqual([listing[s]['videos']['count'] for s in ('一采', '二采', '后处理') if s != stage], [0, 0])
+                self.assertEqual(listing['round']['videos']['count'], 2)
+                self.assertIn(f'round={number}', listing['round']['videos']['url'])
+                self.assertNotIn('stage=', listing['round']['videos']['url'])
                 for format in ('zip', 'jypack'):
-                    response = workspace_production_download(self.case.project.name, 'V001', self.request, number, stage, format)
+                    response = workspace_production_download(self.case.project.name, 'V001', self.request, number, archive_format=format)
                     self.assertTrue(Path(response.path).is_file())
                     payload = asyncio.run(self.consume(response))
                     with ZipFile(BytesIO(restore_package(payload) if format == 'jypack' else payload)) as archive:
@@ -100,7 +103,7 @@ class ChloeRoundDownloadTests(unittest.TestCase):
 
     def test_empty_wrong_round_and_missing_original(self):
         listing = workspace_production_downloads(self.case.project.name, 'V001', self.request, round_number=4)
-        self.assertIsNone(listing['一采']['videos']['url'])
+        self.assertIsNone(listing['round']['videos']['url'])
         for number, stage, status in [(4, '一采', 409), (1, '二采', 409), (99, '一采', 404)]:
             with self.assertRaises(HTTPException) as error:
                 workspace_production_download(self.case.project.name, 'V001', self.request, number, stage, 'zip')

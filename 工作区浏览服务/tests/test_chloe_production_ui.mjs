@@ -130,15 +130,17 @@ try {
   await page.locator('.scene-storyboard').waitFor();
   assert.equal(await page.getByRole('region',{name:'修改场次分镜正文',exact:true}).count(),0);
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
-  const firstPack=page.getByRole('region',{name:'一采交接包',exact:true});
-  const secondPack=page.getByRole('region',{name:'二采交接包',exact:true});
+  const firstPack=page.getByRole('region',{name:'第1轮交接包',exact:true});
+  const secondPack=page.getByRole('region',{name:'第2轮交接包',exact:true});
   await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).waitFor();
   assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isEnabled(),true);
-  assert.equal(await firstPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isDisabled(),true);
+  assert.equal(await firstPack.count(),0);
+  assert.equal(await page.locator('.stage-download-section').count(),1);
+  assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮本轮视频','第2轮交接包','第2轮画布与导演包']);
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:'第1轮',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[aria-label="一采交接包"] button')?.disabled===false);
-  assert.equal(await secondPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).isDisabled(),true);
+  await page.waitForFunction(()=>document.querySelector('[aria-label="第1轮交接包"] button')?.disabled===false);
+  assert.equal(await secondPack.count(),0);
   await firstPack.getByRole('button',{name:'视频 ZIP 包',exact:true}).click();
   await page.getByText('隔离打包失败',{exact:false}).first().waitFor();
   downloadFailure=false;
@@ -149,9 +151,9 @@ try {
    assert.equal(await readFile(await downloaded.path(),'utf8'),'isolated-download');
    await downloaded.delete();
   }
-  assert.ok(downloadRequests.every(value=>new URLSearchParams(value).get('round')==='1'));
+  assert.ok(downloadRequests.every(value=>new URLSearchParams(value).get('round')==='1' && !new URLSearchParams(value).has('stage')));
   assert.deepEqual(downloadRequests.map(value=>new URLSearchParams(value).get('format')),['zip','zip','jypack']);
-  await page.locator('details[aria-label="一采画布与导演包"] > summary').click();
+  await page.locator('details[aria-label="第1轮画布与导演包"] > summary').click();
   await page.getByText('E001 · 导演包',{exact:false}).first().waitFor();
   await page.getByRole('button',{name:'分镜脚本',exact:true}).click();
   const script=page.locator('.scene-storyboard');

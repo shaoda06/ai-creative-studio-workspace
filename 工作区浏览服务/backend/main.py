@@ -1039,7 +1039,7 @@ def workspace_production_downloads(name: str, work: str, request: Request, scene
 @spaces_router.get('/projects/{name}/works/{work}/production-download')
 def workspace_production_download(name: str, work: str, request: Request,
                                   round_number: Annotated[int, Query(alias='round', ge=1)],
-                                  stage: Literal['一采', '二采', '后处理'],
+                                  stage: Literal['一采', '二采', '后处理'] | None = None,
                                   archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     if not management_request(request):
         raise HTTPException(403, '视频打包仅允许本机或局域网工作台访问')
