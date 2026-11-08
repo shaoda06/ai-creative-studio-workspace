@@ -53,7 +53,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 | `工作区浏览服务/` | React＋FastAPI浏览服务、双击启动、共用解析器与开发历史 |
 | `工作区浏览服务/Krea2风格库/` | 本地浏览页、当前风格资源、更新程序和启动入口 |
 | `workspaces/Nora Workspace/projects/` | Nora真实短剧及角色项目 |
-| `workspaces/Iris Workspace/projects/` | Iris商业订单，原Git历史独立保留 |
+| `workspaces/Iris Workspace/projects/` | Iris商业订单，本地保存 |
 | `workspaces/Chloe Workspace/` | Chloe具名项目，各项目独立维护综合资料与共用资产，项目内projects保存单条视频 |
 | `综合资料/` | 跨项目资料、未分类资料和本机过程资料，模板仅保留目录说明 |
 
@@ -147,7 +147,7 @@ python3 -B -m unittest discover -s 工作区浏览服务/Krea2风格库/Krea2_�
 
 ## Git边界
 
-采用 `.gitignore` 排除清单：通用规则、技能、脚本、模板、源码和获准分发的资源可被Git发现；实际 `workspaces/`、总层综合资料内容、本机配置、运行库、缓存、历史归档及按需安装的外部技能不入库。Nora、Iris、Chloe统一通过各自初始化流程创建本地README和资料目录；Iris已有独立Git仍保持独立，不合并历史。公开提示词的新增、修改和删除按[提交规则](AGENTS.md#git-提交与推送)一并归入，隐私、回收站和临时文件继续排除。
+采用 `.gitignore` 排除清单：通用规则、技能、脚本、模板、源码和获准分发的资源可被Git发现；实际 `workspaces/`、总层综合资料内容、本机配置、运行库、缓存、历史归档及按需安装的外部技能不入库。Nora、Iris、Chloe通过各自初始化流程创建本地README和资料目录。公开提示词的新增、修改和删除按[提交规则](AGENTS.md#git-提交与推送)一并归入，隐私、回收站和临时文件继续排除。
 
 开发记录与测试只分发通用实现、检查结果及独立示例。真实项目、客户订单、台词、账号决定、素材标识、任务和会话ID、个人路径及业务验收明细保存在本地资料中。原始画布及Krea2资源的分发范围沿各自来源与许可说明维护。
 
