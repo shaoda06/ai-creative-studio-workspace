@@ -211,7 +211,7 @@ export function Dialog({ title, children, close, headerActions, size = "default"
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   return <dialog ref={ref} className={size === "default" ? undefined : `dialog-${size}`} aria-label={title} onCancel={event => { event.preventDefault(); if (!closeDisabled) close(); }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
 }
-export function Preview({ project, item, revision, close, baseUrl = projectUrl(project) }: { project: string; item: FileItem; revision: number; close: () => void; baseUrl?: string }) {
+export function Preview({ project, item, revision, close, baseUrl = projectUrl(project), showFileActions = true }: { project: string; item: FileItem; revision: number; close: () => void; baseUrl?: string; showFileActions?: boolean }) {
   // Keep the opened item and revision until the user chooses to load newer text.
   const [openedRevision, setOpenedRevision] = useState(revision);
   const [mediaError, setMediaError] = useState('');
@@ -230,9 +230,9 @@ export function Preview({ project, item, revision, close, baseUrl = projectUrl(p
   const video = kind === 'video' || fileKind === 'video';
   const audio = kind === 'audio' || fileKind === 'audio';
   return <Dialog title={item.name} close={close}>
-    {kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
+    {showFileActions && kind !== 'progress' && !(kind === 'document' && item.doc) && <FileActions url={item.url} downloadOnly={image} centered={image} />}
     {text && !item.doc && revision !== openedRevision && <FloatingMessage>项目资料有更新。<button onClick={() => setOpenedRevision(revision)}>读取新版本</button></FloatingMessage>}
-    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div><FileActions url={item.url} /></div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
+    {kind === 'progress' && item.doc ? <div className="phase-progress"><div className="phase-progress-meta"><div className="phase-progress-status"><strong>当前状态：</strong><Rich html={String(item.doc.statusHtml)} /></div>{showFileActions && <FileActions url={item.url} />}</div><Rich html={String(item.doc.html)} /></div> : item.doc ? kind === 'document' ? <Document value={item.doc} /> : <Rich html={String(item.doc.html)} /> : text ? <><Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />{query.data && (query.data.html ? <Document value={query.data} showOriginal={false} /> : <><p>{query.data.notice}</p><pre>{query.data.text}</pre></>)}</> :
       image ? <img className="preview-image" src={item.url} alt={item.name} onError={() => setMediaError('图片无法加载，请下载原文件查看。')} /> :
       video ? <video controls preload="metadata" src={item.url} onError={() => setMediaError('视频无法加载，请使用原文件入口。')} /> :
       audio ? <audio controls preload="metadata" src={item.url} onError={() => setMediaError('音频无法加载，请使用原文件入口。')} /> : <p>此格式暂不支持页内预览，请打开原文件。</p>}

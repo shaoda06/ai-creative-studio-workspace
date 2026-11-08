@@ -76,6 +76,16 @@ try {
    const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
    assert.deepEqual(await readFile(destination),bytes);await download.delete();
   }
+  await page.getByText(/^成片目录（/).click();
+  await page.getByRole('button',{name:'预览成片',exact:true}).first().click();
+  const dialog=page.getByRole('dialog');await dialog.waitFor();
+  assert.equal(await dialog.locator('.file-action-links').count(),0);
+  assert.equal(await dialog.getByRole('button',{name:'下载',exact:true}).count(),0);
+  assert.equal(await dialog.getByRole('link',{name:/查看/}).count(),0);
+  await dialog.locator('video').evaluate(el=>el.play());
+  await page.waitForFunction(()=>document.querySelector('dialog video')?.currentTime>0);
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  assert.equal(await page.getByRole('dialog').count(),0);
   for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
    await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
    await page.getByRole('dialog').waitFor();

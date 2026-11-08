@@ -60,6 +60,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [selected, setSelected] = useState('one');
   const [fullscreenImage, setFullscreenImage] = useState(false);
   const [preview, setPreview] = useState<FileItem | null>(null);
+  const [videoOnlyPreview, setVideoOnlyPreview] = useState(false);
   const close = useCallback(() => setPreview(null), []);
   const [readState, setReadState] = useState('ready');
   const [sync, setSync] = useState<{ error?: string; errorKind?: string; retryAt?: number; updating?: boolean }>({});
@@ -207,6 +208,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <ReferenceMediaCard item={{ kind: 'reference', name: audio.name, media: audio, approvalHtml: '<span class="status-badge status-gray">示例</span>' }} audio playing={sound.playingId === 'sample'} progress={sound.progress} onPlay={() => sound.toggle('sample', audio.url!)} onSelect={() => setPreview(audio)} />
         <ReferenceMediaCard item={{ kind: 'reference', name: video.name, media: video }} audio={false} playing={false} progress={0} onPlay={() => setPreview(video)} onSelect={() => setPreview(video)} />
         <AudioPreviewButton name="缺少参考音频的示例" enabled={false} playing={false} progress={0} onClick={() => {}} />
+      </ComponentExample>
+      <ComponentExample title="仅播放的视频预览" rule="Preview默认显示查看和下载；调用方可用showFileActions关闭文件按钮组，保留播放、关闭和Esc退出。示例只播放本地静态视频。" usage="Chloe成片与发布的视频弹窗">
+        <button onClick={() => setVideoOnlyPreview(true)}>打开仅播放预览</button>
+        {videoOnlyPreview && <Preview project="" item={video} revision={1} showFileActions={false} close={() => setVideoOnlyPreview(false)} />}
       </ComponentExample>
       <ComponentExample title="紧凑声音参考" rule="标题、公共试听按钮与右侧时长同排；长标题省略并提供完整提示，时长未知显示未取得。" usage="Chloe声音当前采用、其他版本与模特声音信息">
         <AudioReferenceCard name="AUD-SAMPLE@V001" duration={4} playing={sound.playingId==='reference'} progress={sound.currentId==='reference' ? sound.progress : 0} onPlay={()=>sound.toggle('reference',audio.url!)} />
