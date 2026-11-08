@@ -34,7 +34,7 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
     {selected ? <PublicationDetail key={`${baseUrl}/${selected}`} baseUrl={baseUrl} project={selected} /> : <section className="panel" aria-label="成片与发布">
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
-      {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.map(video => <EntryCard key={video.project}
+      {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.map(video => <EntryCard compact key={video.project}
         to={`${page}?section=publication&video=${encodeURIComponent(video.project)}`} title={`${video.id} · ${video.title}`}
         description={`${video.status} · 成片目录内 ${video.finalCount} 个视频`} />)}</div>
         : <p className="muted">暂无视频项目。已有视频的成片和发布资料会显示在这里。</p>)}

@@ -68,6 +68,7 @@ try {
   assert.ok((await card.locator('p').innerText()).includes(`成片目录内 ${fixture.list[0].finalCount} 个视频`));
   assert.ok((await card.getAttribute('href')).includes('video='+encodeURIComponent(fixture.detail.project)));
   assert.equal(await page.locator('.chloe-publication-list').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
+  assert.deepEqual(await card.evaluate(el=>[getComputedStyle(el).paddingTop,getComputedStyle(el).gap,getComputedStyle(el.querySelector('h3')).margin]),['18px','6px','0px']);
   await card.focus();await page.keyboard.press('Enter');
   await page.getByRole('region',{name:'视频发布资料'}).waitFor();
   for(const field of ['正文','话题','挂品链接']){

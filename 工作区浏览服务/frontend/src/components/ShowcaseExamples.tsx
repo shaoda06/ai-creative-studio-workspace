@@ -99,6 +99,12 @@ export function ShowcaseExamples({ category }: { category: string }) {
           {entryTitles.map(title => <EntryCard key={title} to="/" title={title} description="返回网站入口页" icon="▤" />)}
         </div> : <p className="muted">没有匹配的示例。</p>}</div>
       </ComponentExample>
+      <ComponentExample fullWidth title="紧凑入口卡片" rule="上下内边距18px，两行间距6px；整卡点击与默认入口相同。长标题可换行，说明与箭头仍贴底。" usage="Chloe成片与发布列表">
+        <div className="grid">
+          <EntryCard compact to="/" title="V001 · 示例作品" description="制作中 · 成片目录内 1 个视频" />
+          <EntryCard compact to="/" title="V002 · 用于检查长作品名称换行与说明对齐的示例作品" description="待发布 · 成片目录内 2 个视频" />
+        </div>
+      </ComponentExample>
       <ComponentExample title="导航的分组与方向" rule="同一组件支持横排、竖排、紧凑和分组下拉；加宽规格用于项目顶部，竖排示例保持桌面侧栏排列。禁用项不可选择。" usage="顶部栏目、侧栏、制作模式">
         <TabNav wide label="示例分组导航" selected={selected} onChange={setSelected} groups={[{ label: '示例分组', values: ['two', 'three'] }]} items={[{ value: 'one', label: '普通页签' }, { value: 'two', label: '子项甲' }, { value: 'three', label: '子项乙' }, { value: 'disabled', label: '禁用页签', disabled: true }]} />
         <TabNav label="示例竖排导航" vertical compact selected={selected} onChange={setSelected} items={[{ value: 'one', label: '示例甲' }, { value: 'two', label: '示例乙' }]} />

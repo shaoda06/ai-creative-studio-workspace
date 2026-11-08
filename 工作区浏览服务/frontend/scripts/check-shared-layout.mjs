@@ -96,6 +96,13 @@ try {
     const entryBottoms = await entryCards.evaluateAll(cards => cards.map(card => card.querySelector('p').getBoundingClientRect().bottom));
     assert.ok(Math.abs(entryBottoms[0] - entryBottoms[1]) <= 1, `${width}px / 展示页入口卡片贴底对齐`);
     await contained(entryCards.first(), `${width}px / 展示页入口卡片`);
+    const compactEntries = showcase.getByRole('region', { name: '紧凑入口卡片', exact: true }).getByRole('link');
+    assert.deepEqual(await compactEntries.first().evaluate(el => {
+      const style = getComputedStyle(el);
+      return [style.paddingTop, style.paddingBottom, style.columnGap, getComputedStyle(el.querySelector('h3')).margin];
+    }), ['18px', '18px', '6px', '0px']);
+    assert.equal(await entryCards.first().evaluate(el => getComputedStyle(el).paddingTop), '23px');
+    for (const entry of await compactEntries.all()) await contained(entry, `${width}px / 紧凑入口卡片`);
     const namingPath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '组件演示集' });
     const singlePath = showcase.getByRole('navigation', { name: '当前位置', exact: true }).filter({ hasText: '示例当前栏目' });
     const currentStyle = node => {
