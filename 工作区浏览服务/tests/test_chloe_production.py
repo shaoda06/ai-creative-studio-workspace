@@ -176,6 +176,41 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertNotIn('当前镜头',recorded['doc']['html'])
         self.assertIn('SH001',recorded['doc']['html'])
 
+    def test_round_script_drives_local_timing_not_current_script(self):
+        self.plan()
+        script=self.project/'脚本.md'
+        body=script.read_text().replace('| P001 | SH001 | 5 |\n| P002 | SH002 | 4 |','| P001 | SH001、SH002 | 9 |')
+        body=body.replace('00:00-00:05秒','00:10-00:15秒').replace('00:00-00:04秒','00:15-00:19秒')
+        (self.project/'历史版本/脚本-v01.md').write_text(body)
+        script.write_text(body.replace('00:10-00:15秒','00:10-00:16秒').replace('00:15-00:19秒','00:16-00:19秒').replace('**时长**：5秒','**时长**：6秒').replace('**时长**：4秒','**时长**：3秒'))
+        self.candidate('P001','E001')
+        self.rounds([self.round(1,[('P001','E001')])])
+        context={'shots':[{'id':'SH001','duration':None},{'id':'SH002','duration':None}],
+                 'issues':[], 'prompts':{}, 'references':{}}
+        with patch.object(browser,'context_for',side_effect=lambda *args:json.loads(json.dumps(context))):
+            detail=browser.detail(self.projects,self.project.name,self.api,'V001')
+        result=detail['segments']['whole'][0]['videos'][0]['context']
+        self.assertEqual([(s['start'],s['duration']) for s in result['shots']],[(0,5),(5,4)])
+        self.assertEqual(result['shotTimingSource'],'plan')
+
+    def test_unreliable_script_timing_stays_disabled_and_recorded_times_win(self):
+        context={'shots':[{'id':'SH003','duration':None},{'id':'SH004','duration':None}]}
+        entry={'shotIds':['SH003','SH004'],'duration':10}
+        shots=[{'fields':{'镜号':'SH003','时间':'00:10-00:14秒','时长':'4'}},
+               {'fields':{'镜号':'SH004','时间':'00:14-00:20秒','时长':'6'}}]
+        for bad in ['待确定','00:13-00:19秒','00:15-00:21秒','00:14-00:19秒']:
+            changed=json.loads(json.dumps(shots));changed[1]['fields']['时间']=bad
+            result=json.loads(json.dumps(context));browser.apply_script_timing(result,changed,entry)
+            self.assertEqual(result,context)
+        result=json.loads(json.dumps(context));browser.apply_script_timing(result,shots,entry)
+        self.assertEqual([(s['start'],s['duration']) for s in result['shots']],[(0,4),(4,6)])
+        result['shotTimingSource']='recorded';result['shots'][0]['duration']=3.5
+        before=json.loads(json.dumps(result));browser.apply_script_timing(result,shots,entry)
+        self.assertEqual(result,before)
+        mismatch={'shots':[{'id':'SH003','duration':None}]}
+        browser.apply_script_timing(mismatch,shots,entry)
+        self.assertNotIn('shotTimingSource',mismatch)
+
     def test_complete_round_partial_revision_and_approval_not_inferred(self):
         self.plan();self.candidate('P001','E001');self.candidate('P002','E002')
         self.candidate('P001','E003','R002')

@@ -1,5 +1,6 @@
 """Chloe's reference projection into the complete public ProductionWorkbench."""
 import json
+from math import isclose
 from pathlib import Path
 import re
 from urllib.parse import quote
@@ -160,6 +161,36 @@ def items(projects,name,space_api):
              'workStatusLabel':progress['当前阶段'],'hasArchive':False}]
 
 
+def apply_script_timing(context, script_shots, entry):
+    """Project this round's explicit script times into segment-local planned times."""
+    shots = context['shots']
+    if context.get('shotTimingSource') == 'recorded' or not shots or len(shots) != len(entry['shotIds']):
+        return
+    fields_by_id = {shot['fields']['镜号']: shot['fields'] for shot in script_shots}
+    spans = []
+    for identity in entry['shotIds']:
+        fields = fields_by_id[identity]
+        interval = re.fullmatch(r'\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*[-–—]\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*秒?\s*', fields['时间'])
+        if not interval:
+            return
+        start, end = (sum(float(part) * 60 ** power for power, part in enumerate(value.split(':')[::-1]))
+                      for value in interval.groups())
+        duration = float(fields['时长'].removesuffix('秒').strip())
+        if end <= start or not isclose(end - start, duration, abs_tol=1e-6) or (spans and not isclose(start, spans[-1][1], abs_tol=1e-6)):
+            return
+        spans.append((start, end))
+    origin = spans[0][0]
+    if not isclose(spans[-1][1] - origin, entry['duration'], abs_tol=1e-6):
+        return
+    for shot, (start, end) in zip(shots, spans):
+        if shot['duration'] is not None and (not isclose(shot['duration'], end - start, abs_tol=1e-6)
+                or not isclose(shot['start'], start - origin, abs_tol=1e-6)):
+            return
+    for shot, (start, end) in zip(shots, spans):
+        shot.update(start=start - origin, duration=end - start)
+    context['shotTimingSource'] = 'plan'
+
+
 def detail(projects,name,space_api,work,view=None,**kwargs):
     project=projects.project(name);check_work(project,work)
     if view=='archive':
@@ -188,6 +219,7 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                         shot.update(id=identity,html=script_part(project,item['script'],[identity]))
                 script_doc=document(project,item['script'])
                 script_shots=next(section['shots'] for section in script_doc['sections'] if section['heading']=='镜头与分镜')
+                apply_script_timing(context, script_shots, entry)
                 context['dialogues']=[]
                 for shot in script_shots:
                     identity=shot['fields']['镜号']
