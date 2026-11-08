@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import execution_records as recordio
+import project_resources as resourceio
 from urllib.parse import quote
 from backend.services.comfy_tasks import paths
 
@@ -64,7 +65,12 @@ def file_info(project, value, archive=None):
         return unavailable
     root, prefix = archive or (project, '/api/projects/' + quote(paths.scope_name(project), safe='') + '/files/')
     file = (root / relative).resolve()
-    if not file.is_relative_to(root) or not recordio.exists(file) or not recordio.backing_file(file).resolve().is_relative_to(root):
+    if not file.is_relative_to(root):
+        return unavailable
+    if resourceio.media_kind(file):
+        file = resourceio.resolve_file(root, file)
+    if (any(part.startswith('.') for part in file.relative_to(root).parts) or not recordio.exists(file)
+            or not recordio.backing_file(file).resolve().is_relative_to(root)):
         return unavailable
     size = file.stat().st_size if file.is_file() else len(recordio.text(file).encode('utf-8'))
     return {'available': True, 'bytes': size, 'url': prefix + quote(relative.as_posix(), safe='/')}
@@ -90,6 +96,9 @@ def task_files(data, state, events, archive=None):
                         for item in data.segment_plan.targets]
             targets += [{'path': item['path'], 'identity': item.get('identity')}
                         for item in state.get('segments', {}).values() if item.get('path')]
+    # Older direct-output tasks retain complete collection counts without individual receipts.
+    collected_all = (not data.segment_plan and state.get('status') == 'completed'
+                     and state.get('collected') == state.get('expected') == len(targets))
     outputs = []
     for target in targets:
         if any(item['path'] == target['path'] for item in outputs):
@@ -102,8 +111,9 @@ def task_files(data, state, events, archive=None):
                         target['identity'] and item.get('identity') == target['identity']), None)
         error = latest.get('error') if latest and latest['result'] == 'failed' else (
             segment.get('error') if not latest and segment and segment.get('check') == '取回失败' else None)
-        saved = target['path'] in state.get('saved_outputs', []) or any(
-            item.get('path') == target['path'] and item.get('check') == '已取回' for item in state.get('segments', {}).values())
+        saved = collected_all or target['path'] in state.get('saved_outputs', []) or any(
+            item.get('path') == target['path'] and item.get('check') in ('已取回', '已核对不变')
+            for item in state.get('segments', {}).values())
         saved = saved or bool(latest and latest['result'] == 'success')
         status = 'failed' if latest and latest['result'] == 'failed' or error else (
             'saved' if saved and info['available'] else 'missing' if saved else 'pending')

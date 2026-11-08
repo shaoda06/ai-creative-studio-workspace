@@ -7,6 +7,7 @@ from unittest.mock import patch
 import httpx
 from fastapi import FastAPI
 from backend import main
+import project_resources as resourceio
 from backend.services.comfy_segments import SegmentPlan
 from backend.services.task_details import task_detail
 from backend.services.project_files import ProjectFiles
@@ -109,6 +110,37 @@ class DetailTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result['summary']['collected_at'])
         self.assertIsNone(result['summary']['started_at'])
         self.assertEqual(result['outputs'][0]['status'], 'pending')
+
+    async def test_legacy_completed_direct_outputs_use_collection_counts(self):
+        self.seed('completed')
+        output = Path(self.data.outputs[0].path)
+        output.parent.mkdir()
+        output.write_bytes(b'old output')
+        result = await task_detail(self.store, 'task')
+        self.assertEqual(result['outputs'][0]['status'], 'pending')
+        self.store.save('task', collected=1)
+        result = await task_detail(self.store, 'task')
+        self.assertEqual(result['outputs'][0]['status'], 'saved')
+        self.assertIsNone(result['outputs'][0]['downloaded_at'])
+
+    async def test_legacy_verified_segment_links_to_its_registered_resource(self):
+        self.seed('completed')
+        original = self.project / 'candidate.mp4'
+        media = self.project / '资源/视频/VID-example/V001/candidate.mp4'
+        media.parent.mkdir(parents=True)
+        media.write_bytes(b'migrated media')
+        self.data.outputs = []
+        self.data.segment_plan = SegmentPlan(director_node='1', report_node='2', output_root='/output', targets=[
+            dict(index=0, path=str(original), response_name='0.json')])
+        self.store.save('task', collected=1, segments={
+            '0': {'identity': 'segment-0', 'path': str(original), 'check': '已核对不变'}})
+        with resourceio.edit_index(self.project) as index:
+            index['aliases']['candidate.mp4'] = media.relative_to(self.project).as_posix()
+        output = (await task_detail(self.store, 'task'))['outputs'][0]
+        self.assertEqual((output['status'], output['bytes']), ('saved', len(b'migrated media')))
+        self.assertTrue(output['url'].endswith('/candidate.mp4'))
+        self.assertIsNone(output['downloaded_at'])
+        self.assertEqual(ProjectFiles(self.root / 'projects').file(self.project.name, 'candidate.mp4'), media)
 
     async def test_http_missing_task_and_corrupt_mapping_are_distinct(self):
         api = FastAPI()
