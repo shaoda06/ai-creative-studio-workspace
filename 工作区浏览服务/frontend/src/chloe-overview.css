@@ -10,6 +10,7 @@
 .chloe-overview-task { border-left: 3px solid var(--line); padding-left: 18px; overflow-wrap: anywhere; }
 .chloe-overview-videos { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .chloe-overview-videos th { text-align: left; font-weight: 500; color: var(--muted); }
+.chloe-overview-videos th:not(:first-child), .chloe-overview-videos td:not(:first-child) { text-align: center; }
 .chloe-overview-videos th, .chloe-overview-videos td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
 .chloe-overview-work-link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chloe-overview-videos th:nth-child(1) { width: 40%; }

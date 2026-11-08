@@ -76,6 +76,14 @@ try {
     assert.equal(await task.locator('p').innerText(),'下一步：'+pendingProgress['下一步']);
     assert.equal(await page.locator('.chloe-overview-videos tbody tr').count(),3);
     assert.equal(await page.locator('.chloe-overview-videos tbody tr').first().locator('td').count(),4);
+    const colors = {'制作中':'blue','待发布':'orange','已发布':'green','正常':'green','待用户决定':'orange','受阻':'red'};
+    for (const cell of await page.locator('.chloe-overview-videos :is(th,td):not(:first-child)').all()) {
+      assert.equal(await cell.evaluate(el=>getComputedStyle(el).textAlign),'center');
+    }
+    for (const badge of await page.locator('.chloe-overview-videos .status-badge').all()) {
+      assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[await badge.innerText()]);
+    }
+    assert.equal(await page.locator('.chloe-overview-videos .status-badge').count(),6);
     for (const [index, video] of samples.working.videos.entries()) {
       assert.equal(await page.locator('.chloe-overview-videos tbody a').nth(index).getAttribute('href'),'#/spaces/chloe?section=production&video='+encodeURIComponent(video.project));
     }
@@ -100,6 +108,10 @@ try {
     await page.getByText('抖音、小红书',{exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview-metrics dd').allTextContents(),['3','2','0','1']);
     assert.equal(await page.locator('.chloe-overview-task').count(),2);
+    for (const status of ['已发布','受阻']) {
+      const badge = page.locator('.chloe-overview-videos .status-badge').filter({hasText:status});
+      assert.equal(await badge.getAttribute('class'),'status-badge status-'+colors[status]);
+    }
     const pendingBox = await page.locator('.chloe-overview-pending').boundingBox();
     const taskBoxes = await Promise.all((await page.locator('.chloe-overview-task').all()).map(el=>el.boundingBox()));
     assert.ok(taskBoxes.every(box=>Math.abs(box.width-pendingBox.width)<1 && Math.abs(box.x-pendingBox.x)<1));
