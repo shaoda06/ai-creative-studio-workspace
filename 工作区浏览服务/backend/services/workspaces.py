@@ -3,7 +3,7 @@ from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import re
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from backend.services.project_files import ProjectFiles
 
@@ -98,17 +98,21 @@ class Workspaces:
         return [space.public() for space in self.items.values()]
 
 
-def scope_links(value, api):
+def scope_links(value, api, review_page=None):
     """Keep generated resource links in the space that owns the data."""
     if isinstance(value, dict):
-        return {key: scope_links(item, api) for key, item in value.items()}
+        return {key: scope_links(item, api, review_page) for key, item in value.items()}
     if isinstance(value, list):
-        return [scope_links(item, api) for item in value]
+        return [scope_links(item, api, review_page) for item in value]
     if isinstance(value, str) and value.startswith('/api/projects/'):
         return api + value[4:]
     if value == '/#/':
+        if review_page:
+            return review_page('@shared')
         return '/#/spaces/' + api.rsplit('/', 1)[1]
     if isinstance(value, str) and value.startswith('/#/projects/'):
+        if review_page:
+            return review_page(unquote(value.removeprefix('/#/projects/')))
         return '/#/spaces/' + api.rsplit('/', 1)[1] + value[2:]
     if isinstance(value, str) and ('href=' in value or 'src=' in value):
         return re.sub(r'(href|src)="/api/projects/', lambda match: match[1] + '="' + api + '/projects/', value)

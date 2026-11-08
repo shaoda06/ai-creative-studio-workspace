@@ -16,6 +16,18 @@ from h3_browser_context import request_context, empty_context
 from prepared_documents import read_journal
 
 
+def review_page(space, project):
+    page = '/#/spaces/' + quote(space.id, safe='')
+    context = space.context
+    if '::' in project:
+        context, project = project.split('::', 1)
+    if context:
+        page += '/contexts/' + quote(context, safe='')
+    if project == '@shared':
+        return page + '?section=assets'
+    return page + '?section=production&video=' + quote(project, safe='')
+
+
 def check_work(project, work):
     if work is not None and work != project.name.split('-',1)[0]:
         raise FileNotFoundError('视频编号不属于本项目')

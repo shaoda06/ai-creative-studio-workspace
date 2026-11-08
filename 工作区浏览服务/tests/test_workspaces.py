@@ -279,6 +279,38 @@ class WorkspaceTests(HttpTestCase):
         self.assertEqual(self.client.get(self.api + '/comfy/tasks').json()['tasks'], [{'id': 'commercial'}])
         self.assertEqual(self.spaces.get('commercial').runtime, (self.primary / '工作区浏览服务/runtime/workspaces/commercial').resolve())
 
+    def test_report_review_links_follow_business_adapter_and_preserve_other_spaces(self):
+        from dataclasses import replace
+        from urllib.parse import quote
+        chloe = replace(self.spaces.get('commercial'), id='chloe', view='chloe-commerce',
+                        production_adapter='chloe-production', project_layout='nested')
+        self.spaces.items['chloe'] = chloe
+        chloe.tasks = SimpleNamespace(token='chloe-token')
+        cases = [
+            ('/api', self.spaces.get('nora'), '作品 空格&', '/#/projects/' + quote('作品 空格&', safe='')),
+            (self.api, self.spaces.get('commercial'), '作品 空格&', '/#/spaces/commercial/projects/' + quote('作品 空格&', safe='')),
+            (self.api, self.spaces.get('commercial'), '@shared', '/#/spaces/commercial'),
+            ('/api/workspaces/chloe', chloe, '甲 &项目::V001-隔离展示',
+             '/#/spaces/chloe/contexts/' + quote('甲 &项目', safe='') + '?section=production&video=' + quote('V001-隔离展示', safe='')),
+            ('/api/workspaces/chloe', chloe, '乙项目::@shared',
+             '/#/spaces/chloe/contexts/' + quote('乙项目', safe='') + '?section=assets'),
+            ('/api/workspaces/chloe', chloe, 'V001-旧平铺',
+             '/#/spaces/chloe?section=production&video=' + quote('V001-旧平铺', safe='')),
+            ('/api/workspaces/chloe', chloe, '@shared', '/#/spaces/chloe?section=assets'),
+        ]
+        for api, space, project, expected in cases:
+            with self.subTest(api=api, project=project):
+                path = '/#/' if project == '@shared' else '/#/projects/' + quote(project, safe='')
+                report = {'tasks': [{'review_path': path}], 'delivery': {'tasks': [{'review_path': path}]}}
+                space.tasks.read_report = lambda batch, thread: report
+                response = self.client.post(api + '/internal/comfy/notifications/example/report',
+                    json={'thread_id': 'isolated-thread'}, headers={'x-nora-task-token': space.tasks.token})
+                self.assertEqual(response.status_code, 200, response.text)
+                result = response.json()
+                self.assertEqual(result['tasks'][0]['review_path'], expected)
+                self.assertEqual(result['delivery']['tasks'][0]['review_path'], expected)
+                self.assertEqual(report['tasks'][0]['review_path'], path)
+
     def test_internal_credentials_cannot_cross_spaces(self):
         url = self.api + '/internal/comfy/groups/original-group'
         for token in ['', 'nora-token']:

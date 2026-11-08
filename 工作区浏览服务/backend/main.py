@@ -121,7 +121,10 @@ def task_store(request: Request):
 
 def workspace_reply(request: Request, value):
     space = getattr(request.state, 'workspace_space', None)
-    return scope_links(value, space.api) if space else value
+    if space is None:
+        return value
+    review_page = getattr(production.adapter(space), 'review_page', None) if space.production_adapter else None
+    return scope_links(value, space.api, (lambda project: review_page(space, project)) if review_page else None)
 
 
 @app.get('/api/comfy/tasks')

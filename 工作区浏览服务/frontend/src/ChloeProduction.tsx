@@ -9,11 +9,12 @@ import { ProductionWorkbench } from './components/ProductionWorkbench';
 import { ProductionAccessContext, type ProductionAccess } from './components/ProductionAccess';
 import { Breadcrumbs, BreadcrumbActionsContext, BreadcrumbSelectorContext } from './components/Breadcrumbs';
 import { PageCheckStatus } from './components/PageCheckStatus';
+import { TaskApiContext } from './components/TaskApiContext';
 
 export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
-  const { workspacePage } = useChloeScope();
+  const { workspacePage, taskApi } = useChloeScope();
   const [actions, setActions] = useState<HTMLDivElement | null>(null);
   const [selector, setSelector] = useState<HTMLSpanElement | null>(null);
   const [preview, setPreview] = useState<FileItem | null>(null);
@@ -41,8 +42,10 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
     <PageCheckStatus queries={[list]} />
     <section className="panel">
     <Result page loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
-    {list.data && <ProductionWorkbench project={selected || baseUrl} items={list.data} selected={selected} onSelect={onSelect} revision={0}
-      statistics={{ total: list.data.length, completed: 0, notStarted: 0, running: 0 }} />}
+    <TaskApiContext value={taskApi}>
+      {list.data && <ProductionWorkbench project={selected || baseUrl} items={list.data} selected={selected} onSelect={onSelect} revision={0}
+        statistics={{ total: list.data.length, completed: 0, notStarted: 0, running: 0 }} />}
+    </TaskApiContext>
     </section>
     {preview && selected && <Preview project={selected} baseUrl={projectUrl(selected)} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext></BreadcrumbSelectorContext></BreadcrumbActionsContext></ProductionAccessContext></div>;

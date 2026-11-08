@@ -26,18 +26,25 @@ await server.listen();const browser=await chromium.launch({channel:'chrome',head
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}});page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let notes={notes:{},rounds:{}};let failList=true;
+  const errors=[],unexpected=[],writes=[];let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let scopedDetail=fixture.detail;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),url=new URL(request.url()),path=decodeURIComponent(url.pathname);
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
-   if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]} ]});
+   if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',...(taskMode ? {project_layout:'nested',projects:[{id:'甲项目',name:'甲项目'}]} : {projects:[]})} ]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
+   if(path.endsWith('/后台任务状态.json'))return route.fulfill({json:{id:'isolated-task',status:'cancelled'}});
+   if(path==='/api/workspaces/chloe/comfy/tasks/isolated-task/detail'){
+    detailRequests++;
+    if(taskFailure)return route.fulfill({status:503,json:{detail:'隔离详情读取失败'}});
+    return route.fulfill({json:{summary:{id:'isolated-task',project:'甲项目::V001-隔离演示',title:'隔离任务详情',task_type:'video-first',status:'cancelled',collected:0,expected:2},
+     events:[],outputs:[],records:[],notification_batches:[],resolution_evidence:[],replacement_tasks:[]}});
+   }
    if(path.endsWith('/production-videos')){
     if(failList){return route.fulfill({status:409,body:'隔离读取失败'});}
     return route.fulfill({json:fixture.items});
    }
-   if(path.endsWith('/production-detail'))return route.fulfill({json:fixture.detail});
+   if(path.endsWith('/production-detail'))return route.fulfill({json:scopedDetail});
    if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads});
    if(path.endsWith('/production-notes')||path.endsWith('/production-notes/export')){
     if(request.method()==='PUT'){
@@ -104,6 +111,28 @@ try {
   assert.equal(await page.getByText('分镜 v01 暂无对应导演分镜表。',{exact:true}).count(),0);
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
+  // The shared task ledger belongs to the workspace, not its nested content context.
+  taskMode=true;
+  scopedDetail=JSON.parse(JSON.stringify(fixture.detail),(key,value)=>{
+   if(value && typeof value==='object' && 'taskStateUrl' in value){
+    value.url='';value.taskStatus='cancelled';
+    value.taskStateUrl='/api/workspaces/chloe/contexts/甲项目/projects/V001-隔离演示/files/执行记录/E001/后台任务状态.json';
+   }
+   return value;
+  });
+  await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe/contexts/'+encodeURIComponent('甲项目')+'?section=production&video='+encodeURIComponent('V001-隔离演示'));
+  await page.getByRole('button',{name:'查看任务详情',exact:true}).click();
+  const dialog=page.getByRole('dialog');
+  await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
+  assert.ok((await page.locator('body').innerText()).includes('隔离详情读取失败'));
+  taskFailure=false;
+  await page.getByRole('button',{name:'重新读取',exact:true}).click();
+  await dialog.getByText('隔离任务详情',{exact:true}).waitFor();
+  assert.ok(detailRequests>=2);
+  assert.ok(await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1}));
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('dialog').count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

@@ -5,6 +5,7 @@ export function useChloeScope() {
   const suffix = context ? `/contexts/${encodeURIComponent(context)}` : '';
   return {
     context,
+    taskApi: `/api/workspaces/${encodeURIComponent(spaceId)}`,
     api: `/api/workspaces/${encodeURIComponent(spaceId)}${suffix}`,
     page: `/spaces/${encodeURIComponent(spaceId)}${suffix}`,
     workspacePage: `/spaces/${encodeURIComponent(spaceId)}`,
