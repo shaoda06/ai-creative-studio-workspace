@@ -9,7 +9,9 @@ import { Dialog, Preview, PreviewContext, Result } from './components';
 import { PageHeader } from './components/PageHeader';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageCheckStatus } from './components/PageCheckStatus';
-import { EntryCard } from './components/EntryCard';
+import { ProductionEpisodeButton } from './components/ProductionEpisodeButton';
+import { ProductionAccessContext } from './components/ProductionAccess';
+import { useChloeProductionAccess } from './chloeProductionAccess';
 import { TabSelect } from './components/TabSelect';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
@@ -28,7 +30,8 @@ const missing = new Set(['待确定', '待核实', '未取得', '不适用', '�
 export function ChloePublication({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
-  const { workspacePage, page } = useChloeScope();
+  const { workspacePage } = useChloeScope();
+  const access = useChloeProductionAccess(baseUrl, selected);
   const list = useQuery({ queryKey: ['chloe-publication', baseUrl], queryFn: () => get<Video[]>(`${baseUrl}/publication-videos`), refetchInterval: 5000 });
   return <>
     <PageHeader stacked title={title} actions={<Link to={workspacePage}>返回项目列表</Link>}>
@@ -42,9 +45,8 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
       </div>
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
-      {list.data && (list.data.length ? <div className="chloe-publication-list">{list.data.slice().sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(video => <EntryCard compact key={video.project}
-        to={`${page}?section=publication&video=${encodeURIComponent(video.project)}`} title={`${video.id} · ${video.title}`}
-        description={`${video.status} · 成片目录内 ${video.finalCount} 个视频`} />)}</div>
+      {list.data && (list.data.length ? <ProductionAccessContext value={access}><div className="episode-grid episode-grid-pairs">{list.data.slice().sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(video => <ProductionEpisodeButton key={video.project}
+        project={baseUrl} revision={0} item={{ kind: 'group', name: video.project, title: video.title }} onSelect={onSelect} />)}</div></ProductionAccessContext>
         : <p className="muted">暂无视频项目。已有视频的成片和发布资料会显示在这里。</p>)}
     </section>}
   </>;

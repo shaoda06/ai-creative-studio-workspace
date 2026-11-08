@@ -60,6 +60,11 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
+   if(path.endsWith('/production-detail')){
+    const item=listItems.find(item=>path.includes('/projects/'+item.project+'/'));
+    const color={'制作中':'blue','待发布':'orange','已发布':'green'}[item.status];
+    return route.fulfill({json:{kind:'group',name:item.project,statusHtml:`<span class="status-badge status-${color}">${item.status}</span>`,scenes:['whole'],segments:{whole:[{id:'P001',duration:20,videos:[]}]}}});
+   }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
    if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)} });
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
@@ -69,17 +74,18 @@ try {
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');
   await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failList=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
-  const cards=page.locator('.chloe-publication-list > .project-card');
+  const cards=page.locator('.episode-grid > .episode-button');
   await cards.first().waitFor();
   assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 4 部', ...['制作中','待发布','已发布'].map(status=>`${status} ${listItems.filter(item=>item.status===status).length} 部`)]);
-  assert.deepEqual((await cards.locator('h3').allTextContents()).map(text=>text.split(' · ')[0]),['V1000','V010','V002',fixture.list[0].id]);
-  const card=cards.filter({has:page.getByRole('heading',{name:`${fixture.list[0].id} · ${fixture.list[0].title}`,exact:true})});
-  assert.equal(await card.locator('h3').innerText(),`${fixture.list[0].id} · ${fixture.list[0].title}`);
-  assert.ok((await card.locator('p').innerText()).includes(`成片目录内 ${fixture.list[0].finalCount} 个视频`));
-  assert.ok((await card.getAttribute('href')).includes('video='+encodeURIComponent(fixture.detail.project)));
-  assert.equal(await page.locator('.chloe-publication-list').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
-  assert.deepEqual(await card.evaluate(el=>[getComputedStyle(el).paddingTop,getComputedStyle(el).gap,getComputedStyle(el.querySelector('h3')).margin]),['18px','6px','0px']);
+  assert.deepEqual(await cards.locator('strong').allTextContents(),['V1000','V010','V002',fixture.list[0].id]);
+  const card=page.locator(`[data-episode="${fixture.detail.project}"]`);
+  assert.equal(await card.locator('.episode-button-title').innerText(),fixture.list[0].title);
+  await card.locator('.episode-button-status').getByText(fixture.list[0].status,{exact:true}).waitFor();
+  await card.locator('.episode-button-duration').getByText('20秒*',{exact:true}).waitFor();
+  assert.equal(await page.locator('.episode-grid').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),2);
+  assert.deepEqual(await card.evaluate(el=>[el.getBoundingClientRect().height,getComputedStyle(el).padding,getComputedStyle(el).gap]),[48,'8px 12px','8px']);
   await card.focus();await page.keyboard.press('Enter');
+  assert(new URL(page.url()).hash.includes('section=publication&video='), '作品按钮仍进入发布详情');
   await page.getByRole('region',{name:'视频发布资料'}).waitFor();
   for(const field of ['正文','话题','挂品链接']){
    await page.getByRole('button',{name:'复制'+field,exact:true}).click();
