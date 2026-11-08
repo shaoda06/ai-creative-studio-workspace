@@ -15,6 +15,7 @@ import { ResourceLibrary } from './components/ResourceLibrary';
 import { IrisProject } from './IrisProject';
 import { ChloeWorkspace } from './ChloeWorkspace';
 import type { IrisPresentation, IrisWork } from './IrisProject';
+import './ProjectSpace.css';
 
 export function ProjectSpace() {
   const { spaceId = '', context } = useParams();
@@ -29,7 +30,7 @@ export function ProjectSpace() {
     {query.data && !space && <p role="alert">项目空间未登记。</p>}
     {space && (space.view === 'chloe-commerce' && (space.project_layout !== 'nested' || context) ? <ChloeWorkspace key={`${spaceId}/${context}`} workspaceQuery={query} /> : <>
       <div className="section-heading"><h2>业务项目</h2>{space.view === 'serial-drama' && <button className="link" onClick={() => setIndexOpen(true)}>查看项目总索引</button>}</div>
-      <div className="grid">{space.projects.map((project, index) => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(index + 1).padStart(2, '0')}-${project.name}`} description="查看项目资料与素材" icon="▤" />)}</div>
+      <div className={space.view === 'chloe-commerce' ? 'grid chloe-project-grid' : 'grid'}>{space.projects.map((project, index) => <EntryCard key={project.id} to={spaceProjectPath(space, project.id)} title={`${String(index + 1).padStart(2, '0')}-${project.name}`} description="查看项目资料与素材" icon="▤" />)}</div>
       {!space.projects.length && <p className="muted">暂无项目。</p>}
     </>)}
     {indexOpen && <Dialog title="项目总索引" close={() => setIndexOpen(false)}><Result loading={index.isPending} error={index.error} retry={index.refetch} retrying={index.isFetching} />{index.data && <Document value={index.data} showOriginal={false} />}</Dialog>}
