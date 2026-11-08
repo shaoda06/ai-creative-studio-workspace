@@ -18,7 +18,7 @@ import { useChloeScope } from './chloeScope';
 import './chloe-resources.css';
 
 type ResourceVersion = {
-  key: string; resource_id: string; version: string; kind: string; name: string; title: string;
+  key: string; resource_id: string; version: string; kind: string; name: string; title: string; display_name: string;
   owner: string; owner_label: string; file: string; registered_at: string; origin: string;
   facts: { width?: number; height?: number; duration_seconds?: number; bytes: number; fps?: number };
   source_range?: { start_seconds?: number; end_seconds?: number }; media: FileItem | null;
@@ -66,7 +66,7 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
           return item.kind==='图片' ? <div className="chloe-resource-item" key={item.key}>
             <AssetMediaCard title={item.name} item={{media:item.media||undefined,emptyLabel:'原文件缺失'}} revision={0} compact showVersion={false}>{description}</AssetMediaCard>
           </div> : <article className="chloe-resource-item" key={item.key} aria-label={item.name}>
-            <div><h3>{item.name}</h3>{item.kind==='音频' ?
+            <div><h3>{item.display_name}</h3>{item.kind==='音频' ?
               <div className="cover chloe-resource-audio">
                 <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 34V12l22-5v22M18 19l22-5" /><ellipse cx="12" cy="35" rx="6" ry="4" /><ellipse cx="34" cy="30" rx="6" ry="4" /></svg>
                 <div><AudioPreviewButton name={item.name} enabled={!!item.media} playing={audio.playingId===item.key} progress={audio.currentId===item.key?audio.progress:0} onClick={()=>audio.toggle(item.key,item.media!.url!)} /></div>

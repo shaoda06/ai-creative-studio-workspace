@@ -41,7 +41,13 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         samples = Path(__file__).parents[1]/'frontend/public/component-samples'
         for name in ('tone.wav', 'video.webm'):
             source = self.base/name; shutil.copyfile(samples/name,source)
-            import_media(self.root, source, name, project=self.video.name)
+            ref = import_media(self.root, source, name, project=None if name=='tone.wav' else self.video.name)
+            if name=='tone.wav': self.audio=ref
+        self.voice=initialize_asset(self.root,'声音','A001','隔离声音')
+        voice_doc=self.voice/'声音说明.md'
+        ref=f"[共用:{self.audio['resource_id']}@{self.audio['version']}](<{os.path.relpath(self.audio['absolute_file'],self.voice)}>)"
+        header='| 用途 | 资源引用 | 来源或原图引用 | 执行编号 |\n| --- | --- | --- | --- |'
+        voice_doc.write_text(voice_doc.read_text().replace(header,header+f'\n| 声音参考 | {ref} | 原件 | 无 |\n| 声音原始参考 | {ref} | 用户上传 | 无 |'))
         shutil.copyfile(samples/'video.webm',self.video/'成片/人工成片.webm')
         (self.video/'剪辑交接/示例包.zip').write_bytes(b'not a media resource')
         self.space = SimpleNamespace(root=self.root,api=self.api,view='chloe-commerce')
@@ -132,7 +138,24 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         self.space.view='serial-drama'
         self.assertEqual(self.client.get(self.api+'/resource-library').status_code,404)
 
+    def test_audio_title_uses_exact_voice_role_without_renaming_file(self):
+        before=self.snapshot()
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['kind']=='音频')
+        self.assertEqual(entry['display_name'],'隔离声音 · 原始参考')
+        self.assertEqual(entry['name'],'tone.wav')
+        self.assertEqual(entry['media']['name'],'tone.wav')
+        self.assertEqual(self.snapshot(),before)
+        doc=self.voice/'声音说明.md'
+        doc.write_text(doc.read_text().replace('声音原始参考','声音参考'))
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['kind']=='音频')
+        self.assertEqual(entry['display_name'],'隔离声音 · 声音参考')
+        newer=import_media(self.root,self.base/'tone.wav','tone-version-2',resource_id=self.audio['resource_id'])
+        doc.write_text(doc.read_text().replace('@V001','@V002').replace(
+            os.path.relpath(self.audio['absolute_file'],self.voice),os.path.relpath(newer['absolute_file'],self.voice)))
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['kind']=='音频' and v['version']=='V001')
+        self.assertEqual(entry['display_name'],entry['title'])
+
     def test_missing_file_remains_recorded(self):
         path=Path(self.first['absolute_file']);path.unlink()
-        entry=next(v for v in catalog(self.root,self.api)[0] if v['owner']=='综合资料' and v['version']=='V001')
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['owner']=='综合资料' and v['resource_id']==self.first['resource_id'] and v['version']=='V001')
         self.assertIsNone(entry['media'])

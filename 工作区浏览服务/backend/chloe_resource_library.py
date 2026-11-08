@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse
 import project_resources as resources
 from backend.chloe_models import request_space, linked_html
 from backend.parsers import documents
+from backend.chloe_reference_assets import VOICES, asset_documents
+from backend.chloe_overview import fields
+from chloe_documents import MEDIA as MEDIA_REFERENCE, records
 
 router = APIRouter(prefix='/resource-library')
 MEDIA = {'图片': 'image', '视频': 'video', '音频': 'audio'}
@@ -24,6 +27,19 @@ def owners(root):
 
 def catalog(root, api):
     entries, scopes = [], []
+    voice_titles = {}
+    for _, _, path, doc in asset_documents(root, VOICES):
+        name = fields(doc, '资产身份')['资产名称']
+        versions = {}
+        for row in sorted(records(doc, '参考版本'), key=lambda row: row['用途'] != '声音原始参考'):
+            match = MEDIA_REFERENCE.fullmatch(row['资源引用'])
+            if match:
+                _, identity, version, href = match.groups()
+                key = ((path.parent/href).resolve(), identity, version)
+                purpose = '原始参考' if row['用途'] == '声音原始参考' else row['用途']
+                versions.setdefault(key, name+' · '+purpose)
+        for key, title in versions.items():
+            voice_titles.setdefault(key, []).append(title)
     for owner in owners(root):
         scope = owner.relative_to(root).as_posix()
         label = '共用资源' if scope == '综合资料' else owner.name
@@ -32,7 +48,11 @@ def catalog(root, api):
             for version in family['versions']:
                 file = resources.local(owner, version['file'])
                 key = file.relative_to(root).as_posix()
-                entries.append({**version, 'name': file.name, 'title': family['name'],
+                display_name = file.name
+                if family['kind'] == '音频':
+                    titles = voice_titles.get((file, version['resource_id'], version['version']), [])
+                    display_name = '；'.join(dict.fromkeys(titles)) or family['name'] or file.name
+                entries.append({**version, 'name': file.name, 'title': family['name'], 'display_name': display_name,
                     'owner': scope, 'owner_label': label, 'file': key,
                     'key': scope+'/'+resources.label(version),
                     'media': {'kind': MEDIA[family['kind']], 'key': key, 'name': file.name,
