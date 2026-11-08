@@ -14,7 +14,7 @@
 |---|---|---|
 | SCR-01 | reviewed_invariant | When a scene is organized around active pursuit or conflict, it has a current agenda, opposing force, directional turn, and exit state. A traceable fact, leverage change, cost, authority, or choice makes the prior strategy fail; an opponent's unexplained silence, inaction, or departure does not substitute for the turn. Atmospheric, ritual, montage, transition, and consequence-processing scenes may instead justify themselves through a necessary change in knowledge, relationship, pressure, rhythm, or production state; they must not manufacture an opponent merely to satisfy this rule. |
 | SCR-02 | craft_default | Prefer choices and consequences over coincidence for major turns. |
-| SCR-03 | reviewed_invariant | Private thought is expressed through behavior, evidence, or deliberate VO/OS. |
+| SCR-03 | reviewed_invariant | Private thought is expressed through behavior, evidence, or deliberate voice-over as defined in the [shared screenplay skill](../../studio-screenplay/SKILL.md#声源与正文写法). |
 | SCR-04 | craft_default | Dialogue carries agenda, relationship, subtext, and a change—not only information. |
 | SCR-05 | structural_invariant | Existing production tags use supported, closed syntax and resolvable references. A continuity tag records a state established by shown action; it cannot establish that an unseen event or contact never occurred. |
 | SCR-06 | taste_option | Silence, slang, interruption, narration, and sentence rhythm remain character/style choices. |
