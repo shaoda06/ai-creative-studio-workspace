@@ -23,7 +23,7 @@ Agent读取当前可用的imagegen技能及实际工具说明，使用内置生�
 
 scripts/imagegen_tool.py提供两个供调用方复用的函数：
 
-- generation_call(prompt, references, result_store_key)：返回可执行的内置工具调用正文，正文中保存完整返回值并转发原生结果；不执行生图、不改写提示词。references为按顺序的真实本地路径。
+- generation_call(prompt, references, result_store_key)：返回可执行的内置工具调用正文，正文中保存完整返回值并转发原生结果；不执行生图、不改写提示词。references为按顺序的真实本地路径。正文用 JSON Unicode 转义传递非 ASCII 字符，执行时还原提示词、参考路径和结果保存键原值。
 - preserve_original(source, destination, project=实际项目根目录)：将工具实际返回的PNG原字节保存到明确位置，按[共用PNG存储](../../studio-image-processing/references/图片处理工具规范.md#png保存复用与替换)复用相同内容并保护原图，核对解码及实际宽高；已有不同内容时停止。返回width、height、bytes、format、decoded。
 
 文件处理使用工作区已配置的Python环境；不联网、不自动提交，不裁图、缩放或移除原结果。生图本身始终由Agent调用实际工具。业务交接命令和业务记录由调用方的阶段规范提供。

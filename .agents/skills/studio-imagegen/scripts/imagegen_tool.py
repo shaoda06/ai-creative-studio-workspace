@@ -22,8 +22,8 @@ def generation_call(prompt, references, result_store_key):
     if references:
         arguments['referenced_image_paths'] = [str(file) for file in references]
     return ('// @exec: {"yield_time_ms": 120000, "max_output_tokens": 1000}\n'
-            'const imagegenResult = await tools.image_gen__imagegen(' + json.dumps(arguments, ensure_ascii=False) + ');\n'
-            'store(' + json.dumps(result_store_key, ensure_ascii=False) + ', imagegenResult);\n'
+            'const imagegenResult = await tools.image_gen__imagegen(' + json.dumps(arguments, ensure_ascii=True) + ');\n'
+            'store(' + json.dumps(result_store_key, ensure_ascii=True) + ', imagegenResult);\n'
             'generatedImage(imagegenResult);\n')
 
 
