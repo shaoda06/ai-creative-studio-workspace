@@ -39,7 +39,8 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
 export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kind: ReferenceAssetKind; query: UseQueryResult<ReferenceAssetDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, endpoint, ratio} = referenceAssetKinds[kind];
   const purposes = [label+'展示图'];
-  const aspectRatio = kind === 'hair' ? 16 / 9 : undefined;
+  const naturalImages = kind === 'hair' || kind === 'clothing';
+  const aspectRatio = naturalImages ? 'natural' : undefined;
   const { api, page } = useChloeScope();
   const [params,setParams] = useSearchParams();
   const [document,setDocument] = useState<FileItem | null>(null);
@@ -64,20 +65,23 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
     {data && <div className="chloe-model-layout">
       <div className="chloe-model-detail">
         <div className="chloe-look-detail">
-          <section className="panel" aria-label={label+'信息'}><h2>{label}信息</h2>
+          <section className={naturalImages ? 'panel chloe-look-info' : 'panel'} aria-label={label+'信息'}><h2>{label}信息</h2>
             <dl className="chloe-overview-fields"><div><dt>{label}名称</dt><dd>{data.name}</dd></div><div><dt>{label}说明</dt><dd>{data.description}</dd></div></dl>
-            <section aria-label={label+'参考图'}><h3>参考图</h3>
-              {references.length ? <ul>{references.map((image,index)=><li key={`${image.resource}@${image.version}`}>
+            <section className={naturalImages ? 'chloe-assets-content chloe-look-references' : undefined} aria-label={label+'参考图'}><h3>参考图</h3>
+              {!references.length ? <p>无</p> : naturalImages ? <div className="chloe-look-reference-list" tabIndex={0} aria-label={label+'参考图列表'}>
+                {references.map((image,index)=><AssetMediaCard key={`${image.resource}@${image.version}`} title={`参考图 ${index+1} · ${image.resource}@${image.version}`}
+                  compact revision={0} aspectRatio={aspectRatio} item={{media:image.media}} />)}
+              </div> : <ul>{references.map((image,index)=><li key={`${image.resource}@${image.version}`}>
                 <LinkButton onClick={()=>open(image.media)}>参考图 {index+1} · {image.resource}@{image.version}</LinkButton>
-              </li>)}</ul> : <p>无</p>}
+              </li>)}</ul>}
             </section>
           </section>
-          <section className="panel chloe-look-images" aria-label={label+'图片'}><h2>{label}图片（{ratio}）</h2>
+          <section className={naturalImages ? 'panel chloe-look-images chloe-look-image-column' : 'panel chloe-look-images'} aria-label={label+'图片'}><h2>{label}图片（{ratio}）</h2>
             <UnderlineTabs label={label+'图片用途'} items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
             {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal aspectRatio={aspectRatio} showFileActions={false} showVersion={false} revision={0} item={{media:image.media,version:image.version}} />)
-              : <AssetMediaCard title={purpose} hideTitle formal aspectRatio={aspectRatio} revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
+              : <AssetMediaCard title={purpose} hideTitle formal aspectRatio={kind === 'hair' ? 16 / 9 : undefined} revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
             {others.length>0 && <details><summary>其他版本</summary><div className="chloe-model-versions" aria-label={label+'其他版本'} tabIndex={0}>{others.map(image=><div key={`${image.purpose}:${image.resource}@${image.version}`}>
-              <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} item={{media:image.media}} />
+              <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} aspectRatio={aspectRatio} item={{media:image.media}} />
               <details><summary>来源与执行记录</summary><Rich html={image.sourceHtml} /><p>执行编号：{image.execution}</p></details>
             </div>)}</div></details>}
           </section>

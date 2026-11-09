@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  clothes=[clothing_detail(root,id,'/api/workspaces/chloe') for id in ['O001','O002']]
  references={}
- for kind, name, size in [(HAIR,'示例盘发',(640,360)),(SCENES,'示例庭院',(360,640))]:
+ for kind, name, size in [(HAIR,'示例盘发',(640,352)),(SCENES,'示例庭院',(360,640))]:
   folder=initialize_asset(root,kind.label,kind.prefix+'001',name)
   initialize_asset(root,kind.label,kind.prefix+'002','未选图'+kind.label)
   path=folder/(kind.label+'说明.md')
@@ -429,13 +429,21 @@ try {
   assert.equal(await page.locator('.asset-media-card').count(),2);
   await page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true}).click();
   const clothingInfo=page.getByRole('region',{name:label+'信息',exact:true});
-  await clothingInfo.getByText('无',{exact:true}).waitFor();
+  await clothingInfo.locator('dd').getByText(details[0].description,{exact:true}).waitFor();
   assert.equal(await page.getByText(`不显示的${label}来源`,{exact:true}).count(),0);
-  const referenceLinks=clothingInfo.getByRole('region',{name:label+'参考图',exact:true});
+  const referenceSection=clothingInfo.getByRole('region',{name:label+'参考图',exact:true});
+  const naturalImages=kind!=='scenes';
   const referenceImages=details[0].images.filter(image=>image.purpose===label+'参考图');
-  assert.equal(await referenceLinks.getByRole('button').count(),2);
+  assert.equal(await referenceSection.getByRole('button').count(),2);
   for (const [index,image] of referenceImages.entries()) {
-    await referenceLinks.getByRole('button',{name:`参考图 ${index+1} · ${image.resource}@${image.version}`,exact:true}).click();
+    const title=`参考图 ${index+1} · ${image.resource}@${image.version}`;
+    const referenceButton=naturalImages ? referenceSection.locator('.asset-media-card').filter({hasText:title}).locator('.cover')
+      : referenceSection.getByRole('button',{name:title,exact:true});
+    if (naturalImages) {
+      await referenceButton.scrollIntoViewIfNeeded();
+      await assertNaturalImage(referenceButton,label+'参考图');
+    }
+    await referenceButton.click();
     await page.getByRole('dialog').waitFor();
     assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'),image.media.url);
     await page.keyboard.press('Escape');
@@ -459,10 +467,21 @@ try {
   const adoptedClothingCard=clothingImages.locator('.asset-media-card').first();
   assert.deepEqual(await adoptedClothingCard.locator('.field-label').allTextContents(),['尺寸：']);
   assert.equal(await adoptedClothingCard.getByText('下载',{exact:true}).count(),0);
-  if (kind === 'hair') {
-    const cover = await adoptedClothingCard.locator('.cover').boundingBox();
-    assert.ok(Math.abs(cover.width / cover.height - 16 / 9) < 0.01);
-    await adoptedClothingCard.getByText(/640 × 360/).waitFor();
+  if (naturalImages) {
+    const cover = adoptedClothingCard.locator('.cover');
+    await cover.scrollIntoViewIfNeeded();
+    await assertNaturalImage(cover,label+'展示图');
+    const [left,right]=await Promise.all([clothingInfo.boundingBox(),clothingImages.boundingBox()]);
+    assert.equal(left.y,right.y);
+    assert.ok(Math.abs(left.height-right.height)<1,label+'左右框等高');
+    const referenceList=referenceSection.locator('.chloe-look-reference-list');
+    assert.ok(await referenceList.evaluate(el=>el.scrollHeight>el.clientHeight),label+'参考图超出时内部滚动');
+    await referenceList.locator('.cover').first().hover();
+    const scrollTop=await referenceList.evaluate(el=>el.scrollTop);
+    const fixedInfoY=(await clothingInfo.locator('dl').boundingBox()).y;
+    await page.mouse.wheel(0,140);
+    await page.waitForFunction(value=>document.querySelector('.chloe-look-reference-list').scrollTop>value,scrollTop);
+    assert.equal((await clothingInfo.locator('dl').boundingBox()).y,fixedInfoY,label+'说明留在滚动区外');
   }
   await clothingImages.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
@@ -472,6 +491,11 @@ try {
   await clothingImages.getByText('其他版本',{exact:true}).click();
   const garmentVersions=page.locator(`[aria-label="${label}其他版本"]`);
   assert.deepEqual((await garmentVersions.locator('h3').allTextContents()).map(text=>text.split('@')[1]),['V005','V004','V003','V002']);
+  if (naturalImages) {
+    const candidate=garmentVersions.locator('.cover').first();
+    await candidate.scrollIntoViewIfNeeded();
+    await assertNaturalImage(candidate,label+'其他版本');
+  }
   const garmentScroll=await garmentVersions.evaluate(el=>({height:el.clientHeight,full:el.scrollHeight}));
   assert.ok(garmentScroll.height<=1050 && garmentScroll.full>garmentScroll.height);
   assert.equal(await clothingImages.getByRole('heading',{name:new RegExp(`^${label}参考图`)}).count(),0);
