@@ -34,6 +34,9 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
     : [];
   const activeTypes = types.filter(type => selectedTypes.includes(type));
   const visibleCards = activeTypes.length ? cards.filter(card => card.type && activeTypes.includes(card.type)) : cards;
+  const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
+    to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
+    item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
@@ -44,9 +47,11 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
           setSelectedTypes(previous => checked ? [...previous,type] : previous.filter(value => value !== type));
         }} />{type}</label>)}
     </fieldset>}
-    {query.data && (visibleCards.length ? <div className="asset-media-grid">{visibleCards.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
-      to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
-      item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />)}</div> : <p className="muted">暂无{label}资料。</p>)}
+    {query.data && (visibleCards.length ? kind === 'accessories'
+      ? <div className="asset-media-grid chloe-accessory-columns">{[0,1,2].map(column =>
+        <div className="chloe-accessory-column" key={column}>{visibleCards.filter((_,index) => index % 3 === column).map(renderCard)}</div>)}</div>
+      : <div className="asset-media-grid">{visibleCards.map(renderCard)}</div>
+      : <p className="muted">暂无{label}资料。</p>)}
   </>;
 }
 

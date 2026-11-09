@@ -110,6 +110,14 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   path=initialize_asset(root,'配饰',identity,title)/'配饰说明.md'
   path.write_text(path.read_text().replace('| 配饰类型 | 待确定 |',f'| 配饰类型 | {asset_type} |'))
  hair,scenes,accessories=references['发型'],references['场景'],references['配饰']
+ folder=root/'综合资料/共用素材/配饰/C003-示例贝雷帽'
+ path=folder/'配饰说明.md'
+ source=Path(tmp)/'tall-accessory.png';Image.new('RGB',(240,420),'#a786ad').save(source)
+ result=import_media(root,source,'tall-accessory')
+ reference='[共用:'+result['resource_id']+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],folder)+'>)'
+ append('参考版本',['配饰展示图',reference,'用户提供','不适用'])
+ append('当前采用',['配饰展示图',reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+ accessories.append(asset_detail(root,'C003','/api/workspaces/chloe',ACCESSORIES))
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
  media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in hair+clothes+scenes+accessories for image in item['images']]}
  print(json.dumps({'hairCards':asset_cards(root,'/api/workspaces/chloe',HAIR),'hair':hair,'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'accessoryCards':asset_cards(root,'/api/workspaces/chloe',ACCESSORIES),'accessories':accessories,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
@@ -547,8 +555,23 @@ try {
   assert.equal(await filters.getByRole('checkbox').count(),2);
   assert.equal(await page.getByRole('searchbox').count(),0);
   assert.equal(await accessoryCards.count(),4);
+  const columns=page.locator('.chloe-accessory-column');
+  assert.equal(await columns.count(),3);
+  assert.deepEqual(await columns.first().locator('h3').allTextContents(),['C001 · 示例小包','C004 · 示例托特包']);
+  const shortCard=page.getByRole('link',{name:'C001 · 示例小包',exact:true});
+  const tallCard=page.getByRole('link',{name:'C003 · 示例贝雷帽',exact:true});
+  const nextCard=page.getByRole('link',{name:'C004 · 示例托特包',exact:true});
+  await assertNaturalImage(shortCard.locator('.cover'),'配饰横图封面');
+  await assertNaturalImage(tallCard.locator('.cover'),'配饰竖图封面');
+  const [shortBox,tallBox,nextBox]=await Promise.all([shortCard.boundingBox(),tallCard.boundingBox(),nextCard.boundingBox()]);
+  assert.ok(Math.abs(shortBox.width-tallBox.width)<1);
+  assert.ok(Math.abs(shortBox.y-tallBox.y)<1 && shortBox.x<tallBox.x);
+  assert.equal(nextBox.x,shortBox.x);
+  assert.ok(Math.abs(nextBox.y-shortBox.y-shortBox.height-18)<1,'下一张直接接在本列卡片下方');
+  assert.ok(nextBox.y<tallBox.y+tallBox.height,'较短列无需等待较高的并排卡片');
   await bag.check();
   assert.deepEqual(await accessoryCards.locator('h3').allTextContents(),['C001 · 示例小包','C004 · 示例托特包']);
+  assert.equal(await columns.first().locator('.asset-media-card').count(),1,'筛选后重新按可见卡片分列');
   await hat.check();
   assert.equal(await accessoryCards.count(),3);
   await bag.uncheck();
