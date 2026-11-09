@@ -199,9 +199,10 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="仅保留尺寸的采用图" item={{media:image,version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
         <AssetMediaCard title="仅保留尺寸的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
       </ComponentExample>
-      <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio控制图片区域宽高比，有图与空态同高；图片完整显示、不裁切。未传时保留默认固定高度。" usage="Chloe基础全身三视图">
+      <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe基础全身三视图、正面面部图">
         <AssetMediaCard title="16:9图片区域" item={imageRecord} revision={1} formal hideTitle aspectRatio={16 / 9} />
         <AssetMediaCard title="16:9空图片区域" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle aspectRatio={16 / 9} />
+        <AssetMediaCard title="按原图比例展示" item={imageRecord} revision={1} formal hideTitle aspectRatio="natural" />
       </ComponentExample>
       <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。默认卡片不变；entry传入to时整卡作为链接，图片不再单独打开预览，未传to时有图仍可预览。" usage="Chloe模特列表">
         <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...imageRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />

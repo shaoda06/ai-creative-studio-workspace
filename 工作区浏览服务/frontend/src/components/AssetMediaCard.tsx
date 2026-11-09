@@ -6,7 +6,7 @@ import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number; to?: string; titleActions?: ReactNode; onDetails?: () => void; children?: ReactNode }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; titleActions?: ReactNode; onDetails?: () => void; children?: ReactNode }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -17,7 +17,9 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const linked = entry && to;
   const linkedActions = linked && !!titleActions;
   const Cover = linked ? 'div' : 'button';
-  const coverStyle = aspectRatio ? { aspectRatio, height: 'auto' } : undefined;
+  const fixedRatioStyle = typeof aspectRatio === 'number' ? { aspectRatio, height: 'auto' } : undefined;
+  const naturalRatio = aspectRatio === 'natural';
+  const imageStyle = naturalRatio ? { height: 'auto', maxHeight: 'none' } : fixedRatioStyle && { maxHeight: 'none' };
   const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}`;
   const content = <>
     {!hideTitle && (titleActions ? <div className="asset-media-card-heading">
@@ -25,10 +27,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       <div className="asset-media-card-title-actions">{titleActions}</div>
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
-      {item.media ? <Cover style={coverStyle} className="cover" onClick={linked ? undefined : () => preview(item.media)}><img style={aspectRatio ? { maxHeight: 'none' } : undefined} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
+      {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" onClick={linked ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         setDimensions(`${width} × ${height}`);
-      }} /></Cover> : <div style={coverStyle} className="cover asset-media-placeholder">
+      }} /></Cover> : <div style={fixedRatioStyle} className="cover asset-media-placeholder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1.5" /><path d="m3 17 6-6 4 4 3-3 5 5" /></svg>
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}

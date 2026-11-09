@@ -214,6 +214,15 @@ try {
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
   const bodyCover=await bodyColumn.locator(':scope > div > .asset-media-card .cover').boundingBox();
   assert.ok(Math.abs(bodyCover.width / bodyCover.height - 1)<.01,'基础全身图区域为1:1');
+  const portraitCover=faceColumn.locator(':scope > div > .asset-media-card .cover');
+  const portrait=await portraitCover.locator('img').evaluate(async img=>{
+    await img.decode();
+    const box=img.getBoundingClientRect(), cover=img.parentElement.getBoundingClientRect();
+    return {width:box.width,height:box.height,coverWidth:cover.width,coverHeight:cover.height,
+      availableWidth:img.parentElement.parentElement.clientWidth,naturalRatio:img.naturalWidth/img.naturalHeight};
+  });
+  assert.ok(Math.abs(portrait.width-portrait.availableWidth)<1 && Math.abs(portrait.width-portrait.coverWidth)<1);
+  assert.ok(Math.abs(portrait.height-portrait.coverHeight)<1 && Math.abs(portrait.width/portrait.height-portrait.naturalRatio)<.01,'正面图铺满原列宽并按实际比例计算高度');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();

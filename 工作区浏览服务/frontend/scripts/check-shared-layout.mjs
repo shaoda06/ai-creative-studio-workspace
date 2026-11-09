@@ -477,7 +477,19 @@ try {
     await dimensionsCard.locator('.cover').click();
     await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
-    console.log(`图片卡片：${width}px普通／紧凑无图同高占位、默认与自定义提示、仅详情／记录同排／未生成空态的右对齐、左侧记录和本地预览通过。`);
+    const naturalCard = showcase.getByRole('article',{name:'按原图比例展示',exact:true});
+    const naturalImage = naturalCard.locator('.cover img');
+    await naturalImage.scrollIntoViewIfNeeded();
+    const natural = await naturalImage.evaluate(async img=>{
+      await img.decode();
+      const box=img.getBoundingClientRect(), cover=img.parentElement.getBoundingClientRect();
+      return {width:box.width,height:box.height,coverWidth:cover.width,coverHeight:cover.height,
+        availableWidth:img.parentElement.parentElement.clientWidth,ratio:img.naturalWidth/img.naturalHeight};
+    });
+    assert.ok(Math.abs(natural.width-natural.availableWidth)<1 && Math.abs(natural.width-natural.coverWidth)<1);
+    assert.ok(Math.abs(natural.height-natural.coverHeight)<1 && Math.abs(natural.width/natural.height-natural.ratio)<.01);
+    await contained(naturalCard,`${width}px / 按原图比例的图片卡片`);
+    console.log(`图片卡片：${width}px普通／紧凑占位、默认与自定义提示、详情及记录对齐、本地预览和原图比例展示通过。`);
     await showcase.getByRole('button', { name: '文件与正文', exact: true }).click();
     const sampleDocument = showcase.locator('.document').filter({ has: page.locator('#sample-text') });
     const referenceSummary = sampleDocument.getByText('参考资料', { exact: true });

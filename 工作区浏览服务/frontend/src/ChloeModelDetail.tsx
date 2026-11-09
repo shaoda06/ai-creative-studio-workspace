@@ -67,7 +67,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const faceImage = data && adopted('正面面部');
   const bodyPurpose = look && view==='masked' ? maskedPurpose : originalPurpose;
   const bodyImage = data && adopted(bodyPurpose);
-  const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number) => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
+  const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number | 'natural') => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
     item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
   const otherVersions = (purpose: string) => asset!.images
     .filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose)
@@ -108,7 +108,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <section className="panel chloe-model-image-column" aria-label="正面面部图">
           <h2>正面面部图（3:4）{faceImage && <span className="muted"> · {faceImage.resource}@{faceImage.version}</span>}</h2>
           <div><UnderlineTabs label="正面面部图视图" items={originalView} selected="original" onChange={() => {}} /></div>
-          <div>{imageCard('正面面部',faceImage)}</div>
+          <div>{imageCard('正面面部',faceImage,'natural')}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
         </section>
         <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
