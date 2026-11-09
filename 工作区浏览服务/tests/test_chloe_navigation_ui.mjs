@@ -39,7 +39,11 @@ try {
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
-      if (path.startsWith('/api/assembly-fixture/')) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100"><rect width="120" height="100" fill="#edf5ef"/></svg>'});
+      if (path.startsWith('/api/assembly-fixture/')) {
+        const width = path.endsWith('-front') ? 90 : 120;
+        const height = path.endsWith('/O001') ? 240 : /-(front|body)$/.test(path) ? 120 : 100;
+        return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#edf5ef"/></svg>`});
+      }
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
       if (path === '/api/workspaces/account-demo/shared-models/M002') return route.fulfill({json:{id:'M002',name:'模特乙',images:[
         {purpose:'正面面部',adopted:true,media:fixtureImage('M002-front')},
@@ -137,6 +141,8 @@ try {
     await summary.waitFor();
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
     assert.equal(await reset.count(),0);
+    const exportArea = page.getByRole('region',{name:'导出',exact:true});
+    await exportArea.getByText('文字模板',{exact:true}).waitFor();
     await choose('选择模特').click();
     const modelA = dialog.getByRole('button',{name:'选择M001 · 模特甲',exact:true});
     const modelB = dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true});
@@ -173,7 +179,24 @@ try {
     await clothingA.click();
     assert.equal(await dialog.getByText('O002 · 制作中服装',{exact:true}).count(),0);
     await confirm.click();
-    assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).getAttribute('src'),'/api/assembly-fixture/O001');
+    const clothingImage = page.getByRole('img',{name:'服装图',exact:true});
+    assert.equal(await clothingImage.getAttribute('src'),'/api/assembly-fixture/O001');
+    await clothingImage.scrollIntoViewIfNeeded();
+    await clothingImage.evaluate(image => image.decode());
+    const modelImages = page.locator('.chloe-assembly-model-images img');
+    for (const image of await modelImages.all()) {
+      await image.scrollIntoViewIfNeeded();
+      const metrics = await image.evaluate(async element => {
+        await element.decode();
+        const figure = element.closest('figure');
+        const {paddingLeft,paddingRight} = getComputedStyle(figure);
+        return {width:element.clientWidth,height:element.clientHeight,
+          innerWidth:figure.clientWidth-parseFloat(paddingLeft)-parseFloat(paddingRight),
+          ratio:element.naturalWidth/element.naturalHeight};
+      });
+      assert.ok(Math.abs(metrics.width-metrics.innerWidth)<=1);
+      assert.ok(Math.abs(metrics.height-metrics.width/metrics.ratio)<=1);
+    }
     const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
       const rect = item.getBoundingClientRect();
       return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
@@ -183,7 +206,9 @@ try {
       `模特和服装的预览框上下对齐：${JSON.stringify(frames)}`);
     const modelWidth=frames[0].right-frames[0].left, clothingWidth=frames[2].right-frames[2].left;
     assert.ok(Math.abs(modelWidth/(modelWidth+clothingWidth)-0.3)<0.002);
-    assert.ok(Math.abs(frames[2].bottom-frames[2].top-Math.min(550,Math.max(400,height*0.57)))<=1);
+    assert.ok(frames[0].bottom-frames[0].top > frames[1].bottom-frames[1].top);
+    const [summaryBox, exportBox] = await Promise.all([summary.boundingBox(),exportArea.boundingBox()]);
+    assert.ok(Math.abs(summaryBox.width-modelWidth)<=1 && Math.abs(exportBox.width-clothingWidth)<=1);
     for (const [label, src] of [['正面基础图','M002-front'],['基础三视图','M002-body'],['服装图','O001']]) {
       await choose(`查看${label}大图`).click();
       await zoom.waitFor();

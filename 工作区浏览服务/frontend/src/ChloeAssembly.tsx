@@ -142,15 +142,21 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
       </div>
     </section>
 
-    <section aria-label="当前选择" className="chloe-assembly-summary">
-      <h2>当前选择</h2>
-      <dl className="chloe-overview-fields" aria-live="polite">
-        <div><dt>模特</dt><dd>{model ? assetTitle(model) : '未选择'}</dd></div>
-        <div><dt>服装</dt><dd>{clothing ? assetTitle(clothing) : '未选择'}</dd></div>
-        {accessories.length ? accessories.map((asset, index) => <div key={index}><dt>配饰 {index + 1}</dt><dd>{assetTitle(asset)}</dd></div>) :
-          <div><dt>配饰</dt><dd>未选择</dd></div>}
-      </dl>
-    </section>
+    <div className="chloe-assembly-summary">
+      <section aria-label="当前选择">
+        <h2>当前选择</h2>
+        <dl className="chloe-overview-fields" aria-live="polite">
+          <div><dt>模特</dt><dd>{model ? assetTitle(model) : '未选择'}</dd></div>
+          <div><dt>服装</dt><dd>{clothing ? assetTitle(clothing) : '未选择'}</dd></div>
+          {accessories.length ? accessories.map((asset, index) => <div key={index}><dt>配饰 {index + 1}</dt><dd>{assetTitle(asset)}</dd></div>) :
+            <div><dt>配饰</dt><dd>未选择</dd></div>}
+        </dl>
+      </section>
+      <section aria-label="导出">
+        <h2>导出</h2>
+        <div className="chloe-assembly-export-template muted">文字模板</div>
+      </section>
+    </div>
     {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
     {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
