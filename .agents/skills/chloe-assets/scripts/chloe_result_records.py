@@ -207,6 +207,32 @@ def native(project, manifest, source):
     return {**result,'images':[{'file':str(resources.local(owner,report['items'][0]['path'])),'width':facts['width'],'height':facts['height']}]}
 
 
+def register_available(project, file, basis):
+    root = docs.project_path(project)
+    path = (root / file).resolve()
+    if not basis.strip() or basis.strip() in docs.MISSING:
+        raise ValueError('须提供用户明确批准该资产登记为可用的依据')
+    with resources.index_lock(root/'综合资料'):
+        entry = next((e for e in docs.documents(root) if e[0] == path and e[0].name in docs.REQUIRED_ASSET_IMAGES), None)
+        if entry is None:
+            raise ValueError('不是已登记的Chloe共用图片资产说明')
+        body = path.read_text('utf-8')
+        state = docs.asset_status(path, docs.read_document(root, *entry, body=body))
+        if state['missing_images']:
+            raise ValueError('资产登记为可用前须采用：'+'、'.join(state['missing_images']))
+        if state['status'] == '可用':
+            return state
+        number = max((int(r['记录编号'][1:]) for r in rows(body, '采用变更')), default=0)+1
+        body = put(body, '采用变更', ['记录编号'], {
+            '记录编号': f'B{number:03}', '记录时间': now(), '变更范围': '资产状态',
+            '原值或原版本': '制作中', '新值或新版本': '可用', '依据': basis.strip(),
+        })
+        body = put(body, '资产身份', ['字段'], {'字段': '资产状态', '内容': '可用'}, replace=True)
+        updated = docs.asset_status(path, docs.read_document(root, *entry, body=body))
+        save(path, body)
+        return updated
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     commands=parser.add_subparsers(dest='action',required=True)
@@ -219,9 +245,15 @@ def main():
     resume.add_argument('--manifest',required=True,type=Path,help='原任务清单JSON；business_result位于所选任务的image_plan或video_plan')
     resume.add_argument('--task-index',required=True,type=int,help='任务清单tasks中的零基序号')
     resume.add_argument('--report',required=True,type=Path,help='该任务已有的结果收尾报告，兼容执行档案内紧凑记录')
+    available=commands.add_parser('register-available',help='用户明确批准后，将一项图片资产登记为可用')
+    available.add_argument('--project-root',required=True,type=Path)
+    available.add_argument('--file',required=True,type=Path,help='固定资产说明路径，相对项目根目录或绝对路径')
+    available.add_argument('--basis',required=True,help='用户明确批准该对象登记为可用的实际依据')
     args=parser.parse_args()
     if args.action=='native':
         result=native(args.project_root.resolve(),args.manifest.resolve(),args.source.resolve())
+    elif args.action=='register-available':
+        result=register_available(args.project_root,args.file,args.basis)
     else:
         import execution_records as recordio
         task=json.loads(args.manifest.read_text('utf-8'))['tasks'][args.task_index]

@@ -1,5 +1,6 @@
 """Template, initializer and populated-record checks in isolated Chloe workspaces."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from chloe_init import initialize_workspace, initialize_project, initialize_vide
 import chloe_documents as docs
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media, bind_reference
+from chloe_result_records import register_available
 
 
 class ChloeDocumentsTest(unittest.TestCase):
@@ -80,12 +82,43 @@ class ChloeDocumentsTest(unittest.TestCase):
         entry = next(e for e in docs.documents(self.root) if e[0] == path)
         parsed = docs.read_document(self.root, *entry)
         self.assertEqual([r['字段'] for r in docs.records(parsed, '资产身份')],
-                         ['资产编号', '资产名称', '来源说明'])
+                         ['资产编号', '资产名称', '来源说明', '资产状态'])
         for field in ('资产类型', '资产用途', '使用限制'):
             path.write_text(original.replace('## 人物特征', f'| {field} | 待核实 |\n\n## 人物特征'))
             self.assertTrue(self.check()['errors'])
         path.write_text(original)
         self.assertFalse(self.check()['errors'])
+
+    def test_model_requires_both_adopted_images_and_separate_availability_decision(self):
+        path = self.assets['模特']/'模特说明.md'
+        entry = next(e for e in docs.documents(self.root) if e[0] == path)
+        # A pre-existing object remains readable and in production without a state row.
+        path.write_text(path.read_text().replace('| 资产状态 | 制作中 |\n', ''))
+        for index, purpose in enumerate(('正面面部', '全身三视图原图'), 1):
+            source = self.base/f'asset-{index}.png'
+            Image.new('RGB', (12*index, 16), 'red').save(source)
+            ref = import_media(self.root, source, f'external/reference-{index}')
+            relative = Path(os.path.relpath(ref['absolute_file'], path.parent)).as_posix()
+            resource = f"[共用:{ref['resource_id']}@{ref['version']}](<{relative}>)"
+            self.append(path, '参考版本', [purpose, resource, '无', '不适用'])
+            self.assertIn(purpose, docs.asset_status(path, docs.read_document(self.root, *entry))['missing_images'])
+            self.append(path, '当前采用', [purpose, resource, '用户批准图片', '2026-11-07T09:00:00+08:00'])
+            if index == 1:
+                with self.assertRaisesRegex(ValueError, '全身三视图原图'):
+                    register_available(self.root, path, '用户批准登记 M001 为可用')
+        state = docs.asset_status(path, docs.read_document(self.root, *entry))
+        self.assertEqual((state['status'], state['missing_images']), ('制作中', []))
+        with self.assertRaisesRegex(ValueError, '批准'):
+            register_available(self.root, path, '未取得')
+        original = path.read_text()
+        path.write_text(original.replace('| 来源说明 | 待核实 |', '| 来源说明 | 待核实 |\n| 资产状态 | 可用 |'))
+        with self.assertRaisesRegex(ValueError, '明确批准'):
+            docs.read_document(self.root, *entry)
+        path.write_text(original)
+        self.assertEqual(register_available(self.root, path, '用户批准登记 M001 为可用')['status'], '可用')
+        doc = docs.read_document(self.root, *entry)
+        self.assertEqual(len(docs.records(doc, '当前采用')), 2)
+        self.assertEqual(docs.records(doc, '采用变更')[0]['依据'], '用户批准登记 M001 为可用')
 
     def test_parsed_values_keep_long_content_and_template_fields(self):
         path=self.video/'脚本.md'
@@ -127,7 +160,6 @@ class ChloeDocumentsTest(unittest.TestCase):
         common=import_media(self.root,source,'external/reference')
         own=import_media(self.root,source,'task/output',project=self.video.name)
         bind_reference(self.root,self.video.name,'E001/reference',common['resource_id'],common['version'])
-        import os
         common_link=f"[共用:{common['resource_id']}@{common['version']}](<{Path(os.path.relpath(common['absolute_file'],self.video)).as_posix()}>)"
         own_link=f"[本视频:{own['resource_id']}@{own['version']}](<{Path(os.path.relpath(own['absolute_file'],self.video)).as_posix()}>)"
         p=self.video/'制作记录.md'

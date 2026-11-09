@@ -19,6 +19,11 @@ PREFIXES = {'事项编号': 'I', '记录编号': 'B', '事实编号': 'F', '条�
             '执行编号': 'E', '审阅编号': 'R', '返修编号': 'X', '交接编号': 'J',
             '发布编号': 'P', '采集编号': 'D', '复盘编号': 'R', '验证编号': 'T', '修订编号': 'U',
             '核对编号': 'K', '镜头编号': 'SH', '资料编号': 'Q'}
+REQUIRED_ASSET_IMAGES = {
+    '模特说明.md': ('正面面部', '全身三视图原图'),
+    '造型说明.md': ('造型面部三视图', '全身三视图原图', '全身三视图遮面版'),
+    **{label+'说明.md': (label+'展示图',) for label in ('发型', '服装', '配饰', '场景')},
+}
 
 
 def parse(text):
@@ -151,12 +156,12 @@ def value_check(field, value, choices):
         raise ValueError('脚本版本须为v01等格式')
 
 
-def read_document(root, path, source, substitutions):
+def read_document(root, path, source, substitutions, *, body=None):
     text = source.read_text('utf-8')
     for key, value in substitutions.items():
         text = text.replace('{{'+key+'}}', value)
     expected = parse(text)
-    actual = parse(path.read_text('utf-8'))
+    actual = parse(path.read_text('utf-8') if body is None else body)
     if actual['title'] != expected['title']:
         raise ValueError('标题、对象编号或名称与模板／目录不一致')
     if [s['heading'] for s in actual['sections']] != [s['heading'] for s in expected['sections']]:
@@ -184,8 +189,13 @@ def read_document(root, path, source, substitutions):
             if tab['columns'] != base['columns']:
                 raise ValueError(section['heading']+'：表头或列序与模板不一致')
             fixed = tab['columns'] == ['字段', '内容']
-            if fixed and [r[0] for r in tab['rows']] != [r[0] for r in base['rows']]:
-                raise ValueError(section['heading']+'：固定字段缺失、重复、改名或顺序改变')
+            if fixed:
+                names = [r[0] for r in tab['rows']]
+                expected_names = [r[0] for r in base['rows']]
+                if path.name in REQUIRED_ASSET_IMAGES and section['heading'] == '资产身份' and '资产状态' not in names:
+                    expected_names.remove('资产状态')  # Existing records default to 制作中.
+                if names != expected_names:
+                    raise ValueError(section['heading']+'：固定字段缺失、重复、改名或顺序改变')
             seen = set()
             for row in tab['rows']:
                 record = dict(zip(tab['columns'], row))
@@ -202,6 +212,11 @@ def read_document(root, path, source, substitutions):
                         ref = media_reference(root, path, value)
                         if field.endswith('封面引用') and Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
                             raise ValueError(field+'必须引用准确图片版本')
+                    elif (path.name in REQUIRED_ASSET_IMAGES and section['heading'] == '当前采用'
+                          and field == '资源引用' and value not in MISSING):
+                        ref = media_reference(root, path, value)
+                        if Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
+                            raise ValueError('图片资产的当前采用须引用图片')
                     elif value.startswith(('[共用:', '[本视频:')):
                         media_reference(root, path, value)
                     for label, href in LINK.findall(value):
@@ -230,6 +245,14 @@ def read_document(root, path, source, substitutions):
 def records(doc, heading):
     section = next((s for s in doc['sections'] if s['heading'] == heading), None)
     return [dict(zip(t['columns'], row)) for t in section['tables'] for row in t['rows']] if section else []
+
+
+def asset_status(path, doc):
+    identity = {row['字段']: row['内容'] for row in records(doc, '资产身份')}
+    adopted = {row['用途'] for row in records(doc, '当前采用')}
+    required = REQUIRED_ASSET_IMAGES[path.name]
+    return {'id': identity['资产编号'], 'name': identity['资产名称'], 'status': identity.get('资产状态', '制作中'),
+            'missing_images': [purpose for purpose in required if purpose not in adopted]}
 
 
 def verification_reference(root, path, identity, href):
@@ -288,14 +311,10 @@ def linked_object(root, path, identity, value, prefix):
 
 
 def check_relations(root, path, doc):
-    image_purposes = {
-        '模特说明.md': {'正面面部', '全身三视图原图'},
-        '造型说明.md': {'造型面部三视图', '全身三视图原图', '全身三视图遮面版'},
-    }
-    if path.name in image_purposes:
+    if path.name in {'模特说明.md', '造型说明.md'}:
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
-                if row['用途'].split('/', 1)[0] not in image_purposes[path.name]:
+                if row['用途'].split('/', 1)[0] not in REQUIRED_ASSET_IMAGES[path.name]:
                     raise ValueError(path.name+'：'+heading+'图片用途不在固定图种内：'+row['用途'])
     if path.name in {'发型说明.md', '服装说明.md', '配饰说明.md', '场景说明.md'}:
         label = path.name[:2]
@@ -351,6 +370,17 @@ def check_relations(root, path, doc):
     for row in records(doc,'当前采用'):
         if any(row[field] in MISSING for field in ('资源引用','采用依据','采用时间')):
             raise ValueError('当前采用必须有准确资源、采用依据和时间')
+    if path.name in REQUIRED_ASSET_IMAGES and any(
+        row['字段'] == '资产状态' and row['内容'] == '可用' for row in records(doc, '资产身份')
+    ):
+        state = asset_status(path, doc)
+        if state['missing_images']:
+            raise ValueError('资产登记为可用前须采用：'+'、'.join(state['missing_images']))
+        decisions = [row for row in records(doc, '采用变更') if row['变更范围'] == '资产状态']
+        if not decisions or decisions[-1]['原值或原版本'] != '制作中' or decisions[-1]['新值或新版本'] != '可用' or any(
+            decisions[-1][field] in MISSING for field in ('依据', '记录时间')
+        ):
+            raise ValueError('资产登记为可用须记录用户明确批准的依据和时间')
     script = {r['字段']:r['内容'] for r in records(doc,'脚本信息')}
     if script and script['脚本状态'] == '已确认' and any(script[k] in MISSING for k in ('确认依据','确认时间')):
         raise ValueError('已确认脚本缺少确认依据或时间')
@@ -626,7 +656,7 @@ def check_workspace(root, only=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['check','read'])
+    parser.add_argument('action',choices=['check','read','asset-status'])
     parser.add_argument('--project-root',required=True,type=Path,help='明确选定的 Chloe 具名项目根目录')
     parser.add_argument('--file',type=Path,help='相对于具名项目根目录的固定文档路径，或绝对路径')
     args = parser.parse_args(); root=project_path(args.project_root)
@@ -635,6 +665,13 @@ def main():
         result = check_workspace(root,path)
         print(json.dumps(result,ensure_ascii=False,indent=2))
         raise SystemExit(1 if result['errors'] else 0)
+    if args.action == 'asset-status':
+        assets = [asset_status(entry[0], read_document(root, *entry)) for entry in documents(root)
+                  if entry[0].name in REQUIRED_ASSET_IMAGES and (path is None or entry[0].resolve() == path)]
+        if path is not None and not assets:
+            parser.error('不是已登记的Chloe共用图片资产说明')
+        print(json.dumps(assets, ensure_ascii=False, indent=2))
+        return
     if path is None:
         parser.error('read需要--file')
     entry = next((e for e in documents(root) if e[0].resolve() == path),None)
