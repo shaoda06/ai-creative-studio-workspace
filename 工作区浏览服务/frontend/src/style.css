@@ -209,10 +209,13 @@ html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
 .chloe-model-versions{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;max-height:1050px;overflow-y:auto;scrollbar-gutter:stable}
 
 .chloe-look-detail{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:24px;align-items:start}
-.chloe-look-image-column{display:grid;min-width:0}
+.chloe-look-info,.chloe-look-image-column{align-self:stretch;min-width:0}
+.chloe-look-image-column{display:grid}
 .chloe-look-images{display:grid;gap:12px}
 
-.chloe-look-clothing{display:grid;gap:16px}
+.chloe-look-info,.chloe-look-references{display:flex;flex-direction:column}
+.chloe-look-references,.chloe-look-reference-list{flex:1;min-height:0}
+.chloe-look-reference-list{display:grid;align-content:start;gap:16px;contain:size;overflow-y:auto}
 
 .chloe-model-layout{margin-top:28px}
 .chloe-model-navigation{display:flex;justify-content:space-between;align-items:center;gap:24px}

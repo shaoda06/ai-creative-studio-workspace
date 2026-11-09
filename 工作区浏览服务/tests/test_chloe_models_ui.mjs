@@ -73,8 +73,9 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   append('参考版本',['造型面部三视图',reference,'用户提供','不适用'])
   if index==1:append('当前采用',['造型面部三视图',reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  append('执行记录',['E001','图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
- for slot,color in [('1','#ee9a70'),('2','#336688')]:
-  source=Path(tmp)/('clothing'+slot+'.png');Image.new('RGB',(200,300),color).save(source)
+ for index,color in enumerate(['#ee9a70','#336688','#86a173','#b68163','#67618b','#ceba86'],1):
+  slot=str(index)
+  source=Path(tmp)/('clothing'+slot+'.png');Image.new('RGB',(320,160),color).save(source)
   result=import_media(root,source,'clothing'+slot)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version']).replace(os.path.relpath(Path(result['absolute_file']),model),os.path.relpath(Path(result['absolute_file']),look.parent))
   append('输入记录',['E001',slot,'服装参考','不适用',reference])
@@ -130,7 +131,7 @@ async function assertNaturalImage(cover, description) {
 try {
  for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}}), errors=[], unexpected=[];
-  let fail=false, long=false, emptyScenes=false, emptyHair=false;
+  let fail=false, long=false, emptyScenes=false, emptyHair=false, manyLookReferences=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -155,7 +156,8 @@ try {
    const garment=sample.clothes.find(item=>path===`/api/workspaces/chloe/shared-clothing/${item.id}`);
    if(garment)return route.fulfill({json:garment});
    const detail=sample.details.find(item=>path===`/api/workspaces/chloe/shared-models/${item.id}`);
-   if(detail)return route.fulfill({json:detail});
+   if(detail)return route.fulfill({json:manyLookReferences ? detail : {...detail,
+     looks:detail.looks.map(look=>({...look,clothing:look.clothing.slice(0,2)}))}});
    if(sample.media[path])return route.fulfill({body:Buffer.from(sample.media[path],'base64'),contentType:'image/png'});
    if(path===sample.cards[0].media.url)return route.fulfill({body:Buffer.from(sample.image,'base64'),contentType:'image/png'});
    unexpected.push(path);return route.fulfill({status:404,json:{detail:'unexpected'}});
@@ -319,6 +321,7 @@ try {
   assert.equal(lookFaceBox.x,lookBodyBox.x);
   assert.equal(lookFaceBox.width,lookBodyBox.width);
   assert.ok(lookFaceBox.y+lookFaceBox.height<lookBodyBox.y);
+  assert.ok(Math.abs(infoBox.y+infoBox.height-lookBodyBox.y-lookBodyBox.height)<1);
   const lookFace=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='造型面部三视图');
   const lookFaceHeading=lookFacePanel.getByRole('heading',{name:`造型面部三视图（16:9） · ${lookFace.resource}@${lookFace.version}`,exact:true});
   await lookFaceHeading.waitFor();
@@ -333,10 +336,12 @@ try {
   await faceVersions.click();
   assert.deepEqual(await lookFacePanel.locator('.chloe-model-versions h3').allTextContents(),[`造型面部三视图 · ${lookFace.resource}@V001`]);
   await faceVersions.click();
-  const clothing=lookInfo.getByRole('region',{name:'服装参考图',exact:true});
+  const clothing=lookInfo.getByRole('region',{name:'造型参考图',exact:true});
+  const referenceList=clothing.locator('.chloe-look-reference-list');
   assert.equal(await clothing.locator('.asset-media-card').count(),2);
-  assert.equal(await lookInfo.locator(':scope > :last-child').getAttribute('aria-label'),'服装参考图');
-  for (const cover of await clothing.locator('.cover').all()) await assertNaturalImage(cover,'服装参考图');
+  assert.equal(await lookInfo.locator(':scope > :last-child').getAttribute('aria-label'),'造型参考图');
+  for (const cover of await clothing.locator('.cover').all()) await assertNaturalImage(cover,'造型参考图');
+  assert.ok(await referenceList.evaluate(el=>el.scrollHeight===el.clientHeight),'参考图放得下时无需滚动');
   await clothing.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(sample.details[0].looks[0].clothing[0].reference.split('@')[0]));
@@ -375,6 +380,21 @@ try {
   await page.screenshot({path:output+`/${width}-look.png`,fullPage:true});
   assert.match(page.url(),/look=L001/);
   assert.equal(await page.getByRole('dialog').count(),0);
+  manyLookReferences=true;
+  await page.reload();
+  await referenceList.locator('.asset-media-card').nth(5).waitFor({state:'attached'});
+  await Promise.all([assertNaturalImage(faceCover,'面部正式图'),assertNaturalImage(lookBodyCover,'全身正式图')]);
+  const [overflowInfoBox,overflowBodyBox]=await Promise.all([lookInfo.boundingBox(),lookPanel.boundingBox()]);
+  assert.ok(Math.abs(overflowInfoBox.y+overflowInfoBox.height-overflowBodyBox.y-overflowBodyBox.height)<1,'参考图过多时仍与右侧底边对齐');
+  await referenceList.locator('.cover').first().hover();
+  const description = lookInfo.locator('dl');
+  const descriptionY = (await description.boundingBox()).y;
+  const pageScrollY = await page.evaluate(()=>scrollY);
+  await page.mouse.wheel(0,200);
+  await page.waitForFunction(()=>document.querySelector('.chloe-look-reference-list').scrollTop>0);
+  assert.equal((await description.boundingBox()).y,descriptionY,'滚动参考图时造型信息不移动');
+  assert.equal(await page.evaluate(()=>scrollY),pageScrollY,'滚轮只滚动参考图');
+  manyLookReferences=false;
   await page.reload();
   await page.getByRole('link',{name:'返回造型列表',exact:true}).click();
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).waitFor();

@@ -119,10 +119,10 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       </div>}
       {tab==='looks' && (look ? <>
         <div className="chloe-look-detail">
-          <section className="panel" aria-label="造型信息"><h2>造型信息</h2>
+          <section className="panel chloe-look-info" aria-label="造型信息"><h2>造型信息</h2>
             <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div><div><dt>造型说明</dt><dd>{look.description}</dd></div></dl>
-            <section className="chloe-assets-content" aria-label="服装参考图"><h3>服装参考图</h3>
-              {look.clothing.length ? <div className="chloe-look-clothing">{look.clothing.map(item=><div key={item.reference}>
+            <section className="chloe-assets-content chloe-look-references" aria-label="造型参考图"><h3>造型参考图</h3>
+              {look.clothing.length ? <div className="chloe-look-reference-list" tabIndex={0} aria-label="造型参考图列表">{look.clothing.map(item=><div key={item.reference}>
                 <AssetMediaCard title={item.reference} compact revision={0} aspectRatio="natural" item={{media:item.media}} />
                 <p className="muted">执行编号：{item.executions.join('、')}</p>
               </div>)}</div> : <p>无</p>}
