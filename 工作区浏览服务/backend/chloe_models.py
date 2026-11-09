@@ -193,13 +193,13 @@ def model_detail(root, identity, api):
                      'url': base + '/files/' + quote(ref['file'], safe='/')}
         clothing = {}
         for row in records(look_doc, '输入记录'):
-            if row['输入用途'] != '服装参考':
+            if row['输入用途'] not in {'服装参考', '配饰参考'}:
                 continue
             ref = media_reference(root, look_path, row['资源引用'])
             reference = ref['resource_id'] + '@' + ref['version']
             if reference not in clothing:
                 clothing[reference] = {'reference': reference, 'executions': [],
-                    'media': {'kind': 'image', 'name': '服装参考 · ' + reference, 'key': ref['file'],
+                    'media': {'kind': 'image', 'name': row['输入用途'] + ' · ' + reference, 'key': ref['file'],
                               'url': base + '/files/' + quote(ref['file'], safe='/')}}
             if row['执行编号'] not in clothing[reference]['executions']:
                 clothing[reference]['executions'].append(row['执行编号'])

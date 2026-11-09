@@ -1,4 +1,4 @@
-"""Shared read-only clothing, scene and voice records; media stay in their original versioned files."""
+"""Shared read-only asset records; media stay in their original versioned files."""
 import json
 from dataclasses import dataclass
 from urllib.parse import quote
@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
 from backend.parsers import documents
-from chloe_documents import read_document, records, template
+from chloe_documents import MISSING, read_document, records, template
 import project_resources as resources
 
 @dataclass
@@ -21,6 +21,7 @@ class AssetKind:
 
 HAIR = AssetKind('发型', 'H', 'shared-hair')
 CLOTHING = AssetKind('服装', 'O', 'shared-clothing')
+ACCESSORIES = AssetKind('配饰', 'C', 'shared-accessories')
 SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')
 
@@ -59,7 +60,10 @@ def asset_detail(root, identity, api, kind):
             item['duration'] = info['facts'].get('duration_seconds')
         content['models'] = [{'id': row['对象编号'], 'name': row['对象编号']+' · '+model_context(root, row['对象编号'])[0]}
                              for row in records(doc, '关联资料') if row['关系'] == '模特']
-    return {'id': identity, 'name': name, 'description': fields(doc, kind.label+'信息')[kind.label+'说明'],
+    info = fields(doc, kind.label+'信息')
+    if kind == ACCESSORIES:
+        content['type'] = info['配饰类型']
+    return {'id': identity, 'name': name, 'description': info[kind.label+'说明'],
             **content, 'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 
@@ -73,6 +77,9 @@ def asset_cards(root, api, kind):
         current = next((image for image in content['images']
                         if image['adopted'] and image['purpose'] == purpose), None)
         card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
+        if kind == ACCESSORIES:
+            asset_type = fields(doc, '配饰信息')['配饰类型']
+            card['type'] = asset_type if asset_type and asset_type not in MISSING else None
         if kind == VOICES:
             card['models'] = [row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特']
             card['description'] = fields(doc, '声音信息')['声音说明']

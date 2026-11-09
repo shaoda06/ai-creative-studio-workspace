@@ -145,7 +145,7 @@ class ChloeModelsTests(unittest.TestCase):
         second, _ = self.add_image('orange', 'clothing-second', first['resource_id'])
         for execution in ['E001','E002']:
             self.append('执行记录',[execution,'图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
-        for slot, ref, execution, purpose in [('1',first,'E001','服装参考'),('2',second,'E001','服装参考'),('1',first,'E002','服装参考'),('3',second,'E002','模特参考')]:
+        for slot, ref, execution, purpose in [('1',first,'E001','服装参考'),('2',second,'E001','配饰参考'),('1',first,'E002','服装参考'),('3',second,'E002','模特参考')]:
             label = f'[共用:{ref["resource_id"]}@{ref["version"]}](<{os.path.relpath(ref["absolute_file"], folder)}>)'
             self.append('输入记录',[execution,slot,purpose,'不适用',label])
         before = {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
@@ -153,6 +153,7 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertEqual(len(clothing),2)
         self.assertEqual(clothing[0]['reference'],first['resource_id']+'@V001')
         self.assertEqual(clothing[1]['reference'],second['resource_id']+'@V002')
+        self.assertTrue(clothing[1]['media']['name'].startswith('配饰参考'))
         self.assertEqual(clothing[0]['executions'],['E001','E002'])
         self.assertEqual(model_file(self.root,'M001',clothing[0]['media']['key']),Path(first['absolute_file']))
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})

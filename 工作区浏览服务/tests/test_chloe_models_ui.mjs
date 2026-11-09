@@ -19,7 +19,7 @@ from pathlib import Path
 from PIL import Image
 from backend.chloe_models import model_cards,model_detail
 from backend.chloe_clothing import clothing_cards,clothing_detail
-from backend.chloe_reference_assets import HAIR,SCENES,asset_cards,asset_detail
+from backend.chloe_reference_assets import ACCESSORIES,HAIR,SCENES,asset_cards,asset_detail
 from chloe_init import initialize_workspace,initialize_project,initialize_asset,SKILLS
 import sys
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
@@ -92,11 +92,11 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  clothes=[clothing_detail(root,id,'/api/workspaces/chloe') for id in ['O001','O002']]
  references={}
- for kind, name, size in [(HAIR,'示例盘发',(640,352)),(SCENES,'示例庭院',(360,480))]:
+ for kind, name, size in [(HAIR,'示例盘发',(640,352)),(SCENES,'示例庭院',(360,480)),(ACCESSORIES,'示例小包',(500,280))]:
   folder=initialize_asset(root,kind.label,kind.prefix+'001',name)
   initialize_asset(root,kind.label,kind.prefix+'002','未选图'+kind.label)
   path=folder/(kind.label+'说明.md')
-  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的'+kind.label+'来源 |'))
+  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的'+kind.label+'来源 |').replace('| 配饰类型 | 待确定 |','| 配饰类型 | 包 |'))
   for index,purpose in enumerate([kind.label+'展示图']*5+[kind.label+'参考图']*2):
    key=kind.prefix+str(index)
    source=Path(tmp)/(key+'.png');Image.new('RGB',size,(80+index*15,130,90)).save(source)
@@ -106,10 +106,13 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
    append('参考版本',[purpose,reference,'用户提供','不适用'])
    if index==0:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
   references[kind.label]=[asset_detail(root,kind.prefix+suffix,'/api/workspaces/chloe',kind) for suffix in ('001','002')]
- hair,scenes=references['发型'],references['场景']
+ for identity, title, asset_type in [('C003','示例贝雷帽','贝雷帽'),('C004','示例托特包','包')]:
+  path=initialize_asset(root,'配饰',identity,title)/'配饰说明.md'
+  path.write_text(path.read_text().replace('| 配饰类型 | 待确定 |',f'| 配饰类型 | {asset_type} |'))
+ hair,scenes,accessories=references['发型'],references['场景'],references['配饰']
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
- media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in hair+clothes+scenes for image in item['images']]}
- print(json.dumps({'hairCards':asset_cards(root,'/api/workspaces/chloe',HAIR),'hair':hair,'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
+ media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in hair+clothes+scenes+accessories for image in item['images']]}
+ print(json.dumps({'hairCards':asset_cards(root,'/api/workspaces/chloe',HAIR),'hair':hair,'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'accessoryCards':asset_cards(root,'/api/workspaces/chloe',ACCESSORIES),'accessories':accessories,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp(join(tmpdir(),'chloe-models-'));
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -131,7 +134,7 @@ async function assertNaturalImage(cover, description) {
 try {
  for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}}), errors=[], unexpected=[];
-  let fail=false, long=false, emptyScenes=false, emptyHair=false, manyLookReferences=false;
+  let fail=false, long=false, emptyScenes=false, emptyHair=false, emptyAccessories=false, manyLookReferences=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -149,6 +152,9 @@ try {
    if(path==='/api/workspaces/chloe/shared-hair')return route.fulfill({json:emptyHair ? [] : sample.hairCards});
    const hairstyle=sample.hair.find(item=>path===`/api/workspaces/chloe/shared-hair/${item.id}`);
    if(hairstyle)return route.fulfill({json:hairstyle});
+   if(path==='/api/workspaces/chloe/shared-accessories')return route.fulfill({json:emptyAccessories ? [] : sample.accessoryCards});
+   const accessory=sample.accessories.find(item=>path===`/api/workspaces/chloe/shared-accessories/${item.id}`);
+   if(accessory)return route.fulfill({json:accessory});
    if(path==='/api/workspaces/chloe/shared-clothing')return route.fulfill({json:sample.clothingCards});
    if(path==='/api/workspaces/chloe/shared-scenes')return route.fulfill(fail ? {status:409,json:{detail:'isolated invalid scene'}} : {json:emptyScenes ? [] : sample.sceneCards});
    const scene=sample.scenes.find(item=>path===`/api/workspaces/chloe/shared-scenes/${item.id}`);
@@ -425,7 +431,7 @@ try {
   fail=false;long=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   const assetTabs = page.getByRole('navigation',{name:'共用资产分类',exact:true});
-  assert.deepEqual(await assetTabs.getByRole('button').allTextContents(),['AI 模特','发型','服装','场景','声音']);
+  assert.deepEqual(await assetTabs.getByRole('button').allTextContents(),['AI 模特','发型','服装','配饰','场景','声音']);
   for (const [kind,label,prefix,title,ratio,details] of [['hair','发型','H','示例盘发','16:9',sample.hair],['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院',null,sample.scenes]]) {
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:label,exact:true}).click();
   await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
@@ -532,6 +538,39 @@ try {
   await assetTabs.getByRole('button',{name:'发型',exact:true}).click();
   await page.getByText('暂无发型资料。',{exact:true}).waitFor();
   assert.equal(await page.locator('.asset-media-card').count(),0);
+  await assetTabs.getByRole('button',{name:'配饰',exact:true}).click();
+  const filters=page.getByRole('group',{name:'按类型筛选'});
+  const bag=filters.getByRole('checkbox',{name:'包',exact:true});
+  const hat=filters.getByRole('checkbox',{name:'贝雷帽',exact:true});
+  const accessoryCards=page.locator('.asset-media-grid .asset-media-card');
+  await bag.waitFor();
+  assert.equal(await filters.getByRole('checkbox').count(),2);
+  assert.equal(await page.getByRole('searchbox').count(),0);
+  assert.equal(await accessoryCards.count(),4);
+  await bag.check();
+  assert.deepEqual(await accessoryCards.locator('h3').allTextContents(),['C001 · 示例小包','C004 · 示例托特包']);
+  await hat.check();
+  assert.equal(await accessoryCards.count(),3);
+  await bag.uncheck();
+  assert.deepEqual(await accessoryCards.locator('h3').allTextContents(),['C003 · 示例贝雷帽']);
+  await hat.uncheck();
+  assert.equal(await accessoryCards.count(),4);
+  await page.getByRole('link',{name:'C001 · 示例小包',exact:true}).click();
+  const accessoryInfo=page.getByRole('region',{name:'配饰信息',exact:true});
+  await accessoryInfo.getByText('包',{exact:true}).waitFor();
+  const accessoryImage=page.getByRole('region',{name:'配饰图片',exact:true});
+  await accessoryImage.getByRole('heading',{name:'配饰图片',exact:true}).waitFor();
+  await assertNaturalImage(accessoryImage.locator('.cover').first(),'配饰正式图');
+  const accessoryReference=accessoryInfo.getByRole('region',{name:'配饰参考图',exact:true}).locator('.cover').first();
+  await assertNaturalImage(accessoryReference,'配饰参考图');
+  await accessoryReference.click();
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
+  await page.getByRole('link',{name:'返回配饰列表',exact:true}).click();
+  emptyAccessories=true;await page.reload();
+  await page.getByText('暂无配饰资料。',{exact:true}).waitFor();
+  assert.equal(await filters.count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

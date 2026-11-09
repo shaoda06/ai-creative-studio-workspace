@@ -127,6 +127,7 @@ def business_link(root, path, page):
     if len(parts) >= 5 and parts[:2] == ('综合资料', '共用素材'):
         identity = parts[3].split('-', 1)[0]
         category = {'AI模特': ('models', 'model'), '服装': ('clothing', 'clothing'),
+                    '配饰': ('accessories', 'accessory'),
                     '场景': ('scenes', 'scene'), '声音': ('voices', 'voice')}.get(parts[2])
         if category:
             return page+f'?section=assets&asset={category[0]}&{category[1]}='+quote(identity)

@@ -17,7 +17,7 @@ description: Chloe 自营带货业务入口，处理业务会话职责分流与�
 | 发布平台、目标人群、内容风格、工作区与具名项目初始化 | [账号定位与建档](../chloe-positioning/SKILL.md) |
 | 精选联盟选品、商品事实与原始素材 | [选品与商品资料](../chloe-selection/SKILL.md) |
 | 本条主题、卖点、文案、分镜与声音设计，新建视频项目 | [策划、脚本与分镜](../chloe-creative/SKILL.md) |
-| 模特、发型、服装、造型、场景、声音参考及镜头图片 | [资产与镜头图片](../chloe-assets/SKILL.md) |
+| 模特、发型、服装、配饰、造型、场景、声音参考及镜头图片 | [资产与镜头图片](../chloe-assets/SKILL.md) |
 | 模型提示词、实际输入、生成、处理、返修与采用 | [视频制作](../chloe-production/SKILL.md) |
 | 已采用片段、顺序、剪映清单和人工成片接续 | [剪映交接](../chloe-handoff/SKILL.md) |
 | 单条内容与带货表现、跨视频复盘及下一轮调整 | [带货复盘](../chloe-review/SKILL.md) |

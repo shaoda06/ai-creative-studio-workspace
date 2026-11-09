@@ -13,11 +13,12 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
 
-interface ReferenceAssetCard { id: string; name: string; media: FileItem | null }
-export interface ReferenceAssetDetail extends AssetDetail { description: string }
+interface ReferenceAssetCard { id: string; name: string; media: FileItem | null; type?: string | null }
+export interface ReferenceAssetDetail extends AssetDetail { description: string; type?: string }
 export const referenceAssetKinds = {
   hair: {label:'发型', parameter:'hair', endpoint:'shared-hair', ratio:'16:9'},
   clothing: {label:'服装', parameter:'clothing', endpoint:'shared-clothing', ratio:'4:3'},
+  accessories: {label:'配饰', parameter:'accessory', endpoint:'shared-accessories', ratio:null},
   scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:null},
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
@@ -26,10 +27,24 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
   const { api, page } = useChloeScope();
   const query = useQuery({queryKey:['chloe-reference-assets',kind,api],queryFn:()=>get<ReferenceAssetCard[]>(`${api}/${endpoint}`),refetchInterval:5000});
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const cards = query.data || [];
+  const types = kind === 'accessories'
+    ? Array.from(new Set(cards.flatMap(card => card.type ? [card.type] : []))).sort((a,b) => a.localeCompare(b,'zh-CN'))
+    : [];
+  const activeTypes = types.filter(type => selectedTypes.includes(type));
+  const visibleCards = activeTypes.length ? cards.filter(card => card.type && activeTypes.includes(card.type)) : cards;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (query.data.length ? <div className="asset-media-grid">{query.data.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
+    {types.length > 0 && <fieldset className="chloe-accessory-types"><legend>按类型筛选</legend>
+      {types.map(type => <label key={type}><input type="checkbox" checked={selectedTypes.includes(type)}
+        onChange={event => {
+          const checked = event.target.checked;
+          setSelectedTypes(previous => checked ? [...previous,type] : previous.filter(value => value !== type));
+        }} />{type}</label>)}
+    </fieldset>}
+    {query.data && (visibleCards.length ? <div className="asset-media-grid">{visibleCards.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
       to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
       item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />)}</div> : <p className="muted">暂无{label}资料。</p>)}
   </>;
@@ -63,7 +78,7 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
       <div className="chloe-model-detail">
         <div className="chloe-look-detail">
           <section className="panel chloe-look-info" aria-label={label+'信息'}><h2>{label}信息</h2>
-            <dl className="chloe-overview-fields"><div><dt>{label}名称</dt><dd>{data.name}</dd></div><div><dt>{label}说明</dt><dd>{data.description}</dd></div></dl>
+            <dl className="chloe-overview-fields"><div><dt>{label}名称</dt><dd>{data.name}</dd></div>{kind === 'accessories' && <div><dt>配饰类型</dt><dd>{data.type}</dd></div>}<div><dt>{label}说明</dt><dd>{data.description}</dd></div></dl>
             <section className="chloe-assets-content chloe-look-references" aria-label={label+'参考图'}><h3>参考图</h3>
               {!references.length ? <p>无</p> : <div className="chloe-look-reference-list" tabIndex={0} aria-label={label+'参考图列表'}>
                 {references.map((image,index)=><AssetMediaCard key={`${image.resource}@${image.version}`} title={`参考图 ${index+1} · ${image.resource}@${image.version}`}

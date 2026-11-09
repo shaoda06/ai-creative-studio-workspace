@@ -34,10 +34,11 @@ class ChloeDocumentsTest(unittest.TestCase):
                     ['R001','不适用','[原成片](<成片/test.mp4>)开场构图','不适用','仅做内容分析','调整开场'])
         return f'[R001](<../projects/{self.video.name}/README.md#单条复盘>)'
 
-    def test_all_fourteen_types_and_reinitialization(self):
+    def test_all_document_types_and_reinitialization(self):
+        expected = 8 + len(ASSETS)
         result=self.check()
-        self.assertEqual(result,{'checked_documents':14,'errors':[]})
-        self.assertEqual(len({source for _,source,_ in docs.documents(self.root)}),14)
+        self.assertEqual(result,{'checked_documents':expected,'errors':[]})
+        self.assertEqual(len({source for _,source,_ in docs.documents(self.root)}),expected)
         self.assertFalse((self.root/'综合资料/账号运营配置.md').exists())
         direction = next(e for e in docs.documents(self.root) if e[0].name == '账号定位.md')
         parsed = docs.read_document(self.root, *direction)
