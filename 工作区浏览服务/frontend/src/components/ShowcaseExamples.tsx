@@ -199,7 +199,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="仅保留尺寸的采用图" item={{media:image,version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
         <AssetMediaCard title="仅保留尺寸的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
       </ComponentExample>
-      <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe基础全身三视图、正面面部图">
+      <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe共用资产入口封面、参考图、正式图及其他版本">
         <AssetMediaCard title="16:9图片区域" item={imageRecord} revision={1} formal hideTitle aspectRatio={16 / 9} />
         <AssetMediaCard title="16:9空图片区域" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle aspectRatio={16 / 9} />
         <AssetMediaCard title="按原图比例展示" item={imageRecord} revision={1} formal hideTitle aspectRatio="natural" />

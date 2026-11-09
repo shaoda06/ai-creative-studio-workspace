@@ -9,7 +9,6 @@ import { Result, PreviewContext, Preview, Rich } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { FullscreenImage } from './components/FullscreenImage';
 import { UnderlineTabs } from './components/UnderlineTabs';
-import { LinkButton } from './components/LinkButton';
 import { PageCheckStatus } from './components/PageCheckStatus';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
@@ -19,7 +18,7 @@ export interface ReferenceAssetDetail extends AssetDetail { description: string 
 export const referenceAssetKinds = {
   hair: {label:'发型', parameter:'hair', endpoint:'shared-hair', ratio:'16:9'},
   clothing: {label:'服装', parameter:'clothing', endpoint:'shared-clothing', ratio:'4:3'},
-  scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:'9:16'},
+  scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:null},
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
 
@@ -30,7 +29,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (query.data.length ? <div className="asset-media-grid">{query.data.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal revision={0}
+    {query.data && (query.data.length ? <div className="asset-media-grid">{query.data.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
       to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
       item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />)}</div> : <p className="muted">暂无{label}资料。</p>)}
   </>;
@@ -39,8 +38,6 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
 export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kind: ReferenceAssetKind; query: UseQueryResult<ReferenceAssetDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, endpoint, ratio} = referenceAssetKinds[kind];
   const purposes = [label+'展示图'];
-  const naturalImages = kind === 'hair' || kind === 'clothing';
-  const aspectRatio = naturalImages ? 'natural' : undefined;
   const { api, page } = useChloeScope();
   const [params,setParams] = useSearchParams();
   const [document,setDocument] = useState<FileItem | null>(null);
@@ -65,23 +62,21 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
     {data && <div className="chloe-model-layout">
       <div className="chloe-model-detail">
         <div className="chloe-look-detail">
-          <section className={naturalImages ? 'panel chloe-look-info' : 'panel'} aria-label={label+'信息'}><h2>{label}信息</h2>
+          <section className="panel chloe-look-info" aria-label={label+'信息'}><h2>{label}信息</h2>
             <dl className="chloe-overview-fields"><div><dt>{label}名称</dt><dd>{data.name}</dd></div><div><dt>{label}说明</dt><dd>{data.description}</dd></div></dl>
-            <section className={naturalImages ? 'chloe-assets-content chloe-look-references' : undefined} aria-label={label+'参考图'}><h3>参考图</h3>
-              {!references.length ? <p>无</p> : naturalImages ? <div className="chloe-look-reference-list" tabIndex={0} aria-label={label+'参考图列表'}>
+            <section className="chloe-assets-content chloe-look-references" aria-label={label+'参考图'}><h3>参考图</h3>
+              {!references.length ? <p>无</p> : <div className="chloe-look-reference-list" tabIndex={0} aria-label={label+'参考图列表'}>
                 {references.map((image,index)=><AssetMediaCard key={`${image.resource}@${image.version}`} title={`参考图 ${index+1} · ${image.resource}@${image.version}`}
-                  compact revision={0} aspectRatio={aspectRatio} item={{media:image.media}} />)}
-              </div> : <ul>{references.map((image,index)=><li key={`${image.resource}@${image.version}`}>
-                <LinkButton onClick={()=>open(image.media)}>参考图 {index+1} · {image.resource}@{image.version}</LinkButton>
-              </li>)}</ul>}
+                  compact revision={0} aspectRatio="natural" item={{media:image.media}} />)}
+              </div>}
             </section>
           </section>
-          <section className={naturalImages ? 'panel chloe-look-images chloe-look-image-column' : 'panel chloe-look-images'} aria-label={label+'图片'}><h2>{label}图片（{ratio}）</h2>
+          <section className="panel chloe-look-images chloe-look-image-column" aria-label={label+'图片'}><h2>{label}图片{ratio && `（${ratio}）`}</h2>
             <UnderlineTabs label={label+'图片用途'} items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
-            {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal aspectRatio={aspectRatio} showFileActions={false} showVersion={false} revision={0} item={{media:image.media,version:image.version}} />)
+            {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal aspectRatio="natural" showFileActions={false} showVersion={false} revision={0} item={{media:image.media,version:image.version}} />)
               : <AssetMediaCard title={purpose} hideTitle formal aspectRatio={kind === 'hair' ? 16 / 9 : undefined} revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
             {others.length>0 && <details><summary>其他版本</summary><div className="chloe-model-versions" aria-label={label+'其他版本'} tabIndex={0}>{others.map(image=><div key={`${image.purpose}:${image.resource}@${image.version}`}>
-              <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} aspectRatio={aspectRatio} item={{media:image.media}} />
+              <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} aspectRatio="natural" item={{media:image.media}} />
               <details><summary>来源与执行记录</summary><Rich html={image.sourceHtml} /><p>执行编号：{image.execution}</p></details>
             </div>)}</div></details>}
           </section>

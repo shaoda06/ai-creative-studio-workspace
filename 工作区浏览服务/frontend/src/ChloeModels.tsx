@@ -32,7 +32,7 @@ export function ChloeModels({ workspaceQuery }: { workspaceQuery: UseQueryResult
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     <Result loading={false} error={voices.error} retry={voices.refetch} retrying={voices.isFetching} />
     {query.data && (query.data.length ? <div className="asset-media-grid">
-      {query.data.map(model => <AssetMediaCard key={model.id} title={`${model.id} · ${model.name}`} formal entry revision={0}
+      {query.data.map(model => <AssetMediaCard key={model.id} title={`${model.id} · ${model.name}`} formal entry aspectRatio="natural" revision={0}
         titleActions={voices.data?.filter(voice=>voice.models.includes(model.id)).length
           ? voices.data.filter(voice=>voice.models.includes(model.id)).map(voice=><AudioPreviewButton key={voice.id} name={`${model.name} · ${voice.name}`} enabled={!!voice.media}
               playing={audio.playingId===voice.id} progress={audio.currentId===voice.id ? audio.progress : 0} onClick={()=>audio.toggle(voice.id,voice.media!.url!)} />)

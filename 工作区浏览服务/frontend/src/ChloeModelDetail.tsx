@@ -69,7 +69,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const lookFaceImage = look && adopted(lookFacePurpose);
   const bodyPurpose = look && view==='masked' ? maskedPurpose : originalPurpose;
   const bodyImage = data && adopted(bodyPurpose);
-  const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number | 'natural') => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
+  const imageCard = (purpose: string, image?: ModelImage, placeholderRatio?: number) => <AssetMediaCard aspectRatio={image ? 'natural' : placeholderRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
     item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
   const otherVersions = (purpose: string) => asset!.images
     .filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose)
@@ -77,7 +77,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const references = (purpose: string) => {
     const images = otherVersions(purpose);
     return images.length ? <div className="chloe-model-versions" aria-label={`${purpose}其他版本`} tabIndex={0}>{images.map(image=><div key={`${image.purpose}:${image.resource}@${image.version}`}>
-      <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} item={{media:image.media,version:image.version}} />
+      <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact aspectRatio="natural" revision={0} item={{media:image.media,version:image.version}} />
       <details><summary>来源与执行记录</summary><p>来源或原图引用：</p><Rich html={image.sourceHtml} /><p>执行编号：{image.execution}</p></details>
     </div>)}</div> : <p className="muted">暂无{purpose}其他版本。</p>;
   };
@@ -86,7 +86,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div>
             <UnderlineTabs label="当前采用三视图" items={look ? lookViews : originalView} selected={look ? view : 'original'} onChange={value=>{ if (look) select('view',value); }} />
           </div>
-          <div>{imageCard(bodyPurpose,bodyImage,look ? 'natural' : 1)}</div>
+          <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 1)}</div>
           <div>{otherVersions(bodyPurpose).length > 0 && <details><summary>其他版本</summary>
             <div className="chloe-assets-content">{references(bodyPurpose)}</div>
           </details>}</div>
@@ -110,7 +110,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         <section className="panel chloe-model-image-column" aria-label="正面面部图">
           <h2>正面面部图（3:4）{faceImage && <span className="muted"> · {faceImage.resource}@{faceImage.version}</span>}</h2>
           <div><UnderlineTabs label="正面面部图视图" items={originalView} selected="original" onChange={() => {}} /></div>
-          <div>{imageCard('正面面部',faceImage,'natural')}</div>
+          <div>{imageCard('正面面部',faceImage)}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
         </section>
         <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
@@ -131,7 +131,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div className="chloe-look-image-column">
             <section className="panel chloe-look-images" aria-label={lookFacePurpose}>
               <h2>{lookFacePurpose}（16:9）{lookFaceImage && <span className="muted"> · {lookFaceImage.resource}@{lookFaceImage.version}</span>}</h2>
-              <div>{imageCard(lookFacePurpose,lookFaceImage,lookFaceImage ? 'natural' : 16/9)}</div>
+              <div>{imageCard(lookFacePurpose,lookFaceImage,16/9)}</div>
               {otherVersions(lookFacePurpose).length > 0 && <details><summary>其他版本</summary>
                 <div className="chloe-assets-content">{references(lookFacePurpose)}</div>
               </details>}
@@ -140,7 +140,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           </div>
         </div>
       </> : <section className="panel">
-        {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}
+        {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry aspectRatio="natural" revision={0}
           to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图原图'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
       {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
