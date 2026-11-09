@@ -65,6 +65,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const adopted = (purpose: string) => asset!.images.find(image => image.adopted && image.purpose === purpose);
   const faceImage = data && adopted('正面面部');
+  const lookFacePurpose = '造型面部三视图';
+  const lookFaceImage = look && adopted(lookFacePurpose);
   const bodyPurpose = look && view==='masked' ? maskedPurpose : originalPurpose;
   const bodyImage = data && adopted(bodyPurpose);
   const imageCard = (purpose: string, image?: ModelImage, aspectRatio?: number | 'natural') => <AssetMediaCard aspectRatio={aspectRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
@@ -126,7 +128,16 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
               </div>)}</div> : <p>无</p>}
             </section>
           </section>
-          <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>
+          <div className="chloe-look-image-column">
+            <section className="panel chloe-look-images" aria-label={lookFacePurpose}>
+              <h2>{lookFacePurpose}（16:9）{lookFaceImage && <span className="muted"> · {lookFaceImage.resource}@{lookFaceImage.version}</span>}</h2>
+              <div>{imageCard(lookFacePurpose,lookFaceImage,16/9)}</div>
+              {otherVersions(lookFacePurpose).length > 0 && <details><summary>其他版本</summary>
+                <div className="chloe-assets-content">{references(lookFacePurpose)}</div>
+              </details>}
+            </section>
+            <section className="panel chloe-look-images" aria-label="全身定装三视图">{bodyImages()}</section>
+          </div>
         </div>
       </> : <section className="panel">
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry revision={0}

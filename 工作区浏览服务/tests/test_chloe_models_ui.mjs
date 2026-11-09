@@ -65,6 +65,13 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version']).replace(os.path.relpath(Path(result['absolute_file']),model),os.path.relpath(Path(result['absolute_file']),look.parent))
   append('参考版本',[purpose,reference,'用户提供','不适用'])
   if index<=1:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+ for index,color in enumerate(['#cfcbbe','#e1e5ca']):
+  source=Path(tmp)/f'look-face-{index}.png';Image.new('RGB',(640,360),color).save(source)
+  result=import_media(root,source,source.stem,resource_id=look_face_resource if index else None)
+  look_face_resource=result['resource_id']
+  reference='[共用:'+look_face_resource+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],look.parent)+'>)'
+  append('参考版本',['造型面部三视图',reference,'用户提供','不适用'])
+  if index==1:append('当前采用',['造型面部三视图',reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  append('执行记录',['E001','图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
  for slot,color in [('1','#ee9a70'),('2','#336688')]:
   source=Path(tmp)/('clothing'+slot+'.png');Image.new('RGB',(200,300),color).save(source)
@@ -298,9 +305,29 @@ try {
   assert.ok(Math.abs(backRect.x+backRect.width-rowRect.x-rowRect.width)<1);
   assert.equal(await lookInfo.locator('dl > div').filter({has:page.getByText('造型说明',{exact:true})}).locator('dd').textContent(),'无');
   assert.equal(await lookInfo.getByText('服装来源类型',{exact:true}).count(),0);
-  const layout=await page.locator('.chloe-look-detail').evaluate(el=>Array.from(el.children).map(c=>{const r=c.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}}));
-  assert.equal(layout[0].y,layout[1].y);
-  assert.ok(Math.abs(layout[0].width/layout[1].width-2/3)<0.01);
+  const lookFacePanel=page.getByRole('region',{name:'造型面部三视图',exact:true});
+  const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
+  const [infoBox,lookFaceBox,lookBodyBox]=await Promise.all([lookInfo.boundingBox(),lookFacePanel.boundingBox(),lookPanel.boundingBox()]);
+  assert.equal(infoBox.y,lookFaceBox.y);
+  assert.ok(Math.abs(infoBox.width/lookFaceBox.width-2/3)<0.01);
+  assert.equal(lookFaceBox.x,lookBodyBox.x);
+  assert.equal(lookFaceBox.width,lookBodyBox.width);
+  assert.ok(lookFaceBox.y+lookFaceBox.height<lookBodyBox.y);
+  const lookFace=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='造型面部三视图');
+  const lookFaceHeading=lookFacePanel.getByRole('heading',{name:`造型面部三视图（16:9） · ${lookFace.resource}@${lookFace.version}`,exact:true});
+  await lookFaceHeading.waitFor();
+  const faceCover=lookFacePanel.locator(':scope > div > .asset-media-card .cover');
+  const faceCoverBox=await faceCover.boundingBox();
+  assert.ok(Math.abs(faceCoverBox.width/faceCoverBox.height-16/9)<0.01);
+  await faceCover.click();
+  await page.getByRole('dialog').waitFor();
+  assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'),lookFace.media.url);
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
+  const faceVersions=lookFacePanel.getByText('其他版本',{exact:true});
+  await faceVersions.click();
+  assert.deepEqual(await lookFacePanel.locator('.chloe-model-versions h3').allTextContents(),[`造型面部三视图 · ${lookFace.resource}@V001`]);
+  await faceVersions.click();
   const clothing=lookInfo.getByRole('region',{name:'服装参考图',exact:true});
   assert.equal(await clothing.locator('.asset-media-card').count(),2);
   assert.equal(await lookInfo.locator(':scope > :last-child').getAttribute('aria-label'),'服装参考图');
@@ -309,7 +336,6 @@ try {
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(sample.details[0].looks[0].clothing[0].reference.split('@')[0]));
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({state:'detached'});
-  const lookPanel=page.getByRole('region',{name:'全身定装三视图',exact:true});
   assert.deepEqual(await lookPanel.locator('.asset-media-card').first().locator('.field-label').allTextContents(),['尺寸：']);
   assert.deepEqual(await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button').allTextContents(),['原图','遮面版']);
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
@@ -318,6 +344,7 @@ try {
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'遮面版',exact:true}).click();
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
+  await lookFaceHeading.waitFor();
   await lookPanel.locator(':scope > div > .asset-media-card .cover').click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(lookMasked.resource));
