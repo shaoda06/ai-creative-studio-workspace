@@ -25,6 +25,7 @@ const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fix
 const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
+const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
 const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
 fixtureAccessories.push(fixtureAsset('C007','制作中配饰','制作中'));
 try {
@@ -50,8 +51,8 @@ try {
         {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
         {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
       ]}});
-      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes',
-        '/api/workspaces/account-demo/shared-hair'].includes(path)) return route.fulfill({json:[]});
+      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
+      if (path === '/api/workspaces/account-demo/shared-hair') return route.fulfill({json:showAssemblyFixtures ? fixtureHair : []});
       if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
@@ -139,7 +140,7 @@ try {
     const confirm = dialog.getByRole('button',{name:'确认选择',exact:true});
     const reset = assetNav.getByRole('button',{name:'重置',exact:true});
     await summary.waitFor();
-    assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
     assert.equal(await reset.count(),0);
     const exportArea = page.getByRole('region',{name:'导出',exact:true});
     const generateHandoff = exportArea.getByRole('button',{name:'生成',exact:true});
@@ -152,9 +153,9 @@ try {
       const {top,bottom,height} = item.getBoundingClientRect();
       return {top,bottom,height};
     }));
-    const [emptyFace, emptyBody, emptyClothing] = emptyPreviews;
+    const [emptyFace, emptyBody, emptyClothing, emptyHair] = emptyPreviews;
     assert.ok(emptyFace.height >= 230 && emptyBody.height >= 230);
-    assert.ok(Math.abs(emptyFace.top-emptyClothing.top)<=1 && Math.abs(emptyBody.bottom-emptyClothing.bottom)<=1);
+    assert.ok(Math.abs(emptyFace.top-emptyClothing.top)<=1 && Math.abs(emptyBody.bottom-emptyHair.bottom)<=1);
     await choose('选择模特').click();
     const modelA = dialog.getByRole('button',{name:'选择M001 · 模特甲',exact:true});
     const modelB = dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true});
@@ -214,8 +215,8 @@ try {
       return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
     }));
     assert.ok(frames[0].bottom < frames[1].top && frames[0].right < frames[2].left);
-    assert.ok(Math.abs(frames[0].top-frames[2].top)<=1 && Math.abs(frames[1].bottom-frames[2].bottom)<=1,
-      `模特和服装的预览框上下对齐：${JSON.stringify(frames)}`);
+    assert.ok(frames[2].bottom < frames[3].top && Math.abs(frames[0].top-frames[2].top)<=1 && Math.abs(frames[1].bottom-frames[3].bottom)<=1,
+      `模特与服装、发型的组合预览上下对齐：${JSON.stringify(frames)}`);
     const modelWidth=frames[0].right-frames[0].left, clothingWidth=frames[2].right-frames[2].left;
     assert.ok(Math.abs(modelWidth/(modelWidth+clothingWidth)-0.3)<0.002);
     assert.ok(frames[0].bottom-frames[0].top > frames[1].bottom-frames[1].top);
@@ -245,7 +246,27 @@ try {
     await clothingA.click();
     await confirm.click();
     await generateHandoff.click();
-    assert.doesNotMatch(await handoff.textContent(), /^配饰：/m);
+    assert.doesNotMatch(await handoff.textContent(), /^(发型|配饰)：/m);
+    await choose('选择发型').click();
+    const hairChoice = dialog.getByRole('button',{name:'选择H001 · 发型甲',exact:true});
+    await hairChoice.click();
+    assert.equal(await dialog.getByText('H002 · 制作中发型',{exact:true}).count(),0);
+    await confirm.click();
+    assert.equal(await summary.locator('dd').nth(2).textContent(),'H001 · 发型甲');
+    await choose('查看发型图大图').click();
+    await zoom.waitFor();
+    assert.equal(await zoom.getByRole('img').getAttribute('src'),'/api/assembly-fixture/H001');
+    await page.keyboard.press('Escape');
+    await zoom.waitFor({state:'hidden'});
+    await choose('选择发型').click();
+    assert.equal(await hairChoice.getAttribute('aria-pressed'),'true');
+    await hairChoice.click();
+    await confirm.click();
+    assert.equal(await summary.locator('dd').nth(2).textContent(),'未选择');
+    assert.equal(await page.getByRole('img',{name:'发型图',exact:true}).count(),0);
+    await choose('选择发型').click();
+    await hairChoice.click();
+    await confirm.click();
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
@@ -269,14 +290,14 @@ try {
     await confirm.click();
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 5/5');
     assert.equal(await choose('添加配饰').count(),0);
-    assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
-    assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲',...[0,1,2,3,5].map(i=>`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`)]);
+    assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','发型','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲','H001 · 发型甲',...[0,1,2,3,5].map(i=>`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`)]);
     assert.equal(await handoff.textContent(),'点击「生成」，整理当前选择的造型制作交接词。');
     assert.ok(await copyHandoff.isDisabled());
     const emptyHandoffHeight = (await handoff.boundingBox()).height;
     await generateHandoff.click();
     const text = await handoff.textContent();
-    for (const value of ['Chloe AI视频带货','模特：M002 · 模特乙','服装：O001 · 服装甲',
+    for (const value of ['Chloe AI视频带货','模特：M002 · 模特乙','服装：O001 · 服装甲','发型：H001 · 发型甲',
       '按对象编号查找各自正式采用的参考图','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
     for (const i of [0,1,2,3,5]) assert.ok(text.includes(`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`));
     assert.doesNotMatch(text,/IMG-|@V\d+|正面基础图|基础全身三视图|C005/);
@@ -305,9 +326,9 @@ try {
     const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
     assert.ok(resetBox.x+resetBox.width<assemblyBox.x && Math.abs(assemblyBox.x+assemblyBox.width-tabBar.x-tabBar.width)<=1);
     await reset.click();
-    assert.equal(await handoff.textContent(),'选定模特和服装后可生成交接词，配饰可选。');
+    assert.equal(await handoff.textContent(),'选定模特和服装后可生成交接词，发型和配饰可选。');
     assert.ok(await copyHandoff.isDisabled());
-    assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
     assert.equal(await page.locator('.chloe-assembly-main img').count(),0);
     assert.deepEqual(await accessories.getByRole('button').allTextContents(),['+添加配饰']);
     assert.equal(await reset.count(),0);

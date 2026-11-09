@@ -14,7 +14,7 @@ import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
 type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null };
-type PickerKind = 'models' | 'clothing' | 'accessories';
+type PickerKind = 'models' | 'clothing' | 'hair' | 'accessories';
 type OpenImage = (title: string, src: string) => void;
 
 const accessoryLimit = 5;
@@ -80,6 +80,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
   const { api } = useChloeScope();
   const [model, setModel] = useState<AssemblyAsset | null>(null);
   const [clothing, setClothing] = useState<AssemblyAsset | null>(null);
+  const [hair, setHair] = useState<AssemblyAsset | null>(null);
   const [accessories, setAccessories] = useState<AssemblyAsset[]>([]);
   const [handoff, setHandoff] = useState('');
   const [picker, setPicker] = useState<PickerKind | null>(null);
@@ -93,7 +94,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
   });
   const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部')?.media ?? model?.media;
   const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图')?.media;
-  const currentAsset = picker === 'models' ? model : clothing;
+  const currentAsset = picker === 'models' ? model : picker === 'hair' ? hair : clothing;
   const initial = picker === 'accessories' ? accessories : currentAsset ? [currentAsset] : [];
   const canGenerate = !!(model && clothing);
 
@@ -104,6 +105,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
       '',
       `模特：${assetTitle(model)}`,
       `服装：${assetTitle(clothing)}`,
+      ...(hair ? [`发型：${assetTitle(hair)}`] : []),
       ...(accessories.length
         ? ['配饰：', ...accessories.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`)]
         : []),
@@ -116,6 +118,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
   const confirm = (assets: AssemblyAsset[]) => {
     if (picker === 'models') setModel(assets[0] ?? null);
     if (picker === 'clothing') setClothing(assets[0] ?? null);
+    if (picker === 'hair') setHair(assets[0] ?? null);
     if (picker === 'accessories') setAccessories(assets);
     setHandoff('');
     setPicker(null);
@@ -123,12 +126,13 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
   const reset = () => {
     setModel(null);
     setClothing(null);
+    setHair(null);
     setAccessories([]);
     setHandoff('');
   };
 
   return <>
-    {renderNavigation(model || clothing || accessories.length ? reset : undefined)}
+    {renderNavigation(model || clothing || hair || accessories.length ? reset : undefined)}
     <div className="chloe-assets-content chloe-assembly">
     <div className="chloe-assembly-main">
       <section className="chloe-assembly-column" aria-label="模特选择">
@@ -139,10 +143,17 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
           <AssemblyPreview label="基础三视图" media={body} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
         </div>
       </section>
-      <section className="chloe-assembly-column" aria-label="服装选择">
+      <section className="chloe-assembly-column" aria-label="服装与发型选择">
         <h2>服装选择</h2>
         <button type="button" aria-label="选择服装" onClick={() => setPicker('clothing')}>{clothing ? assetTitle(clothing) : '选择服装'}</button>
-        <AssemblyPreview label="服装图" media={clothing?.media} empty="请选择服装" onPreview={openImage} />
+        <div className="chloe-assembly-outfit-images">
+          <AssemblyPreview label="服装图" media={clothing?.media} empty="请选择服装" onPreview={openImage} />
+          <section className="chloe-assembly-hair" aria-label="发型选择">
+            <h2>发型选择</h2>
+            <button type="button" aria-label="选择发型" onClick={() => setPicker('hair')}>{hair ? assetTitle(hair) : '选择发型'}</button>
+            <AssemblyPreview label="发型图" media={hair?.media} empty="请选择发型" onPreview={openImage} />
+          </section>
+        </div>
       </section>
     </div>
     {model && <Result loading={false} error={modelQuery.error} retry={modelQuery.refetch} retrying={modelQuery.isFetching} />}
@@ -169,6 +180,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
         <dl className="chloe-overview-fields" aria-live="polite">
           <div><dt>模特</dt><dd>{model ? assetTitle(model) : '未选择'}</dd></div>
           <div><dt>服装</dt><dd>{clothing ? assetTitle(clothing) : '未选择'}</dd></div>
+          <div><dt>发型</dt><dd>{hair ? assetTitle(hair) : '未选择'}</dd></div>
           {accessories.length ? accessories.map((asset, index) => <div key={index}><dt>配饰 {index + 1}</dt><dd>{assetTitle(asset)}</dd></div>) :
             <div><dt>配饰</dt><dd>未选择</dd></div>}
         </dl>
@@ -182,7 +194,7 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
           </div>
         </div>
         <p className="chloe-assembly-export-template">{handoff || <span className="muted">
-          {canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，配饰可选。'}
+          {canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，发型和配饰可选。'}
         </span>}</p>
       </section>
     </div>
