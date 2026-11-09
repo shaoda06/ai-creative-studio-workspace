@@ -22,10 +22,11 @@ const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
 const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
-const fixtureAsset = (id,name) => ({id,name,media:fixtureImage(id)});
-const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),{id:'M003',name:'无采用图',media:null}];
-const fixtureClothing = [fixtureAsset('O001','服装甲')];
+const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
+const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
+const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
+fixtureAccessories.push(fixtureAsset('C007','制作中配饰','制作中'));
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height}});
@@ -142,7 +143,7 @@ try {
     await modelA.waitFor();
     assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).overflowY),'hidden');
     assert.ok(await confirm.isDisabled());
-    assert.ok(await dialog.getByRole('button',{name:'M003 · 无采用图',exact:true}).isDisabled());
+    assert.equal(await dialog.getByText('M003 · 制作中模特',{exact:true}).count(),0);
     await modelA.click();
     assert.equal(await modelA.getAttribute('aria-pressed'),'true');
     assert.equal(await modelA.locator('span').textContent(),'✓');
@@ -170,6 +171,7 @@ try {
     await choose('选择服装').click();
     const clothingA = dialog.getByRole('button',{name:'选择O001 · 服装甲',exact:true});
     await clothingA.click();
+    assert.equal(await dialog.getByText('O002 · 制作中服装',{exact:true}).count(),0);
     await confirm.click();
     assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).getAttribute('src'),'/api/assembly-fixture/O001');
     const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
@@ -209,6 +211,7 @@ try {
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
     await choose('添加配饰').click();
     await accessoryChoice(0).waitFor();
+    assert.equal(await dialog.getByText('C007 · 制作中配饰',{exact:true}).count(),0);
     assert.ok(await confirm.isDisabled());
     for (let index=0; index<5; index++) {
       await accessoryChoice(index).click();

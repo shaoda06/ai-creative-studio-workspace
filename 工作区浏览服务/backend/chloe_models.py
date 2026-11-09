@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 from backend.chloe_overview import fields
 from backend.parsers import documents
-from chloe_documents import LINK, media_reference, read_document, records, template
+from chloe_documents import LINK, asset_status, media_reference, read_document, records, template
 import project_resources as resources
 
 router = APIRouter(prefix='/shared-models')
@@ -33,25 +33,25 @@ def model_documents(root):
         portrait = media_reference(root, path, portraits[0]['资源引用']) if portraits else None
         if portrait and Path(portrait['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
             raise ValueError('正面面部采用必须为PNG、JPEG或WebP图片')
-        yield identity, name, doc, portrait
+        yield identity, name, path, doc, portrait
 
 
 def model_cards(root, api):
     cards = []
-    for identity, name, doc, portrait in model_documents(root):
+    for identity, name, path, doc, portrait in model_documents(root):
         media = None
         if portrait:
             key = portrait['resource_id'] + '@' + portrait['version']
             media = {'kind': 'image', 'name': name + ' · 正面面部', 'key': key,
                      'url': f'{api}/shared-models/{quote(identity)}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'}
         cards.append({'id': identity, 'name': name, 'identity': fields(doc, '资产身份'),
-                      'features': fields(doc, '人物特征'), 'media': media,
+                      'features': fields(doc, '人物特征'), 'media': media, 'status': asset_status(path, doc)['status'],
                       'version': portrait['version'] if portrait else None})
     return cards
 
 
 def portrait_file(root, identity, resource_id, version):
-    for model_id, _, _, portrait in model_documents(root):
+    for model_id, _, _, _, portrait in model_documents(root):
         if model_id == identity and portrait and portrait['resource_id'] == resource_id and portrait['version'] == version:
             return resources.local(root, portrait['file'])
     raise FileNotFoundError('该模特没有采用这个正面面部版本')
@@ -86,9 +86,8 @@ def portrait(identity: str, resource_id: str, version: str, request: Request, do
 
 
 def model_context(root, identity):
-    for model_id, name, doc, _ in model_documents(root):
+    for model_id, name, path, doc, _ in model_documents(root):
         if model_id == identity:
-            path = root/'综合资料/共用素材/AI模特'/f'{model_id}-{name}'/'模特说明.md'
             return name, path, doc
     raise FileNotFoundError('模特资料不存在：' + identity)
 

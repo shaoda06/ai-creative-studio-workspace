@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
 from backend.parsers import documents
-from chloe_documents import MISSING, read_document, records, template
+from chloe_documents import MISSING, asset_status, read_document, records, template
 import project_resources as resources
 
 @dataclass
@@ -77,6 +77,8 @@ def asset_cards(root, api, kind):
         current = next((image for image in content['images']
                         if image['adopted'] and image['purpose'] == purpose), None)
         card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
+        if kind != VOICES:
+            card['status'] = asset_status(path, doc)['status']
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None

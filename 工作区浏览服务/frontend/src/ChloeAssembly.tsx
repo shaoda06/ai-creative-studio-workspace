@@ -12,7 +12,7 @@ import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = { id: string; name: string; media: FileItem | null };
+type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null };
 type PickerKind = 'models' | 'clothing' | 'accessories';
 type OpenImage = (title: string, src: string) => void;
 
@@ -32,8 +32,9 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
     queryKey: isModel ? ['chloe-models', api] : ['chloe-reference-assets', kind, api],
     queryFn: () => get<AssemblyAsset[]>(`${api}/${endpoint}`),
   });
+  const available = query.data?.filter(asset => asset.status === '可用');
   const selected = draftIds.flatMap(id => {
-    const asset = query.data?.find(item => item.id === id && item.media?.url);
+    const asset = available?.find(item => item.id === id && item.media?.url);
     return asset ? [asset] : [];
   });
   const atLimit = multi && selected.length >= accessoryLimit;
@@ -42,8 +43,8 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
 
   return <Dialog title={title} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (query.data.length ? <div className="asset-media-grid">
-      {query.data.map(asset => {
+    {available && (available.length ? <div className="asset-media-grid">
+      {available.map(asset => {
         const checked = selected.some(item => item.id === asset.id);
         const src = asset.media?.url;
         return <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
@@ -58,7 +59,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
               }
             }}} />;
       })}
-    </div> : <p className="muted">暂无{label}资料。</p>)}
+    </div> : <p className="muted">暂无可用{label}。</p>)}
     <div className="chloe-assembly-confirm">
       <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
     </div>
