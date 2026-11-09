@@ -79,7 +79,6 @@ def asset_cards(root, api, kind):
         card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
         if kind != VOICES:
             card['status'] = asset_status(path, doc)['status']
-            card['imageReference'] = f"{current['resource']}@{current['version']}" if current else None
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None

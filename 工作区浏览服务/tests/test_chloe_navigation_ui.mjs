@@ -22,7 +22,7 @@ const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
 const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
-const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id),imageReference:`IMG-${id}@V002`});
+const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
@@ -245,7 +245,7 @@ try {
     await clothingA.click();
     await confirm.click();
     await generateHandoff.click();
-    assert.match(await handoff.inputValue(), /本次装配未额外选择/);
+    assert.doesNotMatch(await handoff.inputValue(), /^配饰：/m);
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
@@ -275,10 +275,10 @@ try {
     assert.ok(await copyHandoff.isDisabled());
     await generateHandoff.click();
     const text = await handoff.inputValue();
-    for (const value of ['Chloe AI视频带货','M002 · 模特乙','IMG-M002-face@V003','IMG-M002-body@V002',
-      'O001 · 服装甲','IMG-O001@V002','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
-    for (const i of [0,1,2,3,5]) assert.ok(text.includes(fixtureAccessories[i].imageReference));
-    assert.ok(!text.includes('IMG-M002-body@V004') && !text.includes('IMG-C005@V002'));
+    for (const value of ['Chloe AI视频带货','模特：M002 · 模特乙','服装：O001 · 服装甲',
+      '按对象编号查找各自正式采用的参考图','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
+    for (const i of [0,1,2,3,5]) assert.ok(text.includes(`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`));
+    assert.doesNotMatch(text,/IMG-|@V\d+|正面基础图|基础全身三视图|C005/);
     await copyHandoff.click();
     await page.waitForFunction(async expected => await navigator.clipboard.readText() === expected,text);
     await accessories.getByRole('img',{name:'C001',exact:true}).click();

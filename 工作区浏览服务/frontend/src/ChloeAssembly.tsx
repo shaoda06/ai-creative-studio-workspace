@@ -13,13 +13,12 @@ import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null; imageReference?: string | null };
+type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null };
 type PickerKind = 'models' | 'clothing' | 'accessories';
 type OpenImage = (title: string, src: string) => void;
 
 const accessoryLimit = 5;
 const assetTitle = (asset: AssemblyAsset) => `${asset.id} · ${asset.name}`;
-const assetWithImage = (asset: AssemblyAsset) => `${assetTitle(asset)}（展示图 ${asset.imageReference}）`;
 
 function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void; onPreview: OpenImage;
@@ -92,26 +91,24 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
     queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}`),
     enabled: !!modelId,
   });
-  const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部');
-  const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图');
+  const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部')?.media ?? model?.media;
+  const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图')?.media;
   const currentAsset = picker === 'models' ? model : clothing;
   const initial = picker === 'accessories' ? accessories : currentAsset ? [currentAsset] : [];
-  const canGenerate = !!(model && clothing?.imageReference && front && body && accessories.every(asset => asset.imageReference));
+  const canGenerate = !!(model && clothing);
 
   const generate = () => {
-    if (!model || !clothing?.imageReference || !front || !body) return;
+    if (!model || !clothing) return;
     setHandoff([
       `请在「${projectName}」按以下装配开始制作造型图。`,
       '',
       `模特：${assetTitle(model)}`,
-      `- 正面基础图：${front.resource}@${front.version}`,
-      `- 基础全身三视图：${body.resource}@${body.version}`,
-      `服装：${assetWithImage(clothing)}`,
+      `服装：${assetTitle(clothing)}`,
       ...(accessories.length
-        ? ['配饰：', ...accessories.map((asset, index) => `${index + 1}. ${assetWithImage(asset)}`)]
-        : ['配饰：本次装配未额外选择。']),
+        ? ['配饰：', ...accessories.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`)]
+        : []),
       '',
-      '请核对上述正式参考图，按取景使用实际入镜的配饰，保持各视角的造型一致。若鞋履、妆发或搭配有需要确认的取舍，先确认再生成。',
+      '请按对象编号查找各自正式采用的参考图，按取景使用实际入镜的配饰，保持各视角的造型一致。若鞋履、妆发或搭配有需要确认的取舍，先确认再生成。',
       '请按 Chloe 造型流程从造型面部三视图开始，按顺序送审并接续全身定装三视图原图和遮面版。',
     ].join('\n'));
   };
@@ -138,8 +135,8 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
         <h2>模特选择</h2>
         <button type="button" aria-label="选择模特" onClick={() => setPicker('models')}>{model ? assetTitle(model) : '选择模特'}</button>
         <div className="chloe-assembly-model-images">
-          <AssemblyPreview label="正面基础图" media={front?.media ?? model?.media} empty={model ? '尚未采用正面基础图' : '请选择模特'} onPreview={openImage} />
-          <AssemblyPreview label="基础三视图" media={body?.media} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
+          <AssemblyPreview label="正面基础图" media={front} empty={model ? '尚未采用正面基础图' : '请选择模特'} onPreview={openImage} />
+          <AssemblyPreview label="基础三视图" media={body} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
         </div>
       </section>
       <section className="chloe-assembly-column" aria-label="服装选择">
