@@ -86,7 +86,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div>
             <UnderlineTabs label="当前采用三视图" items={look ? lookViews : originalView} selected={look ? view : 'original'} onChange={value=>{ if (look) select('view',value); }} />
           </div>
-          <div>{imageCard(bodyPurpose,bodyImage,look ? undefined : 1)}</div>
+          <div>{imageCard(bodyPurpose,bodyImage,look ? 'natural' : 1)}</div>
           <div>{otherVersions(bodyPurpose).length > 0 && <details><summary>其他版本</summary>
             <div className="chloe-assets-content">{references(bodyPurpose)}</div>
           </details>}</div>
@@ -123,7 +123,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
             <dl className="chloe-overview-fields"><div><dt>造型名称</dt><dd>{look.name}</dd></div><div><dt>所属模特</dt><dd>{data.id} · {data.name}</dd></div><div><dt>造型说明</dt><dd>{look.description}</dd></div></dl>
             <section className="chloe-assets-content" aria-label="服装参考图"><h3>服装参考图</h3>
               {look.clothing.length ? <div className="chloe-look-clothing">{look.clothing.map(item=><div key={item.reference}>
-                <AssetMediaCard title={item.reference} compact revision={0} item={{media:item.media}} />
+                <AssetMediaCard title={item.reference} compact revision={0} aspectRatio="natural" item={{media:item.media}} />
                 <p className="muted">执行编号：{item.executions.join('、')}</p>
               </div>)}</div> : <p>无</p>}
             </section>
@@ -131,7 +131,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div className="chloe-look-image-column">
             <section className="panel chloe-look-images" aria-label={lookFacePurpose}>
               <h2>{lookFacePurpose}（16:9）{lookFaceImage && <span className="muted"> · {lookFaceImage.resource}@{lookFaceImage.version}</span>}</h2>
-              <div>{imageCard(lookFacePurpose,lookFaceImage,16/9)}</div>
+              <div>{imageCard(lookFacePurpose,lookFaceImage,lookFaceImage ? 'natural' : 16/9)}</div>
               {otherVersions(lookFacePurpose).length > 0 && <details><summary>其他版本</summary>
                 <div className="chloe-assets-content">{references(lookFacePurpose)}</div>
               </details>}

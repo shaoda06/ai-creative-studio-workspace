@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   append('参考版本',[purpose,reference,'用户提供','不适用'])
   if index<=1:append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  for index,color in enumerate(['#cfcbbe','#e1e5ca']):
-  source=Path(tmp)/f'look-face-{index}.png';Image.new('RGB',(640,360),color).save(source)
+  source=Path(tmp)/f'look-face-{index}.png';Image.new('RGB',(640,352),color).save(source)
   result=import_media(root,source,source.stem,resource_id=look_face_resource if index else None)
   look_face_resource=result['resource_id']
   reference='[共用:'+look_face_resource+'@'+result['version']+'](<'+os.path.relpath(result['absolute_file'],look.parent)+'>)'
@@ -114,6 +114,19 @@ const output = await mkdtemp(join(tmpdir(),'chloe-models-'));
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
+
+async function assertNaturalImage(cover, description) {
+  const image = await cover.locator('img').evaluate(async img => {
+    await img.decode();
+    const box = img.getBoundingClientRect();
+    const cover = img.parentElement.getBoundingClientRect();
+    return {width:box.width,height:box.height,coverWidth:cover.width,coverHeight:cover.height,
+      availableWidth:img.parentElement.parentElement.clientWidth,naturalRatio:img.naturalWidth/img.naturalHeight};
+  });
+  assert.ok(Math.abs(image.width-image.availableWidth)<1 && Math.abs(image.width-image.coverWidth)<1, description+'铺满图片区域');
+  assert.ok(Math.abs(image.height-image.coverHeight)<1 && Math.abs(image.width/image.height-image.naturalRatio)<.01, description+'按原图比例调整高度');
+}
+
 try {
  for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}}), errors=[], unexpected=[];
@@ -229,14 +242,7 @@ try {
   const bodyCover=await bodyColumn.locator(':scope > div > .asset-media-card .cover').boundingBox();
   assert.ok(Math.abs(bodyCover.width / bodyCover.height - 1)<.01,'基础全身图区域为1:1');
   const portraitCover=faceColumn.locator(':scope > div > .asset-media-card .cover');
-  const portrait=await portraitCover.locator('img').evaluate(async img=>{
-    await img.decode();
-    const box=img.getBoundingClientRect(), cover=img.parentElement.getBoundingClientRect();
-    return {width:box.width,height:box.height,coverWidth:cover.width,coverHeight:cover.height,
-      availableWidth:img.parentElement.parentElement.clientWidth,naturalRatio:img.naturalWidth/img.naturalHeight};
-  });
-  assert.ok(Math.abs(portrait.width-portrait.availableWidth)<1 && Math.abs(portrait.width-portrait.coverWidth)<1);
-  assert.ok(Math.abs(portrait.height-portrait.coverHeight)<1 && Math.abs(portrait.width/portrait.height-portrait.naturalRatio)<.01,'正面图铺满原列宽并按实际比例计算高度');
+  await assertNaturalImage(portraitCover,'正面面部图');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
     const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
@@ -317,8 +323,7 @@ try {
   const lookFaceHeading=lookFacePanel.getByRole('heading',{name:`造型面部三视图（16:9） · ${lookFace.resource}@${lookFace.version}`,exact:true});
   await lookFaceHeading.waitFor();
   const faceCover=lookFacePanel.locator(':scope > div > .asset-media-card .cover');
-  const faceCoverBox=await faceCover.boundingBox();
-  assert.ok(Math.abs(faceCoverBox.width/faceCoverBox.height-16/9)<0.01);
+  await assertNaturalImage(faceCover,'造型面部三视图');
   await faceCover.click();
   await page.getByRole('dialog').waitFor();
   assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'),lookFace.media.url);
@@ -331,6 +336,7 @@ try {
   const clothing=lookInfo.getByRole('region',{name:'服装参考图',exact:true});
   assert.equal(await clothing.locator('.asset-media-card').count(),2);
   assert.equal(await lookInfo.locator(':scope > :last-child').getAttribute('aria-label'),'服装参考图');
+  for (const cover of await clothing.locator('.cover').all()) await assertNaturalImage(cover,'服装参考图');
   await clothing.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(sample.details[0].looks[0].clothing[0].reference.split('@')[0]));
@@ -339,13 +345,16 @@ try {
   assert.deepEqual(await lookPanel.locator('.asset-media-card').first().locator('.field-label').allTextContents(),['尺寸：']);
   assert.deepEqual(await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button').allTextContents(),['原图','遮面版']);
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
+  const lookBodyCover=lookPanel.locator(':scope > div > .asset-media-card .cover');
+  await assertNaturalImage(lookBodyCover,'全身定装三视图原图');
   const noView=new URL(page.url()); noView.hash=noView.hash.replace('&view=original',''); await page.goto(noView.toString());
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookOriginal.resource}@${lookOriginal.version}`,exact:true}).waitFor();
   await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'遮面版',exact:true}).click();
   const lookMasked=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图遮面版');
   await page.getByRole('heading',{name:`全身定装三视图（4:3） · ${lookMasked.resource}@${lookMasked.version}`,exact:true}).waitFor();
   await lookFaceHeading.waitFor();
-  await lookPanel.locator(':scope > div > .asset-media-card .cover').click();
+  await assertNaturalImage(lookBodyCover,'全身定装三视图遮面版');
+  await lookBodyCover.click();
   await page.getByRole('dialog').waitFor();
   assert.ok((await page.getByRole('dialog').locator('img').getAttribute('src')).includes(lookMasked.resource));
   await page.keyboard.press('Escape');
