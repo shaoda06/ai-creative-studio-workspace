@@ -238,7 +238,7 @@ def facts(path):
             raise ValueError('图片无法解码') from error
     else:
         probe = subprocess.run(['ffprobe', '-v', 'error', '-show_format', '-show_streams', '-of', 'json', str(path)],
-                               capture_output=True, text=True, check=True)
+                               capture_output=True, encoding='utf-8', check=True)
         info = json.loads(probe.stdout)
         result['duration_seconds'] = float(info['format']['duration'])
         for stream in info['streams']:
