@@ -1,12 +1,12 @@
 .chloe-assembly{display:grid;gap:24px}
 .chloe-assembly h2{margin:0 0 10px;font-size:18px}
 .chloe-assembly-main,.chloe-assembly-summary{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);column-gap:20px}
-.chloe-assembly-main{grid-template-rows:auto auto auto;row-gap:8px}
+.chloe-assembly-main{grid-template-rows:repeat(4,auto);row-gap:8px}
 .chloe-assembly-column{display:grid;grid-row:1 / -1;grid-template-rows:subgrid;min-width:0}
 .chloe-assembly-column h2{margin:0}
 .chloe-assembly-column>button,.chloe-assembly-hair>button{text-align:left;overflow-wrap:anywhere}
-.chloe-assembly-model-images{display:grid;gap:8px;min-width:0}
-.chloe-assembly-outfit-images{display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr);gap:8px;contain:size}
+.chloe-assembly-model-images,.chloe-assembly-outfit-images{display:grid;grid-row:3 / -1;grid-template-rows:subgrid;min-width:0}
+.chloe-assembly-outfit-images>.chloe-assembly-preview,.chloe-assembly-hair{contain:size}
 .chloe-assembly-hair{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:8px;min-width:0}
 .chloe-assembly-preview{display:grid;grid-template-rows:auto minmax(0,1fr);gap:6px;min-height:0;margin:0;padding:10px;border:1px solid var(--line);border-radius:8px;background:#f5f7f4;text-align:center}
 .chloe-assembly-preview>button{min-width:0;min-height:0;padding:0;border:0;background:transparent;cursor:zoom-in}

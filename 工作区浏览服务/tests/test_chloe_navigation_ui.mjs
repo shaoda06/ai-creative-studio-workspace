@@ -149,13 +149,15 @@ try {
     await handoff.waitFor();
     assert.ok(await generateHandoff.isDisabled());
     assert.ok(await copyHandoff.isDisabled());
-    const emptyPreviews = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
+    const previews = page.locator('.chloe-assembly-main figure, .chloe-assembly-hair');
+    const emptyPreviews = await previews.evaluateAll(items => items.map(item => {
       const {top,bottom,height} = item.getBoundingClientRect();
       return {top,bottom,height};
     }));
     const [emptyFace, emptyBody, emptyClothing, emptyHair] = emptyPreviews;
     assert.ok(emptyFace.height >= 230 && emptyBody.height >= 230);
-    assert.ok(Math.abs(emptyFace.top-emptyClothing.top)<=1 && Math.abs(emptyBody.bottom-emptyHair.bottom)<=1);
+    assert.ok(Math.abs(emptyFace.top-emptyClothing.top)<=1 && Math.abs(emptyFace.bottom-emptyClothing.bottom)<=1);
+    assert.ok(Math.abs(emptyBody.top-emptyHair.top)<=1 && Math.abs(emptyBody.bottom-emptyHair.bottom)<=1);
     await choose('选择模特').click();
     const modelA = dialog.getByRole('button',{name:'选择M001 · 模特甲',exact:true});
     const modelB = dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true});
@@ -210,16 +212,19 @@ try {
       assert.ok(Math.abs(metrics.width-metrics.innerWidth)<=1);
       assert.ok(Math.abs(metrics.height-metrics.width/metrics.ratio)<=1);
     }
-    const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
+    const frames = await previews.evaluateAll(items => items.map(item => {
       const rect = item.getBoundingClientRect();
       return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
     }));
-    assert.ok(frames[0].bottom < frames[1].top && frames[0].right < frames[2].left);
-    assert.ok(frames[2].bottom < frames[3].top && Math.abs(frames[0].top-frames[2].top)<=1 && Math.abs(frames[1].bottom-frames[3].bottom)<=1,
-      `模特与服装、发型的组合预览上下对齐：${JSON.stringify(frames)}`);
-    const modelWidth=frames[0].right-frames[0].left, clothingWidth=frames[2].right-frames[2].left;
+    const [faceFrame, bodyFrame, clothingFrame, hairSection] = frames;
+    assert.ok(faceFrame.bottom < bodyFrame.top && faceFrame.right < clothingFrame.left);
+    assert.ok(Math.abs(faceFrame.top-clothingFrame.top)<=1 && Math.abs(faceFrame.bottom-clothingFrame.bottom)<=1,
+      `正面基础图和服装图上下对齐：${JSON.stringify(frames)}`);
+    assert.ok(Math.abs(bodyFrame.top-hairSection.top)<=1 && Math.abs(bodyFrame.bottom-hairSection.bottom)<=1,
+      `基础三视图和整个发型区上下对齐：${JSON.stringify(frames)}`);
+    const modelWidth=faceFrame.right-faceFrame.left, clothingWidth=clothingFrame.right-clothingFrame.left;
     assert.ok(Math.abs(modelWidth/(modelWidth+clothingWidth)-0.3)<0.002);
-    assert.ok(frames[0].bottom-frames[0].top > frames[1].bottom-frames[1].top);
+    assert.ok(faceFrame.bottom-faceFrame.top > bodyFrame.bottom-bodyFrame.top);
     const [summaryBox, exportBox] = await Promise.all([summary.boundingBox(),exportArea.boundingBox()]);
     assert.ok(Math.abs(summaryBox.width-modelWidth)<=1 && Math.abs(exportBox.width-clothingWidth)<=1);
     for (const [label, src] of [['正面基础图','M002-front'],['基础三视图','M002-body'],['服装图','O001']]) {
