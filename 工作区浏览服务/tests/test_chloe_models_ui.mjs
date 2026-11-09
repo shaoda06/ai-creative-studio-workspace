@@ -47,13 +47,12 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   return '[共用:'+rid+'@'+version+'](<'+os.path.relpath(file,model)+'>)'
  first=label(target,ref['resource_id'],ref['version'])
  append('参考版本',['正面面部',first,'用户提供','不适用'])
- for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('面部三视图','#bbaacc',(600,338),'head'),('面部三视图','#bbddcc',(600,338),'head2'),('全身三视图原图','#bbaabb',(600,300),'views'),('全身三视图遮面版','#444444',(600,300),'masked'),('全身三视图遮面版','#555555',(600,300),'masked2')]:
+ for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('全身三视图原图','#bbaabb',(600,600),'views'),('全身三视图原图','#aabbaa',(600,600),'views2')]:
   source=Path(tmp)/(key+'.png');Image.new('RGB',size,color).save(source)
   result=import_media(root,source,key,resource_id=ref['resource_id'] if key.startswith('face') else None)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version'])
-  append('参考版本',[purpose,reference,original if key=='masked' else first,'不适用'])
-  if key=='views':original=reference
-  if key in ('head','views','masked'):append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+  append('参考版本',[purpose,reference,first,'不适用'])
+  if key=='views':append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  look=initialize_asset(root,'造型','L001','通勤造型')/'造型说明.md'
  text=look.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |')
  start=text.index('## 关联资料');end=text.index('\\n\\n',text.index('| ---',start))
@@ -178,21 +177,12 @@ try {
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'模特图片',exact:true}).click();
   await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
   assert.equal(await page.getByRole('heading',{name:'人物特征',exact:true}).count(),0);
-  assert.equal(await page.getByRole('navigation',{name:'当前采用三视图'}).locator('[aria-current="page"]').textContent(),'遮面版');
   const expectedRef=purpose=>{const image=sample.details[0].images.find(image=>image.adopted && image.purpose===purpose);return `${image.resource}@${image.version}`;};
   assert.ok((await page.getByRole('heading',{name:/^正面面部图/}).textContent()).includes(expectedRef('正面面部')));
-  assert.ok((await page.getByRole('heading',{name:/^基础全身三视图/}).textContent()).includes(expectedRef('全身三视图遮面版')));
-  const basePanel=page.getByRole('region',{name:'基础全身三视图',exact:true});
-  await basePanel.getByText('其他版本',{exact:true}).click();
-  assert.equal(await basePanel.getByRole('navigation',{name:'模特图片用途'}).count(),0);
-  assert.equal(await basePanel.locator('[aria-label="全身三视图遮面版其他版本"] .asset-media-card').count(),1);
-  await page.getByRole('navigation',{name:'当前采用三视图'}).getByRole('button',{name:'原图',exact:true}).click();
   await page.getByRole('heading',{name:'基础全身三视图（1:1） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
-  assert.equal(await page.getByRole('region',{name:'基础全身三视图',exact:true}).getByText('其他版本',{exact:true}).count(),0);
   await page.reload();
-  await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（1:1） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.match(page.url(),/modelTab=images/);
-  assert.match(page.url(),/view=original/);
   const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
   assert.deepEqual(await detailTabs.getByRole('button').allTextContents(),['模特信息','模特图片','造型']);
   const tabRect=await detailTabs.boundingBox(),crumbRect=await page.locator('.breadcrumbs').boundingBox(),contentRect=await page.locator('.chloe-model-images').boundingBox();
@@ -201,34 +191,32 @@ try {
   assert.equal(await page.getByRole('heading',{name:'资产身份',exact:true}).count(),0);
   const faceColumn=page.getByRole('region',{name:'正面面部图',exact:true});
   const bodyColumn=page.getByRole('region',{name:'基础全身三视图',exact:true});
-  const headColumn=page.getByRole('region',{name:'面部三视图',exact:true});
-  assert.ok((await headColumn.locator('h2').textContent()).includes(expectedRef('面部三视图')));
-  assert.deepEqual(await headColumn.getByRole('navigation').getByRole('button').allTextContents(),['原图']);
-  await headColumn.locator('.cover').first().click();
+  assert.equal(await page.getByRole('region',{name:'面部三视图',exact:true}).count(),0);
+  assert.deepEqual(await bodyColumn.getByRole('navigation').getByRole('button').allTextContents(),['原图']);
+  await bodyColumn.locator('.cover').first().click();
   await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
-  await headColumn.getByText('其他版本',{exact:true}).click();
-  assert.equal(await headColumn.locator('.chloe-model-versions .asset-media-card').count(),1);
-  const shortVersions=headColumn.locator('.chloe-model-versions');
+  await bodyColumn.getByText('其他版本',{exact:true}).click();
+  assert.equal(await bodyColumn.locator('.chloe-model-versions .asset-media-card').count(),1);
+  const shortVersions=bodyColumn.locator('.chloe-model-versions');
   await shortVersions.locator('.cover').hover();
   const pageBeforeWheel=await page.evaluate(()=>scrollY);
   await page.mouse.wheel(0,250);
   await page.waitForFunction(before=>scrollY>before,pageBeforeWheel);
 
-  await headColumn.getByText('其他版本',{exact:true}).click();
+  await bodyColumn.getByText('其他版本',{exact:true}).click();
   assert.equal(await page.getByRole('heading',{name:'当前采用',exact:true}).count(),0);
   const faceView=faceColumn.getByRole('navigation',{name:'正面面部图视图'});
   assert.deepEqual(await faceView.getByRole('button').allTextContents(),['原图']);
   assert.equal(await faceView.locator('[aria-current="page"]').textContent(),'原图');
-  const faceBox=await faceColumn.boundingBox(),bodyBox=await bodyColumn.boundingBox(),headBox=await headColumn.boundingBox();
-  assert.ok(faceBox.x+faceBox.width<headBox.x && Math.abs(faceBox.y-headBox.y)<1,'面部图与面部三视图左右排列');
-  assert.ok(bodyBox.y>=headBox.y+headBox.height && Math.abs(bodyBox.x-faceBox.x)<1 && Math.abs(bodyBox.x+bodyBox.width-headBox.x-headBox.width)<1,'基础全身三视图独占下一整行');
+  const faceBox=await faceColumn.boundingBox(),bodyBox=await bodyColumn.boundingBox();
+  assert.ok(faceBox.x+faceBox.width<bodyBox.x && Math.abs(faceBox.y-bodyBox.y)<1,'正面面部图在左，基础全身三视图在右');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
-  const bodyCover=await bodyColumn.locator('.cover').boundingBox();
+  const bodyCover=await bodyColumn.locator(':scope > div > .asset-media-card .cover').boundingBox();
   assert.ok(Math.abs(bodyCover.width / bodyCover.height - 1)<.01,'基础全身图区域为1:1');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
   for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
-    const left=await faceColumn.locator(selector).boundingBox(),right=await headColumn.locator(selector).boundingBox();
+    const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
     assert.ok(Math.abs(left.y-right.y)<1,`左右对齐：${selector}`);
   }
   assert.equal(await page.locator('.chloe-model-image-column > div > .asset-media-card h3').count(),0);
@@ -247,11 +235,11 @@ try {
   await longVersions.locator('.cover').first().hover();
   await page.mouse.wheel(0,250);
   await page.waitForFunction(()=>document.querySelector('[aria-label="正面面部其他版本"]').scrollTop>0);
-  await longVersions.evaluate(el=>el.scrollTop=el.scrollHeight);
-  await longVersions.locator('.cover').last().hover();
+  await longVersions.evaluate(el=>el.scrollTop=0);
+  await longVersions.locator('.cover').first().hover();
   const boundaryPage=await page.evaluate(()=>scrollY);
-  await page.mouse.wheel(0,250);
-  await page.waitForFunction(before=>scrollY>before,boundaryPage);
+  await page.mouse.wheel(0,-250);
+  await page.waitForFunction(before=>scrollY<before,boundaryPage);
 
   await refs.locator('.cover').last().click();
   await page.getByRole('dialog').waitFor(); assert.match(page.url(),/ref=/);
@@ -341,17 +329,12 @@ try {
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
   await page.getByRole('link',{name:'M002 · 示例模特乙',exact:true}).click();
   await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
+  await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'模特图片',exact:true}).click();
+  await page.getByText('尚未采用全身三视图原图',{exact:true}).waitFor();
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'造型',exact:true}).click();
   await page.getByText('暂无该模特的造型资料。',{exact:true}).waitFor();
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
   await page.getByRole('link',{name:'M001 · 示例模特甲',exact:true}).waitFor();
-  for(const oldTab of ['face','body']) {
-    await page.goto(server.resolvedUrls.local[0]+`#/spaces/chloe?section=assets&asset=models&model=M001&modelTab=${oldTab}`);
-    await page.getByRole('heading',{name:/^基础全身三视图/}).waitFor();
-    assert.equal(await page.getByRole('navigation',{name:'模特详情分类'}).locator('[aria-current="page"]').textContent(),'模特图片');
-    await page.getByRole('heading',{name:/^正面面部图/}).waitFor();
-  }
-  await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
   long=true;await page.reload();
   await page.getByRole('heading',{name:'M001 · '+'LongModelName'.repeat(30),exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

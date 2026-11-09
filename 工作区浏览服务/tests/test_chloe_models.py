@@ -63,15 +63,14 @@ class ChloeModelsTests(unittest.TestCase):
         first, first_label = self.add_image('red', 'first')
         second, second_label = self.add_image('blue', 'second', first['resource_id'])
         original, original_label = self.add_image('green', 'original')
-        masked, masked_label = self.add_image('black', 'masked', original['resource_id'])
         for purpose, label, parent in [('正面面部', first_label, '用户提供'), ('正面面部', second_label, first_label),
-                                      ('全身三视图原图', original_label, first_label), ('全身三视图遮面版', masked_label, original_label)]:
+                                      ('全身三视图原图', original_label, first_label)]:
             self.append('参考版本', [purpose, label, parent, '不适用'])
         self.append('当前采用', ['正面面部', first_label, '用户选定', '2026-11-07T12:00:00+08:00'])
-        self.append('当前采用', ['全身三视图遮面版', masked_label, '用户选定', '2026-11-07T12:00:00+08:00'])
+        self.append('当前采用', ['全身三视图原图', original_label, '用户选定', '2026-11-07T12:00:00+08:00'])
         before = {str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         value = model_detail(self.root, 'M001', self.api)
-        self.assertEqual(len(value['images']), 4)
+        self.assertEqual(len(value['images']), 3)
         self.assertEqual(sum(i['adopted'] for i in value['images']), 2)
         candidate = next(i for i in value['images'] if i['purpose'] == '正面面部' and i['version'] == second['version'])
         self.assertFalse(candidate['adopted'])

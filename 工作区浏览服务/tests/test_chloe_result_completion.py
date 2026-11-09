@@ -157,7 +157,7 @@ class ResultCompletionTests(unittest.TestCase):
     def test_out_of_order_results_are_bound_to_declared_targets(self):
         doc=self.image_execution();_,a=self.image('a');_,b=self.image('b')
         plan=self.image_plan(doc,'E001')
-        plan['outputs'].append({'slot':'面部三视图','purpose':'面部三视图','source':None})
+        plan['outputs'].append({'slot':'全身三视图','purpose':'全身三视图原图','source':None})
         report,path=self.report(self.owner,a,'E001')
         report['items'].insert(0,{'path':b['file'],'width':12,'height':16})
         data=SimpleNamespace(task_type='image',image_plan={'adapter':'technical','business_result':plan},project=str(self.owner),

@@ -287,7 +287,7 @@ def linked_object(root, path, identity, value, prefix):
 
 def check_relations(root, path, doc):
     image_purposes = {
-        '模特说明.md': {'正面面部', '面部三视图', '全身三视图原图', '全身三视图遮面版'},
+        '模特说明.md': {'正面面部', '全身三视图原图'},
         '造型说明.md': {'全身三视图原图', '全身三视图遮面版'},
     }
     if path.name in image_purposes:
