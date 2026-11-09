@@ -177,6 +177,8 @@ dialog.dialog-compact{width:440px}
 .underline-tabs-scroll{min-width:0;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}
 .underline-tabs-scroll>button{flex:none}
 .underline-tabs-align-end>button:last-child{margin-inline-start:auto}
+.underline-tabs-end-action{align-self:center;margin-inline-start:auto}
+.underline-tabs-align-end>.underline-tabs-end-action+button:last-child{margin-inline-start:0}
 
 dialog .dialog-close{flex:none;white-space:nowrap}
 
@@ -196,6 +198,8 @@ dialog .dialog-close-floating{position:absolute;top:12px;right:16px;z-index:3;di
 dialog .dialog-close-floating:hover{background:#ffffff2b}
 
 html:has(dialog.dialog-fullscreen[open]){overflow:hidden;scrollbar-gutter:auto}
+html:has(dialog.dialog-lock-scroll[open]){overflow:hidden}
+dialog.dialog-lock-scroll{overscroll-behavior:contain}
 
 .asset-media-card-entry>h3{height:1.7em;white-space:nowrap;display:block;text-overflow:ellipsis}.asset-media-card-entry .asset-media-item>.cover{margin-bottom:0}
 .asset-media-card-selectable{position:relative}

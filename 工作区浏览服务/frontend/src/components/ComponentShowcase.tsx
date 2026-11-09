@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, Document, FileTree, Preview, PreviewContext } from '../components';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
+import { LinkButton } from './LinkButton';
 import { TabSelect } from './TabSelect';
 import { Switch } from './Switch';
 import { CopyButton } from './CopyButton';
@@ -28,6 +29,7 @@ const options = [
 const sampleText = '这是一段公共组件演示文字。';
 const longSampleText = '这是长文字演示，用来检查桌面窗口内的换行与关闭入口，不读取或修改项目资料。'.repeat(4) + 'LongUnbrokenReference'.repeat(10);
 const longSampleTitle = '长标题与正文换行演示：' + 'DocumentRevisionReference'.repeat(4);
+const lockedDialogTitle = '锁住背景滚动示例';
 const sampleDocument = { html: '<h1>示例阅读文档</h1><p>这里的内容仅用于演示，不属于任何项目。</p><h2 id="demo-overview">内容概览</h2><p>可以展开章节导航、跳到指定章节，也可以复制示例文字。</p><h3 id="demo-detail">阅读细节</h3><p>正文沿用网站的字体、段落与表格样式。</p><h2 id="demo-checks">示例清单</h2><ul><li>打开文档弹窗</li><li>查看章节与正文</li><li>关闭后继续浏览组件</li></ul><table><thead><tr><th>状态</th><th>说明</th></tr></thead><tbody><tr><td>示例</td><td>不读取或修改真实项目资料</td></tr></tbody></table>' };
 const sampleItems = Array.from({ length: 18 }, (_, i) => `示例记录 ${String(i + 1).padStart(2, '0')}`);
 
@@ -65,13 +67,14 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-row"><button onClick={() => setClicks(n => n + 1)}>普通按钮</button><button className="link" onClick={() => setClicks(n => n + 1)}>链接按钮</button><button disabled>禁用按钮</button></div>
           <p>已点击 {clicks} 次</p><p>{sampleText}</p><CopyButton text={sampleText} label="复制示例文字" />
         </Example>
-        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签用于切换同一区域的内容，选中前后保持字重与宽度，长文字按可用空间换行。可把末项对齐到标签栏末端。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产装配入口">
+        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签选中前后保持字重与宽度，长文字按可用空间换行。末项可以靠右，并在其左侧放置操作按钮。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产装配入口">
           <div className="component-demo-row"><span>编辑模式</span><Switch label="示例编辑模式" checked={editing} onChange={setEditing} /></div>
           {editing ? <textarea className="component-demo-textarea" aria-label="示例正文" value={draft} onChange={event => setDraft(event.target.value)} /> : <p className="component-draft">{draft}</p>}
           <UnderlineTabs label="示例页签" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab} />
           <UnderlineTabs compact scrollable label="紧凑滚动页签示例" items={[{ value: 'overview', label: '示例节点甲', icon: <span aria-hidden="true">●</span>, tooltip: '节点状态说明示例' }, { value: 'detail', label: '示例节点乙' }]} selected={tab} onChange={setTab} />
           <UnderlineTabs label="长文字页签演示" items={[{ value: 'one', label: '简短页签' }, { value: 'long', label: '长文字与连续英文换行：' + 'LongNavigationReference'.repeat(4) }]} selected={longTab} onChange={setLongTab} />
-          <UnderlineTabs alignLastToEnd label="末项靠右页签演示" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab} />
+          <UnderlineTabs alignLastToEnd label="末项靠右页签演示" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab}
+            endAction={tab === 'detail' && <LinkButton onClick={() => setTab('overview')}>重置示例</LinkButton>} />
           <p>{tab === 'overview' ? '这里是概览内容。' : '这里是详情内容。'}</p>
         </Example>
         <Example title="轮次修改标记" rule="普通页签右上角的小黄点表示本轮有新视频，与分段条共用；选中与未选中时都保留标记。" usage="场次标签、分段条">
@@ -109,7 +112,8 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
       {category === 'reading' && <Example title="项目空间预览" rule="不同项目空间使用同一预览组件；预览关闭后保留当前项目位置。演示使用静态正文，不访问真实项目。" usage="统一项目资料浏览"><button onClick={() => setSpacePreview(true)}>打开项目空间文档</button></Example>}
       {spacePreview && <Preview project="demo-space" baseUrl="/api/workspaces/demo/projects/example" item={{ kind: 'document', name: '项目空间示例', doc: sampleDocument }} revision={0} close={() => setSpacePreview(false)} />}
       {category === 'reading' && <Example title="文档弹窗" rule="弹窗复用正文排版和章节导航。点击关闭、按Esc或点击遮罩可退出，回到原阅读位置。长标题不挤压关闭按钮，正文连续长串也会换行；fullscreen规格使用深灰蓝半透明蒙版，内容四周留白；无顶部栏时右上角保留独立关闭叉号。" usage="开发记录、项目总索引、项目文档预览">
-        <div className="component-demo-row"><button onClick={() => setDialog('示例阅读文档')}>打开示例文档</button><button onClick={() => { setDialogBusy(false); setDialog('紧凑弹窗示例'); }}>打开紧凑弹窗</button><button onClick={() => setDialog(longSampleTitle)}>打开长内容弹窗</button><button onClick={() => { setDialogBusy(false); setDialog('全屏查看示例'); }}>打开全屏示例</button></div>
+        <div className="component-demo-row"><button onClick={() => setDialog('示例阅读文档')}>打开示例文档</button><button onClick={() => { setDialogBusy(false); setDialog('紧凑弹窗示例'); }}>打开紧凑弹窗</button><button onClick={() => setDialog(longSampleTitle)}>打开长内容弹窗</button><button onClick={() => { setDialogBusy(false); setDialog('全屏查看示例'); }}>打开全屏示例</button><button onClick={() => setDialog(lockedDialogTitle)}>打开滚动锁弹窗</button></div>
+        <p>滚动锁示例打开后，滚轮仅滚动弹窗内容，关闭后恢复背景滚动。</p>
         <p>打开后可展开章节、跳转正文，或复制示例文字。</p>
       </Example>}
       {category === 'lists' && <>
@@ -142,6 +146,6 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
       <ShowcaseExamples key={category} category={category} />
     </div>
     {pending && <FloatingMessage>演示进行中。关闭消息不会结束演示，可在展示页点击“结束演示”。</FloatingMessage>}
-    {dialog === longSampleTitle ? <Dialog title={longSampleTitle} close={closeDialog}><p>{longSampleText}</p><button onClick={() => showNotice(longSampleText, 'error')}>弹窗内错误提示</button>{Array.from({ length: 8 }, (_, i) => <p key={i}>{longSampleText}</p>)}</Dialog> : dialog === '紧凑弹窗示例' ? <Dialog title={dialog} size="compact" closeDisabled={dialogBusy} close={closeDialog}><p>仅模拟提交状态，不执行保存。开启后，关闭按钮、Esc和遮罩都不能关闭弹窗。</p><Switch label="模拟提交中" checked={dialogBusy} onChange={setDialogBusy} /></Dialog> : dialog && <Dialog title={dialog} size={dialog === '全屏查看示例' ? 'fullscreen' : 'default'} showHeader={dialog !== '全屏查看示例'} close={closeDialog}><div className="component-demo-row"><CopyButton text={sampleText} label="复制示例文字" /></div><Document value={sampleDocument} showOriginal={false} /></Dialog>}
+    {dialog === longSampleTitle || dialog === lockedDialogTitle ? <Dialog title={dialog} close={closeDialog} lockPageScroll={dialog === lockedDialogTitle}><p>{longSampleText}</p><button onClick={() => showNotice(longSampleText, 'error')}>弹窗内错误提示</button>{Array.from({ length: 8 }, (_, i) => <p key={i}>{longSampleText}</p>)}</Dialog> : dialog === '紧凑弹窗示例' ? <Dialog title={dialog} size="compact" closeDisabled={dialogBusy} close={closeDialog}><p>仅模拟提交状态，不执行保存。开启后，关闭按钮、Esc和遮罩都不能关闭弹窗。</p><Switch label="模拟提交中" checked={dialogBusy} onChange={setDialogBusy} /></Dialog> : dialog && <Dialog title={dialog} size={dialog === '全屏查看示例' ? 'fullscreen' : 'default'} showHeader={dialog !== '全屏查看示例'} close={closeDialog}><div className="component-demo-row"><CopyButton text={sampleText} label="复制示例文字" /></div><Document value={sampleDocument} showOriginal={false} /></Dialog>}
   </div>;
 }

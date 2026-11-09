@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem } from './api';
@@ -28,7 +29,7 @@ function AssemblyPicker({ kind, initialId, onConfirm, onClose }: {
   });
   const selected = query.data?.find(asset => asset.id === draftId && asset.media?.url);
 
-  return <Dialog title={`选择${label}`} close={onClose}>
+  return <Dialog title={`选择${label}`} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (query.data.length ? <div className="asset-media-grid">
       {query.data.map(asset => <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
@@ -48,7 +49,7 @@ function AssemblyPreview({ label, media, empty }: { label: string; media?: FileI
   </figure>;
 }
 
-export function ChloeAssembly() {
+export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?: () => void) => ReactNode }) {
   const { api } = useChloeScope();
   const [model, setModel] = useState<AssemblyAsset | null>(null);
   const [clothing, setClothing] = useState<AssemblyAsset | null>(null);
@@ -74,8 +75,15 @@ export function ChloeAssembly() {
     }
     setPicker(null);
   };
+  const reset = () => {
+    setModel(null);
+    setClothing(null);
+    setAccessories([]);
+  };
 
-  return <div className="chloe-assembly">
+  return <>
+    {renderNavigation(model || clothing || accessories.length ? reset : undefined)}
+    <div className="chloe-assets-content chloe-assembly">
     <div className="chloe-assembly-main">
       <section className="chloe-assembly-column" aria-label="模特选择">
         <h2>模特选择</h2>
@@ -114,5 +122,6 @@ export function ChloeAssembly() {
       </dl>
     </section>
     {picker && <AssemblyPicker kind={picker.kind} initialId={pickerId} onConfirm={confirm} onClose={() => setPicker(null)} />}
-  </div>;
+    </div>
+  </>;
 }
