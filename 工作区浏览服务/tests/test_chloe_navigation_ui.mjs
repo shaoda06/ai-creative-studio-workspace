@@ -144,7 +144,7 @@ try {
     const exportArea = page.getByRole('region',{name:'导出',exact:true});
     const generateHandoff = exportArea.getByRole('button',{name:'生成',exact:true});
     const copyHandoff = exportArea.getByRole('button',{name:'复制',exact:true});
-    const handoff = exportArea.getByRole('textbox',{name:'造型制作交接词',exact:true});
+    const handoff = exportArea.locator('.chloe-assembly-export-template');
     await handoff.waitFor();
     assert.ok(await generateHandoff.isDisabled());
     assert.ok(await copyHandoff.isDisabled());
@@ -245,7 +245,7 @@ try {
     await clothingA.click();
     await confirm.click();
     await generateHandoff.click();
-    assert.doesNotMatch(await handoff.inputValue(), /^配饰：/m);
+    assert.doesNotMatch(await handoff.textContent(), /^配饰：/m);
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
@@ -271,14 +271,21 @@ try {
     assert.equal(await choose('添加配饰').count(),0);
     assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
     assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲',...[0,1,2,3,5].map(i=>`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`)]);
-    assert.equal(await handoff.inputValue(),'');
+    assert.equal(await handoff.textContent(),'点击「生成」，整理当前选择的造型制作交接词。');
     assert.ok(await copyHandoff.isDisabled());
+    const emptyHandoffHeight = (await handoff.boundingBox()).height;
     await generateHandoff.click();
-    const text = await handoff.inputValue();
+    const text = await handoff.textContent();
     for (const value of ['Chloe AI视频带货','模特：M002 · 模特乙','服装：O001 · 服装甲',
       '按对象编号查找各自正式采用的参考图','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
     for (const i of [0,1,2,3,5]) assert.ok(text.includes(`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`));
     assert.doesNotMatch(text,/IMG-|@V\d+|正面基础图|基础全身三视图|C005/);
+    const textBox = await handoff.evaluate(element => ({
+      height:element.getBoundingClientRect().height, border:getComputedStyle(element).borderTopWidth,
+      fits:element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth,
+    }));
+    assert.ok(textBox.height > emptyHandoffHeight && textBox.fits);
+    assert.equal(textBox.border,'1px');
     await copyHandoff.click();
     await page.waitForFunction(async expected => await navigator.clipboard.readText() === expected,text);
     await accessories.getByRole('img',{name:'C001',exact:true}).click();
@@ -298,7 +305,7 @@ try {
     const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
     assert.ok(resetBox.x+resetBox.width<assemblyBox.x && Math.abs(assemblyBox.x+assemblyBox.width-tabBar.x-tabBar.width)<=1);
     await reset.click();
-    assert.equal(await handoff.inputValue(),'');
+    assert.equal(await handoff.textContent(),'选定模特和服装后可生成交接词，配饰可选。');
     assert.ok(await copyHandoff.isDisabled());
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
     assert.equal(await page.locator('.chloe-assembly-main img').count(),0);

@@ -22,5 +22,5 @@
 .chloe-assembly-export-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .chloe-assembly-export-heading h2{margin:0}
 .chloe-assembly-export-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-.chloe-assembly-export-template{display:block;resize:vertical}
+.chloe-assembly-export-template{margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
 .chloe-assembly-confirm{display:flex;justify-content:flex-end;margin-top:20px}

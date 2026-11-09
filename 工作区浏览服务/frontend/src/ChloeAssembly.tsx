@@ -181,8 +181,9 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
             {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
           </div>
         </div>
-        <textarea aria-label="造型制作交接词" className="chloe-assembly-export-template" rows={8} readOnly value={handoff}
-          placeholder={canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，配饰可选。'} />
+        <p className="chloe-assembly-export-template">{handoff || <span className="muted">
+          {canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，配饰可选。'}
+        </span>}</p>
       </section>
     </div>
     {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
