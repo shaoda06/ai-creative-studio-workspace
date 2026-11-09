@@ -44,6 +44,7 @@ const assetCategories = [
   { value: 'accessories', label: '配饰' },
   { value: 'scenes', label: '场景' },
   { value: 'voices', label: '声音' },
+  { value: 'assembly', label: '装配' },
 ];
 
 type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
@@ -102,8 +103,12 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
       {current.value === 'review' ? <ChloeReview key={api} /> : current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
-        <div className="chloe-assets-content">{assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> : referenceKind ? <ChloeReferenceAssets kind={referenceKind} key={`${spaceId}/${referenceKind}`} workspaceQuery={workspaceQuery} /> :
-          <ChloeVoices key={spaceId} workspaceQuery={workspaceQuery} />}</div>
+        <div className="chloe-assets-content">
+          {assetCategory.value === 'assembly' ? <p className="muted">暂无装配内容</p> :
+            assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
+            referenceKind ? <ChloeReferenceAssets kind={referenceKind} key={`${spaceId}/${referenceKind}`} workspaceQuery={workspaceQuery} /> :
+            <ChloeVoices key={spaceId} workspaceQuery={workspaceQuery} />}
+        </div>
       </> : <>
         <p>{current.description}</p>
         <p className="muted">当前为栏目预览，具体内容随后补充。</p>

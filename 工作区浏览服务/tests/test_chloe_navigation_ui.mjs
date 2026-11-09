@@ -1,22 +1,26 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const { chromium } = require('playwright');
-const { createServer } = await import(require.resolve('vite'));
-const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
+const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
+const react = (await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const frontend = fileURLToPath(new URL('../frontend/', import.meta.url));
 const version = JSON.parse(await readFile(frontend+'package.json', 'utf8')).version;
 const tool = fileURLToPath(new URL('../', import.meta.url));
-const emptyOverview = JSON.parse(execFileSync(tool+'.venv/bin/python', ['-c', 'import json; from pathlib import Path; from backend.chloe_overview import account_overview; print(json.dumps(account_overview(Path("tests/fixtures/chloe-overview/new"))))'], {cwd:tool,encoding:'utf8'}));
-const output = await mkdtemp('/private/tmp/chloe-navigation-');
+const python = join(tool, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
+const emptyOverview = JSON.parse(execFileSync(python, ['-c', 'import json; from pathlib import Path; from backend.chloe_overview import account_overview; print(json.dumps(account_overview(Path("tests/fixtures/chloe-overview/new"))))'], {cwd:tool,encoding:'utf8'}));
+const output = await mkdtemp(join(tmpdir(),'chloe-navigation-'));
 const server = await createServer({configFile:false,root:frontend,plugins:[react()],
   define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
+const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height}});
@@ -29,7 +33,8 @@ try {
       if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
-      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
+      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes',
+        '/api/workspaces/account-demo/shared-hair','/api/workspaces/account-demo/shared-accessories'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
@@ -73,19 +78,21 @@ try {
     await nav.getByRole('button',{name:'共用资产',exact:true}).click();
     const assetNav = page.getByRole('navigation',{name:'共用资产分类',exact:true});
     await assetNav.waitFor();
-    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),['AI 模特','服装','场景','声音']);
+    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),assetLabels);
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'AI 模特');
-    for (const label of ['AI 模特','服装','场景','声音']) {
+    for (const label of assetLabels) {
       await assetNav.getByRole('button',{name:label,exact:true}).click();
       await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
       const bounds = await assetNav.getByRole('button',{name:label,exact:true}).boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
     }
-    assert.ok(page.url().endsWith('section=assets&asset=voices'));
+    await page.getByText('暂无装配内容',{exact:true}).waitFor();
+    assert.ok(page.url().endsWith('section=assets&asset=assembly'));
     await page.reload(); await assetNav.waitFor();
-    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'声音');
+    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'装配');
+    await page.getByText('暂无装配内容',{exact:true}).waitFor();
     await page.goBack();
-    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='场景');
+    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='声音');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
@@ -105,10 +112,10 @@ try {
     await nav.waitFor({state:'detached'});
     assert.equal(await page.getByRole('navigation',{name:'Chloe栏目'}).count(),0);
     await page.getByRole('link',{name:/普通资料区/}).click();
-    await page.getByText('暂无项目。',{exact:true}).waitFor();
+    await page.getByText('暂无进行中的项目。',{exact:true}).waitFor();
     assert.equal(await page.getByRole('navigation',{name:'Chloe栏目'}).count(),0);
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }
-  console.log('Chloe navigation passed: three desktop sizes, seven tabs and four asset categories, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
+  console.log('Chloe navigation passed: three desktop sizes, seven tabs and seven asset categories, assembly placeholder, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
 } finally { await browser.close(); await server.close(); }
