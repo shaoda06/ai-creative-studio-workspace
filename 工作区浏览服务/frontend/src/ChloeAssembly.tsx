@@ -38,7 +38,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   });
   const atLimit = multi && selected.length >= accessoryLimit;
   const title = multi ? `选择配饰 ${selected.length}/${accessoryLimit}` : `选择${label}`;
-  const canConfirm = !!query.data && !query.error && (selected.length > 0 || (multi && initial.length > 0));
+  const canConfirm = !!query.data && !query.error && (selected.length > 0 || initial.length > 0);
 
   return <Dialog title={title} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
@@ -50,9 +50,13 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
           item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
           selection={{selected: checked, disabled: !src || (atLimit && !checked),
             onPreview: src ? () => onPreview(assetTitle(asset), src) : undefined,
-            onSelect: () => setDraftIds(multi
-              ? checked ? selected.filter(item => item.id !== asset.id).map(item => item.id) : [...selected.map(item => item.id), asset.id]
-              : [asset.id])}} />;
+            onSelect: () => {
+              if (checked) {
+                setDraftIds(selected.filter(item => item.id !== asset.id).map(item => item.id));
+              } else {
+                setDraftIds(multi ? [...selected.map(item => item.id), asset.id] : [asset.id]);
+              }
+            }}} />;
       })}
     </div> : <p className="muted">暂无{label}资料。</p>)}
     <div className="chloe-assembly-confirm">
@@ -90,8 +94,8 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
   const initial = picker === 'accessories' ? accessories : currentAsset ? [currentAsset] : [];
 
   const confirm = (assets: AssemblyAsset[]) => {
-    if (picker === 'models') setModel(assets[0]);
-    if (picker === 'clothing') setClothing(assets[0]);
+    if (picker === 'models') setModel(assets[0] ?? null);
+    if (picker === 'clothing') setClothing(assets[0] ?? null);
     if (picker === 'accessories') setAccessories(assets);
     setPicker(null);
   };

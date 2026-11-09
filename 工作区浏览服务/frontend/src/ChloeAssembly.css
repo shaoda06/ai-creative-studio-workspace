@@ -1,6 +1,6 @@
 .chloe-assembly{display:grid;gap:24px}
 .chloe-assembly h2{margin:0 0 10px;font-size:18px}
-.chloe-assembly-main{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);grid-template-rows:auto auto clamp(340px,50vh,480px);gap:8px 20px}
+.chloe-assembly-main{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);grid-template-rows:auto auto clamp(400px,57vh,550px);gap:8px 20px}
 .chloe-assembly-column{display:grid;grid-row:1 / -1;grid-template-rows:subgrid;min-width:0}
 .chloe-assembly-column h2{margin:0}
 .chloe-assembly-column>button{text-align:left;overflow-wrap:anywhere}

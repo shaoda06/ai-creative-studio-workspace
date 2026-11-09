@@ -146,6 +146,10 @@ try {
     await modelA.click();
     assert.equal(await modelA.getAttribute('aria-pressed'),'true');
     assert.equal(await modelA.locator('span').textContent(),'✓');
+    await modelA.click();
+    assert.equal(await modelA.getAttribute('aria-pressed'),'false');
+    assert.ok(await confirm.isDisabled());
+    await modelA.click();
     await dialog.getByRole('button',{name:'查看M001 · 模特甲大图',exact:true}).click();
     const zoom = page.locator('dialog.dialog-fullscreen');
     await zoom.waitFor();
@@ -164,7 +168,8 @@ try {
     assert.equal(await page.getByRole('img',{name:'正面基础图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-front');
     assert.equal(await page.getByRole('img',{name:'基础三视图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-body');
     await choose('选择服装').click();
-    await dialog.getByRole('button',{name:'选择O001 · 服装甲',exact:true}).click();
+    const clothingA = dialog.getByRole('button',{name:'选择O001 · 服装甲',exact:true});
+    await clothingA.click();
     await confirm.click();
     assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).getAttribute('src'),'/api/assembly-fixture/O001');
     const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
@@ -176,7 +181,7 @@ try {
       `模特和服装的预览框上下对齐：${JSON.stringify(frames)}`);
     const modelWidth=frames[0].right-frames[0].left, clothingWidth=frames[2].right-frames[2].left;
     assert.ok(Math.abs(modelWidth/(modelWidth+clothingWidth)-0.3)<0.002);
-    assert.ok(Math.abs(frames[2].bottom-frames[2].top-Math.min(480,Math.max(340,height/2)))<=1);
+    assert.ok(Math.abs(frames[2].bottom-frames[2].top-Math.min(550,Math.max(400,height*0.57)))<=1);
     for (const [label, src] of [['正面基础图','M002-front'],['基础三视图','M002-body'],['服装图','O001']]) {
       await choose(`查看${label}大图`).click();
       await zoom.waitFor();
@@ -184,6 +189,21 @@ try {
       await page.keyboard.press('Escape');
       await zoom.waitFor({state:'hidden'});
     }
+    await choose('选择服装').click();
+    assert.equal(await clothingA.getAttribute('aria-pressed'),'true');
+    await clothingA.click();
+    assert.equal(await clothingA.getAttribute('aria-pressed'),'false');
+    assert.ok(await confirm.isEnabled());
+    await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+    assert.equal(await summary.locator('dd').nth(1).textContent(),'O001 · 服装甲');
+    await choose('选择服装').click();
+    await clothingA.click();
+    await confirm.click();
+    assert.equal(await summary.locator('dd').nth(1).textContent(),'未选择');
+    assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).count(),0);
+    await choose('选择服装').click();
+    await clothingA.click();
+    await confirm.click();
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
