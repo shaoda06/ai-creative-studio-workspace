@@ -15,6 +15,7 @@ from workspace_project_index import register_project
 ASSETS = {
     '商品': ('商品资料', 'G', '商品说明.md'),
     '模特': ('共用素材/AI模特', 'M', '模特说明.md'),
+    '发型': ('共用素材/发型', 'H', '发型说明.md'),
     '服装': ('共用素材/服装', 'O', '服装说明.md'),
     '造型': ('共用素材/造型', 'L', '造型说明.md'),
     '场景': ('共用素材/场景', 'S', '场景说明.md'),
@@ -153,7 +154,7 @@ def main():
     asset = commands.add_parser('asset', help='建立商品或共用资产说明；不复制媒体')
     asset.add_argument('--project-name', required=True, help='所属已建档项目的准确目录名')
     asset.add_argument('--kind', choices=ASSETS, required=True)
-    asset.add_argument('--id', required=True, help='G/M/O/L/S/A 加正整数编号，例如 M001')
+    asset.add_argument('--id', required=True, help='G/M/H/O/L/S/A 加正整数编号，例如 M001')
     asset.add_argument('--name', required=True)
     args = parser.parse_args()
     if args.action == 'workspace':

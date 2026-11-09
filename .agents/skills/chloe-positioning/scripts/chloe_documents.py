@@ -80,6 +80,8 @@ def documents(root):
         yield root/f'综合资料/{name}.md', template('chloe-positioning', name+'模板.md'), {}
     for kind, (folder, prefix, filename) in ASSETS.items():
         parent = root/'综合资料'/folder
+        if kind == '发型' and not parent.exists():
+            continue
         if not parent.is_dir():
             raise ValueError('缺少固定目录：'+str(parent))
         for item in sorted(p for p in parent.iterdir() if p.is_dir() and not p.name.startswith('.')):
@@ -295,7 +297,7 @@ def check_relations(root, path, doc):
             for row in records(doc, heading):
                 if row['用途'].split('/', 1)[0] not in image_purposes[path.name]:
                     raise ValueError(path.name+'：'+heading+'图片用途不在固定图种内：'+row['用途'])
-    if path.name in {'服装说明.md', '场景说明.md'}:
+    if path.name in {'发型说明.md', '服装说明.md', '场景说明.md'}:
         label = path.name[:2]
         for row in records(doc, '参考版本'):
             if row['用途'] not in {label+'参考图', label+'展示图'}:
@@ -303,12 +305,12 @@ def check_relations(root, path, doc):
         for row in records(doc, '当前采用'):
             if row['用途'] != label+'展示图':
                 raise ValueError(label+'当前采用只登记'+label+'展示图')
-    if path.name == '场景说明.md':
+    if path.name in {'发型说明.md', '场景说明.md'}:
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
                 ref = media_reference(root, path, row['资源引用'])
                 if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
-                    raise ValueError('场景说明：'+heading+'须引用PNG、JPEG或WebP图片')
+                    raise ValueError(path.stem+'：'+heading+'须引用PNG、JPEG或WebP图片')
     if path.name == '声音说明.md':
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
@@ -371,14 +373,15 @@ def check_relations(root, path, doc):
     owner = owner_for(root, path)
     for row in records(doc,'输入记录'):
         if '输入用途' in row:
-            if row['输入用途'] not in {'模特参考', '服装参考', '其他参考'}:
-                raise ValueError('输入用途须为模特参考、服装参考或其他参考')
-            if row['输入用途'] == '服装参考':
+            purpose = row['输入用途']
+            if purpose not in {'模特参考', '服装参考', '发型参考', '其他参考'}:
+                raise ValueError('输入用途须为模特参考、服装参考、发型参考或其他参考')
+            if purpose in {'服装参考', '发型参考'}:
                 if row['资源引用'] in MISSING:
-                    raise ValueError('服装参考须引用具体图片版本，无图片时不建输入行')
-                clothing = media_reference(root,path,row['资源引用'])
-                if not clothing['resource_id'].startswith('IMG-') or Path(clothing['file']).suffix.lower() not in {'.png','.jpg','.jpeg','.webp'}:
-                    raise ValueError('服装参考须引用PNG、JPEG或WebP图片')
+                    raise ValueError(purpose+'须引用具体图片版本，无图片时不建输入行')
+                image = media_reference(root, path, row['资源引用'])
+                if not image['resource_id'].startswith('IMG-') or Path(image['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+                    raise ValueError(purpose+'须引用PNG、JPEG或WebP图片')
         if row['资源引用'] in MISSING:
             continue
         ref = media_reference(root,path,row['资源引用'])

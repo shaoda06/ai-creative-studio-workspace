@@ -17,6 +17,7 @@ import type { AssetDetail } from './ChloeModelDetail';
 interface ReferenceAssetCard { id: string; name: string; media: FileItem | null }
 export interface ReferenceAssetDetail extends AssetDetail { description: string }
 export const referenceAssetKinds = {
+  hair: {label:'发型', parameter:'hair', endpoint:'shared-hair', ratio:'16:9'},
   clothing: {label:'服装', parameter:'clothing', endpoint:'shared-clothing', ratio:'4:3'},
   scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:'9:16'},
 };
@@ -38,6 +39,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
 export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kind: ReferenceAssetKind; query: UseQueryResult<ReferenceAssetDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, endpoint, ratio} = referenceAssetKinds[kind];
   const purposes = [label+'展示图'];
+  const aspectRatio = kind === 'hair' ? 16 / 9 : undefined;
   const { api, page } = useChloeScope();
   const [params,setParams] = useSearchParams();
   const [document,setDocument] = useState<FileItem | null>(null);
@@ -72,8 +74,8 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
           </section>
           <section className="panel chloe-look-images" aria-label={label+'图片'}><h2>{label}图片（{ratio}）</h2>
             <UnderlineTabs label={label+'图片用途'} items={purposes.map(value=>({value,label:value}))} selected={purpose} onChange={value=>select('purpose',value)} />
-            {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal showFileActions={false} showVersion={false} revision={0} item={{media:image.media,version:image.version}} />)
-              : <AssetMediaCard title={purpose} hideTitle formal revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
+            {adopted.length ? adopted.map(image=><AssetMediaCard key={`${image.purpose}:${image.resource}@${image.version}`} title={`${image.purpose} · ${image.resource}@${image.version}`} formal aspectRatio={aspectRatio} showFileActions={false} showVersion={false} revision={0} item={{media:image.media,version:image.version}} />)
+              : <AssetMediaCard title={purpose} hideTitle formal aspectRatio={aspectRatio} revision={0} item={{emptyLabel:`尚未采用${purpose}`}} />}
             {others.length>0 && <details><summary>其他版本</summary><div className="chloe-model-versions" aria-label={label+'其他版本'} tabIndex={0}>{others.map(image=><div key={`${image.purpose}:${image.resource}@${image.version}`}>
               <AssetMediaCard title={`${image.purpose} · ${image.resource}@${image.version}`} compact revision={0} item={{media:image.media}} />
               <details><summary>来源与执行记录</summary><Rich html={image.sourceHtml} /><p>执行编号：{image.execution}</p></details>

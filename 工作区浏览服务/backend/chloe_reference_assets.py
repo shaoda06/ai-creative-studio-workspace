@@ -19,6 +19,7 @@ class AssetKind:
     endpoint: str
 
 
+HAIR = AssetKind('发型', 'H', 'shared-hair')
 CLOTHING = AssetKind('服装', 'O', 'shared-clothing')
 SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')

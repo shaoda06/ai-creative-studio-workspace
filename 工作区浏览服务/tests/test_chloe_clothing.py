@@ -7,7 +7,7 @@ import unittest
 from PIL import Image
 
 from functools import partial
-from backend.chloe_reference_assets import CLOTHING, SCENES, asset_cards, asset_detail, asset_file
+from backend.chloe_reference_assets import CLOTHING, HAIR, SCENES, asset_cards, asset_detail, asset_file
 from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
@@ -96,6 +96,20 @@ class ChloeClothingTests(unittest.TestCase):
         self.append('当前采用', [self.kind.label+'参考图', ref, '错误采用', '2026-11-07T12:00:00+08:00'])
         with self.assertRaisesRegex(ValueError, '当前采用只登记'):
             self.detail(self.root, self.identity, self.api)
+
+
+class ChloeHairTests(ChloeClothingTests):
+    kind = HAIR
+
+    def test_existing_project_without_hair_directory_can_be_read_and_initialized(self):
+        self.path.unlink()
+        self.folder.rmdir()
+        self.folder.parent.rmdir()
+        self.assertEqual(self.cards(self.root, self.api), [])
+        self.assertEqual(check_workspace(self.root)['errors'], [])
+        folder = initialize_asset(self.root, '发型', 'H001', '新增发型')
+        self.assertTrue((folder/'发型说明.md').is_file())
+        self.assertEqual(self.cards(self.root, self.api)[0]['id'], 'H001')
 
 
 class ChloeSceneTests(ChloeClothingTests):

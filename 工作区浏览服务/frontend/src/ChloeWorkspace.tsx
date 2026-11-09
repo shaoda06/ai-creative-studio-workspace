@@ -30,7 +30,7 @@ import type { ModelDetail } from './ChloeModelDetail';
 const sections = [
   { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
   { value: 'products', label: '选品与商品', description: '候选选品、商品资料、带货条件与关联视频。' },
-  { value: 'assets', label: '共用资产', description: 'AI模特、服装、造型、场景与声音。' },
+  { value: 'assets', label: '共用资产', description: 'AI模特、发型、服装、造型、场景与声音。' },
   { value: 'production', label: '视频制作', description: '单条视频的脚本、参考素材、生成审阅与剪映交接。' },
   { value: 'publication', label: '成片与发布', description: '人工成片、封面文案、关联商品与发布记录。' },
   { value: 'review', label: '运营复盘', description: '单条表现、跨视频结论与调整验证。' },
@@ -39,6 +39,7 @@ const sections = [
 
 const assetCategories = [
   { value: 'models', label: 'AI 模特' },
+  { value: 'hair', label: '发型' },
   { value: 'clothing', label: '服装' },
   { value: 'scenes', label: '场景' },
   { value: 'voices', label: '声音' },
@@ -95,7 +96,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
     {current.value === 'publication' ? <ChloePublication title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'publication',video:value} : {section:'publication'})} /> : current.value === 'production' ? <ChloeProduction title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'resources' ? <ChloeResources key={api} workspaceQuery={workspaceQuery} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={modelId || referenceId || voiceId ? undefined : 'panel'} aria-label={current.label}>
-      {current.value !== 'review' && (current.value !== 'assets' || !['models','clothing','scenes','voices'].includes(assetCategory.value)) && <PageCheckStatus queries={[workspaceQuery]} />}
+      {current.value !== 'review' && current.value !== 'assets' && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'review' ? <ChloeReview key={api} /> : current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>
         <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}

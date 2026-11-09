@@ -48,7 +48,7 @@ from backend.chloe_publication import router as chloe_publication_router, write_
 from backend.chloe_models import router as chloe_models_router
 from backend.chloe_resource_library import router as chloe_resource_library_router
 from backend.chloe_clothing import router as chloe_clothing_router
-from backend.chloe_reference_assets import SCENES, VOICES, asset_router as chloe_asset_router
+from backend.chloe_reference_assets import HAIR, SCENES, VOICES, asset_router as chloe_asset_router
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -1217,6 +1217,7 @@ spaces_router.include_router(chloe_publication_write_router, dependencies=[Depen
 spaces_router.include_router(chloe_models_router)
 spaces_router.include_router(chloe_resource_library_router)
 spaces_router.include_router(chloe_clothing_router)
+spaces_router.include_router(chloe_asset_router(HAIR))
 spaces_router.include_router(chloe_asset_router(SCENES))
 spaces_router.include_router(chloe_asset_router(VOICES))
 app.include_router(spaces_router, prefix='/api/workspaces/{workspace_id}')
