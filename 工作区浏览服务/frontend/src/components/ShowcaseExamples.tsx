@@ -58,6 +58,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [search, setSearch] = useState('');
   const entryTitles = ['公共组件示例', '带有较长标题并可以自然换行的公共组件入口卡片示例，供对照同行卡片的底部入口位置'].filter(title => title.includes(search));
   const [selected, setSelected] = useState('one');
+  const [selectedImage, setSelectedImage] = useState('');
   const [fullscreenImage, setFullscreenImage] = useState(false);
   const [preview, setPreview] = useState<FileItem | null>(null);
   const [videoOnlyPreview, setVideoOnlyPreview] = useState(false);
@@ -211,6 +212,13 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="未关联声音的入口卡片" item={{emptyLabel:'尚未采用图片'}} revision={1} entry to="/"
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
+      </ComponentExample>
+      <ComponentExample title="单选图片卡片" rule="点击整卡暂选，选中时显示蒙版与对勾。再次选择由调用方替换选中项，无可用图片时可禁用。" usage="Chloe 装配资产选择">
+        <div className="asset-media-grid">
+          <AssetMediaCard title="单选图片甲" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
+          <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
+          <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,disabled:true,onSelect:()=>{}}} />
+        </div>
       </ComponentExample>
       <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
         <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />

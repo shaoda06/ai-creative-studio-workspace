@@ -24,6 +24,7 @@ import { ChloeReview } from './ChloeReview';
 import { ChloePublication } from './ChloePublication';
 import { ChloeResources } from './ChloeResources';
 import { ChloeModels } from './ChloeModels';
+import { ChloeAssembly } from './ChloeAssembly';
 import { ChloeModelDetail } from './ChloeModelDetail';
 import type { ModelDetail } from './ChloeModelDetail';
 
@@ -104,7 +105,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
         <div className="chloe-assets-content">
-          {assetCategory.value === 'assembly' ? <p className="muted">暂无装配内容</p> :
+          {assetCategory.value === 'assembly' ? <ChloeAssembly /> :
             assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
             referenceKind ? <ChloeReferenceAssets kind={referenceKind} key={`${spaceId}/${referenceKind}`} workspaceQuery={workspaceQuery} /> :
             <ChloeVoices key={spaceId} workspaceQuery={workspaceQuery} />}

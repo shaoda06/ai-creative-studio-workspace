@@ -21,10 +21,16 @@ await server.listen();
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
 const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
+const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
+const fixtureAsset = (id,name) => ({id,name,media:fixtureImage(id)});
+const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),{id:'M003',name:'无采用图',media:null}];
+const fixtureClothing = [fixtureAsset('O001','服装甲')];
+const fixtureAccessories = [fixtureAsset('C001','配饰甲'),fixtureAsset('C002','配饰乙')];
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height}});
     const errors = [], unexpected = [];
+    let showAssemblyFixtures = false;
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname;
@@ -32,10 +38,17 @@ try {
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
-      if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:[]});
+      if (path.startsWith('/api/assembly-fixture/')) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100"><rect width="120" height="100" fill="#edf5ef"/></svg>'});
+      if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
+      if (path === '/api/workspaces/account-demo/shared-models/M002') return route.fulfill({json:{id:'M002',name:'模特乙',images:[
+        {purpose:'正面面部',adopted:true,media:fixtureImage('M002-front')},
+        {purpose:'全身三视图原图',adopted:false,media:fixtureImage('M002-candidate')},
+        {purpose:'全身三视图原图',adopted:true,media:fixtureImage('M002-body')},
+      ]}});
       if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes',
-        '/api/workspaces/account-demo/shared-hair','/api/workspaces/account-demo/shared-accessories'].includes(path)) return route.fulfill({json:[]});
-      if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:[]});
+        '/api/workspaces/account-demo/shared-hair'].includes(path)) return route.fulfill({json:[]});
+      if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
+      if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
@@ -94,11 +107,11 @@ try {
       const bounds = await assetNav.getByRole('button',{name:label,exact:true}).boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x+bounds.width <= width+1);
     }
-    await page.getByText('暂无装配内容',{exact:true}).waitFor();
+    await page.getByRole('region',{name:'当前选择',exact:true}).waitFor();
     assert.ok(page.url().endsWith('section=assets&asset=assembly'));
     await page.reload(); await assetNav.waitFor();
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'装配');
-    await page.getByText('暂无装配内容',{exact:true}).waitFor();
+    await page.getByRole('region',{name:'当前选择',exact:true}).waitFor();
     await page.goBack();
     await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='声音');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
@@ -112,6 +125,60 @@ try {
     await page.goto(server.resolvedUrls.local[0]+'#/spaces/account-demo?section=assets&asset=models&example=model-card');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
     assert.equal(await page.locator('.asset-media-card').count(),0);
+    showAssemblyFixtures = true;
+    await page.goto(server.resolvedUrls.local[0]+'#/spaces/account-demo?section=assets&asset=assembly');
+    await page.reload();
+    const summary = page.getByRole('region',{name:'当前选择',exact:true});
+    const choose = name => page.getByRole('button',{name,exact:true});
+    const dialog = page.getByRole('dialog');
+    const confirm = dialog.getByRole('button',{name:'确认选择',exact:true});
+    await summary.waitFor();
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
+    await choose('选择模特').click();
+    const modelA = dialog.getByRole('button',{name:'M001 · 模特甲',exact:true});
+    const modelB = dialog.getByRole('button',{name:'M002 · 模特乙',exact:true});
+    await modelA.waitFor();
+    assert.ok(await confirm.isDisabled());
+    assert.ok(await dialog.getByRole('button',{name:'M003 · 无采用图',exact:true}).isDisabled());
+    await modelA.click();
+    assert.equal(await modelA.getAttribute('aria-pressed'),'true');
+    assert.equal(await modelA.locator('span').textContent(),'✓');
+    await modelB.click();
+    assert.equal(await modelA.getAttribute('aria-pressed'),'false');
+    assert.equal(await modelB.getAttribute('aria-pressed'),'true');
+    assert.equal(await summary.locator('dd').first().textContent(),'未选择');
+    await confirm.click();
+    await page.getByRole('img',{name:'基础三视图',exact:true}).waitFor();
+    assert.equal(await page.getByRole('img',{name:'正面基础图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-front');
+    assert.equal(await page.getByRole('img',{name:'基础三视图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-body');
+    await choose('选择服装').click();
+    await dialog.getByRole('button',{name:'O001 · 服装甲',exact:true}).click();
+    await confirm.click();
+    assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).getAttribute('src'),'/api/assembly-fixture/O001');
+    const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
+      const rect = item.getBoundingClientRect();
+      return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
+    }));
+    assert.ok(frames[0].bottom < frames[1].top && frames[0].right < frames[2].left);
+    assert.ok(Math.abs(frames[0].top-frames[2].top)<=1 && Math.abs(frames[1].bottom-frames[2].bottom)<=1,
+      `模特和服装的预览框上下对齐：${JSON.stringify(frames)}`);
+    const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
+    for (const asset of fixtureAccessories) {
+      await choose('添加配饰').click();
+      const card = dialog.getByRole('button',{name:`${asset.id} · ${asset.name}`,exact:true});
+      await card.waitFor();
+      assert.ok(await confirm.isDisabled());
+      await card.click();
+      await confirm.click();
+      assert.equal(await accessories.getByRole('button').last().getAttribute('aria-label'),'添加配饰');
+    }
+    assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2']);
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲','C001 · 配饰甲','C002 · 配饰乙']);
+    await choose('配饰 1 · C001 · 配饰甲').click();
+    await dialog.getByRole('button',{name:'C002 · 配饰乙',exact:true}).click();
+    await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+    assert.equal(await summary.locator('dd').nth(2).textContent(),'C001 · 配饰甲');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
     await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','作品进度']);
@@ -125,5 +192,5 @@ try {
     assert.deepEqual(errors,[]); assert.deepEqual(unexpected,[]);
     await page.close();
   }
-  console.log('Chloe navigation passed: three desktop sizes, seven tabs and seven asset categories, assembly placeholder, URL refresh/back, keyboard and space isolation. Screenshots: '+output);
+  console.log('Chloe navigation passed: three desktop sizes, asset tabs, assembly selection and cancellation, approved image previews, accessory append, URL refresh/back, keyboard and isolation. Screenshots: '+output);
 } finally { await browser.close(); await server.close(); }

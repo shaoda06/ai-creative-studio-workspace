@@ -354,7 +354,7 @@ try {
     await compactAsset.getByRole('button').click();
     await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
-    const entryImageCards = showcase.locator('.asset-media-card-entry');
+    const entryImageCards = showcase.locator('.asset-media-card-entry:not(.asset-media-card-selectable)');
     assert.equal(await entryImageCards.count(), 4);
     for (const card of await entryImageCards.all()) {
       await contained(card, `${width}px / 入口图片卡片`);
@@ -379,6 +379,20 @@ try {
     assert.equal(page.url(),beforePlay,'入口试听不触发导航');
     await actionCard.getByRole('button',{name:'暂停入口卡片声音',exact:true}).click();
     assert.ok(await entryImageCards.filter({hasText:'未关联声音的入口卡片'}).getByRole('button').isDisabled());
+    const firstChoice = showcase.getByRole('button', { name: '单选图片甲', exact: true });
+    const secondChoice = showcase.getByRole('button', { name: '单选图片乙', exact: true });
+    const unavailableChoice = showcase.getByRole('button', { name: '单选图片未就绪', exact: true });
+    await contained(firstChoice, `${width}px / 单选图片卡片`);
+    assert.ok(await unavailableChoice.isDisabled());
+    await firstChoice.click();
+    assert.equal(await firstChoice.getAttribute('aria-pressed'), 'true');
+    assert.equal(await firstChoice.locator('span').textContent(), '✓');
+    assert.equal(await firstChoice.locator('span').evaluate(el => getComputedStyle(el).color), 'rgb(37, 113, 99)');
+    assert.notEqual(await firstChoice.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)');
+    await secondChoice.press('Enter');
+    assert.equal(await firstChoice.getAttribute('aria-pressed'), 'false');
+    assert.equal(await secondChoice.getAttribute('aria-pressed'), 'true');
+    assert.equal(await secondChoice.locator('span').textContent(), '✓');
     const soundCards=showcase.locator('.audio-reference-card');
     assert.equal(await soundCards.count(),2);
     for(const soundCard of await soundCards.all()) {

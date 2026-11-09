@@ -6,7 +6,7 @@ import type { RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; titleActions?: ReactNode; onDetails?: () => void; children?: ReactNode }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
   const preview = useContext(PreviewContext);
   const [dimensions, setDimensions] = useState('');
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -16,18 +16,18 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const version = formal ? item.version?.match(/v\d+(?:\.\d+)*/i)?.[0] : item.version || item.media?.key.match(/(?:候选|草稿)-(v\d+(?:\.\d+)*)/i)?.[1];
   const linked = entry && to;
   const linkedActions = linked && !!titleActions;
-  const Cover = linked ? 'div' : 'button';
+  const Cover = linked || selection ? 'div' : 'button';
   const fixedRatioStyle = typeof aspectRatio === 'number' ? { aspectRatio, height: 'auto' } : undefined;
   const naturalRatio = aspectRatio === 'natural';
   const imageStyle = naturalRatio ? { height: 'auto', maxHeight: 'none' } : fixedRatioStyle && { maxHeight: 'none' };
-  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}`;
+  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}${selection ? ' asset-media-card-selectable' : ''}`;
   const content = <>
     {!hideTitle && (titleActions ? <div className="asset-media-card-heading">
       <PointerTooltip text={title}><h3>{linkedActions ? <Link to={to!} aria-label={title} className="asset-media-card-title-link">{title}</Link> : title}</h3></PointerTooltip>
       <div className="asset-media-card-title-actions">{titleActions}</div>
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
-      {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" onClick={linked ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
+      {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" onClick={linked || selection ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         setDimensions(`${width} × ${height}`);
       }} /></Cover> : <div style={fixedRatioStyle} className="cover asset-media-placeholder">
@@ -48,5 +48,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     </div>
     {children}
   </>;
-  return linked && !linkedActions ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className} aria-label={hideTitle ? title : undefined}>{content}</article>;
+  return linked && !linkedActions ? <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link> : <article className={className} aria-label={hideTitle ? title : undefined}>
+    {content}
+    {selection && <button type="button" className="asset-media-card-select" aria-label={title} aria-pressed={selection.selected} disabled={selection.disabled} onClick={selection.onSelect}>
+      {selection.selected && <span aria-hidden="true">✓</span>}
+    </button>}
+  </article>;
 }
