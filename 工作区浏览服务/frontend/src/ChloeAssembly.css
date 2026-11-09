@@ -19,5 +19,8 @@
 .chloe-assembly-add{display:grid;justify-items:center;align-content:center;gap:4px;min-height:140px;border-style:dashed}
 .chloe-assembly-add>span{font-size:28px;line-height:1}
 .chloe-assembly-summary{padding-top:16px;border-top:1px solid var(--line)}
-.chloe-assembly-export-template{display:grid;place-items:center;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#f5f7f4}
+.chloe-assembly-export-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.chloe-assembly-export-heading h2{margin:0}
+.chloe-assembly-export-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.chloe-assembly-export-template{display:block;resize:vertical}
 .chloe-assembly-confirm{display:flex;justify-content:flex-end;margin-top:20px}

@@ -8,16 +8,18 @@ import type { ModelDetail } from './ChloeModelDetail';
 import { referenceAssetKinds } from './ChloeReferenceAssets';
 import { Dialog, PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { CopyButton } from './components/CopyButton';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null };
+type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null; imageReference?: string | null };
 type PickerKind = 'models' | 'clothing' | 'accessories';
 type OpenImage = (title: string, src: string) => void;
 
 const accessoryLimit = 5;
 const assetTitle = (asset: AssemblyAsset) => `${asset.id} · ${asset.name}`;
+const assetWithImage = (asset: AssemblyAsset) => `${assetTitle(asset)}（展示图 ${asset.imageReference}）`;
 
 function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void; onPreview: OpenImage;
@@ -75,11 +77,12 @@ function AssemblyPreview({ label, media, empty, onPreview }: { label: string; me
   </figure>;
 }
 
-export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?: () => void) => ReactNode }) {
+export function ChloeAssembly({ projectName, renderNavigation }: { projectName: string; renderNavigation: (reset?: () => void) => ReactNode }) {
   const { api } = useChloeScope();
   const [model, setModel] = useState<AssemblyAsset | null>(null);
   const [clothing, setClothing] = useState<AssemblyAsset | null>(null);
   const [accessories, setAccessories] = useState<AssemblyAsset[]>([]);
+  const [handoff, setHandoff] = useState('');
   const [picker, setPicker] = useState<PickerKind | null>(null);
   const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
   const openImage: OpenImage = (title, src) => setPreview({title, src});
@@ -89,21 +92,42 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
     queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}`),
     enabled: !!modelId,
   });
-  const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部')?.media ?? model?.media;
-  const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图')?.media;
+  const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部');
+  const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图');
   const currentAsset = picker === 'models' ? model : clothing;
   const initial = picker === 'accessories' ? accessories : currentAsset ? [currentAsset] : [];
+  const canGenerate = !!(model && clothing?.imageReference && front && body && accessories.every(asset => asset.imageReference));
+
+  const generate = () => {
+    if (!model || !clothing?.imageReference || !front || !body) return;
+    setHandoff([
+      `请在「${projectName}」按以下装配开始制作造型图。`,
+      '',
+      `模特：${assetTitle(model)}`,
+      `- 正面基础图：${front.resource}@${front.version}`,
+      `- 基础全身三视图：${body.resource}@${body.version}`,
+      `服装：${assetWithImage(clothing)}`,
+      ...(accessories.length
+        ? ['配饰：', ...accessories.map((asset, index) => `${index + 1}. ${assetWithImage(asset)}`)]
+        : ['配饰：本次装配未额外选择。']),
+      '',
+      '请核对上述正式参考图，按取景使用实际入镜的配饰，保持各视角的造型一致。若鞋履、妆发或搭配有需要确认的取舍，先确认再生成。',
+      '请按 Chloe 造型流程从造型面部三视图开始，按顺序送审并接续全身定装三视图原图和遮面版。',
+    ].join('\n'));
+  };
 
   const confirm = (assets: AssemblyAsset[]) => {
     if (picker === 'models') setModel(assets[0] ?? null);
     if (picker === 'clothing') setClothing(assets[0] ?? null);
     if (picker === 'accessories') setAccessories(assets);
+    setHandoff('');
     setPicker(null);
   };
   const reset = () => {
     setModel(null);
     setClothing(null);
     setAccessories([]);
+    setHandoff('');
   };
 
   return <>
@@ -114,8 +138,8 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
         <h2>模特选择</h2>
         <button type="button" aria-label="选择模特" onClick={() => setPicker('models')}>{model ? assetTitle(model) : '选择模特'}</button>
         <div className="chloe-assembly-model-images">
-          <AssemblyPreview label="正面基础图" media={front} empty={model ? '尚未采用正面基础图' : '请选择模特'} onPreview={openImage} />
-          <AssemblyPreview label="基础三视图" media={body} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
+          <AssemblyPreview label="正面基础图" media={front?.media ?? model?.media} empty={model ? '尚未采用正面基础图' : '请选择模特'} onPreview={openImage} />
+          <AssemblyPreview label="基础三视图" media={body?.media} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
         </div>
       </section>
       <section className="chloe-assembly-column" aria-label="服装选择">
@@ -153,8 +177,15 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
         </dl>
       </section>
       <section aria-label="导出">
-        <h2>导出</h2>
-        <div className="chloe-assembly-export-template muted">文字模板</div>
+        <div className="chloe-assembly-export-heading">
+          <h2>导出</h2>
+          <div className="chloe-assembly-export-actions">
+            <button type="button" disabled={!canGenerate} onClick={generate}>生成</button>
+            {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
+          </div>
+        </div>
+        <textarea aria-label="造型制作交接词" className="chloe-assembly-export-template" rows={8} readOnly value={handoff}
+          placeholder={canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，配饰可选。'} />
       </section>
     </div>
     {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}

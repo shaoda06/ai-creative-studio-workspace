@@ -22,14 +22,14 @@ const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
 const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
-const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
+const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id),imageReference:`IMG-${id}@V002`});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
 fixtureAccessories.push(fixtureAsset('C007','制作中配饰','制作中'));
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
-    const page = await browser.newPage({viewport:{width,height}});
+    const page = await browser.newPage({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
     const errors = [], unexpected = [];
     let showAssemblyFixtures = false;
     page.on('pageerror', error => errors.push(String(error)));
@@ -46,9 +46,9 @@ try {
       }
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
       if (path === '/api/workspaces/account-demo/shared-models/M002') return route.fulfill({json:{id:'M002',name:'模特乙',images:[
-        {purpose:'正面面部',adopted:true,media:fixtureImage('M002-front')},
-        {purpose:'全身三视图原图',adopted:false,media:fixtureImage('M002-candidate')},
-        {purpose:'全身三视图原图',adopted:true,media:fixtureImage('M002-body')},
+        {purpose:'正面面部',adopted:true,resource:'IMG-M002-face',version:'V003',media:fixtureImage('M002-front')},
+        {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
+        {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
       ]}});
       if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes',
         '/api/workspaces/account-demo/shared-hair'].includes(path)) return route.fulfill({json:[]});
@@ -142,7 +142,12 @@ try {
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
     assert.equal(await reset.count(),0);
     const exportArea = page.getByRole('region',{name:'导出',exact:true});
-    await exportArea.getByText('文字模板',{exact:true}).waitFor();
+    const generateHandoff = exportArea.getByRole('button',{name:'生成',exact:true});
+    const copyHandoff = exportArea.getByRole('button',{name:'复制',exact:true});
+    const handoff = exportArea.getByRole('textbox',{name:'造型制作交接词',exact:true});
+    await handoff.waitFor();
+    assert.ok(await generateHandoff.isDisabled());
+    assert.ok(await copyHandoff.isDisabled());
     const emptyPreviews = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
       const {top,bottom,height} = item.getBoundingClientRect();
       return {top,bottom,height};
@@ -235,9 +240,12 @@ try {
     await confirm.click();
     assert.equal(await summary.locator('dd').nth(1).textContent(),'未选择');
     assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).count(),0);
+    assert.ok(await generateHandoff.isDisabled());
     await choose('选择服装').click();
     await clothingA.click();
     await confirm.click();
+    await generateHandoff.click();
+    assert.match(await handoff.inputValue(), /本次装配未额外选择/);
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
@@ -263,6 +271,16 @@ try {
     assert.equal(await choose('添加配饰').count(),0);
     assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
     assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲',...[0,1,2,3,5].map(i=>`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`)]);
+    assert.equal(await handoff.inputValue(),'');
+    assert.ok(await copyHandoff.isDisabled());
+    await generateHandoff.click();
+    const text = await handoff.inputValue();
+    for (const value of ['Chloe AI视频带货','M002 · 模特乙','IMG-M002-face@V003','IMG-M002-body@V002',
+      'O001 · 服装甲','IMG-O001@V002','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
+    for (const i of [0,1,2,3,5]) assert.ok(text.includes(fixtureAccessories[i].imageReference));
+    assert.ok(!text.includes('IMG-M002-body@V004') && !text.includes('IMG-C005@V002'));
+    await copyHandoff.click();
+    await page.waitForFunction(async expected => await navigator.clipboard.readText() === expected,text);
     await accessories.getByRole('img',{name:'C001',exact:true}).click();
     await zoom.waitFor();
     assert.equal(await zoom.getByRole('img').getAttribute('src'),'/api/assembly-fixture/C001');
@@ -280,6 +298,8 @@ try {
     const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
     assert.ok(resetBox.x+resetBox.width<assemblyBox.x && Math.abs(assemblyBox.x+assemblyBox.width-tabBar.x-tabBar.width)<=1);
     await reset.click();
+    assert.equal(await handoff.inputValue(),'');
+    assert.ok(await copyHandoff.isDisabled());
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
     assert.equal(await page.locator('.chloe-assembly-main img').count(),0);
     assert.deepEqual(await accessories.getByRole('button').allTextContents(),['+添加配饰']);
