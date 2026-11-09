@@ -12,7 +12,7 @@
 .chloe-assembly-preview>.muted{place-self:center}
 .chloe-assembly-model-images .chloe-assembly-preview{grid-template-rows:auto auto}
 .chloe-assembly-model-images .chloe-assembly-preview>button>img{height:auto}
-.chloe-assembly-model-images .chloe-assembly-preview>.muted{display:grid;align-items:center;min-height:140px}
+.chloe-assembly-model-images .chloe-assembly-preview>.muted{display:grid;align-items:center;min-height:190px}
 .chloe-assembly-column>.chloe-assembly-preview{contain:size}
 .chloe-assembly-accessory-heading{display:flex;align-items:baseline;gap:12px}
 .chloe-assembly-accessories{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch}

@@ -143,6 +143,13 @@ try {
     assert.equal(await reset.count(),0);
     const exportArea = page.getByRole('region',{name:'导出',exact:true});
     await exportArea.getByText('文字模板',{exact:true}).waitFor();
+    const emptyPreviews = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
+      const {top,bottom,height} = item.getBoundingClientRect();
+      return {top,bottom,height};
+    }));
+    const [emptyFace, emptyBody, emptyClothing] = emptyPreviews;
+    assert.ok(emptyFace.height >= 230 && emptyBody.height >= 230);
+    assert.ok(Math.abs(emptyFace.top-emptyClothing.top)<=1 && Math.abs(emptyBody.bottom-emptyClothing.bottom)<=1);
     await choose('选择模特').click();
     const modelA = dialog.getByRole('button',{name:'选择M001 · 模特甲',exact:true});
     const modelB = dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true});
