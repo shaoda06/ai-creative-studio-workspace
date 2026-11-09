@@ -240,7 +240,7 @@ def main():
         else:
             raise ValueError('未登记的Chloe结果适配')
         result=complete(args.owner.resolve(),plan,report,args.report.resolve())
-    print(json.dumps(result,ensure_ascii=False,indent=2))
+    print(json.dumps(result,ensure_ascii=True,indent=2))
 
 if __name__=='__main__':
     main()

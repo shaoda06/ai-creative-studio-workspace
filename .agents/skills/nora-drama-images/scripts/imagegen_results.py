@@ -74,7 +74,7 @@ def main():
         else:
             result = json.loads(project_file(root, job['report']).read_text('utf-8-sig'))
         result = {name: result[name] for name in ('provider', 'status', 'user_message_ready', 'items', 'review_path', 'browser', 'error') if name in result}
-    print(json.dumps(result, ensure_ascii=False))
+    print(json.dumps(result, ensure_ascii=True))
 
 
 if __name__ == '__main__':

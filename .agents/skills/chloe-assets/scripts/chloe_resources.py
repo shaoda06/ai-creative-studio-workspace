@@ -121,7 +121,7 @@ def main():
     else:
         root, owner = common_owner(args.project_root)
         result = resources.catalog(video_root(root, args.project) if args.project else owner)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=True, indent=2))
 
 
 if __name__ == '__main__':

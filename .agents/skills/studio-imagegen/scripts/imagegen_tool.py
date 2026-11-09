@@ -21,6 +21,12 @@ def generation_call(prompt, references, result_store_key):
     arguments = {'prompt': prompt}
     if references:
         arguments['referenced_image_paths'] = [str(file) for file in references]
+        for filename in arguments['referenced_image_paths']:
+            path = Path(filename)
+            if not path.is_absolute():
+                raise ValueError(f'Imagegen 参考图须先按实际资源归属解析为绝对路径：{filename}')
+            if not path.is_file():
+                raise FileNotFoundError(f'Imagegen 参考图文件不存在：{filename}')
     return ('// @exec: {"yield_time_ms": 120000, "max_output_tokens": 1000}\n'
             'const imagegenResult = await tools.image_gen__imagegen(' + json.dumps(arguments, ensure_ascii=True) + ');\n'
             'store(' + json.dumps(result_store_key, ensure_ascii=True) + ', imagegenResult);\n'
