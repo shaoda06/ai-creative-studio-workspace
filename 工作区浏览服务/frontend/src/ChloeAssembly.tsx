@@ -6,46 +6,67 @@ import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
 import { referenceAssetKinds } from './ChloeReferenceAssets';
-import { Dialog, Result } from './components';
+import { Dialog, PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { FullscreenImage } from './components/FullscreenImage';
+import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
 type AssemblyAsset = { id: string; name: string; media: FileItem | null };
-type PickerTarget = { kind: 'models' | 'clothing' } | { kind: 'accessories'; index: number };
+type PickerKind = 'models' | 'clothing' | 'accessories';
+type OpenImage = (title: string, src: string) => void;
 
+const accessoryLimit = 5;
 const assetTitle = (asset: AssemblyAsset) => `${asset.id} · ${asset.name}`;
 
-function AssemblyPicker({ kind, initialId, onConfirm, onClose }: {
-  kind: PickerTarget['kind']; initialId?: string; onConfirm: (asset: AssemblyAsset) => void; onClose: () => void;
+function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
+  kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void; onPreview: OpenImage;
 }) {
   const { api } = useChloeScope();
-  const [draftId, setDraftId] = useState(initialId);
+  const [draftIds, setDraftIds] = useState(() => initial.map(asset => asset.id));
   const isModel = kind === 'models';
+  const multi = kind === 'accessories';
   const label = isModel ? '模特' : referenceAssetKinds[kind].label;
   const endpoint = isModel ? 'shared-models' : referenceAssetKinds[kind].endpoint;
   const query = useQuery({
     queryKey: isModel ? ['chloe-models', api] : ['chloe-reference-assets', kind, api],
     queryFn: () => get<AssemblyAsset[]>(`${api}/${endpoint}`),
   });
-  const selected = query.data?.find(asset => asset.id === draftId && asset.media?.url);
+  const selected = draftIds.flatMap(id => {
+    const asset = query.data?.find(item => item.id === id && item.media?.url);
+    return asset ? [asset] : [];
+  });
+  const atLimit = multi && selected.length >= accessoryLimit;
+  const title = multi ? `选择配饰 ${selected.length}/${accessoryLimit}` : `选择${label}`;
+  const canConfirm = !!query.data && !query.error && (selected.length > 0 || (multi && initial.length > 0));
 
-  return <Dialog title={`选择${label}`} close={onClose} lockPageScroll>
+  return <Dialog title={title} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (query.data.length ? <div className="asset-media-grid">
-      {query.data.map(asset => <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
-        item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
-        selection={{selected: selected?.id === asset.id, disabled: !asset.media?.url, onSelect: () => setDraftId(asset.id)}} />)}
+      {query.data.map(asset => {
+        const checked = selected.some(item => item.id === asset.id);
+        const src = asset.media?.url;
+        return <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
+          item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
+          selection={{selected: checked, disabled: !src || (atLimit && !checked),
+            onPreview: src ? () => onPreview(assetTitle(asset), src) : undefined,
+            onSelect: () => setDraftIds(multi
+              ? checked ? selected.filter(item => item.id !== asset.id).map(item => item.id) : [...selected.map(item => item.id), asset.id]
+              : [asset.id])}} />;
+      })}
     </div> : <p className="muted">暂无{label}资料。</p>)}
     <div className="chloe-assembly-confirm">
-      <button type="button" disabled={!selected || !!query.error} onClick={() => { if (selected) onConfirm(selected); }}>确认选择</button>
+      <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
     </div>
   </Dialog>;
 }
 
-function AssemblyPreview({ label, media, empty }: { label: string; media?: FileItem | null; empty: string }) {
+function AssemblyPreview({ label, media, empty, onPreview }: { label: string; media?: FileItem | null; empty: string; onPreview: OpenImage }) {
   return <figure className="chloe-assembly-preview">
     <figcaption>{label}</figcaption>
-    {media?.url ? <img src={media.url} alt={label} loading="lazy" /> : <span className="muted">{empty}</span>}
+    {media?.url ? <button type="button" aria-label={`查看${label}大图`} onClick={() => onPreview(label, media.url!)}>
+      <img src={media.url} alt={label} loading="lazy" />
+    </button> : <span className="muted">{empty}</span>}
   </figure>;
 }
 
@@ -54,7 +75,9 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
   const [model, setModel] = useState<AssemblyAsset | null>(null);
   const [clothing, setClothing] = useState<AssemblyAsset | null>(null);
   const [accessories, setAccessories] = useState<AssemblyAsset[]>([]);
-  const [picker, setPicker] = useState<PickerTarget | null>(null);
+  const [picker, setPicker] = useState<PickerKind | null>(null);
+  const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
+  const openImage: OpenImage = (title, src) => setPreview({title, src});
   const modelId = model?.id;
   const modelQuery = useQuery({
     queryKey: ['chloe-model', api, modelId],
@@ -63,16 +86,13 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
   });
   const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部')?.media ?? model?.media;
   const body = modelQuery.data?.images.find(image => image.adopted && image.purpose === '全身三视图原图')?.media;
-  const pickerId = picker?.kind === 'models' ? model?.id : picker?.kind === 'clothing' ? clothing?.id :
-    picker?.kind === 'accessories' ? accessories[picker.index]?.id : undefined;
+  const currentAsset = picker === 'models' ? model : clothing;
+  const initial = picker === 'accessories' ? accessories : currentAsset ? [currentAsset] : [];
 
-  const confirm = (asset: AssemblyAsset) => {
-    if (picker?.kind === 'models') setModel(asset);
-    if (picker?.kind === 'clothing') setClothing(asset);
-    if (picker?.kind === 'accessories') {
-      const { index } = picker;
-      setAccessories(previous => index === previous.length ? [...previous, asset] : previous.map((item, i) => i === index ? asset : item));
-    }
+  const confirm = (assets: AssemblyAsset[]) => {
+    if (picker === 'models') setModel(assets[0]);
+    if (picker === 'clothing') setClothing(assets[0]);
+    if (picker === 'accessories') setAccessories(assets);
     setPicker(null);
   };
   const reset = () => {
@@ -87,28 +107,33 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
     <div className="chloe-assembly-main">
       <section className="chloe-assembly-column" aria-label="模特选择">
         <h2>模特选择</h2>
-        <button type="button" aria-label="选择模特" onClick={() => setPicker({kind: 'models'})}>{model ? assetTitle(model) : '选择模特'}</button>
+        <button type="button" aria-label="选择模特" onClick={() => setPicker('models')}>{model ? assetTitle(model) : '选择模特'}</button>
         <div className="chloe-assembly-model-images">
-          <AssemblyPreview label="正面基础图" media={front} empty={model ? '尚未采用正面基础图' : '请选择模特'} />
-          <AssemblyPreview label="基础三视图" media={body} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} />
+          <AssemblyPreview label="正面基础图" media={front} empty={model ? '尚未采用正面基础图' : '请选择模特'} onPreview={openImage} />
+          <AssemblyPreview label="基础三视图" media={body} empty={model ? modelQuery.isPending ? '正在读取基础三视图' : '尚未采用基础三视图' : '请选择模特'} onPreview={openImage} />
         </div>
       </section>
       <section className="chloe-assembly-column" aria-label="服装选择">
         <h2>服装选择</h2>
-        <button type="button" aria-label="选择服装" onClick={() => setPicker({kind: 'clothing'})}>{clothing ? assetTitle(clothing) : '选择服装'}</button>
-        <AssemblyPreview label="服装图" media={clothing?.media} empty="请选择服装" />
+        <button type="button" aria-label="选择服装" onClick={() => setPicker('clothing')}>{clothing ? assetTitle(clothing) : '选择服装'}</button>
+        <AssemblyPreview label="服装图" media={clothing?.media} empty="请选择服装" onPreview={openImage} />
       </section>
     </div>
     {model && <Result loading={false} error={modelQuery.error} retry={modelQuery.refetch} retrying={modelQuery.isFetching} />}
 
     <section aria-label="配饰选择">
-      <h2>配饰选择</h2>
+      <div className="chloe-assembly-accessory-heading">
+        <h2>配饰选择 {accessories.length}/{accessoryLimit}</h2>
+        {accessories.length > 0 && <LinkButton onClick={() => setPicker('accessories')}>编辑配饰</LinkButton>}
+      </div>
       <div className="chloe-assembly-accessories">
-        {accessories.map((asset, index) => <AssetMediaCard key={index} title={`配饰 ${index + 1} · ${assetTitle(asset)}`} formal entry aspectRatio={1} revision={0}
-          item={{media: asset.media}} selection={{selected: false, onSelect: () => setPicker({kind: 'accessories', index})}} />)}
-        <button type="button" className="chloe-assembly-add" aria-label="添加配饰" onClick={() => setPicker({kind: 'accessories', index: accessories.length})}>
+        <PreviewContext.Provider value={media => { if (media.url) openImage(media.name, media.url); }}>
+          {accessories.map((asset, index) => <AssetMediaCard key={asset.id} title={`配饰 ${index + 1} · ${assetTitle(asset)}`} formal entry aspectRatio={1} revision={0}
+            item={{media: asset.media}} />)}
+        </PreviewContext.Provider>
+        {accessories.length < accessoryLimit && <button type="button" className="chloe-assembly-add" aria-label="添加配饰" onClick={() => setPicker('accessories')}>
           <span aria-hidden="true">+</span>添加配饰
-        </button>
+        </button>}
       </div>
     </section>
 
@@ -121,7 +146,8 @@ export function ChloeAssembly({ renderNavigation }: { renderNavigation: (reset?:
           <div><dt>配饰</dt><dd>未选择</dd></div>}
       </dl>
     </section>
-    {picker && <AssemblyPicker kind={picker.kind} initialId={pickerId} onConfirm={confirm} onClose={() => setPicker(null)} />}
+    {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
+    {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
   </>;
 }

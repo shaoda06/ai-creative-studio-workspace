@@ -213,11 +213,13 @@ export function ShowcaseExamples({ category }: { category: string }) {
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
-      <ComponentExample title="单选图片卡片" rule="点击整卡暂选，选中时显示蒙版与对勾。再次选择由调用方替换选中项，无可用图片时可禁用。" usage="Chloe 装配资产选择">
+      <ComponentExample title="图片选择卡片" rule="暂选时显示蒙版与对勾。需要看大图时，点击图片打开预览，用标题旁按钮选择。无可用图片时可禁用。" usage="Chloe 装配资产选择">
         <div className="asset-media-grid">
           <AssetMediaCard title="单选图片甲" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
           <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
           <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,disabled:true,onSelect:()=>{}}} />
+          <AssetMediaCard title="可放大的选项" item={imageRecord} revision={1} entry
+            selection={{selected:selectedImage==='preview',onSelect:()=>setSelectedImage('preview'),onPreview:()=>setFullscreenImage(true)}} />
         </div>
       </ComponentExample>
       <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">

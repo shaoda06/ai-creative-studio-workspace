@@ -393,6 +393,15 @@ try {
     assert.equal(await firstChoice.getAttribute('aria-pressed'), 'false');
     assert.equal(await secondChoice.getAttribute('aria-pressed'), 'true');
     assert.equal(await secondChoice.locator('span').textContent(), '✓');
+    const previewChoice = showcase.getByRole('button', { name: '选择可放大的选项', exact: true });
+    await previewChoice.click();
+    assert.equal(await previewChoice.getAttribute('aria-pressed'), 'true');
+    await showcase.getByRole('button', { name: '查看可放大的选项大图', exact: true }).click();
+    const zoomedChoice = page.getByRole('dialog', { name: '全屏图片示例', exact: true });
+    await zoomedChoice.waitFor();
+    await page.keyboard.press('Escape');
+    await zoomedChoice.waitFor({ state: 'hidden' });
+    assert.equal(await previewChoice.getAttribute('aria-pressed'), 'true');
     const soundCards=showcase.locator('.audio-reference-card');
     assert.equal(await soundCards.count(),2);
     for(const soundCard of await soundCards.all()) {

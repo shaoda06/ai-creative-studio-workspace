@@ -25,7 +25,7 @@ const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fix
 const fixtureAsset = (id,name) => ({id,name,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),{id:'M003',name:'无采用图',media:null}];
 const fixtureClothing = [fixtureAsset('O001','服装甲')];
-const fixtureAccessories = [fixtureAsset('C001','配饰甲'),fixtureAsset('C002','配饰乙')];
+const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height}});
@@ -137,8 +137,8 @@ try {
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择']);
     assert.equal(await reset.count(),0);
     await choose('选择模特').click();
-    const modelA = dialog.getByRole('button',{name:'M001 · 模特甲',exact:true});
-    const modelB = dialog.getByRole('button',{name:'M002 · 模特乙',exact:true});
+    const modelA = dialog.getByRole('button',{name:'选择M001 · 模特甲',exact:true});
+    const modelB = dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true});
     await modelA.waitFor();
     assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).overflowY),'hidden');
     assert.ok(await confirm.isDisabled());
@@ -146,6 +146,13 @@ try {
     await modelA.click();
     assert.equal(await modelA.getAttribute('aria-pressed'),'true');
     assert.equal(await modelA.locator('span').textContent(),'✓');
+    await dialog.getByRole('button',{name:'查看M001 · 模特甲大图',exact:true}).click();
+    const zoom = page.locator('dialog.dialog-fullscreen');
+    await zoom.waitFor();
+    assert.equal(await zoom.getByRole('img').getAttribute('src'),'/api/assembly-fixture/M001');
+    await page.keyboard.press('Escape');
+    await zoom.waitFor({state:'hidden'});
+    assert.equal(await modelA.getAttribute('aria-pressed'),'true');
     await modelB.click();
     assert.equal(await modelA.getAttribute('aria-pressed'),'false');
     assert.equal(await modelB.getAttribute('aria-pressed'),'true');
@@ -157,7 +164,7 @@ try {
     assert.equal(await page.getByRole('img',{name:'正面基础图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-front');
     assert.equal(await page.getByRole('img',{name:'基础三视图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-body');
     await choose('选择服装').click();
-    await dialog.getByRole('button',{name:'O001 · 服装甲',exact:true}).click();
+    await dialog.getByRole('button',{name:'选择O001 · 服装甲',exact:true}).click();
     await confirm.click();
     assert.equal(await page.getByRole('img',{name:'服装图',exact:true}).getAttribute('src'),'/api/assembly-fixture/O001');
     const frames = await page.locator('.chloe-assembly-main figure').evaluateAll(items => items.map(item => {
@@ -170,22 +177,51 @@ try {
     const modelWidth=frames[0].right-frames[0].left, clothingWidth=frames[2].right-frames[2].left;
     assert.ok(Math.abs(modelWidth/(modelWidth+clothingWidth)-0.3)<0.002);
     assert.ok(Math.abs(frames[2].bottom-frames[2].top-Math.min(480,Math.max(340,height/2)))<=1);
-    const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
-    for (const asset of fixtureAccessories) {
-      await choose('添加配饰').click();
-      const card = dialog.getByRole('button',{name:`${asset.id} · ${asset.name}`,exact:true});
-      await card.waitFor();
-      assert.ok(await confirm.isDisabled());
-      await card.click();
-      await confirm.click();
-      assert.equal(await accessories.getByRole('button').last().getAttribute('aria-label'),'添加配饰');
+    for (const [label, src] of [['正面基础图','M002-front'],['基础三视图','M002-body'],['服装图','O001']]) {
+      await choose(`查看${label}大图`).click();
+      await zoom.waitFor();
+      assert.equal(await zoom.getByRole('img').getAttribute('src'),`/api/assembly-fixture/${src}`);
+      await page.keyboard.press('Escape');
+      await zoom.waitFor({state:'hidden'});
     }
-    assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2']);
-    assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲','C001 · 配饰甲','C002 · 配饰乙']);
-    await choose('配饰 1 · C001 · 配饰甲').click();
-    await dialog.getByRole('button',{name:'C002 · 配饰乙',exact:true}).click();
+    const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
+    const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
+    assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
+    await choose('添加配饰').click();
+    await accessoryChoice(0).waitFor();
+    assert.ok(await confirm.isDisabled());
+    for (let index=0; index<5; index++) {
+      await accessoryChoice(index).click();
+      assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),`选择配饰 ${index+1}/5`);
+    }
+    assert.ok(await accessoryChoice(5).isDisabled());
+    await dialog.getByRole('button',{name:'查看C006 · 配饰样例6大图',exact:true}).click();
+    await zoom.waitFor();
+    await page.keyboard.press('Escape');
+    await zoom.waitFor({state:'hidden'});
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 5/5');
+    await accessoryChoice(4).click();
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 4/5');
+    await accessoryChoice(5).click();
+    await confirm.click();
+    assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 5/5');
+    assert.equal(await choose('添加配饰').count(),0);
+    assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','服装','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
+    assert.deepEqual(await summary.locator('dd').allTextContents(),['M002 · 模特乙','O001 · 服装甲',...[0,1,2,3,5].map(i=>`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`)]);
+    await accessories.getByRole('img',{name:'C001',exact:true}).click();
+    await zoom.waitFor();
+    assert.equal(await zoom.getByRole('img').getAttribute('src'),'/api/assembly-fixture/C001');
+    await page.keyboard.press('Escape');
+    await zoom.waitFor({state:'hidden'});
+    await choose('编辑配饰').click();
+    await accessoryChoice(0).click();
     await dialog.getByRole('button',{name:'关闭',exact:true}).click();
-    assert.equal(await summary.locator('dd').nth(2).textContent(),'C001 · 配饰甲');
+    assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 5/5');
+    await choose('编辑配饰').click();
+    for (const index of [0,1,2,3,5]) await accessoryChoice(index).click();
+    await confirm.click();
+    assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
+    assert.equal(await choose('添加配饰').count(),1);
     const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
     assert.ok(resetBox.x+resetBox.width<assemblyBox.x && Math.abs(assemblyBox.x+assemblyBox.width-tabBar.x-tabBar.width)<=1);
     await reset.click();
