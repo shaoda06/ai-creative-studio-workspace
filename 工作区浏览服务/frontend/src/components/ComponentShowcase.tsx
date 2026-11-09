@@ -65,12 +65,13 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-row"><button onClick={() => setClicks(n => n + 1)}>普通按钮</button><button className="link" onClick={() => setClicks(n => n + 1)}>链接按钮</button><button disabled>禁用按钮</button></div>
           <p>已点击 {clicks} 次</p><p>{sampleText}</p><CopyButton text={sampleText} label="复制示例文字" />
         </Example>
-        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态；页签用于切换同一区域的内容；选中前后保持字重与宽度，长文字按可用空间换行。" usage="提示词编辑、分镜与提示词页签">
+        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签用于切换同一区域的内容，选中前后保持字重与宽度，长文字按可用空间换行。可把末项对齐到标签栏末端。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产装配入口">
           <div className="component-demo-row"><span>编辑模式</span><Switch label="示例编辑模式" checked={editing} onChange={setEditing} /></div>
           {editing ? <textarea className="component-demo-textarea" aria-label="示例正文" value={draft} onChange={event => setDraft(event.target.value)} /> : <p className="component-draft">{draft}</p>}
           <UnderlineTabs label="示例页签" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab} />
           <UnderlineTabs compact scrollable label="紧凑滚动页签示例" items={[{ value: 'overview', label: '示例节点甲', icon: <span aria-hidden="true">●</span>, tooltip: '节点状态说明示例' }, { value: 'detail', label: '示例节点乙' }]} selected={tab} onChange={setTab} />
           <UnderlineTabs label="长文字页签演示" items={[{ value: 'one', label: '简短页签' }, { value: 'long', label: '长文字与连续英文换行：' + 'LongNavigationReference'.repeat(4) }]} selected={longTab} onChange={setLongTab} />
+          <UnderlineTabs alignLastToEnd label="末项靠右页签演示" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab} />
           <p>{tab === 'overview' ? '这里是概览内容。' : '这里是详情内容。'}</p>
         </Example>
         <Example title="轮次修改标记" rule="普通页签右上角的小黄点表示本轮有新视频，与分段条共用；选中与未选中时都保留标记。" usage="场次标签、分段条">

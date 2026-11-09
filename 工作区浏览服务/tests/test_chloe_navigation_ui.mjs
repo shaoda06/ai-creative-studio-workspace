@@ -80,6 +80,14 @@ try {
     await assetNav.waitFor();
     assert.deepEqual(await assetNav.getByRole('button').allTextContents(),assetLabels);
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'AI 模特');
+    assert.equal(await assetNav.evaluate(bar => {
+      const row = bar.getBoundingClientRect();
+      const tabs = [...bar.querySelectorAll('button')].map(button => button.getBoundingClientRect());
+      const first = tabs[0], previous = tabs.at(-2), last = tabs.at(-1);
+      return Math.abs(first.left - row.left) <= 1 && Math.abs(last.right - row.right) <= 1
+        && tabs.every(tab => Math.abs(tab.top - first.top) <= 1)
+        && last.left - previous.right > parseFloat(getComputedStyle(bar).columnGap) + 1;
+    }),true,'装配单独贴右边，其他资产页签同一行靠左');
     for (const label of assetLabels) {
       await assetNav.getByRole('button',{name:label,exact:true}).click();
       await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);

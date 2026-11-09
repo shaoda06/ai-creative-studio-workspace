@@ -176,6 +176,7 @@ dialog.dialog-compact{width:440px}
 .underline-tabs-compact>button{padding-top:0}
 .underline-tabs-scroll{min-width:0;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}
 .underline-tabs-scroll>button{flex:none}
+.underline-tabs-align-end>button:last-child{margin-inline-start:auto}
 
 dialog .dialog-close{flex:none;white-space:nowrap}
 

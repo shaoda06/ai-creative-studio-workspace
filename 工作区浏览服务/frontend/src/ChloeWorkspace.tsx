@@ -101,7 +101,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
       {current.value !== 'review' && current.value !== 'assets' && <PageCheckStatus queries={[workspaceQuery]} />}
       {current.value !== 'assets' && <h2>{current.label}</h2>}
       {current.value === 'review' ? <ChloeReview key={api} /> : current.value === 'assets' ? voiceId ? <ChloeVoiceDetail key={`${spaceId}/${voiceId}`} query={voiceQuery} workspaceQuery={workspaceQuery} /> : modelId ? <ChloeModelDetail key={`${spaceId}/${modelId}`} query={modelQuery} workspaceQuery={workspaceQuery} /> : referenceId ? <ChloeReferenceAssetDetail kind={referenceKind!} key={`${spaceId}/${referenceKind}/${referenceId}`} query={referenceQuery} workspaceQuery={workspaceQuery} /> : <>
-        <UnderlineTabs label="共用资产分类" items={assetCategories} selected={assetCategory.value}
+        <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
           onChange={value => setParams({ section: 'assets', asset: value })} />
         <div className="chloe-assets-content">
           {assetCategory.value === 'assembly' ? <p className="muted">暂无装配内容</p> :

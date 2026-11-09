@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { PointerTooltip } from './PointerTooltip';
 
-export function UnderlineTabs<T extends string>({ items, selected, onChange, label, disabled = false, compact = false, scrollable = false }: {
+export function UnderlineTabs<T extends string>({ items, selected, onChange, label, disabled = false, compact = false, scrollable = false, alignLastToEnd = false }: {
   items: { value: T; label: string; icon?: ReactNode; tooltip?: string }[];
   selected: T;
   onChange: (value: T) => void;
@@ -9,8 +9,9 @@ export function UnderlineTabs<T extends string>({ items, selected, onChange, lab
   disabled?: boolean;
   compact?: boolean;
   scrollable?: boolean;
+  alignLastToEnd?: boolean;
 }) {
-  return <nav className={`underline-tabs${compact ? ' underline-tabs-compact' : ''}${scrollable ? ' underline-tabs-scroll' : ''}`} aria-label={label}>
+  return <nav className={`underline-tabs${compact ? ' underline-tabs-compact' : ''}${scrollable ? ' underline-tabs-scroll' : ''}${alignLastToEnd ? ' underline-tabs-align-end' : ''}`} aria-label={label}>
     {items.map(item => <PointerTooltip key={item.value} text={item.tooltip}><button disabled={disabled} aria-current={selected === item.value ? 'page' : undefined} onClick={() => onChange(item.value)}>{item.icon}{item.label}</button></PointerTooltip>)}
   </nav>;
 }

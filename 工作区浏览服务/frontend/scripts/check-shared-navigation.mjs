@@ -211,6 +211,14 @@ export async function checkSharedNavigation(page, width, selfTest) {
   const demo = showcase.getByRole('navigation', { name: '长文字页签演示', exact: true });
   await demo.getByRole('button').last().click();
   await fits(demo, `${width}/展示页长页签`);
+  const endDemo = showcase.getByRole('navigation', { name: '末项靠右页签演示', exact: true });
+  const [bar, first, last] = await Promise.all([endDemo.boundingBox(), endDemo.getByRole('button').first().boundingBox(), endDemo.getByRole('button').last().boundingBox()]);
+  assert.ok(Math.abs(first.x - bar.x) <= 1 && Math.abs(last.x + last.width - bar.x - bar.width) <= 1
+    && Math.abs(first.y - last.y) <= 1, `${width}/展示页首末页签分居同一行两端`);
+  const endBefore = await positions(endDemo);
+  await endDemo.getByRole('button').last().click();
+  assert.equal(await endDemo.locator('[aria-current="page"]').textContent(), '详情');
+  await stable(endDemo, endBefore, `${width}/展示页末项靠右`);
   if (selfTest) {
     await demo.scrollIntoViewIfNeeded();
     const screenshot = join(tmpdir(), `nora-navigation-${width}-${process.pid}.png`);
