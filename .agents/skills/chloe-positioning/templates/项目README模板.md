@@ -23,7 +23,9 @@
 
 ## 项目专用约定
 
-无。仅记录用户确认的项目专用约定或例外。
+无。
+
+用户确认约定后，将「无。」替换为条目，每条按「约定名称（适用于……）。具体做法……」填写。记录和接续按[项目专用约定的记录与执行]({{skills}}/chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)办理。
 
 ## 项目接续与相关资料
 
@@ -32,7 +34,7 @@
 | 会话名称 | 职责 | 真实会话入口 |
 | --- | --- | --- |
 
-处理具体视频时主动读取本README、视频README、脚本和与当前任务有关的制作记录。账号方向只在账号定位维护。初始化阶段不预设已选商品或已采用资产，不建立账号连接与权限配置。
+按上方「项目专用约定」接续项目任务。处理具体视频时再读视频README、脚本和相关制作记录。账号方向只在账号定位维护。初始化阶段不预设已选商品或已采用资产，不建立账号连接与权限配置。
 
 按当前任务读取[资产制作规范]({{skills}}/chloe-assets/references/资产制作规范.md)、[声音资产流程]({{skills}}/chloe-assets/references/声音资产制作流程.md)、[资源保存与引用]({{skills}}/chloe-assets/references/资源存储与引用规范.md)、[视频制作与页面接入]({{skills}}/chloe-production/references/视频制作流程与记录.md)、[剪映交接]({{skills}}/chloe-handoff/SKILL.md)或[运营与展示接入]({{skills}}/chloe-positioning/references/社媒运营接入规范.md)。通用约定见[总工作区AGENTS]({{studio}}/AGENTS.md)。
 

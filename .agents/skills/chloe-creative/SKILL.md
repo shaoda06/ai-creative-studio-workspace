@@ -5,7 +5,7 @@ description: 为 Chloe 确定单条带货视频主题、卖点、画面和声音
 
 # Chloe 视频策划、脚本与分镜
 
-创建或接续本条策划时，按[会话组织与接续](../chloe-commerce-video/references/会话组织与接续规范.md)确定视频会话；需要共用资产时沿其中的交接规则说明缺项。
+创建或接续本条策划时，先核对[项目专用约定](../chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)，再按[会话组织与接续](../chloe-commerce-video/references/会话组织与接续规范.md)确定视频会话；需要共用资产时沿其中的交接规则说明缺项。
 
 创建或更新固定资料前，读取[固定资料写法规范](../chloe-positioning/references/固定资料写法规范.md)及其对应模板；完成后运行其中的检查命令，保持章节、字段和状态写法一致。
 

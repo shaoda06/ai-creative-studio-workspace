@@ -5,7 +5,7 @@ description: 核对 Chloe 已采用片段及顺序，准备可下载的剪映清
 
 # Chloe 剪映交接与成片接续
 
-接续本条交接、人工后期结果或转入运营时，按[进度与运营接续](../chloe-commerce-video/references/会话组织与接续规范.md#进度与运营接续)确定承接会话和原记录位置。
+接续本条交接、人工后期结果或转入运营时，先核对[项目专用约定](../chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)，再按[进度与运营接续](../chloe-commerce-video/references/会话组织与接续规范.md#进度与运营接续)确定承接会话和原记录位置。
 
 创建或更新固定资料前，读取[固定资料写法规范](../chloe-positioning/references/固定资料写法规范.md)及其对应模板；完成后运行其中的检查命令，保持章节、字段和状态写法一致。
 

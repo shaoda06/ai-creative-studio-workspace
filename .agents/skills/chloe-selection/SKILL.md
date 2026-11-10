@@ -5,7 +5,7 @@ description: 为 Chloe 评估精选联盟候选商品、整理真实卖点和原
 
 # Chloe 选品与商品资料
 
-接续选品或向视频策划交接时，按[会话组织与接续](../chloe-commerce-video/references/会话组织与接续规范.md)确定承接会话和资料入口。
+接续选品或向视频策划交接时，先核对[项目专用约定](../chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)，再按[会话组织与接续](../chloe-commerce-video/references/会话组织与接续规范.md)确定承接会话和资料入口。
 
 创建或更新固定资料前，读取[固定资料写法规范](../chloe-positioning/references/固定资料写法规范.md)及其对应模板；完成后运行其中的检查命令，保持章节、字段和状态写法一致。
 

@@ -5,7 +5,7 @@ description: 管理 Chloe 商品参考、模特、发型、服装、配饰、造
 
 # Chloe 共用资产与镜头图片
 
-开始资产任务或接收视频缺项时，按[会话职责](../chloe-commerce-video/references/会话组织与接续规范.md#会话职责与命名)确定对象归属，并按[共用资产与单条视频的交接](../chloe-commerce-video/references/会话组织与接续规范.md#共用资产与单条视频的交接)处理发型、服装、造型及镜头图片的职责和引用。
+开始资产任务或接收视频缺项时，先核对[项目专用约定](../chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)，再按[会话职责](../chloe-commerce-video/references/会话组织与接续规范.md#会话职责与命名)确定对象归属，并按[共用资产与单条视频的交接](../chloe-commerce-video/references/会话组织与接续规范.md#共用资产与单条视频的交接)处理发型、服装、造型及镜头图片的职责和引用。
 
 创建或更新固定资料前，读取[固定资料写法规范](../chloe-positioning/references/固定资料写法规范.md)及其对应模板；完成后运行其中的检查命令，保持章节、字段和状态写法一致。
 
