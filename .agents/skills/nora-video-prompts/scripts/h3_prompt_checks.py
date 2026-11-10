@@ -8,12 +8,13 @@ from pathlib import Path
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
+for _skill in ("studio-comfyui", "studio-h3", "studio-h3-aimixer", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 import re
 
 from h3_prompt_format import (BASE_SECTIONS, PROMPT_CHARACTER_LIMIT, REFERENCE_MODES, SECTIONS,
-                              sections, group_mode, keyframe_slots, selected_groups, shot_blocks, format_findings)
+                              sections, shot_blocks, format_findings)
+from aimixer_prompts import group_mode, keyframe_slots, selected_groups
 from project_paths import project_file
 
 REVIEW_ITEMS = ('identity', 'space_action', 'continuity_sound', 'translation')

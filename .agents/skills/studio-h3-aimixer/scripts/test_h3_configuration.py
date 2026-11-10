@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS.parent.parent / '工作区浏览服务'))
-for name in ('studio-h3', 'studio-comfyui', 'studio-workspace-browser', 'nora-drama-production'):
+for name in ('studio-h3', 'studio-h3-aimixer', 'studio-comfyui', 'studio-workspace-browser', 'nora-drama-production'):
     sys.path.insert(0, str(SKILLS / name / 'scripts'))
 from h3_workflow import configure_first_pass, configure_second_pass, prepare_technical, widget
 from workflow_graph import Canvas

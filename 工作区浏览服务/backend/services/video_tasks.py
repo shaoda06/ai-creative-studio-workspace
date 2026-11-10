@@ -20,7 +20,9 @@ def register(store, key, outputs, report_file):
     from backend.services.execution_checks import write_json
     from backend.services.video_records import probe
     data, state = store.rows[key]['input'], store.rows[key]['state']
-    if data.video_plan.get('metadata') != 'ffprobe':
+    metadata = data.video_plan.get('metadata')
+    receipt_only = data.task_type == 'video-scene-generation' and metadata == 'receipt'
+    if not receipt_only and metadata != 'ffprobe':
         raise ValueError('视频技术任务须使用ffprobe媒体核对')
     if recordio.exists(report_file):
         report = recordio.read(report_file)
@@ -39,9 +41,10 @@ def register(store, key, outputs, report_file):
         receipt = project_file(data.project, output['receipt'])
         if not recordio.exists(receipt):
             raise FileNotFoundError(receipt)
+        current = path.stat() if receipt_only else None
         items.append(dict(identity=output.get('identity') or path.name, path=path.relative_to(Path(data.project)).as_posix(),
                           receipt=receipt.relative_to(Path(data.project)).as_posix(),
-                          technical=True, metadata=probe(path)))
+                          technical=True, metadata={'stamp': [current.st_size, current.st_mtime_ns]} if receipt_only else probe(path)))
     report = dict(task_id=key, prompt_id=state['prompt_id'], adapter='technical', status='registered',
                   recorded_at=store.client.now(), items=items, business_sync={'status': 'not_requested'})
     write_json(report_file, report)

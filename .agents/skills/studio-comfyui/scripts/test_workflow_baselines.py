@@ -215,9 +215,9 @@ class BaselineTests(unittest.TestCase):
 
     def test_all_pairs_and_reference_branches(self):
         results = wb.verify(BASELINES)
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         for folder, group in workflow_directories(BASELINES):
-            self.assertEqual(len(wb.verify(folder)), 0 if group == 'backup' else len(list(folder.glob('*.api.json'))))
+            self.assertEqual(len(wb.verify(folder)), len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]
         self.assertEqual(h3, [])
 
@@ -388,8 +388,9 @@ class BaselineTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Missing API output"):
                 wb.verify(tmp)
 
-    def test_empty_backup_directory_has_no_workflows(self):
-        self.assertEqual(wb.verify(RETAINED), [])
+    def test_songssx_is_registered_as_backup(self):
+        self.assertEqual([item["workflow"] for item in wb.verify(RETAINED)],
+                         ["MiniMax-H3-Songssx导演台-Selflift-标准版"])
 
     def test_confirmation_pair_requires_report_output(self):
         with tempfile.TemporaryDirectory() as tmp:

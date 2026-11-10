@@ -1,0 +1,89 @@
+"""Exercise the scene workflow on the real task store with simulated ComfyUI IO."""
+from hashlib import sha256
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import AsyncMock, patch
+
+from backend.main import SubmissionPlanInput
+from backend.services import comfy_tasks, result_registration, submission_plans
+from prepared_documents import read_journal
+
+
+class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_scene_prepare_upload_and_recovery_use_one_output(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / 'projects/样本'
+            project.mkdir(parents=True)
+            runtime = workspace / 'runtime'
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            source = project / 'reference.png'
+            source.write_bytes(b'fixture')
+            prompt = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
+                      'retention_analysis: Keep the room.\ndetailed_description: [Shot 1] Hold.\n'
+                      'overall_soundscape: Room tone.\nnon_diegetic_music: N/A')
+            plan = project / 'plan.json'
+            plan.write_text(json.dumps({'tasks': [{
+                'title': '场次样本', 'task_type': 'video-scene-generation',
+                'record_dir': 'record', 'output': 'out/scene.mp4',
+                'songssx': {'width': 640, 'height': 384, 'reference_image_center_crop': False,
+                            'lowres_scale': .6, 'seed': 7, 'remote_prefix': 'video/test/scene',
+                            'segments': [{'p': f'P{i:03d}', 'duration': 5, 'overlap_frames': overlap,
+                                          'images': [source.name], 'prompt': prompt}
+                                         for i, overlap in enumerate((0, 0, 22), 1)]},
+            }]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project=project.name, plan_file=plan.name,
+                                          prepare_only=True, desktop=desktop, thread_id='test')
+            store = comfy_tasks.TaskStore(runtime, workspace)
+            try:
+                with patch.object(store.client, 'submit', side_effect=AssertionError('no generation')), \
+                        patch.object(store.client, 'upload', side_effect=AssertionError('no preparation upload')):
+                    self.assertEqual((await submission_plans.execute(store, payload))['status'], 'prepared')
+                self.assertEqual(store.rows, {})
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                self.assertEqual([seg['overlap_frames'] for seg in task['video_plan']['segments']], [0, 0, 22])
+                self.assertEqual(len(task['uploads']), 1)
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                with patch.object(store, 'read_session_name', new_callable=AsyncMock):
+                    key = (await store.enqueue(data))['local_task_id']
+                remote = {'name': 'ref.png', 'subfolder': 'record', 'type': 'input'}
+                response = dict(remote=remote, input_path='record/ref.png', sha256=sha256(b'fixture').hexdigest())
+                with patch.object(store.client, 'upload', return_value=response) as upload:
+                    bound = await store.prepare(key)
+                upload.assert_called_once()
+                planner = json.loads(bound['402']['inputs']['timeline_data'])
+                self.assertEqual(planner['images'][0]['file'], 'record/ref.png')
+                canvas = json.loads((project / 'record/任务.workflow.json').read_text())
+                node = next(item for item in canvas['nodes'] if item['id'] == 402)
+                self.assertEqual(json.loads(node['widgets_values'][3]), planner)
+                store.save(key, prompt_id='simulated-prompt')
+            finally:
+                await store.close()
+
+            store = comfy_tasks.TaskStore(runtime, workspace)
+            try:
+                with patch.object(store.client, 'upload', side_effect=AssertionError('reuse upload receipt')):
+                    self.assertEqual(await store.prepare(key), bound)
+                remote = {'filename': 'scene.mp4', 'subfolder': 'video/test', 'type': 'output'}
+                result = {'state': 'success', 'files': [{'node_id': '404', 'output_key': 'images',
+                                                       'index': 0, 'file': remote}]}
+
+                def download(_, args):
+                    destination = Path(args.output)
+                    destination.parent.mkdir()
+                    destination.write_bytes(b'mock mp4')
+                    return {'remote': remote, 'path': args.output, 'bytes': 8}
+
+                with patch.object(store.client, 'download', side_effect=download) as fetch:
+                    await store.finish_collection(key, result)
+                    self.assertEqual(await store.collect(key, result), [])
+                fetch.assert_called_once()
+                with patch('backend.services.video_records.probe', side_effect=AssertionError('no routine probe')):
+                    report = result_registration.register(store, key)
+                self.assertEqual(report['items'][0]['path'], 'out/scene.mp4')
+            finally:
+                await store.close()

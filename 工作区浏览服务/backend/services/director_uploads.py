@@ -5,7 +5,7 @@ _SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
 for _name in ('studio-h3', 'studio-comfyui', 'nora-drama-production'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 import workflow_baselines as pairs
-from h3_uploads import save_uploaded_workflow as save_model_inputs
+from workflow_uploads import save_uploaded_workflow as save_model_inputs
 from drama_uploaded_sources import update_mapping
 
 

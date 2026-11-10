@@ -5,7 +5,7 @@ import re
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[2]
-for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
+for _skill in ("studio-comfyui", "studio-h3", "studio-h3-aimixer", "studio-video-processing", "nora-video-prompts", "nora-drama-production", "nora-drama-handoff"):
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 
 from project_paths import project_file
@@ -78,5 +78,5 @@ def prepare_records(root, skill, spec, api, mapping, record, documents):
 def sync_timing(canvas, mapping, task_type):
     if task_type != 'video-first-pass' or any(item.get('source') or item.get('materials_from') for item in mapping['segments']):
         raise ValueError('自动帧数装配只用于无历史来源的新一采；接续保留原画布及缓存输入')
-    from h3_timing import sync_timing as assemble_timing
+    from aimixer_timing import sync_timing as assemble_timing
     return assemble_timing(canvas, mapping['selected_indices'])

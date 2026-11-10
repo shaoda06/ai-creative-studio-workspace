@@ -67,7 +67,7 @@ class TaskInput(BaseModel):
     record_format: Literal['compact', 'legacy'] = 'compact'
     project: str
     title: str
-    task_type: Literal['image', 'image-upscale', 'video-first-pass', 'video-second-pass', 'video-postprocess']
+    task_type: Literal['image', 'image-upscale', 'video-first-pass', 'video-second-pass', 'video-scene-generation', 'video-postprocess']
     url: str
     workflow: dict
     record_dir: str

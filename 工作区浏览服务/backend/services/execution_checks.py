@@ -10,7 +10,7 @@ from backend.services.video_tasks import business as business_video
 
 import sys
 _SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
-for _name in ('studio-h3', 'nora-drama-production', 'nora-serial-drama', 'studio-workspace-browser'):
+for _name in ('studio-h3', 'studio-h3-aimixer', 'studio-h3-songssx', 'nora-drama-production', 'nora-serial-drama', 'studio-workspace-browser'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from h3_inputs import director_checks
 from drama_execution_checks import (context_checks, storyboard_index_checks, content_checks,
@@ -266,6 +266,15 @@ def fixed_checks(store, data, *, mapping=None, legacy=False):
             raise ValueError('分段计划或输入映射字段不完整：' + str(error)) from error
         if data.outputs:
             raise ValueError('原生分段任务使用segment-plan，不混用末段保存节点作为全组输出')
+    from songssx_workflow import TASK_TYPE, WORKFLOW, validate as validate_songssx
+    plan = data.video_plan or {}
+    if data.task_type == TASK_TYPE:
+        if (plan.get('workflow_id') != WORKFLOW or plan.get('adapter') != 'technical'
+                or plan.get('metadata') != 'receipt' or data.segment_plan is not None):
+            raise ValueError('场次生成须使用已登记的 Songssx 取回计划')
+        validate_songssx(data.workflow, plan, data.outputs, data.uploads)
+    elif plan.get('workflow_id') or any(node['class_type'] == 'MiniMaxH3TimelinePlanner' for node in data.workflow.values()):
+        raise ValueError('Songssx 时间线须使用场次生成任务入口')
     result = {'segments': director_checks(data.workflow, timelines)}
     if business_video(data):
         result['context_sources'] = context_checks(store, data, mapping=mapping, bindings=bindings,
