@@ -11,4 +11,4 @@ description: 共用视频技术处理，按明确源文件、尺寸、帧率和�
 
 媒体核对调用[scripts/video_metadata.py](scripts/video_metadata.py)的`probe(path)`，只读ffprobe的轨道与容器信息，不抽帧、转写或审片。缺少依赖或格式异常如实失败；不将推荐规格填写为实测值。
 
-RIFE/RTX基准及参数装配按[技术处理规范](references/视频技术处理规范.md)，脚本`scripts/video_workflow.py`共用计算显示尺寸与裁切量，并按实际来源和选择装配；任务字段与原规格复用按[调用接口](references/视频技术处理规范.md#调用接口)，不选择已采用来源；通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务明确`video_plan.adapter:"technical"`；业务另行维护源版本、候选、采用与正式位置。
+视频后处理使用[统一基准与实际装配](references/视频技术处理规范.md#实际装配)，按源片与目标规格选择插帧、尺寸处理和裁切。任务字段与原规格复用按[调用接口](references/视频技术处理规范.md#调用接口)，通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务填写 `video_plan.adapter:"technical"`。业务维护源版本、候选、采用与正式位置。

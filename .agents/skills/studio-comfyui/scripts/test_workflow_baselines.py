@@ -31,7 +31,7 @@ class BaselineTests(unittest.TestCase):
             changed = copy.deepcopy(original)
             del changed['12']['inputs'][field]
             with self.assertRaisesRegex(AssertionError, 'required RIFE inputs'):
-                wb.validate_postprocess(changed, name)
+                wb.validate_postprocess(changed)
         for node_id, field, value in [('12', 'source_fps', 24), ('1', 'images', ['7', 0]),
                                       ('16', 'images', ['12', 0]), ('16', 'frame_rate', ['7', 2]),
                                       ('16', 'audio', None), ('16', 'trim_to_audio', True)]:
@@ -39,30 +39,30 @@ class BaselineTests(unittest.TestCase):
                 changed = copy.deepcopy(original)
                 changed[node_id]['inputs'][field] = value
                 with self.assertRaises(AssertionError):
-                    wb.validate_postprocess(changed, name)
+                    wb.validate_postprocess(changed)
         original['12']['class_type'] = 'RIFEInterpolation'
         with self.assertRaisesRegex(AssertionError, 'interpolation node'):
-            wb.validate_postprocess(original, name)
+            wb.validate_postprocess(original)
 
-    def test_combat_crop_preserves_audio_and_both_orientations(self):
-        name = 'RIFE-自动切镜保护裁切'
-        api = json.loads(workflow_file(name, 'api').read_text(encoding='utf-8'))
-        self.assertEqual(api['1']['inputs'], {'image': ['12', 0], 'width': 1920,
-                                             'height': 1080, 'x': 0, 'y': 4})
-        self.assertNotIn('RTXVideoSuperResolution', {n['class_type'] for n in api.values()})
-        for width, height, x, y in ((1920, 1080, 0, 4), (1080, 1920, 4, 0)):
-            changed = copy.deepcopy(api)
-            changed['1']['inputs'].update(width=width, height=height, x=x, y=y)
-            result = wb.validate_postprocess(changed, name)
-            self.assertEqual((result['width'], result['height'], result['target_fps']), (width, height, 30))
-            self.assertEqual(changed['16']['inputs']['audio'], ['7', 1])
-            self.assertFalse(changed['16']['inputs']['trim_to_audio'])
-        for node, field, value in (('1', 'image', ['7', 0]), ('16', 'images', ['12', 0]),
-                                   ('16', 'audio', None), ('16', 'frame_rate', ['7', 2])):
-            changed = copy.deepcopy(api)
-            changed[node]['inputs'][field] = value
-            with self.assertRaises(AssertionError):
-                wb.validate_postprocess(changed, name)
+    def test_postprocess_canvas_can_bypass_each_optional_step(self):
+        name = 'RTX-RIFE-自动切镜保护超分插帧'
+        canvas = json.loads(workflow_file(name).read_text(encoding='utf-8'))
+        graph = wb.Canvas(canvas)
+        self.assertNotIn('25', graph.api(16))
+        graph.nodes[25]['mode'] = 0
+        api = graph.api(16)
+        self.assertEqual(api['25']['inputs']['image'], ['1', 0])
+        self.assertEqual(api['16']['inputs']['images'], ['25', 0])
+        graph.nodes[1]['mode'] = 4
+        api = graph.api(16)
+        self.assertNotIn('1', api)
+        self.assertEqual(api['25']['inputs']['image'], ['12', 0])
+        graph.nodes[12]['mode'] = 4
+        api = graph.api(16)
+        self.assertNotIn('12', api)
+        self.assertEqual(api['25']['inputs']['image'], ['7', 0])
+        self.assertEqual(api['16']['inputs']['frame_rate'], ['7', 2])
+        self.assertEqual(api['16']['inputs']['audio'], ['7', 1])
 
     def test_rife_package_requires_complete_installable_contents(self):
         package = ROOT / 'dependencies/ComfyUI节点资源/ComfyUI-Nora-RIFE-CutTest.zip'
@@ -215,7 +215,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_all_pairs_and_reference_branches(self):
         results = wb.verify(BASELINES)
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 5)
         for folder, group in workflow_directories(BASELINES):
             self.assertEqual(len(wb.verify(folder)), 0 if group == 'backup' else len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]

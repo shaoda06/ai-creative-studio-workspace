@@ -2,6 +2,7 @@
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[2] / 'studio-h3'
+VIDEO_POSTPROCESS_BASELINE = 'RTX-RIFE-自动切镜保护超分插帧'
 WORKFLOW_GROUPS = (
     ('Qwen-image-2-1', 'formal'),
     ('Minimax-H3', 'formal'),

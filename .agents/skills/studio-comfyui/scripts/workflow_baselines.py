@@ -5,11 +5,9 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "studio-comfyui/scripts"))
 from workflow_graph import Canvas, is_link, link_tuple
-from workflow_paths import workflow_directories, workflow_root, SKILL_ROOT
+from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_directories, workflow_root, SKILL_ROOT
 UI_FIELDS={'control_after_generate','upload','choose video to upload','videopreview','image_upload','audioUI','preview'}
 UI_NODES={'Note','MarkdownNote','SetNode','GetNode','Reroute'}
-POSTPROCESS_NODES={'RTX-RIFE-自动切镜保护超分插帧':'NoraRIFEInterpolationCutTest',
-                   'RIFE-自动切镜保护裁切':'NoraRIFEInterpolationCutTest'}
 
 def validate_rife_package(path):
  with zipfile.ZipFile(path) as package:
@@ -23,22 +21,15 @@ def validate_rife_package(path):
   for name in package.namelist():
    if name.endswith('.py'):ast.parse(package.read(name).decode('utf-8'),filename=name)
 
-def validate_postprocess(api,name):
+def validate_postprocess(api):
  interpolation=api['12'];resize=api['1']['inputs'];encode=api['16']['inputs']
- expected='ImageCrop' if name=='RIFE-自动切镜保护裁切' else 'RTXVideoSuperResolution'
- assert api['1']['class_type']==expected, 'Postprocess image processing node mismatch'
- assert interpolation['class_type']==POSTPROCESS_NODES[name], 'Postprocess interpolation node mismatch'
- if interpolation['class_type']=='NoraRIFEInterpolationCutTest':
-  assert {'scale','scene_cut_threshold'}<=set(interpolation['inputs']), 'Missing required RIFE inputs'
- frame_input='images' if interpolation['class_type']=='NoraRIFEInterpolationCutTest' else 'frames'
- assert interpolation['inputs'][frame_input]==['7',0], 'Postprocess source images mismatch'
+ assert api['1']['class_type']=='RTXVideoSuperResolution', 'Postprocess image processing node mismatch'
+ assert interpolation['class_type']=='NoraRIFEInterpolationCutTest', 'Postprocess interpolation node mismatch'
+ assert {'scale','scene_cut_threshold'}<=set(interpolation['inputs']), 'Missing required RIFE inputs'
+ assert interpolation['inputs']['images']==['7',0], 'Postprocess source images mismatch'
  assert interpolation['inputs']['source_fps']==['7',2], 'Postprocess source FPS mismatch'
- if api['1']['class_type']=='ImageCrop':
-  assert resize['image']==['12',0], 'Postprocess must interpolate before cropping'
-  width,height=resize['width'],resize['height']
- else:
-  assert resize['images']==['12',0], 'Postprocess must interpolate before upscaling'
-  width,height=resize['resize_type.width'],resize['resize_type.height']
+ assert resize['images']==['12',0], 'Postprocess must interpolate before upscaling'
+ width,height=resize['resize_type.width'],resize['resize_type.height']
  assert encode['images']==['1',0], 'Postprocess encoder must use processed images'
  assert encode['frame_rate']==['12',1], 'Postprocess output FPS must follow interpolation'
  assert encode['audio']==['7',1] and encode['trim_to_audio'] is False, 'Postprocess original audio/timing mismatch'
@@ -135,8 +126,8 @@ def verify(directory):
         if is_link(v):assert v[0] in task
       count+=1
   result={'workflow':stem,'nodes':len(actual),'optional_references':len(refs),'reference_combinations':count}
-  if stem in POSTPROCESS_NODES:
-   result['postprocess_delivery']=validate_postprocess(actual,stem)
+  if stem==VIDEO_POSTPROCESS_BASELINE:
+   result['postprocess_delivery']=validate_postprocess(actual)
    if actual['12']['class_type']=='NoraRIFEInterpolationCutTest':
     package=Path(__file__).resolve().parents[1]/'dependencies/ComfyUI节点资源/ComfyUI-Nora-RIFE-CutTest.zip'
     validate_rife_package(package)

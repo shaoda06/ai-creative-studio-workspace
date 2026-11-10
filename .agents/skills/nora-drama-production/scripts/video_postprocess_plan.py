@@ -13,11 +13,11 @@ for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-v
 import video_approve
 from episode_rounds import episode_manifest_key, validate_episode_manifest
 from project_paths import project_file
-from workflow_paths import workflow_file
+from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_file
 from video_workflow import assemble, plan_output, assemble_output
 from video_metadata import probe
 
-PROFILES = {'crop': 'RIFE-自动切镜保护裁切', 'upscale': 'RTX-RIFE-自动切镜保护超分插帧'}
+PROFILES = {'crop': '切镜保护插帧与裁切', 'upscale': '切镜保护插帧与超分'}
 
 
 def build(project, request, output):
@@ -60,7 +60,7 @@ def build(project, request, output):
                 raise ValueError('重复来源二采身份：' + identity)
             sources[identity] = (source, report_path.relative_to(root).as_posix())
     if choice is None:
-        baseline = workflow_file(PROFILES[profile])
+        baseline = workflow_file(VIDEO_POSTPROCESS_BASELINE)
         width, height = (1920, 1080) if orientation == 'landscape' else (1080, 1920)
     tasks, canvases, reused = [], {}, []
     for scene, data in composition['scenes'].items():
@@ -92,7 +92,7 @@ def build(project, request, output):
             else:
                 canvas = assemble(profile, placeholder, identity, (width, height),
                                   (0, 4) if orientation == 'landscape' else (4, 0))
-                description = '已采用二采逐段后处理；保留原音轨、播放速度和完整原片，自动切镜保护插帧30fps。'
+                description = '已采用二采逐段后处理，保留原音轨和播放时长。'
                 delivery = f'{PROFILES[profile]}；{width}×{height}、30fps、H.264/yuv420p/CRF19。'
             canvases[project_file(root, canvas_path)] = canvas
             tasks.append({'task_type': 'video-postprocess', 'title': part + ' · 后处理',

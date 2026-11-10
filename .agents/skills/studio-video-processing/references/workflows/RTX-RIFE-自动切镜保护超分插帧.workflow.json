@@ -1,8 +1,8 @@
 {
   "id": "c5386777-92fd-43db-8890-a0418a656da2",
   "revision": 1,
-  "last_node_id": 24,
-  "last_link_id": 7,
+  "last_node_id": 25,
+  "last_link_id": 8,
   "nodes": [
     {
       "id": 7,
@@ -260,10 +260,92 @@
       "title": "04 RTX超分｜1920×1080 · ULTRA"
     },
     {
+      "id": 25,
+      "type": "ImageCrop",
+      "pos": [
+        1510,
+        290
+      ],
+      "size": [
+        280,
+        180
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 4,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "name": "x",
+          "type": "INT",
+          "widget": {
+            "name": "x"
+          },
+          "link": null
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "widget": {
+            "name": "y"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageCrop",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [
+        1920,
+        1080,
+        0,
+        4
+      ],
+      "widgets_values_named": {
+        "width": 1920,
+        "height": 1080,
+        "x": 0,
+        "y": 4
+      },
+      "title": "05 可选裁切｜ImageCrop"
+    },
+    {
       "id": 16,
       "type": "VHS_VideoCombine",
       "pos": [
-        1550,
+        1830,
         290
       ],
       "size": [
@@ -271,7 +353,7 @@
         540
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -279,7 +361,7 @@
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 6
+          "link": 8
         },
         {
           "label": "audio",
@@ -438,7 +520,7 @@
         "pingpong": false,
         "save_output": true
       },
-      "title": "05 输出｜插帧实际FPS与原音轨"
+      "title": "06 输出｜实际帧率与原音轨"
     },
     {
       "id": 12,
@@ -579,7 +661,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "按studio-video-processing的后处理分步询问确定输出分辨率、帧率及必要的保留比例／裁切选择。方法由实际源尺寸和目标计算，不绑定文戏／打戏及旧配置编号。使用video_workflow.py装配任务副本：目标帧率与源相同跳过RIFE，尺寸相同跳过缩放；保留原音轨及播放时长。尺寸和帧率均满足时沿用原文件。此画布为固定节点基准，默认横屏1920×1080、30fps；手动执行前填写实际参数、输入文件与输出身份。"
+        "按 studio-video-processing 的后处理分步询问确定输出分辨率、帧率及画面适配。任务装配按源片及目标启用插帧、尺寸处理与裁切，保留原音轨和播放时长。本基准默认 RIFE 插帧至 30 fps、RTX 超分至 1920×1080，裁切节点默认旁路。手动使用时填写实际输入、输出与各节点参数。仅裁切时旁路 RTX。保持源帧率时旁路 RIFE。"
       ],
       "title": "后处理基准｜按实际输出规格装配",
       "color": "#432",
@@ -631,7 +713,7 @@
       6,
       1,
       0,
-      16,
+      25,
       0,
       "IMAGE"
     ],
@@ -642,6 +724,14 @@
       16,
       1,
       "AUDIO"
+    ],
+    [
+      8,
+      25,
+      0,
+      16,
+      0,
+      "IMAGE"
     ]
   ],
   "groups": [],

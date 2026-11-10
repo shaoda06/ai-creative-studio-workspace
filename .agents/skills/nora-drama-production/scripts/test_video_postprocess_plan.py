@@ -59,14 +59,18 @@ class PostprocessPlanTests(unittest.TestCase):
                         api = Canvas(json.loads(canvas_path.read_text())).api(['16'])
                         size = (1920, 1080) if orientation == 'landscape' else (1080, 1920)
                         fields = ('width', 'height') if profile == 'crop' else ('resize_type.width', 'resize_type.height')
-                        self.assertEqual(tuple(api['1']['inputs'][f] for f in fields), size)
+                        image_node = api['25' if profile == 'crop' else '1']
+                        self.assertEqual(tuple(image_node['inputs'][f] for f in fields), size)
                         if profile == 'crop':
-                            self.assertEqual((api['1']['inputs']['x'], api['1']['inputs']['y']),
+                            self.assertEqual((image_node['inputs']['x'], image_node['inputs']['y']),
                                              (0, 4) if orientation == 'landscape' else (4, 0))
+                            self.assertEqual(image_node['inputs']['image'], ['12', 0])
+                            self.assertEqual(api['16']['inputs']['images'], ['25', 0])
+                            self.assertNotIn('1', api)
                         self.assertEqual(api['6']['inputs']['file'], task['references'][0]['placeholder'])
                         self.assertEqual(api['16']['inputs']['frame_rate'], ['12', 1])
                         self.assertEqual(api['12']['inputs']['target_fps'], 30)
-                        self.assertIn('audio', api['16']['inputs'])
+                        self.assertEqual(api['16']['inputs']['audio'], ['7', 1])
                         canvas_path.unlink()
                     (self.root / 'plan.json').unlink()
 

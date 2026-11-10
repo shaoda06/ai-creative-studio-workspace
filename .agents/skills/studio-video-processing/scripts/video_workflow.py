@@ -1,31 +1,36 @@
 """Assemble existing video workflows from explicit technical inputs."""
-from copy import deepcopy
 from pathlib import Path
 import json
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
-from workflow_paths import workflow_file
+from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_file
 
-WORKFLOWS = {'crop': 'RIFE-自动切镜保护裁切', 'upscale': 'RTX-RIFE-自动切镜保护超分插帧'}
+
+def _set_crop(node, size, offset):
+    values = node['widgets_values_named']
+    values.update(width=size[0], height=size[1], x=offset[0], y=offset[1])
+    node['widgets_values'] = list(values.values())
+    node['mode'] = 0
 
 
 def assemble(method, source, prefix, size, crop_offset=(0, 0)):
-    canvas = json.loads(workflow_file(WORKFLOWS[method]).read_text('utf-8-sig'))
+    canvas = json.loads(workflow_file(VIDEO_POSTPROCESS_BASELINE).read_text('utf-8-sig'))
+    nodes = {node['id']: node for node in canvas['nodes']}
+    loader, rtx, crop, saver = (nodes[key] for key in (6, 1, 25, 16))
+    loader['widgets_values_named']['file'] = source
+    loader['widgets_values'] = list(loader['widgets_values_named'].values())
+    saver['widgets_values_named']['filename_prefix'] = prefix
+    saver['widgets_values']['filename_prefix'] = prefix
     width, height = size
-    for node in canvas['nodes']:
-        if node['type'] == 'LoadVideo':
-            node['widgets_values_named']['file'] = source
-            node['widgets_values'] = list(node['widgets_values_named'].values())
-        elif node['id'] == 1:
-            values = node['widgets_values_named']
-            if method == 'crop':
-                values.update(width=width, height=height, x=crop_offset[0], y=crop_offset[1])
-            else:
-                values.update({'resize_type.width': width, 'resize_type.height': height})
-            node['widgets_values'] = list(values.values())
-        elif node['type'] == 'VHS_VideoCombine':
-            node['widgets_values_named']['filename_prefix'] = prefix
-            node['widgets_values']['filename_prefix'] = prefix
+    if method == 'crop':
+        rtx['mode'] = 4
+        _set_crop(crop, size, crop_offset)
+    elif method == 'upscale':
+        values = rtx['widgets_values_named']
+        values.update({'resize_type.width': width, 'resize_type.height': height})
+        rtx['widgets_values'] = list(values.values())
+    else:
+        raise ValueError(f'未知固定后处理方式：{method}')
     return canvas
 
 
@@ -123,10 +128,8 @@ def assemble_output(source, prefix, plan):
         edges.append((*image, 1, 0, 'IMAGE'))
         image = (1, 0)
     if any(plan['crop'].values()):
-        crop_canvas = assemble('crop', source, prefix, plan['output_size'], (plan['crop']['left'], plan['crop']['top']))
-        crop = next(n for n in crop_canvas['nodes'] if n['id'] == 1)
-        crop['id'] = 25
-        crop['pos'] = [1510, 290]
+        crop = nodes[25]
+        _set_crop(crop, plan['output_size'], (plan['crop']['left'], plan['crop']['top']))
         active.append(crop)
         edges.append((*image, 25, 0, 'IMAGE'))
         image = (25, 0)
