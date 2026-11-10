@@ -18,7 +18,7 @@ description: Iris 商业视频生产二级业务阶段，按批准备内容和�
 
 Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
 
-正式H3默认一采→用户审阅→二采，样片/试验可明确单轮，后处理按项目需要；按授权批次审阅，不自动采用或扩大生成。
+送审、二采和样片例外按[制作策略](references/流程规则.md#执行要点)接续，保留本批授权范围。
 
 本工作区接入共用视频任务引擎时，读[任务服务接入](references/任务服务接入.md)。本阶段提供业务输入与成果登记，服务运行和监控归共用工具，不改变业务授权或自动采用。
 

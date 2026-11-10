@@ -7,16 +7,15 @@ description: 共用MiniMax H3模型工具，维护配置选择与装配前询问
 
 调用方提供明确模式、完整正文、参考文件和顺序、时长、参数、运行组序、所选工作流需要的缓存身份及输出目标。图片的业务制作规格、批准和采用沿调用业务，不从其他业务的示例或链接继承；本工具核对实际模式与输入作用，r2v普通Picture不等于硬首帧。Agent依据实际模式读取[h3-prompt-writing（外部依赖）](../studio-entry/维护规范.md#6-依赖获取与适配资料)对应指南，编写和适配语义；脚本做格式检查、帧数换算、槽位绑定、API装配和技术结果解释，不替Agent创作。
 
-- 提示词完成后按[提示词自检与执行接续](references/参数与基准规范.md#提示词自检与执行接续)核对并推进；标准版装配前按[配置选择与询问](references/参数与基准规范.md#标准版配置选择与装配前询问)确定配置及方向；业务方提供项目默认来源及执行授权。
-- 参数与API结构：[参数与基准](references/参数与基准规范.md#标准版配置参数)。脚本按明确配置装配，不因剧情标签自动改配置。
-- 编写、修订或核对 H3 正文时，读[参考与接续表达](references/参考与接续表达规范.md)中适用的主体标签、参考定义、声源台词及切镜／段间引导规则。正文涉及无字幕、无配乐等项目限制时读[排除要求的写法](references/参考与接续表达规范.md#排除要求的写法)。逐组字符上限与计数见[长度规则](references/参数与基准规范.md#模型提示词长度)。
+- 提示词完成后按[提示词自检与执行接续](references/参考与接续表达规范.md#提示词自检与执行接续)核对并推进。业务方提供项目默认来源及执行授权。
+- 编写、修订或核对 H3 正文时，读[参考与接续表达](references/参考与接续表达规范.md)中适用的主体标签、参考定义、声源台词及切镜／段间引导规则。正文涉及无字幕、无配乐等项目限制时读[排除要求的写法](references/参考与接续表达规范.md#排除要求的写法)。逐组字符上限与计数见[长度规则](references/参考与接续表达规范.md#模型提示词长度)。
 - 先按实际任务确认工作流。已提交任务以原请求和画布辨认。
-  - [AiMixer 导演台](references/ComfyUI-AiMixer导演台节点使用规范.md)负责多组提交、素材槽位、缓存二采和逐组产物。当前 Studio 的生成装配脚本和任务投影接入的是这套工作流。
+  - [AiMixer 导演台](references/ComfyUI-AiMixer导演台节点使用规范.md)负责多组提交、素材槽位、缓存二采和逐组产物。当前 Studio 接入这套工作流。装配前读取[AiMixer 配置选择与询问](references/参数与基准规范.md#标准版配置选择与装配前询问)及[装配参数](references/参数与基准规范.md#标准版配置参数)。
   - [Songssx 导演台](references/ComfyUI-Songssx导演台使用规范.md)维护场次时间线、GEN 和 SelfLift 画布约定，执行接入另行确认。
 - Studio 的视频交接和原任务画布使用项目既有入口。AiMixer 的原生导演包导出已退役。Songssx 的素材导出和配置导出属于插件自带能力，Studio 使用约定仅覆盖生成和结果接续。
 - 已提交请求的只读制作页投影：scripts/h3_browser_context.py，读取实际镜头描述及参考槽位，不提交任务、不推断采用或用当前稿替代历史快照。
 - 机械格式检查：scripts/h3_prompt_format.py；明确无缓存新输入的帧数装配：scripts/h3_timing.py。
-- 六步答案装配、画布转换与明确素材绑定：scripts/h3_workflow.py；新一采通过任务清单h3_first_pass字段落实，字段与命令见[一采装配接口](references/参数与基准规范.md#任务清单字段与调用)；二采通过h3_second_pass只设置目标尺寸，见[二采装配接口](references/参数与基准规范.md#二采装配接口)；原生报告解释：scripts/h3_results.py；素材容量检查：scripts/h3_inputs.py。
+- AiMixer 的六步装配、画布转换与素材绑定：scripts/h3_workflow.py；新一采通过任务清单h3_first_pass字段落实，字段与命令见[一采装配接口](references/参数与基准规范.md#任务清单字段与调用)；二采通过h3_second_pass只设置目标尺寸，见[二采装配接口](references/参数与基准规范.md#二采装配接口)；原生报告解释：scripts/h3_results.py；素材容量检查：scripts/h3_inputs.py。
 
 准备与执行交[ComfyUI通信](../studio-comfyui/SKILL.md)和[持久后台](../studio-workspace-browser/SKILL.md)。通用技术任务使用`video_plan.adapter:"technical"`及明确输出，不要求人物卡、剧本、分镜、EP或短剧采用记录。短剧任务由D09/D10提供业务适配；省略adapter的旧任务保留原短剧语义，不追溯改写。
 

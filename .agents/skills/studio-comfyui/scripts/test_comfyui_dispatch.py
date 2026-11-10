@@ -141,7 +141,7 @@ class DispatchTests(unittest.TestCase):
 
     def test_reprepare_flags_reach_backend_payload(self):
         args = d.parser().parse_args(['--project', str(self.root), '--plan', '任务清单.json', '--prepare-only', '--reprepare'])
-        with patch.object(d.browser_tasks, 'connection', return_value=(self.root.resolve(), {}, 'caller', {})), \
+        with patch.object(d.browser_tasks, 'connection', return_value=(self.root.resolve(), {'workspace': str(self.workspace)}, 'caller', {})), \
                 patch.object(d.browser_tasks, 'local_post', return_value={'status': 'prepared'}) as post:
             d.dispatch(args)
         self.assertEqual(post.call_args.args[1], '/submit-plan')

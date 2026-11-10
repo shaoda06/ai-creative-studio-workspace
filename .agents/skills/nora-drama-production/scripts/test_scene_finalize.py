@@ -498,6 +498,34 @@ class FinalizeTests(unittest.TestCase):
         self.assertNotIn('二采定稿', cells[5])
         self.assertNotIn('后处理', cells[4])
 
+    def test_legacy_archive_resumes_progress_and_restores_canvas_without_rewriting_history(self):
+        self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
+        progress = self.root / '项目进度.md'
+        initial_progress = progress.read_text()
+        result = self.run_plan()
+        expected_progress = progress.read_text()
+        record_path = Path(result['record'])
+        record = tool.adopt.load(record_path)
+        manifest = Path(result['canvas']).with_suffix('.director.json')
+        self.put(manifest, {'historical': True})
+        record.update(delivery='on-demand', manifest=str(manifest), checks='历史留档原始记录')
+        record['records'].remove(str(progress))
+        self.put(record_path, record)
+        self.put(progress, initial_progress)
+
+        self.assertEqual(self.run_plan()['state'], 'completed')
+        self.assertEqual(progress.read_text(), expected_progress)
+        self.assertEqual(tool.adopt.load(record_path), {**record, 'records': record['records'] + [str(progress)]})
+
+        original_record = record_path.read_bytes()
+        canvas = Path(result['canvas'])
+        original_canvas = canvas.read_bytes()
+        canvas.unlink()
+        self.assertEqual(self.run_plan()['state'], 'completed')
+        self.assertEqual(canvas.read_bytes(), original_canvas)
+        self.assertEqual(record_path.read_bytes(), original_record)
+        self.assertEqual(tool.adopt.load(manifest), {'historical': True})
+
     def test_existing_canvas_is_reused_and_conflicting_contents_are_rejected(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         result = self.run_plan()

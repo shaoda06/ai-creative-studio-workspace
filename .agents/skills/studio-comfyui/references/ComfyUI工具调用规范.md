@@ -10,7 +10,7 @@ python3 .agents/skills/studio-comfyui/scripts/comfyui_dispatch.py --project /实
 
 任务清单是调用方业务接入的准备入口，业务阶段负责解释其模板、类型和来源。--prepare-only只准备、不上传、不提交；已有有效生成授权且准备通过时移除此参数入队。返回prepared或enqueued分别表示对应步骤完成。参数完整说明使用--help，历史命令入口继续转调同一实现。
 
-准备成功的`next_action: continue-caller-workflow`表示回到调用方按当前授权与阶段接续，不要求用户审阅准备资料，也不授权后台自动入队。H3提示词完成后的处理见[提示词自检与执行接续](../../studio-h3/references/参数与基准规范.md#提示词自检与执行接续)。
+准备成功的`next_action: continue-caller-workflow`表示回到调用方按当前授权与阶段接续，不要求用户审阅准备资料，也不授权后台自动入队。H3提示词完成后的处理见[提示词自检与执行接续](../../studio-h3/references/参考与接续表达规范.md#提示词自检与执行接续)。
 
 无业务工作稿的图片技术任务可用旧式明确参数入口：--project、--task-type image、--workflow实际API文件、--record-dir项目内执行目录、--task-title、--output-plan、--image-plan。所有JSON文件路径按当前命令目录解析，记录和输出路径按项目边界核对。image-plan例如：
 

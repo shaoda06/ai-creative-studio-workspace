@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio H3视频生成工具"
-  short_description: "共用MiniMax H3模型工具，维护实际模式提示词格式、时间线与参考槽位、参数装配与缓存技术条件；不规定短剧流程、"
+  short_description: "共用 MiniMax H3 正文规则、导演台使用与 AiMixer 任务装配"
   default_prompt: "使用$studio-h3处理当前任务，先确定输入、授权和实际范围。"

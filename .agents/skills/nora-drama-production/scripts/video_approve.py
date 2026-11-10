@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""一次落实明确的视频批准、业务进度及网页核对；导演包另按需导出；不生成媒体。"""
+"""一次落实明确的视频批准、业务进度及网页核对。"""
 import argparse
 import json
 from pathlib import Path
@@ -167,7 +167,7 @@ def browser_sync(root, episode, stage, identities, complete, timeout):
                 raise ValueError('浏览入口同步失败：' + str(status['error']))
             break
         if time.monotonic() >= deadline:
-            raise TimeoutError('浏览入口仍在同步；只需恢复本次网页核对，不重复采用或导出')
+            raise TimeoutError('浏览入口仍在同步；只需恢复本次网页核对，不重复采用')
         time.sleep(.5)
     served = get(route + '/files/' + urllib.parse.quote('项目进度.md', safe=''), text=True)
     _, actual = project_progress.phase_row(served, episode)
@@ -318,8 +318,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, help='项目根目录；不扫描其他项目')
     parser.add_argument('--plan', required=True, help='项目内批准收尾请求；只填批准身份、用户原话及原提交清单')
-    parser.add_argument('--apply', action='store_true', help='一次采用、进度更新及网页核对；不自动导出导演包；默认只读预览')
-    parser.add_argument('--timeout', type=float, default=30, help='导出和网页请求超时秒数；无生成、无自动重新导出')
+    parser.add_argument('--apply', action='store_true', help='一次采用、进度更新及网页核对；默认只读预览')
+    parser.add_argument('--timeout', type=float, default=30, help='网页请求及同步等待的超时秒数，默认30秒')
     args = parser.parse_args()
     try:
         result = approve(args)

@@ -80,34 +80,16 @@ def retrospective_status(summary):
     return {'status': 'completed' if completed else 'pending', 'record': str(summary)}
 
 
-def update_progress(root, episode, scene, stage, summary, *, failure_record=None):
+def update_progress(root, episode, scene, stage, summary):
     path = root / '项目进度.md'
     pending, next_steps = [], []
     indexed = indexed_parts(root, episode)
     missing = episode_missing(root, episode)
-    if failure_record is not None:
-        reference = '[本场' + stage + '留档记录](' + adopt.link(path, failure_record) + ')'
-        reason = {'export_failed': '导出失败', 'verification_failed': '核对失败'}[adopt.load(failure_record)['state']]
-        pending.append(reference + reason)
-        next_steps.append('核对' + reference + '并恢复定稿留档')
-    else:
-        for current_scene, part in indexed:
-            if current_scene == scene and selected(root, part, stage) is None:
-                draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-                pending.append('[' + part + '](' + adopt.link(path, draft) + ')的' + stage + '尚未采用')
-    for current_scene in dict.fromkeys(s for s, _ in indexed):
-        parts = [part for s, part in indexed if s == current_scene]
-        for current_stage in FINALIZATION_STAGES:
-            if failure_record is not None and (current_scene, current_stage) == (scene, stage):
-                continue
-            if any(part + ' ' + current_stage + '未采用' in missing for part in parts):
-                continue
-            if any(item.startswith(current_scene + '-') and item.endswith(current_stage + '缺少当前版本定稿留档')
-                   for item in missing):
-                reference = '[' + current_scene + current_stage + '](' + adopt.link(path, summary) + ')'
-                pending.append(reference + '定稿留档尚未齐备')
-                next_steps.append('补齐' + reference + '的定稿留档')
-    complete = failure_record is None and not missing
+    for current_scene, part in indexed:
+        if current_scene == scene and selected(root, part, stage) is None:
+            draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+            pending.append('[' + part + '](' + adopt.link(path, draft) + ')的' + stage + '尚未采用')
+    complete = not missing
     if complete and retrospective_status(summary)['status'] == 'pending':
         next_steps.append('完成本集复盘与经验归并，记录于[生成说明工作稿](' + adopt.link(path, summary) + ')')
     folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[-1] + '-场次')
@@ -381,7 +363,7 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
                                                               'purpose': '整场汇总工程；不是单次执行原始画布；不恢复一采缓存'}
     urls = {content['mapping']['url'].rstrip('/') for _, content in sources}
     if len(urls) != 1:
-        raise ValueError('引用媒体分属不同服务，不能用单一服务原生导出')
+        raise ValueError('引用媒体分属不同服务，无法汇总为一份使用原素材路径的场次画布')
     edition = plan.get('edition', '')
     if edition and not re.fullmatch(r'\d{3}', edition):
         raise ValueError('edition 须为三位留档序号，不是生成R编号')
@@ -440,15 +422,19 @@ def finalize_one(root, plan, p, apply):
               'record': str(p['record']), 'browser_sync': 'not_checked'}
     if not apply:
         return result
-    if (old and old.get('delivery') == 'on-demand' and old['state'] == 'completed'
-            and p['api_path'].is_file() and p['canvas_path'].is_file()):
-        return {**result, 'state': 'completed'}
     if old is None:
         client.write_new(p['record'], {**record, 'state': 'prepared'})
     for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas'])):
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             client.write_new(path, value)
+    if old and old.get('delivery') == 'on-demand' and old['state'] == 'completed':
+        # Legacy finalization wrote the archive record before updating project progress.
+        progress_path = str(p['progress'])
+        if progress_path not in old['records']:
+            update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'], p['summary'])
+            save_json(p['record'], {**old, 'records': [*old['records'], progress_path]})
+        return {**result, 'state': 'completed'}
     stamp = adopt.load(p['record']).get('verified_at', client.now())
     for path in [*p['drafts'], p['summary']]:
         text = path.read_text(encoding='utf-8-sig')
