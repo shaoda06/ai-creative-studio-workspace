@@ -64,6 +64,35 @@ class TaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(recorded.project, str(self.project))
         self.assertEqual(recorded.record_dir, str(self.record))
 
+    async def test_restart_retains_closed_history_for_removed_named_project_on_disk(self):
+        context = self.root / '原具名项目'
+        payload = self.store.portable_input(self.data)
+        payload['project'] = f'{context.name}::{self.project.name}'
+        self.seed(status='completed', notification='acknowledged')
+        state = self.store.rows['task']['state']
+        state.update(closeout={'status': 'completed'}, group_id='group')
+        with self.store.db:
+            self.store.db.execute('UPDATE tasks SET payload=?, state=? WHERE id=?',
+                                  (json.dumps(payload), json.dumps(state), 'task'))
+            self.store.db.execute('INSERT INTO task_groups VALUES (?, ?)',
+                                  ('group', json.dumps({'task_ids': ['task']})))
+        await self.store.close()
+        with self.assertLogs(t.logger, 'WARNING'):
+            self.store = t.TaskStore(self.root / 'runtime', self.root)
+        self.assertEqual(self.store.rows, {})
+        self.assertEqual(self.store.groups, {})
+        self.assertEqual(self.store.db.execute('SELECT id FROM tasks').fetchall(), [('task',)])
+        self.assertEqual(self.store.db.execute('SELECT id FROM task_groups').fetchall(), [('group',)])
+        with self.assertRaises(t.paths.MissingTaskContext):
+            self.store.resolve_input(t.TaskInput.model_validate(payload))
+        await self.store.close()
+        (context / 'projects').mkdir(parents=True)
+        (context / '综合资料').mkdir()
+        (context / 'README.md').touch()
+        self.store = t.TaskStore(self.root / 'runtime', self.root)
+        self.assertEqual(self.store.rows['task']['state']['status'], 'completed')
+        self.assertEqual(self.store.groups['group']['task_ids'], ['task'])
+
     async def test_websocket_opens_before_post_and_same_client_id(self):
         await self.store.prepare_only(self.data)
         order = []

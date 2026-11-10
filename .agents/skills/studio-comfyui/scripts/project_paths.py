@@ -8,6 +8,10 @@ SHARED_SCOPE = '@shared'
 SHARED_DIRECTORY = '综合资料'
 
 
+class MissingTaskContext(ValueError):
+    """A task's named project directory is no longer present."""
+
+
 def scope_name(root, workspace=None):
     root = Path(root)
     name = SHARED_SCOPE if root.name == SHARED_DIRECTORY and root.parent.name != 'projects' else root.name
@@ -36,9 +40,11 @@ def scope_root(workspace, value, *, recorded=False):
     if '::' in spelling:
         context, name = spelling.split('::', 1)
         owner = (workspace / context).resolve()
-        if (not context or context.startswith('.') or '/' in context or '\\' in context
-                or owner.parent != workspace or not (owner / 'README.md').is_file()
-                or not (owner / 'projects').is_dir() or not (owner / SHARED_DIRECTORY).is_dir()):
+        if not context or context.startswith('.') or '/' in context or '\\' in context or owner.parent != workspace:
+            raise ValueError('所属项目不存在或越界')
+        if owner == workspace / context and not owner.exists() and not owner.is_symlink():
+            raise MissingTaskContext('所属项目不存在或越界')
+        if not (owner / 'README.md').is_file() or not (owner / 'projects').is_dir() or not (owner / SHARED_DIRECTORY).is_dir():
             raise ValueError('所属项目不存在或越界')
         return scope_root(owner, name, recorded=recorded)
     if Path(spelling).is_absolute():

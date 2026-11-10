@@ -25,7 +25,7 @@ class MonitorTests(HttpTestCase):
                         history_updated_at={node['url']:state['ended_at']})
             tasks = SimpleNamespace(public=Mock(return_value=data), rows={'same-id':dict(state=state,input=SimpleNamespace(url=node['url']))})
             self.spaces[identity] = SimpleNamespace(id=identity,name=identity,api='/api/workspaces/'+identity,tasks=tasks)
-        self.registry = SimpleNamespace(items=self.spaces, get=self.spaces.__getitem__)
+        self.registry = SimpleNamespace(items=self.spaces, get=self.spaces.__getitem__, task_history_archives={})
         self.client = TestClient(main.app, base_url='http://127.0.0.1:8782')
         registry = patch.object(main.app.state,'workspaces',self.registry,create=True)
         registry.start()
@@ -60,7 +60,7 @@ class MonitorTests(HttpTestCase):
         self.assertEqual(self.client.get('/api/task-monitor/history?limit=101').status_code,422)
 
     def test_explicit_detail_owner_and_resource_links(self):
-        async def detail(store, identity):
+        async def detail(store, identity, archive=None):
             owner = next(x for x in self.spaces.values() if x.tasks is store)
             return dict(summary=dict(id=identity,title=owner.name),outputs=[dict(url='/api/projects/隔离项目/files/图片.png')])
         with patch.object(main,'task_detail',AsyncMock(side_effect=detail)):

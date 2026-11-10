@@ -107,15 +107,29 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         self.db.commit()
         self.groups_init()
         self.rows = {}
+        missing_history = set()
         for key, payload, state in self.db.execute('SELECT id, payload, state FROM tasks'):
             saved = json.loads(payload)
             saved.setdefault('record_format', 'legacy')
             data = TaskInput.model_validate(saved)
-            self.resolve_input(data, recorded=True)
-            self.rows[key] = {'input': data, 'state': json.loads(state)}
-            self.rows[key]['state'] = self.record_paths(key).convert(self.rows[key]['state'])
+            state = json.loads(state)
+            try:
+                self.resolve_input(data, recorded=True)
+            except paths.MissingTaskContext:
+                closed = state['status'] == 'cancelled' or (
+                    state['status'] == 'completed' and (state.get('closeout') or {}).get('status') == 'completed')
+                if not closed:
+                    raise
+                missing_history.add(key)
+                continue
+            self.rows[key] = {'input': data, 'state': state}
+            self.rows[key]['state'] = self.record_paths(key).convert(state)
             if not resourceio.enabled(data.project):
                 self.rows[key]['_resource_association_input'] = data
+        if missing_history:
+            self.groups = {key: group for key, group in self.groups.items()
+                           if not missing_history.issuperset(group['task_ids'])}
+            logger.warning('具名项目目录已移除，%d 条已结束任务仅保留在数据库：%s', len(missing_history), self.workspace)
         self.workers = {}
         self.notifiers = {}
         self.session_readers = {}
