@@ -6,6 +6,7 @@ import re
 SECTIONS = ('subject_definitions', 'summary', 'retention_analysis', 'detailed_description', 'overall_soundscape', 'non_diegetic_music')
 BASE_SECTIONS = ('integrated_multimodal_description', 'overall_soundscape', 'non_diegetic_music')
 REFERENCE_MODES = ('r2v', 'v2v', 'rv2v')
+PROMPT_CHARACTER_LIMIT = 7000
 
 def digest(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()

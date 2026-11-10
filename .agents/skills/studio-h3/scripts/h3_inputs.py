@@ -1,6 +1,7 @@
 """Check explicit H3 request limits and reference slots; no business prerequisites."""
 import json
 import re
+from h3_prompt_format import PROMPT_CHARACTER_LIMIT
 
 def director_checks(workflow, timelines=None):
     rows = []
@@ -14,8 +15,9 @@ def director_checks(workflow, timelines=None):
         for index in indices:
             group = timeline['segments'][index]
             prompt = '\n\n'.join(part.strip() for part in ([common.get('prompt', ''), group['prompt']] if enabled else [group['prompt']]) if part.strip())
-            if len(prompt) > 7000:
-                raise ValueError(f'原组{index}完整提示词超过7000字符')
+            characters = len(prompt)
+            if characters > PROMPT_CHARACTER_LIMIT:
+                raise ValueError(f'原组{index}完整提示词超过{PROMPT_CHARACTER_LIMIT}字符')
             if not 0 < group['durationSec'] <= 15:
                 raise ValueError(f'原组{index}请求时长不在0—15秒范围内')
             labels, counts, durations = set(), {}, {}
@@ -44,6 +46,6 @@ def director_checks(workflow, timelines=None):
                 raise ValueError(f'原组{index}参考素材组合超限')
             if any((kind, int(slot)) not in labels for kind, slot in re.findall(r'<(Picture|Video|Audio) (\d+)>', prompt)):
                 raise ValueError(f'原组{index}正文标签没有对应的实际输入')
-            rows.append({'index': index, 'characters': len(prompt), 'remaining': 7000 - len(prompt),
+            rows.append({'index': index, 'characters': characters, 'remaining': PROMPT_CHARACTER_LIMIT - characters,
                          'seconds': group['durationSec'], 'counts': counts, 'reference_seconds': durations})
     return rows

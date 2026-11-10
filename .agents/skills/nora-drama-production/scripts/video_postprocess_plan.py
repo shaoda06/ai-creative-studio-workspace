@@ -102,7 +102,7 @@ def build(project, request, output):
                           'canvas': canvas_path.as_posix(), 'record_dir': directory.as_posix(),
                           'output_nodes': ['16'], 'output_root': request['output_root'],
                           'references': [{'file': video.relative_to(root).as_posix(), 'placeholder': placeholder,
-                                          'purpose': '当前采用二采原片，批准与阶段留档见approval_basis'}],
+                                          'purpose': '当前采用二采原片，批准及实际来源见approval_basis'}],
                           'mapping': {'scene': episode + '-' + scene,
                                       'screenplay_version': composition['script']['version'],
                                       'scene_storyboard_version': data['storyboard']['version'],

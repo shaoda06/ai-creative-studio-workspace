@@ -23,8 +23,6 @@ class VideoZipResponse(FileResponse):
             await super().__call__(scope, receive, send)
         finally:
             Path(self.path).unlink()
-            if hasattr(self, 'cleanup'):
-                self.cleanup.close()
 
 
 def clear_downloads():
@@ -32,6 +30,7 @@ def clear_downloads():
     DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
     for path in DOWNLOAD_DIRECTORY.glob('videos-*.zip'):
         path.unlink()
+    # Remove interrupted temporary requests created by pre-retirement versions.
     for path in DOWNLOAD_DIRECTORY.glob('director-*'):
         import shutil
         shutil.rmtree(path)

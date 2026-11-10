@@ -12,13 +12,10 @@ for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-v
     sys.path.insert(0, str(_SKILLS / _skill / "scripts"))
 import re
 
-from h3_prompt_format import sections, group_mode, keyframe_slots, selected_groups, shot_blocks, format_findings
+from h3_prompt_format import (BASE_SECTIONS, PROMPT_CHARACTER_LIMIT, REFERENCE_MODES, SECTIONS,
+                              sections, group_mode, keyframe_slots, selected_groups, shot_blocks, format_findings)
 from project_paths import project_file
 
-SECTIONS = ('subject_definitions', 'summary', 'retention_analysis',
-            'detailed_description', 'overall_soundscape', 'non_diegetic_music')
-BASE_SECTIONS = ('integrated_multimodal_description', 'overall_soundscape', 'non_diegetic_music')
-REFERENCE_MODES = ('r2v', 'v2v', 'rv2v')
 REVIEW_ITEMS = ('identity', 'space_action', 'continuity_sound', 'translation')
 TAG = re.compile(r'<(?:Subject|Picture|Audio|Video) \d+>|\[Shot \d+\]|\(S\d+\)')
 SUBJECT = re.compile(r'<Subject (\d+)>')
@@ -332,9 +329,10 @@ def main():
                 prompt = block[1].strip()
                 warnings = []
                 issues = text_findings(prompt, chinese_text(text), mode=args.mode, warnings=warnings)
-                if len(prompt) > 7000:
-                    issues.append({'code': 'prompt_length', 'detail': '完整模型正文超过7000字符'})
-                documents.append({'file': name, 'characters': len(prompt), 'ok': not issues, 'issues': issues, 'warnings': warnings})
+                characters = len(prompt)
+                if characters > PROMPT_CHARACTER_LIMIT:
+                    issues.append({'code': 'prompt_length', 'detail': f'完整模型正文超过{PROMPT_CHARACTER_LIMIT}字符'})
+                documents.append({'file': name, 'characters': characters, 'ok': not issues, 'issues': issues, 'warnings': warnings})
             result = {'ok': all(d['ok'] for d in documents), 'documents': documents,
                       'scope': '离线确定性正文检查；未检查输入绑定，不证明语义正确或已获生成授权'}
         else:

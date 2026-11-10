@@ -67,7 +67,12 @@ def adopted_source(root, identity, stage):
     for heading in headings:
         start, end = adopt.section(text, heading)
         for reference in re.findall(r'\[留档记录\]\(([^)]+)\)', text[start:end]):
-            record = adopt.load(adopt.local_path(root, draft.parent / unquote(reference)))
+            record_path = adopt.local_path(root, draft.parent / unquote(reference))
+            try:
+                record = adopt.load(record_path)
+            except FileNotFoundError:
+                # Scene archives are optional. The adopted review below can supply the exact source.
+                continue
             if record['state'] != 'completed' or record['stage'] != stage:
                 continue
             for source in record['sources']:

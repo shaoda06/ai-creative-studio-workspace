@@ -303,6 +303,19 @@ class FinalizeTests(unittest.TestCase):
         for path, content in old.items():
             self.assertEqual(path.read_bytes(), content)
 
+    def test_remaining_legacy_manifest_keeps_its_edition_reserved(self):
+        self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
+        canvas = Path(self.run_plan(False)['canvas'])
+        stem = canvas.name.removesuffix('.workflow.json')
+        manifest = canvas.with_name(stem + '-002-导演包.director.json')
+        manifest.parent.mkdir(parents=True)
+        self.put(manifest, {'historical': True})
+
+        result = self.run_plan()
+
+        self.assertEqual(Path(result['canvas']).name, stem + '-003.workflow.json')
+        self.assertEqual(tool.adopt.load(manifest), {'historical': True})
+
     def test_both_generation_stages_single_pair_repeat_and_originals(self):
         for stage in tool.FINALIZATION_STAGES:
             with self.subTest(stage=stage):
@@ -463,6 +476,19 @@ class FinalizeTests(unittest.TestCase):
         self.assertIn(str(progress), tool.adopt.load(Path(result['record']))['records'])
         self.run_plan()
         self.assertEqual(progress.read_text(), text)
+
+    def test_reopening_completed_archive_keeps_later_stage_progress(self):
+        self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
+        first_plan = copy.deepcopy(self.plan)
+        self.run_plan()
+        self.plan.update(stage='二采', items=[self.item(p, '二采') for p in ('P001', 'P002')])
+        self.run_plan()
+        progress = self.root / '项目进度.md'
+        later_progress = progress.read_bytes()
+
+        self.plan = first_plan
+        self.assertEqual(self.run_plan()['state'], 'completed')
+        self.assertEqual(progress.read_bytes(), later_progress)
 
     def test_missing_phase_row_stops_before_export(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]

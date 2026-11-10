@@ -429,6 +429,20 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['phase'], 'sources')
         RemoteClient.assert_not_called()
 
+    def test_revision_uses_approval_source_when_optional_archive_is_missing(self):
+        originals = self.setup_stage('一采')
+        self.assertEqual(self.run_plan()['state'], 'completed')
+        draft = self.fixture.extra / '工作稿/EP001-C001-P001-视频制作-工作稿.md'
+        draft.write_text(draft.read_text() + '\n### 定稿留档-EP001-C001-一采\n'
+                         '- 来源核对：[留档记录](不存在的历史留档.json)\n')
+        revised = self.revision(originals[1])
+
+        result = self.run_plan()
+
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertEqual([source['identity'] for source in result['sources']],
+                         [originals[0]['identity'], revised['identity']])
+
     def test_revision_browser_recovery_keeps_exact_sources_without_export(self):
         originals = self.setup_stage('一采')
         self.run_plan()

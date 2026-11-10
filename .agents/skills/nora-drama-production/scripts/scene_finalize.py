@@ -113,7 +113,7 @@ def source(root, item):
     response = adopt.load(mapping_path.parent / '提交响应.json')
     accepted = response.get('data', response)
     restoration = []
-    # Populate the export copy from the actual API; source canvas bytes stay untouched.
+    # Populate the archive copy from the actual API; source canvas bytes stay untouched.
     for stored in canvas['nodes']:
         named = stored.get('widgets_values_named', {})
         key = str(stored['id'])
@@ -374,7 +374,9 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
         versions = set()
         for directory in (final, record):
             for path in directory.glob(base + '*'):
-                match = re.fullmatch(re.escape(base) + r'(?:-(\d{3}))?(?:-导演包\.mmxpack\.zip|\.workflow\.json|-留档记录\.json|\.api\.json|-导出响应\.json)', path.name)
+                match = re.fullmatch(re.escape(base) + r'(?:-(\d{3}))?'
+                                     r'(?:-导演包\.(?:mmxpack\.zip|director\.json)|\.workflow\.json|'
+                                     r'-留档记录\.json|\.api\.json|-导出响应\.json)', path.name)
                 if match:
                     versions.add(match[1] or '')
         for version in sorted(versions, key=lambda v: int(v or '1'), reverse=True):
@@ -428,8 +430,8 @@ def finalize_one(root, plan, p, apply):
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             client.write_new(path, value)
-    if old and old.get('delivery') == 'on-demand' and old['state'] == 'completed':
-        # Legacy finalization wrote the archive record before updating project progress.
+    if old and old['state'] == 'completed':
+        # Resume only an interrupted progress update; a finished archive is read-only.
         progress_path = str(p['progress'])
         if progress_path not in old['records']:
             update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'], p['summary'])
