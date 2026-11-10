@@ -319,7 +319,7 @@ class BaselineTests(unittest.TestCase):
                                     round(math.sqrt(pixels / aspect) / 32) * 32)
                         self.assertEqual(resolved, second_size)
                         self.assertEqual(director['ref_max_size'], 864)
-                        for node, strength in ((128, 0.5), (342, 0.65), (344, 0.35), (345, 0.35)):
+                        for node, strength in ((128, 0.35), (342, 0.65), (344, 0.35), (345, 0.35)):
                             if node in chain:
                                 self.assertEqual(graph[str(node)]['inputs']['strength_model'], strength)
 

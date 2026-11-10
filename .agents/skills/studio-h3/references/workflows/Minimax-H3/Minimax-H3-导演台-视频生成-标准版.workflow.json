@@ -166,11 +166,11 @@
       },
       "widgets_values": [
         "MysticXXX_MMH3-V1.safetensors",
-        0.5
+        0.35
       ],
       "widgets_values_named": {
         "lora_name": "MysticXXX_MMH3-V1.safetensors",
-        "strength_model": 0.5
+        "strength_model": 0.35
       },
       "color": "#223",
       "bgcolor": "#335"

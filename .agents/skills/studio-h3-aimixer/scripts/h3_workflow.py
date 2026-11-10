@@ -49,7 +49,7 @@ def configure_first_pass(canvas, spec):
     nodes[343]['mode'] = 0
     for node, enabled in ((128, 1 in loras), (507, 2 in loras), (342, combat), (344, combat), (345, combat)):
         nodes[node]['mode'] = 0 if enabled else 4
-    for node, weight in ((128, .5), (507, .8), (342, .65), (344, .35), (345, .35)):
+    for node, weight in ((128, .35), (507, .8), (342, .65), (344, .35), (345, .35)):
         widget(canvas, nodes[node], strength_model=weight)
     timeline = json.loads(nodes[502]['widgets_values_named']['timeline_data'])
     timeline.update(width=width, height=height)
