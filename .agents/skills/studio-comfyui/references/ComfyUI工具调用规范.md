@@ -36,7 +36,7 @@ scripts/comfyui_config.py读取实际工作区comfyui-config.json，按既有格
 {"adapter":"technical","metadata":"ffprobe"}
 ~~~
 
-原生H3分段输出使用`--output-plan`空数组及`--segment-plan`，逐一填写实际运行组序、导演台/报告节点、远端output根和本机成果位置。其他视频使用明确`outputs`映射。任务组清单也支持`video_plan`同一适配，提供`canvas`、`output_nodes`、明确`outputs`或`segment_plan`、`record_dir`和本次授权；不填短剧mapping、人物卡或EP。
+原生H3分段输出使用`--output-plan`空数组及`--segment-plan`，逐一填写实际运行组序、AiMixer 导演台/报告节点、远端output根和本机成果位置。其他视频使用明确`outputs`映射。任务组清单也支持`video_plan`同一适配，提供`canvas`、`output_nodes`、明确`outputs`或`segment_plan`、`record_dir`和本次授权；不填短剧mapping、人物卡或EP。
 
 工具只装配实际模式与参考槽位，后台保存取回凭据和ffprobe报告，不创建短剧候选审阅、修改轮次或采用。未知adapter报错；省略adapter的现行/历史短剧请求继续遵循其原业务检查。技术任务不得用来冒充短剧已完成或已采用。
 

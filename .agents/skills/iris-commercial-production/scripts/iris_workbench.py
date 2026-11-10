@@ -7,7 +7,6 @@ from pathlib import Path
 import re
 from urllib.parse import quote, unquote, urlsplit
 
-from director_export import submitted_media
 from backend.parsers import documents
 from backend.parsers.documents import cells
 from backend.services.iris_presentation import asset_review, delivery_overview, table, entries, work_view
@@ -525,63 +524,6 @@ def director_sheets(projects, name, api, root):
             'record': reference if records else None}
 
 
-def director_spec(projects, name, work, path):
-    project = projects.project(name)
-    source = projects.file(name, path)
-    archives = production.legacy_sources(project, work)
-    archive = next((item for item in archives if source.is_relative_to(item)), None)
-    if not source.name.endswith('.director.json') or not (archive or source.is_relative_to(work_root(project, work))):
-        raise FileNotFoundError('本作品的导演包清单不存在')
-    spec = json.loads(source.read_text('utf-8-sig'))
-    if archive:
-        # This exact historical archive prefix was retained in the original manifest.
-        previous = '历史制作资料/' + archive.name + '/'
-        current = archive.relative_to(project).as_posix() + '/'
-        def rebase(key):
-            return current + key.removeprefix(previous) if key.startswith(previous) else key
-        spec['media'] = {slot: rebase(key) for slot, key in spec['media'].items()}
-        if 'api' in spec:
-            spec['api'] = rebase(spec['api'])
-    return spec
-
-
-def submitted_director_spec(project, execution):
-    if execution['stage'] == '后处理':
-        raise ValueError('后处理没有原生 H3 导演包')
-    request, state = execution['request'], execution['state']
-    if not request or not state.get('prompt_id'):
-        raise ValueError('缺少实际提交请求或提交凭据')
-    workflow = request['prompt']
-    nodes = [key for key, node in workflow.items() if node['class_type'] == 'MiniMaxH3Director']
-    if len(nodes) != 1:
-        raise ValueError('实际请求中无法确定唯一的 H3 导演台')
-    url = state.get('remote_url')
-    if not url:
-        raise ValueError('缺少本次实际提交的服务地址')
-    node = nodes[0]
-    timeline = json.loads(workflow[node]['inputs']['timeline_data'])
-    task = execution['task']
-    source_checks = {production.local_key(project, key, task['project']): (key, stamp)
-                     for key, stamp in execution['sources'].items()}
-
-    def frozen_file(value):
-        key = production.local_key(project, value, task['project'])
-        path = project / key
-        if not path.is_file():
-            raise ValueError('原素材已缺失：' + path.name)
-        if key not in source_checks:
-            raise ValueError('缺少原素材核对记录：' + path.name)
-        original, stamp = source_checks[key]
-        info = path.stat()
-        if list(stamp) != [info.st_size, info.st_mtime_ns] and not production.resources.matches_recorded_stamp(project, original, stamp):
-            raise ValueError('执行后原素材已变更：' + path.name)
-        return key
-
-    media = submitted_media(timeline, node, task.get('uploads', []), frozen_file)
-    return {'name': execution_label(execution) + '.mmxpack.zip', 'node_id': node,
-            'workflow': workflow, 'media': media, 'url': url}
-
-
 def execution_label(execution):
     batch, record = execution['batch'], execution['record']
     segments = dict.fromkeys(segment for segment, _ in execution['segments'])
@@ -591,17 +533,7 @@ def execution_label(execution):
     return ' · '.join(parts)
 
 
-def execution_director_spec(projects, name, work, record):
-    project = projects.project(name)
-    executions = []
-    production.production_data(project, '', work, legacy_fallback=False, executions=executions)
-    source = next((item for item in executions if item['record'].relative_to(project).as_posix() == record), None)
-    if source is None:
-        raise FileNotFoundError('本作品没有对应的实际执行记录')
-    return submitted_director_spec(project, source)
-
-
-def add_execution_downloads(project, api, work, scene_keys, executions, result):
+def add_execution_downloads(project, api, scene_keys, executions, result):
     seen = set()
     for execution in executions:
         record = execution['record']
@@ -619,21 +551,12 @@ def add_execution_downloads(project, api, work, scene_keys, executions, result):
         else:
             reason = '缺少实际执行画布' if submitted else '尚无实际提交凭据'
             stage['canvas'].setdefault('messages', []).append(label + '：' + reason)
-        try:
-            submitted_director_spec(project, execution)
-        except (ValueError, KeyError, IndexError) as error:
-            stage['director'].setdefault('messages', []).append(label + '：' + str(error))
-        else:
-            record_key = record.relative_to(project).as_posix()
-            url = api + '/works/' + work + '/production-director?record=' + quote(record_key, safe='')
-            stage['director']['files'].append({'name': label + ' · 导演包', 'url': url})
-            stage['director']['count'] += 1
 
 
 def downloads(projects, name, space_api, work, scene='whole', view=None):
     project = projects.project(name)
     api = space_api + '/projects/' + quote(name, safe='')
-    result = {stage: {kind: {'count': 0, 'url': None, 'files': []} for kind in ('videos', 'director', 'canvas')}
+    result = {stage: {kind: {'count': 0, 'url': None, 'files': []} for kind in ('videos', 'canvas')}
               for stage in ('一采', '二采', '后处理')}
     executions = []
     values = detail(projects, name, space_api, work, view, executions=executions)
@@ -645,23 +568,16 @@ def downloads(projects, name, space_api, work, scene='whole', view=None):
             raise FileNotFoundError('历史场次不存在')
         for stage, folder in [('一采', '01-一采'), ('二采', '02-二采'), ('后处理', '03-后处理')]:
             directory = project / values['key'] / '06-阶段采用视频' / folder / (scene + '-场次') / '导演包'
-            for path in sorted(directory.glob('*.json')):
+            resource = result[stage]['canvas']
+            for path in sorted(directory.glob('*.workflow.json')):
                 key = path.relative_to(project).as_posix()
                 projects.file(name, key)
-                if path.name.endswith('.director.json'):
-                    url = api + '/works/' + work + '/production-director?path=' + quote(key, safe='')
-                    resource = result[stage]['director']
-                elif path.name.endswith('.workflow.json'):
-                    url = production.file_url(api, key)
-                    resource = result[stage]['canvas']
-                else:
-                    continue
-                resource['files'].append({'name': path.name, 'url': url})
+                resource['files'].append({'name': path.name, 'url': production.file_url(api, key) + '?download=1'})
                 resource['count'] += 1
     else:
         scene_items = values['segments'].values() if scene == 'whole' else [values['segments'].get(scene, [])]
         scene_keys = {video['key'] for items in scene_items for item in items for video in item['videos']}
-        add_execution_downloads(project, api, work, scene_keys, executions, result)
+        add_execution_downloads(project, api, scene_keys, executions, result)
     candidates = {video['key']: video for items in values.get('segments', {}).values() for item in items for video in item['videos']}
     # Only existing explicit delivery manifests enable packaging; opening the tab does not pack.
     _, delivery, _ = work_status(projects, name, space_api, project, work_root(project, work))

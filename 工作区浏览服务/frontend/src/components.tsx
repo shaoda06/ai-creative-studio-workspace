@@ -81,7 +81,7 @@ export function FileLink({ item, showOriginal = true, showStatus = true }: { ite
   return <div className="file"><div className="file-entry-main"><button className="link" onClick={() => preview(target)}>{item.name}</button>{(showOriginal || target.kind === 'video' || previewFileKind((target.key || target.name).split('#')[0]) === 'video') && <FileActions url={target.url} downloadOnly={!showOriginal} />}{item.jianying && <>
     <DownloadButton url={item.jianying.jypack} label="下载剪映包" title={`生成剪映包：${item.name}`} pack />
     <DownloadButton url={item.jianying.zip} label="下载 ZIP" title={`生成 ZIP：${item.name}`} pack />
-  </>}{item.director !== undefined && <DownloadButton url={item.director} label="下载导演包" title={`按需生成导演包：${item.name}`} />}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
+  </>}</div>{showStatus && <div className="file-actions">{item.statusHtml ? <Rich html={item.statusHtml} /> : <span className="status-badge status-gray">未知</span>}</div>}</div>;
 }
 export function FileTree({ items, showOriginal = true, showStatus = true }: { items: FileItem[]; showOriginal?: boolean; showStatus?: boolean }) {
   const entries: FileItem[] = [];

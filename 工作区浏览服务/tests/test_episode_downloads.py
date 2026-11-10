@@ -133,22 +133,23 @@ class EpisodeDownloadTests(HttpTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn('本场', response.json()['detail'])
 
-    def test_scene_director_and_canvas_list_only_selected_scene(self):
+    def test_scene_canvas_list_only_selected_scene(self):
         for scene in self.episode['scenes']:
             for suffix in ['-导演包.mmxpack.zip', '.workflow.json']:
                 self.source(f'09-剧集制作/EP001/06-阶段采用视频/02-二采/{scene}-场次/导演包/EP001-{scene}-二采定稿{suffix}',
                             scene.encode())
         resource = self.client.get(self.url, params={'scene': 'C002'}).json()['二采']
-        for kind in ('director', 'canvas'):
+        self.assertNotIn('director', resource)
+        for kind in ('canvas',):
             self.assertEqual(resource[kind]['count'], 1)
             self.assertIn('C002', resource[kind]['files'][0]['name'])
             self.assertEqual(self.client.get(resource[kind]['files'][0]['url']).content, b'C002')
 
-    def test_director_and_canvas_download_original_files_without_outer_zip(self):
-        expected = {stage: {'director': {}, 'canvas': {}} for stage in episode_downloads.STAGES}
+    def test_canvas_downloads_original_files_and_historical_pack_is_still_readable(self):
+        expected = {stage: {'canvas': {}} for stage in episode_downloads.STAGES}
         for stage, folder in episode_downloads.STAGES.items():
             for scene in self.episode['scenes']:
-                for kind, suffix in [('director', '-导演包.mmxpack.zip'), ('canvas', '.workflow.json')]:
+                for kind, suffix in [('canvas', '.workflow.json')]:
                     filename = f'EP001-{scene}-P001-{stage}定稿' + suffix
                     path = self.source(f'09-剧集制作/EP001/06-阶段采用视频/{folder}/{scene}-场次/导演包/{filename}',
                                        (stage + scene + kind).encode())
@@ -157,7 +158,7 @@ class EpisodeDownloadTests(HttpTestCase):
             self.source(f'09-剧集制作/EP001/06-阶段采用视频/{folder}/C003-场次/导演包/EP001-C003-导演包.mmxpack.zip', b'not indexed')
         manifest = self.client.get(self.url).json()
         for stage in episode_downloads.STAGES:
-            for kind in ('director', 'canvas'):
+            for kind in ('canvas',):
                 with self.subTest(stage=stage, kind=kind):
                     resource = manifest[stage][kind]
                     self.assertIsNone(resource['url'])
@@ -169,12 +170,18 @@ class EpisodeDownloadTests(HttpTestCase):
                         self.assertEqual(response.content, expected[stage][kind][file['name']])
                         self.assertIn(file['name'], unquote(response.headers['content-disposition']))
                     self.assertEqual(self.client.get(self.url + '/' + stage + '/' + kind).status_code, 422)
+        pack = '09-剧集制作/EP001/06-阶段采用视频/01-一采/C001-场次/导演包/EP001-C001-定稿-导演包.mmxpack.zip'
+        self.source(pack, b'existing pack')
+        self.source(pack.replace('.mmxpack.zip', '.director.json'), b'{}')
+        project_url = self.url.split('/episodes/')[0]
+        self.assertEqual(self.client.get(project_url + '/files/' + pack, params={'download': True}).content, b'existing pack')
+        self.assertEqual(self.client.get(project_url + '/director-download', params={'path': pack}).status_code, 404)
         self.assertFalse((self.root / 'downloads').exists())
 
     def test_empty_stage_has_no_link_and_does_not_reuse_first_pass(self):
-        self.source('09-剧集制作/EP001/06-阶段采用视频/01-一采/C001-场次/导演包/EP001-C001-定稿-导演包.mmxpack.zip', b'first pass')
+        self.source('09-剧集制作/EP001/06-阶段采用视频/01-一采/C001-场次/导演包/EP001-C001-定稿.workflow.json', b'first pass')
         manifest = self.client.get(self.url).json()
-        self.assertEqual(manifest['一采']['director']['count'], 1)
+        self.assertEqual(manifest['一采']['canvas']['count'], 1)
         for stage in ('后处理', '二采'):
             for kind in episode_downloads.KINDS:
                 self.assertEqual(manifest[stage][kind], {'count': 0, 'url': None, 'files': []})

@@ -11,7 +11,6 @@ from backend.parsers import documents
 from backend.services.workspaces import jianying_links
 import execution_records as recordio
 from project_paths import input_file, input_key
-from director_export import submitted_media
 from h3_browser_context import request_context, empty_context
 from prepared_documents import read_journal
 
@@ -339,9 +338,9 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
     project=projects.project(name);check_work(project,work)
     if scene!='whole':raise FileNotFoundError('分段范围不存在')
     data=state(project);api=space_api+'/projects/'+quote(name,safe='')
-    result={stage:{kind:{'count':0,'url':None,'files':[]} for kind in ('videos','director','canvas')} for stage in STAGES}
+    result={stage:{kind:{'count':0,'url':None,'files':[]} for kind in ('videos','canvas')} for stage in STAGES}
     if round_number is not None:
-        result['round']={kind:{'count':0,'url':None,'files':[]} for kind in ('videos','director','canvas')}
+        result['round']={kind:{'count':0,'url':None,'files':[]} for kind in ('videos','canvas')}
     result['workPackages']=[];seen=set()
     candidates = list(data['candidates'].values()) if round_number is None else selected_round(data, round_number)['values']
     for candidate in candidates:
@@ -359,15 +358,6 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
                 stages='、'.join(dict.fromkeys(value['stage'] for value in related))
                 file.update(label=f'{segments} · {stages} · {execution}',description=candidate['record']['工具与模式'])
             group=target['canvas'];group['files'].append(file);group['count']+=1
-        request=read_record(record/task_record[0].get('request_name','请求.json'))
-        task_state=read_record(record/'后台任务状态.json')
-        if candidate['stage']!='后处理' and request and task_state.get('prompt_id'):
-            group=target['director']
-            group['files'].append({'name':execution+' · 导演包','url':api+'/works/'+work+'/production-director?record='+execution})
-            group['count']+=1
-        else:
-            for path in record.glob('*.director.json'):
-                group=target['director'];group['files'].append({'name':path.name,'url':api+'/works/'+work+'/production-director?path='+quote(path.relative_to(project).as_posix(),safe='')});group['count']+=1
     if round_number is not None:
         values = round_videos(data, round_number)
         group = result['round']['videos']
@@ -385,37 +375,3 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
         group=result[stage]['videos'];group.setdefault('packages',[]).append({'name':spec['name'],'count':package['count'],'url':urls['zip']})
         group.update(count=package['count'],url=urls['zip'])
     return result
-
-
-def director_spec(projects,name,work,path):
-    project=projects.project(name);check_work(project,work)
-    source=projects.file(name,path)
-    if not source.name.endswith('.director.json'):raise ValueError('需要原生导演包清单')
-    return json.loads(source.read_text('utf-8-sig'))
-
-
-def execution_director_spec(projects,name,work,record):
-    project=projects.project(name);check_work(project,work)
-    data=state(project)
-    row=data['executions'].get(record)
-    if row is None:raise FileNotFoundError('执行编号不存在')
-    task_record=task_for(project,row)
-    if not task_record:raise ValueError('未登记实际任务')
-    task,folder=task_record
-    request=read_record(folder/task.get('request_name','请求.json'))
-    task_state=read_record(folder/'后台任务状态.json')
-    if not request or not task_state.get('prompt_id'):raise ValueError('缺少实际提交请求和凭据')
-    workflow=request['prompt']
-    nodes=[key for key,v in workflow.items() if v['class_type']=='MiniMaxH3Director']
-    if len(nodes)!=1:raise ValueError('需要唯一的实际H3导演台')
-    node=nodes[0];timeline=json.loads(workflow[node]['inputs']['timeline_data'])
-    checks={input_key(project,key):stamp for key,stamp in read_record(folder/'执行检查报告.json').get('sources',{}).items()}
-    def frozen_file(value):
-        path=input_file(project,value,recorded=True);key=input_key(project,path)
-        info=path.stat()
-        if checks.get(key)!=[info.st_size,info.st_mtime_ns]:
-            raise ValueError('原输入缺少核对记录或已改变：'+key)
-        return key
-    if not task_state.get('remote_url'):raise ValueError('缺少本次实际提交服务地址')
-    return {'name':record+'.mmxpack.zip','node_id':node,'workflow':workflow,
-            'media':submitted_media(timeline,node,task.get('uploads',[]),frozen_file),'url':task_state['remote_url']}

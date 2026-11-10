@@ -107,7 +107,7 @@ def main(argv=None):
 
         return module.main(remaining[1:], fetcher=authenticated_fetch, require_url=True)
     return client.main(remaining, client_factory=factory,
-                       allowed_commands=('status', 'download', 'export-pack'), require_url=True)
+                       allowed_commands=('status', 'download'), require_url=True)
 
 
 if __name__ == '__main__':

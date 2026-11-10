@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""汇总已批准的整场一采或二采，准备按需导演包的汇总API、配对画布和重建清单，不预生成ZIP。"""
+"""汇总已批准的整场一采或二采，保存场次画布、API和来源记录。"""
 import argparse
 import copy
 import json
@@ -13,12 +13,10 @@ for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-v
 import re
 import sys
 import tempfile
-import zipfile
 from urllib.parse import unquote
 
 import video_adopt as adopt
 import workflow_baselines as pairs
-from h3_pack import lift_common, verify_pack
 import project_progress
 
 client = adopt.client
@@ -62,7 +60,7 @@ def selected(root, part, stage):
 
 
 def episode_missing(root, episode):
-    """Completion requires adopted stage outputs; director exports are optional."""
+    """Completion requires adopted stage outputs."""
     missing = []
     for scene, part in indexed_parts(root, episode):
         for stage in adopt.STAGES:
@@ -148,6 +146,18 @@ def source(root, item):
             'api': workflow, 'canvas': canvas, 'restoration': restoration}
 
 
+def lift_common(common, group):
+    """公共区差异移入各组；保留绝对素材槽位，本组覆盖公共同槽。"""
+    group = copy.deepcopy(group)
+    if common['commonEnabled']:
+        group['prompt'] = '\n\n'.join(p.strip() for p in (common['prompt'], group['prompt']) if p.strip())
+        for field in ('refs', 'refAudios', 'refVideos'):
+            local = {r['index']: r for r in group[field]}
+            group[field] = sorted({**{r['index']: copy.deepcopy(r) for r in common[field]}, **local}.values(),
+                                  key=lambda r: r['index'])
+    return group
+
+
 def director(source_item, part):
     nodes = [(k, n) for k, n in source_item['api'].items() if n['class_type'] == 'MiniMaxH3Director']
     if len(nodes) != 1:
@@ -194,7 +204,7 @@ def director(source_item, part):
 def prepare(root, plan, batch_parts=None, batch_name=None):
     episode, scene, stage = plan['episode'], plan['scene'], plan['stage']
     if not re.fullmatch(r'(?:EP\d{3}|片头|片尾)', episode) or not re.fullmatch(r'C\d{3}', scene) or stage not in FINALIZATION_STAGES:
-        raise ValueError('需要明确 EP编号或片头／片尾、C编号以及一采或二采；后处理不导出导演包')
+        raise ValueError('需要明确 EP编号或片头／片尾、C编号以及一采或二采；后处理不使用场次画布留档')
     ep = root / '09-剧集制作' / episode
     index_file = ep / '03-分镜脚本' / f'{episode}-分镜索引.md'
     expected = re.findall(r'^\| ' + episode + '-' + scene + r' \|[^\n]*?\| (' + episode + '-' + scene + r'-P\d{3}) \|',
@@ -389,7 +399,7 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
             previous_path = record / (base + ('-' + version if version else '') + '-留档记录.json')
             if previous_path.is_file():
                 previous = adopt.load(previous_path)
-                if (previous['sources'] == evidence and previous['stage'] == stage and previous.get('delivery') == 'on-demand'
+                if (previous.get('canvas') and previous['sources'] == evidence and previous['stage'] == stage
                         and previous.get('configuration_batch_authorization') == plan.get('configuration_batch_authorization')):
                     edition = version
                     break
@@ -400,11 +410,10 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
                     raise ValueError('本场该阶段留档序号已用至999，不能覆盖已有版本')
                 edition = f'{number:03d}'
     stem = base + ('-' + edition if edition else '')
-    return {'workflow': workflow, 'canvas': canvas, 'timeline': timeline, 'node': key,
-            'url': next(iter(urls)), 'sources': sources, 'evidence': evidence, 'media': media,
-            'manifest': final / (stem + '-导演包.director.json'),
-            'pack': final / (stem + '-导演包.mmxpack.zip'), 'canvas_path': final / (stem + '.workflow.json'),
-            'api_path': record / (stem + '.api.json'), 'receipt': record / (stem + '-导出响应.json'),
+    return {'workflow': workflow, 'canvas': canvas, 'node': key,
+            'url': next(iter(urls)), 'sources': sources, 'evidence': evidence,
+            'canvas_path': final / (stem + '.workflow.json'),
+            'api_path': record / (stem + '.api.json'),
             'record': record / (stem + '-留档记录.json'), 'drafts': drafts,
             'summary': adopt.local_path(root, plan.get('summary', ep / '其他资料' / '工作稿' / f'{episode}-生成说明-工作稿.md')),
             'progress': adopt.local_path(root, root / '项目进度.md'),
@@ -414,40 +423,37 @@ def prepare(root, plan, batch_parts=None, batch_name=None):
 
 
 
-def finalize_one(root, plan, p, apply, timeout):
+def finalize_one(root, plan, p, apply):
     for path in [*p['drafts'], p['summary'], p['progress']]:
         path.read_text(encoding='utf-8-sig')
     project_progress.phase_row(p['progress'].read_text('utf-8-sig'), plan['episode'])
     record = {'stage': plan['stage'], 'sources': p['evidence'], 'url': p['url'], 'node_id': p['node'],
-              'delivery': 'on-demand', 'manifest': str(p['manifest']),
-              'pack': str(p['pack']), 'canvas': str(p['canvas_path']), 'api': str(p['api_path']),
+              'canvas': str(p['canvas_path']), 'api': str(p['api_path']),
               'configuration_batch_authorization': plan.get('configuration_batch_authorization')}
-    if p['record'].exists():
-        old = adopt.load(p['record'])
-        if any(old[k] != v for k, v in record.items()):
-            raise ValueError('已有留档来源不同，保留原附件；使用新的 edition 明确另存版本')
-    spec = {'name': p['pack'].name, 'api': p['api_path'].relative_to(root).as_posix(),
-            'node_id': p['node'], 'url': p['url'],
-            'media': {remote: local.relative_to(root).as_posix() for remote, local in p['media'].items()}}
-    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas']), (p['manifest'], spec)):
+    old = adopt.load(p['record']) if p['record'].exists() else None
+    if old is not None and any(old.get(k) != v for k, v in record.items()):
+        raise ValueError('已有留档来源不同，保留原附件；使用新的 edition 明确另存版本')
+    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas'])):
         if path.exists() and adopt.load(path) != value:
             raise ValueError('已有汇总工程不同，不能覆盖：' + str(path))
     result = {'state': 'ready', 'mode': 'apply' if apply else 'dry_run', **record,
               'record': str(p['record']), 'browser_sync': 'not_checked'}
     if not apply:
         return result
-    if not p['record'].exists():
+    if (old and old.get('delivery') == 'on-demand' and old['state'] == 'completed'
+            and p['api_path'].is_file() and p['canvas_path'].is_file()):
+        return {**result, 'state': 'completed'}
+    if old is None:
         client.write_new(p['record'], {**record, 'state': 'prepared'})
-    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas']), (p['manifest'], spec)):
+    for path, value in ((p['api_path'], p['workflow']), (p['canvas_path'], p['canvas'])):
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             client.write_new(path, value)
     stamp = adopt.load(p['record']).get('verified_at', client.now())
     for path in [*p['drafts'], p['summary']]:
         text = path.read_text(encoding='utf-8-sig')
-        body = (f'\n- 状态：{p["scope"]}定稿留档完成；重建资料已保存，ZIP仅点击下载时临时生成。\n'
-                f'- 导演包：[重建清单]({adopt.link(path, p["manifest"])})\n'
-                f'- 配对画布：[下载]({adopt.link(path, p["canvas_path"])})\n'
+        body = (f'\n- 状态：{p["scope"]}定稿留档完成，已保存场次画布。\n'
+                f'- 场次画布：[下载]({adopt.link(path, p["canvas_path"])})\n'
                 f'- 来源核对：[留档记录]({adopt.link(path, p["record"])})\n')
         if re.search(r'^### ' + re.escape(p['heading']) + r'\s*$', text, re.M):
             a, b = adopt.section(text, p['heading'])
@@ -460,7 +466,7 @@ def finalize_one(root, plan, p, apply, timeout):
         mapped.setdefault('scene_finalizations', {})[plan['stage']] = str(p['record'])
         save_json(actual['mapping_path'], mapped)
     save_json(p['record'], {**record, 'state': 'completed', 'verified_at': stamp,
-                           'checks': '全部P段实际批准／实际提交来源／本地冻结素材／重建清单；尚未导出ZIP',
+                           'checks': '全部P段实际批准／实际提交来源／本地冻结素材／场次画布与API',
                            'records': [str(path) for path in [*p['drafts'], p['summary']]]})
     update_progress(root, plan['episode'], plan['episode'] + '-' + plan['scene'], plan['stage'], p['summary'])
     saved = adopt.load(p['record'])
@@ -475,7 +481,7 @@ def finalize(args, *, plan=None):
         plan_path = Path(args.plan)
         plan = adopt.load(plan_path if plan_path.is_absolute() else root / plan_path)
     if not plan.get('configuration_batches'):
-        return finalize_one(root, plan, prepare(root, plan), args.apply, args.timeout)
+        return finalize_one(root, plan, prepare(root, plan), args.apply)
     if not plan.get('configuration_batch_authorization'):
         raise ValueError('按配置分批留档须填写用户本次明确授权依据')
     batches = plan['configuration_batches']
@@ -496,23 +502,22 @@ def finalize(args, *, plan=None):
     for batch in batches:
         sub = {**plan, 'items': [i for i in plan['items'] if i['identity'].rsplit('-', 2)[0] in batch['parts']]}
         prepared.append((sub, prepare(root, sub, batch['parts'], batch['name'])))
-    # Validate every source and configuration before the first remote export.
-    results = [finalize_one(root, sub, p, args.apply, args.timeout) for sub, p in prepared]
+    # Validate every source and configuration before writing any archive.
+    results = [finalize_one(root, sub, p, args.apply) for sub, p in prepared]
     return {'state': 'completed' if args.apply else 'ready', 'mode': 'apply' if args.apply else 'dry_run',
             'authorization': plan['configuration_batch_authorization'], 'batches': results,
             'browser_sync': 'not_checked'}
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅保存重建资料，绝不生成ZIP或视频。路径及请求格式见 nora-drama-production/references/固定脚本接口规范.md。')
+    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅保存场次画布、API和来源记录。路径及请求格式见 nora-drama-production/references/固定脚本接口规范.md。')
     parser.add_argument('--project', required=True, help='项目根；相对当前工作目录解析')
     parser.add_argument('--plan', required=True, help='阶段留档请求JSON；相对项目根解析')
-    parser.add_argument('--apply', action='store_true', help='直接导出到阶段定稿目录并补齐现有记录；默认只读预览')
-    parser.add_argument('--timeout', type=float, default=30, help='每次导出HTTP请求超时秒数，默认30秒，无自动重试')
+    parser.add_argument('--apply', action='store_true', help='保存到阶段定稿目录并补齐现有记录；默认只读预览')
     args = parser.parse_args()
     try:
         print(json.dumps(finalize(args), ensure_ascii=False))
-    except (ValueError, KeyError, OSError, AssertionError, zipfile.BadZipFile, client.ClientError) as error:
+    except (ValueError, KeyError, OSError, AssertionError, client.ClientError) as error:
         print(json.dumps({'ok': False, 'error': str(error), 'type': type(error).__name__}, ensure_ascii=False))
         return 1
     return 0

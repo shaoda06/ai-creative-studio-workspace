@@ -117,7 +117,7 @@ def update_business(root, episode, scene, stage, summary, identities, finalized,
     status = (episode + '分段制作与交付已完成。' if complete else
               scene + '的' + stage + '已采用' + str(len(identities)) + '段；'
               + (('本场后处理采用已齐备。' if finalized else '本场后处理采用尚未齐备。') if stage == '后处理' else
-                 ('本场该阶段采用已齐备，导演包仅按用户明确要求导出。' if finalized else '本场该阶段采用尚未齐备。')))
+                 ('本场该阶段采用已齐备。' if finalized else '本场该阶段采用尚未齐备。')))
     if retrospective['status'] == 'completed':
         status += '完集复盘与经验归并已完成。'
     elif complete:
@@ -305,7 +305,7 @@ def approve(args):
         result['timings_seconds']['browser'] = round(time.monotonic() - began, 3)
         result['state'] = 'completed' if ready else 'adopted_partial'
         return completion_handoff(result, summary)
-    except (ValueError, KeyError, OSError, TimeoutError, urllib.error.URLError, final.client.ClientError, final.zipfile.BadZipFile, AssertionError) as error:
+    except (ValueError, KeyError, OSError, TimeoutError, urllib.error.URLError, final.client.ClientError, AssertionError) as error:
         result.update(state='browser_pending' if result['phase'] == 'browser' else 'needs_attention', error=str(error))
         return result
     finally:
@@ -330,7 +330,7 @@ def main():
             compact['review_url'] = result['browser']['review_url']
         print(json.dumps(compact, ensure_ascii=False))
         return 1 if result['state'] in ('needs_attention', 'browser_pending') else 0
-    except (ValueError, KeyError, OSError, urllib.error.URLError, final.client.ClientError, final.zipfile.BadZipFile, AssertionError) as error:
+    except (ValueError, KeyError, OSError, urllib.error.URLError, final.client.ClientError, AssertionError) as error:
         print(json.dumps({'state': 'needs_attention', 'error': str(error), 'phase': 'inputs'}, ensure_ascii=False))
         return 1
     return 0

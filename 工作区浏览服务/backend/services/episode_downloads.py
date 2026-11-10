@@ -1,4 +1,4 @@
-"""Download explicitly selected videos and stage-specific director files."""
+"""Download explicitly selected videos and stage-specific canvases."""
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import NamedTemporaryFile

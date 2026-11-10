@@ -172,10 +172,6 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const segmentCount = scenes.reduce((count, id) => count + (current?.segments?.[id]?.length || 0), 0);
   const emptyMessage = issues.length > 0 ? '请先修正上方提示的资料。'
     : !current?.script ? `尚未登记${contentLabel}。` : '尚未登记分段计划。';
-  let directorFiles = current?.children;
-  for (const folder of ['06-阶段采用视频', '01-一采', selectedScene + '-场次', '导演包']) {
-    directorFiles = directorFiles?.find(item => item.name === folder)?.children;
-  }
   const open = (name: string) => {
     setPlayback(null);
     setScene('');
@@ -253,7 +249,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         <PointerTooltip text={issue.key}><button className="link"  onClick={() => preview({ kind: 'document', key: issue.key, name: issue.key.split('/').pop()! })}>{issue.key.split('/').pop()}</button></PointerTooltip>：{issue.message}
       </li>)}</ul>
     </div> : null}
-    <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorFiles={directorFiles || []} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
+    <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
     {episodeNotesExport.dialog}
     {(!!current.materials?.length || current.materialRecord) && <details className="asset-candidate-type production-materials"><summary>制作素材与审阅（{current.materials?.length || 0}）</summary>
       {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>查看素材记录</button></p>}

@@ -14,21 +14,12 @@ interface WorkPackage {
   key: string; label: string; version: string; purpose: string; rounds: number[];
   count?: number; archived?: boolean; jypack: string | null; zip: string | null;
 }
-type DownloadGroup = Record<'videos' | 'director' | 'canvas', Resource>;
+type DownloadGroup = Record<'videos' | 'canvas', Resource>;
 export type Downloads = Record<'后处理' | '二采' | '一采', DownloadGroup>
   & { workPackages?: WorkPackage[]; round?: DownloadGroup };
 
 export function workPackageLabel({ label, rounds }: WorkPackage) {
   return rounds.length ? `${rounds.map(number => `第${number}轮`).join('、')} · ${label}` : label;
-}
-
-function OriginalDownloads({ resource, label, generated = false }: { resource: Resource; label: string; generated?: boolean }) {
-  return resource.files.length
-    ? <>{resource.files.map(file => {
-      const button = <DownloadButton key={file.url} url={file.url} label={file.label || file.name} title={`${generated ? '按需生成导演包' : '下载原文件'}：${file.name}`} />;
-      return file.description ? <div key={file.url} className="stage-download-file">{button}<small className="muted">{file.description}</small></div> : button;
-    })}</>
-    : <DownloadButton url={resource.url} label={label} title={resource.url ? '按当前已采用来源临时生成导演包' : '本场该阶段暂无对应文件'} />;
 }
 
 export function SceneDownloads({ project, episode, scene, revision, segments = [], selectedRound, roundNote }: {
@@ -96,20 +87,16 @@ export function SceneDownloads({ project, episode, scene, revision, segments = [
         </div>
       </section>
       {roundMode && videoList}
-      <details className="stage-download-group" aria-label={stage + '画布与导演包'}>
-        <summary>画布与导演包</summary>
-        {([{ key: 'canvas', label: '原画布' }, { key: 'director', label: '导演包' }] as const).map(({ key, label }) => {
-          const resource = resources[key];
-          return <div key={key}>
-            <h4>{label}
-              {resource.messages?.map(message => <small className="stage-download-count muted" key={message}>{message}</small>)}
-              {!resource.files.length && !resource.url && !resource.messages?.length && <small className="stage-download-count muted">暂无对应文件。</small>}
-            </h4>
-            {(resource.files.length > 0 || resource.url) && <div className="stage-download-actions">
-              <OriginalDownloads resource={resource} label={key === 'director' ? '下载导演包' : '下载画布'} generated={key === 'director'} />
-            </div>}
-          </div>;
-        })}
+      <details className="stage-download-group" aria-label={stage + '原画布'}>
+        <summary>原画布</summary>
+        {resources.canvas.messages?.map(message => <small className="stage-download-count muted" key={message}>{message}</small>)}
+        {!resources.canvas.files.length && !resources.canvas.messages?.length && <small className="stage-download-count muted">暂无对应文件。</small>}
+        {resources.canvas.files.length > 0 && <div className="stage-download-actions">
+          {resources.canvas.files.map(file => {
+            const button = <DownloadButton key={file.url} url={file.url} label={file.label || file.name} title={`下载原文件：${file.name}`} />;
+            return file.description ? <div key={file.url} className="stage-download-file">{button}<small className="muted">{file.description}</small></div> : button;
+          })}
+        </div>}
       </details>
     </section>; })}
     </>}

@@ -27,7 +27,7 @@ description: AI创作与制作统一入口，识别业务类型并路由一级�
 | 图片尺寸处理、RTX及技术文件核对 | [图片处理工具](../studio-image-processing/SKILL.md) |
 | 提交、查询、取回和服务开发维护 | [浏览服务与任务后台](../studio-workspace-browser/SKILL.md) |
 | ComfyUI通信、配置及诊断依赖 | [ComfyUI工具](../studio-comfyui/SKILL.md) |
-| H3模型提示词、时间线、缓存与导演包 | [H3工具](../studio-h3/SKILL.md) |
+| H3模型提示词、时间线与两套导演台的使用 | [H3工具](../studio-h3/SKILL.md) |
 | 视频RIFE/RTX装配及客观媒体信息 | [视频处理](../studio-video-processing/SKILL.md) |
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../studio-jianying/SKILL.md) |
 | 实拍剪辑、口播包装与配音解说动画 | [按需剪辑与动效工具](#按需剪辑与动效工具) |

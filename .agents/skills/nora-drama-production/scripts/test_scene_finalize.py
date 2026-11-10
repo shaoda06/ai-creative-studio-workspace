@@ -1,67 +1,17 @@
-"""阶段留档行为测试：隔离项目、真实基准画布和模拟原生导出；不访问远端。"""
+"""阶段留档行为测试：隔离项目和真实基准画布；不访问远端。"""
 import argparse
 import copy
 import hashlib
-import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
 import scene_finalize as tool
-import director_export
 import video_approve
 from workflow_paths import workflow_file
 
-
-
-class NativeClient:
-    calls = []
-    media = {}
-    corrupt = False
-    missing = False
-
-    def __init__(self, url, timeout):
-        self.url = url
-
-    def json(self, route, data, headers):
-        self.calls.append(('preflight', route))
-        return {'missing': ['missing.png'] if self.missing else []}
-
-    def open(self, route, data, headers):
-        self.calls.append(('export', route))
-        body = json.loads(data)
-        timeline = body['timeline']
-        payload = io.BytesIO()
-        with zipfile.ZipFile(payload, 'w') as archive:
-            def portable(value):
-                if isinstance(value, dict):
-                    for k, v in value.items():
-                        if k in tool.MEDIA and v:
-                            dest = 'extra/' + Path(v).name
-                            if dest not in archive.namelist():
-                                archive.writestr(dest, self.media[v])
-                            value[k] = dest
-                        else:
-                            portable(v)
-                elif isinstance(value, list):
-                    for item in value:
-                        portable(item)
-            portable(timeline)
-            if self.corrupt:
-                timeline['segments'][0]['prompt'] = '错误正文'
-            archive.writestr('pack.json', json.dumps({'format': 'minimax-h3-director-pack', 'formatVersion': 1,
-                                                     'widgets': body['widgets'], 'output': timeline['output']}))
-            archive.writestr('timeline.json', json.dumps(timeline))
-            archive.writestr('shared_params/shared_params.json', json.dumps(timeline['global']))
-            for i, g in enumerate(timeline['segments']):
-                archive.writestr(f'asset_groups/{i + 1:02d}/group.json', json.dumps(g))
-        stream = io.BytesIO(payload.getvalue())
-        stream.headers = {'Content-Type': 'application/zip', 'Content-Length': str(len(payload.getvalue())),
-                          'X-Pack-Missing': '[]', 'X-Pack-Download-Name': 'native.mmxpack.zip'}
-        return stream
 
 
 class FinalizeTests(unittest.TestCase):
@@ -118,7 +68,6 @@ class FinalizeTests(unittest.TestCase):
         self.put(path, mapped)
         with self.assertRaisesRegex(ValueError, '保留原视频流'):
             self.run_plan()
-        self.assertEqual(NativeClient.calls, [])
 
     def test_unstarted_indexed_segments_are_missing_not_file_errors(self):
         self.plan['items'] = [self.item('P001'), self.item('P002')]
@@ -168,8 +117,6 @@ class FinalizeTests(unittest.TestCase):
                  '| EP001-C001 | [分镜](scene.md) | EP001-C001-P001 | 其他 |\n'
                  '| EP001-C001 | [分镜](scene.md) | EP001-C001-P002 | 其他 |\n')
         self.plan = {'episode': 'EP001', 'scene': 'C001', 'stage': '一采', 'items': []}
-        NativeClient.calls, NativeClient.media = [], {'ref.png': b'frozen image'}
-        NativeClient.corrupt, NativeClient.missing = False, False
         self.put(self.root / '素材/ref.png', b'frozen image')
         self.originals = {}
 
@@ -266,19 +213,12 @@ class FinalizeTests(unittest.TestCase):
     def run_plan(self, apply=True):
         path = self.extra / '执行附件/阶段留档请求.json'
         self.put(path, self.plan)
-        with patch.object(tool.client, 'Client', NativeClient):
-            return tool.finalize(argparse.Namespace(project=str(self.root), plan=str(path), apply=apply, timeout=30))
+        return tool.finalize(argparse.Namespace(project=str(self.root), plan=str(path), apply=apply))
 
-    def download(self, result):
-        spec = tool.adopt.load(Path(result['manifest']))
-        folder = self.root.parent / 'downloads'
-        folder.mkdir(exist_ok=True)
-        output = folder / spec['name']
-        if output.exists():
-            output.unlink()
-        with patch.object(director_export.comfyui_config, 'client_for', return_value=NativeClient('http://example.invalid', 30)):
-            director_export.export_package(spec, lambda p: self.root / p, self.root.parent.parent, output)
-        return output
+    def saved_timeline(self, result):
+        api = tool.adopt.load(Path(result['api']))
+        node = next(n for n in api.values() if n['class_type'] == 'MiniMaxH3Director')
+        return json.loads(node['inputs']['timeline_data'])
 
     def replace_timeline(self, item, timeline):
         api = tool.adopt.load(Path(item['api']))
@@ -312,42 +252,9 @@ class FinalizeTests(unittest.TestCase):
             self.replace_timeline(item, timeline)
             self.put(Path(item['mapping']), mapping)
         result = self.run_plan()
-        with zipfile.ZipFile(self.download(result)) as archive:
-            timeline = json.loads(archive.read('timeline.json'))
+        timeline = self.saved_timeline(result)
         self.assertEqual([g['id'] for g in timeline['segments']], ['项目-独立组-0', '项目-独立组-1'])
         self.assertEqual([g['prompt'] for g in timeline['segments']], ['P001 <Picture 1>', 'P002 <Picture 1>'])
-
-    def test_native_empty_group_defaults_preserve_configuration_checks(self):
-        self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
-        for item in self.plan['items']:
-            api = tool.adopt.load(Path(item['api']))
-            node = next(n for n in api.values() if n['class_type'] == 'MiniMaxH3Director')
-            timeline = json.loads(node['inputs']['timeline_data'])
-            for group in timeline['segments']:
-                group.pop('loras', None)
-                group.pop('refImageSize', None)
-            timeline['batchWorkspaces']['r2v']['segments'] = copy.deepcopy(timeline['segments'])
-            self.replace_timeline(item, timeline)
-        result = self.run_plan()
-        prepared = tool.prepare(self.root, self.plan)
-        prepared['pack'] = self.download(result)
-        with zipfile.ZipFile(prepared['pack']) as archive:
-            files = {name: archive.read(name) for name in archive.namelist()}
-        for extras, accepted in (({'loras': [], 'refImageSize': None}, True),
-                                 ({'loras': [{'name': 'unexpected.safetensors'}]}, False),
-                                 ({'refImageSize': '1536'}, False),
-                                 ({'unexpected': None}, False)):
-            with self.subTest(extras=extras):
-                with zipfile.ZipFile(prepared['pack'], 'w') as archive:
-                    for name, data in files.items():
-                        if name.startswith('asset_groups/') and name.endswith('/group.json'):
-                            data = json.dumps({**json.loads(data), **extras}).encode()
-                        archive.writestr(name, data)
-                if accepted:
-                    tool.verify_pack(prepared)
-                else:
-                    with self.assertRaisesRegex(ValueError, '包内分组与时间线不一致'):
-                        tool.verify_pack(prepared)
 
     def test_group_mapping_length_mismatch_stops_before_export(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -357,7 +264,6 @@ class FinalizeTests(unittest.TestCase):
         self.put(Path(item['mapping']), mapping)
         with self.assertRaisesRegex(ValueError, '原组序'):
             self.run_plan()
-        self.assertFalse(NativeClient.calls)
 
     def test_backend_metadata_and_outputs_are_read_without_backfilling_frozen_mapping(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -381,24 +287,19 @@ class FinalizeTests(unittest.TestCase):
     def test_postprocess_is_rejected_without_export_or_record_changes(self):
         self.plan['stage'] = '后处理'
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
-        with self.assertRaisesRegex(ValueError, '后处理不导出导演包'):
-            tool.finalize(argparse.Namespace(project=str(self.root), apply=True, timeout=30), plan=self.plan)
-        self.assertEqual(NativeClient.calls, [])
+        with self.assertRaisesRegex(ValueError, '后处理不使用场次画布留档'):
+            tool.finalize(argparse.Namespace(project=str(self.root), apply=True), plan=self.plan)
         self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
-    def test_automatic_edition_reuses_matching_numbered_pair_without_exporting_again(self):
+    def test_automatic_edition_reuses_matching_numbered_pair_without_allocating_a_new_edition(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         first = self.run_plan()
-        old = {Path(first[key]): Path(first[key]).read_bytes() for key in ('manifest', 'canvas', 'record')}
+        old = {Path(first[key]): Path(first[key]).read_bytes() for key in ('api', 'canvas', 'record')}
         self.plan['edition'] = '002'
         second = self.run_plan()
         self.plan.pop('edition')
-        calls = len(NativeClient.calls)
         preview = self.run_plan(False)
-        self.assertEqual(preview['pack'], second['pack'])
         self.assertEqual(preview['canvas'], second['canvas'])
-        self.assertEqual(self.run_plan()['pack'], second['pack'])
-        self.assertEqual(len(NativeClient.calls), calls)
         for path, content in old.items():
             self.assertEqual(path.read_bytes(), content)
 
@@ -407,18 +308,16 @@ class FinalizeTests(unittest.TestCase):
             with self.subTest(stage=stage):
                 self.plan['stage'] = stage
                 self.plan['items'] = [self.item(p, stage) for p in ('P001', 'P002')]
-                before = len(NativeClient.calls)
                 preview = self.run_plan(False)
                 self.assertEqual(preview['state'], 'ready')
-                self.assertFalse(Path(preview['pack']).exists())
+                self.assertFalse(Path(preview['canvas']).exists())
                 result = self.run_plan()
                 self.assertEqual(result['state'], 'completed')
-                self.assertEqual(len(NativeClient.calls), before)
                 files = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
                 self.run_plan()
                 self.assertEqual(files, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
                 self.assertFalse(list(self.extra.rglob('*.zip')))
-                self.assertEqual(len(list(Path(result['pack']).parent.glob('*.workflow.json'))), 1)
+                self.assertEqual(len(list(Path(result['canvas']).parent.glob('*.workflow.json'))), 1)
                 for path, data in self.originals.items():
                     self.assertEqual(path.read_bytes(), data)
 
@@ -444,7 +343,6 @@ class FinalizeTests(unittest.TestCase):
         self.put(Path(item['canvas']), canvas)
         with self.assertRaisesRegex(ValueError, '无法合并'):
             self.run_plan()
-        self.assertEqual(NativeClient.calls, [])
 
     def test_common_differences_move_into_groups_preserving_tags(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -464,12 +362,11 @@ class FinalizeTests(unittest.TestCase):
         self.put(Path(item['mapping']).parent / '请求.json', {'prompt': api})
         self.put(Path(item['mapping']).parent / '模型提示词.txt', '另一公共正文\n\nP002 <Picture 1>')
         result = self.run_plan()
-        with zipfile.ZipFile(self.download(result)) as archive:
-            t = json.loads(archive.read('timeline.json'))
-            self.assertFalse(t['global']['commonEnabled'])
-            self.assertEqual([g['prompt'] for g in t['segments']],
-                             ['共同正文\n\nP001 <Picture 1>', '另一公共正文\n\nP002 <Picture 1>'])
-            self.assertEqual([g['refs'][0]['index'] for g in t['segments']], [0, 0])
+        t = self.saved_timeline(result)
+        self.assertFalse(t['global']['commonEnabled'])
+        self.assertEqual([g['prompt'] for g in t['segments']],
+                         ['共同正文\n\nP001 <Picture 1>', '另一公共正文\n\nP002 <Picture 1>'])
+        self.assertEqual([g['refs'][0]['index'] for g in t['segments']], [0, 0])
 
     def test_existing_review_column_shared_receipt_and_summary(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -528,14 +425,11 @@ class FinalizeTests(unittest.TestCase):
         self.plan['configuration_batch_authorization'] = '用户允许按实际配置分批留档'
         preview = self.run_plan(False)
         self.assertEqual(len(preview['batches']), 2)
-        self.assertFalse(NativeClient.calls)
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed')
         self.assertFalse(list(self.ep.rglob('*.zip')))
-        self.assertEqual(len(list(self.ep.rglob('*.director.json'))), 2)
-        self.assertEqual(len(NativeClient.calls), 0)
+        self.assertEqual(len(list((self.ep / '06-阶段采用视频').rglob('*.workflow.json'))), 2)
         self.run_plan()
-        self.assertEqual(len(NativeClient.calls), 0)
         self.plan['configuration_batches'][1]['parts'] = ['EP001-C001-P001']
         with self.assertRaisesRegex(ValueError, '唯一归属'):
             self.run_plan()
@@ -549,9 +443,7 @@ class FinalizeTests(unittest.TestCase):
             return original(path, text)
         with patch.object(tool, 'replace_file', interrupted), self.assertRaises(OSError):
             self.run_plan()
-        self.assertEqual(len(NativeClient.calls), 0)
         self.run_plan()
-        self.assertEqual(len(NativeClient.calls), 0)
 
     def test_finalization_updates_phase_without_appending_history_or_touching_other_rows(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -580,7 +472,6 @@ class FinalizeTests(unittest.TestCase):
         self.put(progress, text.replace(row, ''))
         with self.assertRaisesRegex(ValueError, '缺少唯一'):
             self.run_plan()
-        self.assertEqual(NativeClient.calls, [])
         self.assertNotIn('### 定稿留档-', progress.read_text())
 
     def test_failed_text_write_cleans_temporary_and_keeps_original(self):
@@ -595,7 +486,7 @@ class FinalizeTests(unittest.TestCase):
         self.assertFalse(temporary.exists())
         self.assertEqual(target.read_text(), '原始记录。')
 
-    def test_resuming_one_stage_does_not_require_other_optional_director_export(self):
+    def test_resuming_one_stage_does_not_require_other_stage_canvas(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         self.run_plan()
         for part in ('P001', 'P002'):
@@ -607,29 +498,18 @@ class FinalizeTests(unittest.TestCase):
         self.assertNotIn('二采定稿', cells[5])
         self.assertNotIn('后处理', cells[4])
 
-    def test_manifest_is_reusable_without_a_zip_and_conflicting_inputs_are_rejected(self):
+    def test_existing_canvas_is_reused_and_conflicting_contents_are_rejected(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
         result = self.run_plan()
-        self.assertFalse(Path(result['pack']).exists())
-        self.assertTrue(Path(result['manifest']).is_file())
-        original = Path(result['manifest']).read_bytes()
+        path = Path(result['canvas'])
+        original = path.read_bytes()
         self.run_plan()
-        self.assertEqual(Path(result['manifest']).read_bytes(), original)
-        self.assertFalse(NativeClient.calls)
-        manifest = tool.adopt.load(Path(result['manifest']))
-        manifest['name'] = 'different.mmxpack.zip'
-        self.put(Path(result['manifest']), manifest)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertFalse(list(self.root.rglob('*.director.json')))
+        self.assertFalse(list(self.root.rglob('*.mmxpack.zip')))
+        self.put(path, {'nodes': []})
         with self.assertRaisesRegex(ValueError, '不能覆盖'):
             self.run_plan()
-
-    def test_preparation_does_not_require_remote_assets_or_export_responses(self):
-        self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
-        NativeClient.missing = True
-        result = self.run_plan()
-        self.assertEqual(result['state'], 'completed')
-        self.assertFalse(NativeClient.calls)
-        self.assertFalse(list(self.root.rglob('*-导出响应.json')))
-        self.assertEqual(tool.adopt.load(Path(result['record']))['delivery'], 'on-demand')
 
     def test_unapproved_or_changed_video_stops_before_writes(self):
         self.plan['items'] = [self.item(p) for p in ('P001', 'P002')]
@@ -643,7 +523,6 @@ class FinalizeTests(unittest.TestCase):
         self.put(selected, b'changed bytes')
         with self.assertRaisesRegex(ValueError, '长度不符合'):
             self.run_plan()
-        self.assertEqual(NativeClient.calls, [])
         self.assertFalse(list(self.extra.rglob('*-留档记录.json')))
 
     def test_seven_groups_are_ordered_by_formal_index(self):
@@ -651,11 +530,10 @@ class FinalizeTests(unittest.TestCase):
             f'| EP001-C001 | 分镜 | EP001-C001-P{i:03d} | 镜号 |\n' for i in range(1, 8)))
         self.plan['items'] = [self.item(f'P{i:03d}') for i in range(7, 0, -1)]
         result = self.run_plan()
-        with zipfile.ZipFile(self.download(result)) as archive:
-            timeline = json.loads(archive.read('timeline.json'))
-            self.assertEqual([g['id'] for g in timeline['segments']], [f'EP001-C001-P{i:03d}' for i in range(1, 8)])
-            self.assertEqual([g['start'] for g in timeline['segments']], list(range(0, 175, 25)))
-            self.assertEqual(timeline['batchWorkspaces']['r2v']['segments'], timeline['segments'])
+        timeline = self.saved_timeline(result)
+        self.assertEqual([g['id'] for g in timeline['segments']], [f'EP001-C001-P{i:03d}' for i in range(1, 8)])
+        self.assertEqual([g['start'] for g in timeline['segments']], list(range(0, 175, 25)))
+        self.assertEqual(timeline['batchWorkspaces']['r2v']['segments'], timeline['segments'])
 
 
 if __name__ == '__main__':

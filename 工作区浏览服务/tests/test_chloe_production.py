@@ -325,7 +325,7 @@ class ChloeProductionTests(unittest.TestCase):
         self.record.write_text(self.record.read_text().replace('| 准备中 |', '| 已提交 |'))
         self.assertEqual(check(self.project)['candidates'],1)
 
-    def test_shared_request_context_and_native_pack_refer_original(self):
+    def test_shared_request_context_refers_to_original(self):
         self.plan();self.candidate('P001','E001');self.candidate('P002','E002')
         actual,reference,ref=self.resource(kind='image',shared=True)
         key=input_key(self.project,actual)
@@ -355,8 +355,6 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertIn('E001/',context['prompts']['chineseUrl'])
         self.assertEqual(list(folder.glob('*.md')),[prompt])
         self.assertIn('Action.',context['prompts']['english'])
-        pack=browser.execution_director_spec(self.projects,self.project.name,'V001','E001')
-        self.assertIn(key,pack['media'].values())
         self.assertEqual(list((self.project/'资源/图片').iterdir()),[])
 
     def test_second_pass_reuses_upstream_bindings_without_writes(self):

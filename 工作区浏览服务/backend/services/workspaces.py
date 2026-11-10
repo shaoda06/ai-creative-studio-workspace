@@ -139,8 +139,6 @@ def project_tree(projects, name, api, directory=None):
                         'url': prefix + quote(key, safe='/')}
                 if path.name.endswith('.jianying.json'):
                     item['jianying'] = jianying_links(api, name, key)
-                if path.name.endswith('.director.json'):
-                    item['director'] = api + '/projects/' + quote(name, safe='') + '/director-download?path=' + quote(key, safe='')
                 result.append(item)
         return result
 

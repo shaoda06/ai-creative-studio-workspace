@@ -112,7 +112,7 @@ export async function checkSharedDownloads(page, width) {
     return route.fulfill({ headers: { 'Content-Disposition': `attachment; filename="manifest.${format}"` }, body: 'explicit-manifest-fixture' });
   });
   assert.equal(manifestRequests, 0, '清单展示不打包');
-  for (const [label, format] of [['下载剪映包', 'jypack'], ['下载 ZIP', 'zip'], ['下载导演包', 'mmxpack.zip']]) {
+  for (const [label, format] of [['下载剪映包', 'jypack'], ['下载 ZIP', 'zip']]) {
     const buttons = manifests.getByRole('button', { name: label, exact: true });
     assert.equal(await buttons.nth(1).isDisabled(), true);
     const saved = page.waitForEvent('download');
@@ -121,7 +121,7 @@ export async function checkSharedDownloads(page, width) {
     assert.equal(file.suggestedFilename(), `manifest.${format}`);
     assert.equal(await readFile(await file.path(), 'utf8'), 'explicit-manifest-fixture');
   }
-  assert.equal(manifestRequests, 3, '一点击一请求');
+  assert.equal(manifestRequests, 2, '一点击一请求');
   await page.unroute('**/component-samples/manifest-check?*');
   for (const stage of ['后处理', '二采', '一采']) {
     const packages = fixture.getByLabel(stage + '交接包', { exact: true });
@@ -131,17 +131,17 @@ export async function checkSharedDownloads(page, width) {
     assert.equal(boxes[0].top, boxes[1].top, stage + '交接包按钮同行');
     assert(boxes[0].right < boxes[1].left, stage + '视频包在左');
   }
-  const directorGroup = fixture.getByLabel('一采画布与导演包', { exact: true });
-  assert.equal(await directorGroup.getAttribute('open'), '');
-  await page.route('**/component-samples/director-check', route => route.fulfill({
-    headers: { 'Content-Disposition': 'attachment; filename="scene.mmxpack.zip"' }, body: 'native-director-fixture',
+  const canvasGroup = fixture.getByLabel('一采原画布', { exact: true });
+  assert.equal(await canvasGroup.getAttribute('open'), '');
+  await page.route('**/component-samples/canvas-check', route => route.fulfill({
+    headers: { 'Content-Disposition': 'attachment; filename="scene.workflow.json"' }, body: 'original-canvas-fixture',
   }));
-  const directorSaved = page.waitForEvent('download');
-  await directorGroup.getByRole('button', { name: '下载导演包', exact: true }).click();
-  const directorFile = await directorSaved;
-  assert.equal(directorFile.suggestedFilename(), 'scene.mmxpack.zip');
-  assert.equal(await readFile(await directorFile.path(), 'utf8'), 'native-director-fixture');
-  await page.unroute('**/component-samples/director-check');
+  const canvasSaved = page.waitForEvent('download');
+  await canvasGroup.getByRole('button', { name: 'scene.workflow.json', exact: true }).click();
+  const canvasFile = await canvasSaved;
+  assert.equal(canvasFile.suggestedFilename(), 'scene.workflow.json');
+  assert.equal(await readFile(await canvasFile.path(), 'utf8'), 'original-canvas-fixture');
+  await page.unroute('**/component-samples/canvas-check');
   const showcase = page.getByTestId('showcase');
   await showcase.getByRole('button', { name: '列表与分页', exact: true }).click();
   await page.route('**/api/component-samples/file', route => route.fulfill({
@@ -155,5 +155,5 @@ export async function checkSharedDownloads(page, width) {
   await page.unroute('**/api/component-samples/file');
   while (await closes.count()) await closes.first().click();
   await fixture.screenshot({ path: join(tmpdir(), `nora-download-${width}.png`) });
-  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试及清单剪映/ZIP/导演包点击下载、场次按需导演包与空入口禁用通过。`);
+  console.log(`下载组件：${width}px统一外观、长文件名、原文件/本地导出/打包保存、禁用、忙碌、错误重试及清单剪映/ZIP、原画布下载与空入口禁用通过。`);
 }

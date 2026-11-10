@@ -16,7 +16,7 @@ import json
 from tests.test_chloe_production import ChloeProductionTests, browser
 x=ChloeProductionTests();x.setUp()
 try:
- x.test_shared_request_context_and_native_pack_refer_original()
+ x.test_shared_request_context_refers_to_original()
  (x.project/'执行记录/E001/任务.workflow.json').write_text('{}')
  x.candidate('P001','E003',stage='二采');x.candidate('P002','E004',stage='二采')
  x.record.write_text(x.record.read_text().replace('| E003 | 视频生成 | 不适用 |','| E003 | 视频生成 | E001 |').replace('| E004 | 视频生成 | 不适用 |','| E004 | 视频生成 | E002 |'))
@@ -138,7 +138,7 @@ try {
   assert.equal(await firstPack.count(),0);
   assert.match(await page.locator('.stage-download-section > h3').innerText(), /第2轮.*整片一采已通过/);
   assert.equal(await page.locator('.stage-download-section').count(),1);
-  assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮交接包','第2轮本轮视频','第2轮画布与导演包']);
+  assert.deepEqual(await page.locator('.stage-download-section > .stage-download-group').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label'))),['第2轮交接包','第2轮本轮视频','第2轮原画布']);
   await page.getByRole('combobox',{name:'修改轮次',exact:true}).click();
   await page.getByRole('option',{name:'第1轮',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[aria-label="第1轮交接包"] button')?.disabled===false);
@@ -156,8 +156,8 @@ try {
   }
   assert.ok(downloadRequests.every(value=>new URLSearchParams(value).get('round')==='1' && !new URLSearchParams(value).has('stage')));
   assert.deepEqual(downloadRequests.map(value=>new URLSearchParams(value).get('format')),['zip','zip','jypack']);
-  await page.locator('details[aria-label="第1轮画布与导演包"] > summary').click();
-  await page.getByText('E001 · 导演包',{exact:false}).first().waitFor();
+  await page.locator('details[aria-label="第1轮原画布"] > summary').click();
+  assert.equal(await page.getByRole('button',{name:'下载导演包',exact:true}).count(),0);
   await page.getByRole('button',{name:'P001 · 一采 · E001',exact:true}).waitFor();
   assert.equal(await page.locator('.stage-download-file > small').innerText(),'H3');
   await page.getByRole('button',{name:'P001 · 一采 · E001',exact:true}).hover();

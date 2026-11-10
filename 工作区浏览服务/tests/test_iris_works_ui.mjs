@@ -62,7 +62,7 @@ try {
      return route.fulfill({json:{kind:'group',name:identity,scenes:['whole'],segments:{whole:[]}}});
     if(identity==='F004' && suffix==='/production-downloads'){
      const empty={count:0,url:null,files:[]};
-     return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:empty,director:empty,canvas:empty}]))});
+     return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:empty,canvas:empty}]))});
     }
     if(suffix==='/production-detail') {
      const source=n=>({kind:'document',name:'分镜v0'+n+'.md',key:key+'/分镜-v0'+n+'.md',version:'v0'+n,doc:{html:'<h2>已保存分镜v0'+n+'</h2><p>'+identity+'历史来源</p>'}});
@@ -109,11 +109,9 @@ try {
     if(suffix==='/production-downloads') {
      const download=base+'/jianying-download?path='+encodeURIComponent(packageKey);
      const stagePackage={name:'隔离交接包',count:2,url:download+'&format=zip'};
-     const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:stage==='一采'?{...stagePackage,packages:[stagePackage],files:[]}:{count:0,url:null,files:[]},director:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
+     const stages=Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:stage==='一采'?{...stagePackage,packages:[stagePackage],files:[]}:{count:0,url:null,files:[]},canvas:{count:0,url:null,files:[]}}]));
      if(identity==='F002'){
       stages['一采'].canvas={count:1,url:null,files:[{name:'R002 · P001 · 画布',url:base+'/files/isolated.workflow.json?download=1'}]};
-      stages['一采'].director={count:1,url:null,files:[{name:'R002 · P001 · 导演包',url:base+'/works/F002/production-director?record=R002'}],
-       messages:['R001 · P001：缺少原素材绑定']};
      }
      const workPackages=identity==='F002'?[{key:packageKey,label:'R002 剪映草稿包',version:'R002',purpose:'隔离交接',rounds:[2],count:2,jypack:download+'&format=jypack',zip:download+'&format=zip'}]:archive?
        [{key:'归档/原剪映草稿.jypack',label:'第6轮 · 中文原交接',version:'第6轮',purpose:'隔离历史',rounds:[],archived:true,jypack:base+'/files/归档/原剪映草稿.jypack?download=1',zip:null}]:[];
@@ -125,11 +123,6 @@ try {
      for(const note of changes.notes)saved[identity].notes[`round/${note.roundNumber}/${note.segment}/${note.stage}/${note.run}`]={...note,updatedAt:'2026-11-06'};
      for(const note of changes.rounds)saved[identity].rounds[note.number]={...note,updatedAt:'2026-11-06'};
      return route.fulfill({json:saved[identity]});
-    }
-    if(suffix==='/production-director'&&identity==='F002'){
-     assert.equal(url.searchParams.get('record'),'R002');
-     technicalDownloads.push('director');
-     return route.fulfill({body:'isolated director pack',headers:{'Content-Disposition':'attachment; filename="R002.mmxpack.zip"'}});
     }
     if(suffix==='/production')return route.fulfill({json:{issues:[],segments:[{id:'P001',duration:3,scriptHtml:'',videos:[{key:identity+'/P001.mp4',url:base+'/files/'+identity+'.webm',run:'R001',stage:'一采',approved:false,adoptionKnown:false,candidateNumber:1,fileRevision:identity,deliveryStatus:'已取回',context:{scriptHtml:'<p>'+identity+'实际镜头</p>',shots:[],prompts:{english:identity+' actual prompt',chinese:identity+'中文'},references:{common:[],segment:[]},issues:[]}}]}],batches:[{id:'R001',name:'R001-'+work.name,segments:[{id:'P001',stage:'一采',key:identity+'/P001.mp4'}]}]}});
     if(suffix==='/production-notes/archive' && work.hasArchive && request.method()==='GET') {
@@ -460,11 +453,10 @@ try {
   await page.getByRole('img',{name:/^P001 一采：R001 · 任务状态待核对 · 未取回/}).waitFor();
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
   await page.getByRole('region',{name:'一采资源下载',exact:true}).getByText('第2轮 · R002 剪映草稿包',{exact:true}).waitFor();
-  const technical=page.getByLabel('一采画布与导演包',{exact:true});
-  await technical.getByText('画布与导演包',{exact:true}).click();
-  await technical.getByText('R001 · P001：缺少原素材绑定',{exact:true}).waitFor();
+  const technical=page.getByLabel('一采原画布',{exact:true});
+  await technical.getByText('原画布',{exact:true}).click();
   assert.deepEqual(technicalDownloads,[]);
-  for(const [label,file] of [['画布','R002.workflow.json'],['导演包','R002.mmxpack.zip']]){
+  for(const [label,file] of [['画布','R002.workflow.json']]){
    const triggered=page.waitForEvent('download');
    await technical.getByRole('button',{name:'R002 · P001 · '+label,exact:true}).click();
    assert.equal((await triggered).suggestedFilename(),file);

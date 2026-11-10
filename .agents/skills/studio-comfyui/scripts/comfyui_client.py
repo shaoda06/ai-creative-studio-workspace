@@ -4,7 +4,6 @@ import argparse
 import base64
 import hashlib
 import http.client
-import io
 import json
 import math
 import mimetypes
@@ -18,7 +17,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-import zipfile
 from concurrent.futures import Future
 from functools import partial
 from threading import Lock
@@ -346,80 +344,6 @@ def download(client, args):
             temp_path.unlink(missing_ok=True)
 
 
-def export_pack(client, args):
-    source = Path(args.workflow).resolve(strict=True)
-    target = Path(args.output).absolute()
-    if os.path.lexists(target):
-        raise ClientError("file_exists", "Refusing to overwrite local output", path=str(target))
-    if not target.name.endswith(".mmxpack.zip"):
-        raise ClientError("invalid_path", "Director pack output must end with .mmxpack.zip")
-    workflow = strict_json(source.read_bytes())
-    validate_workflow(workflow)
-    node = workflow.get(args.node_id)
-    if node is None or node["class_type"] != "MiniMaxH3Director":
-        raise ClientError("invalid_node", "--node-id must identify a MiniMaxH3Director API node")
-    inputs = node["inputs"]
-    timeline = strict_json(inputs["timeline_data"])
-    if not isinstance(timeline, dict):
-        raise ClientError("invalid_timeline", "Expected serialized timeline object")
-    # Match the native web exporter; external model/Refine/SIGMAS links are not pack widgets.
-    widget_names = ("steps", "sampler", "scheduler", "cfg", "shift_video", "shift_audio", "seed", "task_type")
-    widgets = {key: inputs[key] for key in widget_names if key in inputs}
-    if any(isinstance(value, (list, dict)) for value in widgets.values()):
-        raise ClientError("invalid_widgets", "Export requires literal widget values, not linked inputs")
-    route = "/minimax/director/export_pack"
-    headers = {"Content-Type": "application/json"}
-    body = {"timeline": timeline, "widgets": widgets}
-    preflight = client.json(route, encoded({**body, "dryRun": True}), headers)
-    if preflight["missing"]:
-        raise ClientError("missing_assets", "Director pack references missing remote media", missing=preflight["missing"])
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = None
-    try:
-        with client.open(route, encoded(body), headers) as response:
-            if response.headers.get("Content-Type", "").split(";", 1)[0] == "application/json":
-                result = strict_json(response.read())
-                if result["missing"]:
-                    raise ClientError("missing_assets", "Media disappeared during export", missing=result["missing"])
-                stream = io.BytesIO(base64.b64decode(result.pop("zipB64"), validate=True))
-                expected, download_name = result["bytes"], result["downloadName"]
-            else:
-                missing = strict_json(response.headers["X-Pack-Missing"])
-                if missing:
-                    raise ClientError("missing_assets", "Media disappeared during export", missing=missing)
-                stream = response
-                expected = int(response.headers["Content-Length"])
-                download_name = response.headers["X-Pack-Download-Name"]
-            digest, count = hashlib.sha256(), 0
-            with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".comfy-pack-", delete=False) as out:
-                temp_path = Path(out.name)
-                while block := stream.read(CHUNK):
-                    out.write(block)
-                    digest.update(block)
-                    count += len(block)
-                out.flush()
-                os.fsync(out.fileno())
-        if count != expected:
-            raise ClientError("incomplete_download", "Export content length mismatch", expected=expected, actual=count)
-        with zipfile.ZipFile(temp_path) as pack:
-            bad_entry = pack.testzip()
-            if bad_entry:
-                raise ClientError("invalid_pack", "ZIP CRC check failed", entry=bad_entry)
-            metadata = strict_json(pack.read("pack.json"))
-            if metadata["format"] != "minimax-h3-director-pack" or metadata["formatVersion"] != 1:
-                raise ClientError("invalid_pack", "Unsupported Director pack format")
-            pack.getinfo("timeline.json")
-            pack.getinfo("shared_params/shared_params.json")
-            entry_count = len(pack.infolist())
-        os.link(temp_path, target)
-        return {"path": str(target), "bytes": count, "sha256": digest.hexdigest(),
-                "source_workflow": str(source), "node_id": args.node_id,
-                "download_name": download_name, "preflight": preflight, "zip_entries": entry_count}
-    finally:
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
-
-
 class Parser(argparse.ArgumentParser):
     def error(self, message):
         raise ClientError("arguments", message)
@@ -428,7 +352,7 @@ class Parser(argparse.ArgumentParser):
 def parser(*, allowed_commands=None, require_url=False):
     root = Parser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True, parser_class=Parser)
-    for name in allowed_commands or ("upload", "submit", "status", "download", "export-pack"):
+    for name in allowed_commands or ("upload", "submit", "status", "download"):
         sub = commands.add_parser(name)
         sub.add_argument("--url", required=require_url,
                          default=None if require_url else os.environ.get("COMFYUI_URL"))
@@ -451,10 +375,6 @@ def parser(*, allowed_commands=None, require_url=False):
             sub.add_argument("--type", required=True, choices=("input", "output", "temp"))
             sub.add_argument("--output", required=True)
             sub.add_argument("--sha256", help="Optional expected transfer hash, not media quality validation")
-        else:
-            sub.add_argument("--workflow", required=True, help="Saved API node JSON, not canvas JSON")
-            sub.add_argument("--node-id", required=True, help="MiniMaxH3Director node ID in that API")
-            sub.add_argument("--output", required=True, help="New .mmxpack.zip file")
     return root
 
 
@@ -470,8 +390,6 @@ def main(argv=None, *, client_factory=Client, allowed_commands=None, require_url
                 protected.append(Path(args.file).absolute())
             if args.command == "download":
                 protected.append(Path(args.output).absolute())
-            if args.command == "export-pack":
-                protected.extend((Path(args.workflow).absolute(), Path(args.output).absolute()))
             if args.command == "submit":
                 protected.extend(Path(args.record_dir).absolute() / n for n in
                                  (args.attempt_name, args.request_name, args.response_name))

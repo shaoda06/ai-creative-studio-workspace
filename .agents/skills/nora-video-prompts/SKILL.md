@@ -37,4 +37,4 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 交付、状态与接续执行[提示词自检与执行授权](../nora-serial-drama/references/主控操作规范.md#提示词自检与执行授权)。仅写或核对提示词时在正文交付结束；获授权生成才交[D10视频制作](../nora-drama-production/SKILL.md)。正常结果通知不重新做内容审查；修订依据和授权边界按[返修归属](../nora-serial-drama/references/制作返修接续规范.md)。
 
-导演台的公共/本组正文、中文对应与资料映射按[业务接续](references/导演台正文与素材业务接续规范.md)落实；共用工具不读取短剧资料来补业务设定。
+AiMixer 导演台的公共/本组正文、中文对应与资料映射按[业务接续](references/AiMixer导演台正文与素材业务接续规范.md)落实；共用工具不读取短剧资料来补业务设定。

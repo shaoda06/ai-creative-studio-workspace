@@ -1,4 +1,4 @@
-"""批准收尾端到端测试：临时项目、模拟原生导出和网页，无真实生成。"""
+"""批准收尾端到端测试：临时项目和模拟网页，无真实生成。"""
 import argparse
 import copy
 import contextlib
@@ -9,12 +9,12 @@ import zipfile
 import urllib.parse
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import video_approve as tool
 import test_scene_finalize as fixtures
 
-NativeClient = fixtures.NativeClient
+RemoteClient = Mock(side_effect=AssertionError('批准收尾不应建立远端 ComfyUI 客户端'))
 
 
 class ApprovalTests(unittest.TestCase):
@@ -99,7 +99,7 @@ class ApprovalTests(unittest.TestCase):
         if stage == '后处理':
             self.plan['postprocess_delivery'] = {i['identity']: 'workflow' for i in items}
         self.fixture.put(self.request, self.plan)
-        NativeClient.calls = []
+        RemoteClient.reset_mock()
         return items
 
     def run_plan(self, apply=True, browser_error=None):
@@ -113,7 +113,7 @@ class ApprovalTests(unittest.TestCase):
                 self.assertEqual(tool.selected(root, identity.rsplit('-', 2)[0], stage), identity)
             return {'state': 'verified', 'review_url': 'http://browser/#/projects/test'}
 
-        with patch.object(tool.final.client, 'Client', NativeClient), patch.object(tool, 'browser_sync', side_effect=verify):
+        with patch.object(tool.final.client, 'Client', RemoteClient), patch.object(tool, 'browser_sync', side_effect=verify):
             return tool.approve(argparse.Namespace(project=str(self.root), plan=str(self.request), apply=apply, timeout=30))
 
     def register_final(self, item):
@@ -414,7 +414,7 @@ class ApprovalTests(unittest.TestCase):
                         self.assertTrue(all(Path(v['selected_path']).is_file() for v in result['sources']))
                         self.assertNotIn('finalization', result)
                         self.assertTrue(case.run_plan()['reused'])
-                        self.assertEqual(NativeClient.calls, [])
+                        RemoteClient.assert_not_called()
                         self.assertEqual(before, {p: p.read_bytes() for p in case.fixture.ep.rglob('*.mmxpack.zip')})
                 finally:
                     case.doCleanups()
@@ -427,7 +427,7 @@ class ApprovalTests(unittest.TestCase):
         result = self.run_plan()
         self.assertEqual(result['state'], 'needs_attention', result)
         self.assertEqual(result['phase'], 'sources')
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
 
     def test_revision_browser_recovery_keeps_exact_sources_without_export(self):
         originals = self.setup_stage('一采')
@@ -439,7 +439,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['state'], 'completed', result)
         self.assertEqual(result['sources'], failed['sources'])
         self.assertEqual(result['stage'], '一采')
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
 
     def test_last_partial_generation_approval_recovers_previous_adopted_source(self):
         self.setup_stage('一采')
@@ -464,7 +464,7 @@ class ApprovalTests(unittest.TestCase):
         result=self.run_plan()
         self.assertEqual(result['state'],'completed',result)
         self.assertFalse(list(self.fixture.ep.rglob('*一采定稿-002-导演包.mmxpack.zip')))
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
 
     def test_whole_postprocess_approval_finishes_episode_and_repeat_never_exports_again(self):
         items = self.setup_stage(parts=tuple(f'P{i:03d}' for i in range(1, 13)))
@@ -495,7 +495,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['episode_missing'], [])
         self.assertNotIn('finalization', result)
         self.assertFalse(list((self.fixture.ep / '06-阶段采用视频/03-后处理').rglob('*.mmxpack.zip')))
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+        RemoteClient.assert_not_called()
         self.assertIn('| 已完成 |', (self.root / '项目进度.md').read_text())
         cells = tool.project_progress.phase_row((self.root / '项目进度.md').read_text(), 'EP001')[1]
         self.assertEqual(cells[4], '- 无')
@@ -504,7 +504,7 @@ class ApprovalTests(unittest.TestCase):
         for path, data in original.items():
             self.assertEqual(path.read_bytes(), data)
         self.assertEqual(self.run_plan()['state'], 'completed')
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+        RemoteClient.assert_not_called()
 
     def test_postprocess_completion_does_not_require_optional_director_archive(self):
         self.setup_stage()
@@ -513,7 +513,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['state'], 'completed')
         self.assertTrue(result['episode_completed'])
         self.assertNotIn('finalization', result)
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
         self.assertFalse(list((self.fixture.ep / '06-阶段采用视频/02-二采').rglob('*.mmxpack.zip')))
         missing = tool.episode_missing(self.root, 'EP001')
         self.assertEqual(missing, [])
@@ -527,7 +527,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['state'], 'adopted_partial')
         self.assertFalse(result['episode_completed'])
         self.assertIsNone(tool.selected(self.root, 'EP001-C001-P002', '后处理'))
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
         pending = tool.project_progress.phase_row((self.root / '项目进度.md').read_text(), 'EP001')[1][4]
         self.assertIn('P002', pending)
         self.assertNotIn('EP001-C001-P001', pending)
@@ -537,7 +537,7 @@ class ApprovalTests(unittest.TestCase):
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         self.assertEqual(self.run_plan(apply=False)['state'], 'ready')
         self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
         self.assertEqual(self.browser_calls, [])
 
     def test_browser_failure_preserves_approval_and_archive_and_recovers_without_export(self):
@@ -550,7 +550,7 @@ class ApprovalTests(unittest.TestCase):
         recovered = self.run_plan()
         self.assertEqual(recovered['state'], 'completed')
         self.assertEqual(recovered['previous_failures'][0]['error'], '模拟网页失败')
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+        RemoteClient.assert_not_called()
 
     def test_empty_approval_stops_before_moving(self):
         self.setup_stage()
@@ -559,17 +559,16 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(failed['state'], 'needs_attention')
         self.assertIn('批准原话', failed['error'])
         self.assertIsNone(tool.selected(self.root, 'EP001-C001-P001', '后处理'))
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
 
-    def test_unavailable_exporter_does_not_block_first_pass_adoption(self):
+    def test_first_pass_adoption_runs_without_a_remote_client(self):
         self.setup_stage('一采')
-        NativeClient.corrupt = True
         result = self.run_plan()
         self.assertEqual(result['state'], 'completed', result)
         self.assertFalse(result['episode_completed'])
         self.assertEqual(tool.selected(self.root, 'EP001-C001-P001', '一采'), self.plan['identities'][0])
         self.assertNotIn('| 已完成 |', (self.root / '项目进度.md').read_text())
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
         self.assertTrue(self.browser_calls)
 
     def test_last_partial_approval_finalizes_existing_approved_combination(self):
@@ -584,7 +583,7 @@ class ApprovalTests(unittest.TestCase):
         self.request = self.fixture.extra / '执行附件' / all_ids[1] / '批准收尾请求.json'
         result = self.run_plan()
         self.assertTrue(result['episode_completed'])
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+        RemoteClient.assert_not_called()
 
     def test_browser_verification_uses_existing_endpoints_and_exact_scene_revision(self):
         self.setup_stage()
@@ -715,12 +714,12 @@ class ApprovalTests(unittest.TestCase):
         self.assertFalse(result['episode_completed'])
         self.assertEqual(tool.adopt.load(source), origin)
         self.assertEqual(len(result['sources']), 2)
-        self.assertEqual(NativeClient.calls, [])
+        RemoteClient.assert_not_called()
 
     def test_cli_returns_compact_result_and_saves_full_report(self):
         self.setup_stage()
         output = io.StringIO()
-        with patch.object(tool.final.client, 'Client', NativeClient), \
+        with patch.object(tool.final.client, 'Client', RemoteClient), \
                 patch.object(tool, 'browser_sync', return_value={'state': 'verified', 'review_url': 'http://browser/project'}), \
                 patch.object(tool.sys, 'argv', ['video_approve.py', '--project', str(self.root), '--plan', str(self.request), '--apply']), \
                 contextlib.redirect_stdout(output):
@@ -737,7 +736,7 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(result['state'], 'completed')
         self.assertFalse(result['episode_completed'])
         self.assertIn('| 进行中 |', (self.root / '项目进度.md').read_text())
-        self.assertEqual([c[0] for c in NativeClient.calls].count('export'), 0)
+        RemoteClient.assert_not_called()
 
 
 if __name__ == '__main__':
