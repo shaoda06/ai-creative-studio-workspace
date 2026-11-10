@@ -1,6 +1,8 @@
 # ComfyUI-Songssx导演台使用规范
 
-适用于 `MiniMax-H3-Songssx导演台-Selflift-标准版.json`。用实际节点类型辨认工作流。该画布中，402 是 `MiniMaxH3TimelinePlanner`，403 是 `MiniMaxH3FiniteSegmentVideoSampler`，404 是 `SaveVideo`。
+适用于 [MiniMax H3 Songssx 导演台 SelfLift 标准版画布](workflows/非正式工作流/MiniMax-H3-Songssx导演台-Selflift-标准版.workflow.json)。画布原样收纳为备用工作流。配套 API 版待从支持该画布节点的 ComfyUI 导出后，按相同主文件名保存为 `.api.json`。
+
+用实际节点类型辨认工作流。该画布中，402 是 `MiniMaxH3TimelinePlanner`，403 是 `MiniMaxH3FiniteSegmentVideoSampler`，404 是 `SaveVideo`。
 
 ## 场次与分段
 
