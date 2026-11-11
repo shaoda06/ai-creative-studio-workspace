@@ -14,12 +14,12 @@ license: MIT
 | 完整重做或局部返修范围 | [完整重做](references/完整重做规范.md)，据此确定来源、改稿范围及受影响资料 |
 | 首帧需求、素材选择及已有素材复用 | [首帧条件](references/首帧参考图规范.md#1-制作复用与画面要求)、[分段素材](references/分段素材与首帧规范.md) |
 | 场景机位与选图 | [场景视图规划](../nora-drama-images/references/场景图片制作规范.md#42-视图规划与复用)，缺设计交D04、缺图交D06 |
-| 手绘导演表 | [导演表业务接入](references/手绘导演分镜表规范.md)，调用公共制作规则及模板，依据本版文字分镜交图片阶段执行 |
+| 手绘导演表 | 按[共用流程](../studio-video-production/SKILL.md#导演分镜表选择)落实本场选择，需要制作时按[业务接入](references/手绘导演分镜表规范.md)交图片阶段执行 |
 
 Nora 的山音方法按[范围与适配](../nora-serial-drama/references/山音方法适配规范.md#山音方法的范围与适配)接入同一稿件。画面文字、声音默认、资产资格及已确认项目约定沿本业务规范，具体声音边界见场次业务规则。
 
 ## 交接与完成
 
-剧情、台词和决定因果的必要动作回[剧本阶段](../nora-drama-write/SKILL.md)维护；镜头及P段落实到当前分镜。素材设计和图片分别交D04与D06，确认后的镜头交[视频提示词](../nora-video-prompts/SKILL.md)转写。按[文本自检](../nora-drama-review/references/文本自检与订正规范.md#文本交付前的自检与订正)合并订正，本批形成送审或执行方案时按[修改轮次](../nora-serial-drama/references/场次版本组合规范.md#场次修改轮次)一次登记该集的完整组合。
+剧情、台词和决定因果的必要动作回[剧本阶段](../nora-drama-write/SKILL.md)维护；镜头及P段落实到当前分镜。素材设计和图片分别交D04与D06，按[共用生成资产与提示词](../studio-video-production/SKILL.md#生成资产与提示词)核对各段所需参考，再交[视频提示词](../nora-video-prompts/SKILL.md)转写。按[文本自检](../nora-drama-review/references/文本自检与订正规范.md#文本交付前的自检与订正)合并订正，本批形成送审或执行方案时按[修改轮次](../nora-serial-drama/references/场次版本组合规范.md#场次修改轮次)一次登记该集的完整组合。
 
 正式产出为场次分镜与本集轻量索引，保存及交付按[主控完成标准](../nora-serial-drama/references/主控操作规范.md#完成标准)。业务脚本负责保存明确的组合；原生JSON/JSONL机检的输入边界按[脚本使用规范](references/脚本使用规范.md)。

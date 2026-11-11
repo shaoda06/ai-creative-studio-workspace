@@ -13,7 +13,7 @@ description: Iris 商业视频分镜与声音二级业务阶段，落实逐镜�
 - 内部生产：[模板](templates/分镜与声音制作稿.md)。
 - 交付整理：[模板](templates/分镜脚本与导演表.md)，来源于当前生产资料与实际成果。
 
-导演表：按[业务接入](references/导演表规则.md)调用公共制作规则与版式，本地仅使用[业务登记模板](templates/导演表内容.md)。
+分镜及分段成形后，按[共用导演表选择](../studio-video-production/SKILL.md#导演分镜表选择)接续。制表按[业务接入](references/导演表规则.md)调用共用版式，使用[业务登记模板](templates/导演表内容.md)记录。
 
 Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流程与交接.md#业务与工具分工)协作；工具接续查[能力状态](../iris-commercial-video/references/工具适配.md)，实际整理对外材料时读取[跨阶段交付规则](../iris-commercial-video/references/对外交付.md)。
 
