@@ -2,13 +2,13 @@
 
 用于把已有视频中的一名表演者换成目标角色，按原片保留动作、镜头、背景和声音。每次 Remake 请求处理一个片段，多个片段由调用方负责切分、提交和合片。
 
-- [画布](workflows/Minimax-H3/Viggle-Remake-单人换人-双参考图.workflow.json)与[API 模板](workflows/Minimax-H3/Viggle-Remake-单人换人-双参考图.api.json)使用同一组节点编号。当前 Swap 采样使用 `#15`，备用 Edit Sigma `#33` 保留在画布上。Edit 模式使用对应的 Edit 权重与 Sigma。
+- [画布](workflows/Viggle-Remake-单人换人-双参考图.workflow.json)与[API 模板](workflows/Viggle-Remake-单人换人-双参考图.api.json)使用同一组节点编号。当前 Swap 采样使用 `#15`，备用 Edit Sigma `#33` 保留在画布上。Edit 模式使用对应的 Edit 权重与 Sigma。
 - 基准使用 Swap INT8、Euler 六步、24 fps、短边 480、Mystic 去油 LoRA 0.35。工作流内的预设值仅作为本模板起点。[Viggle 官方 ComfyUI 说明](https://huggingface.co/Viggle/Viggle-Remake/blob/main/COMFYUI.md)
 
 ## 1. 确定换人目标和参考图
 
 - 从原片及用户说明确定要换的表演者。同框有其他人时，在提示词写清原片里可辨认的目标，以及其他人物的保留要求。
-- 两张参考图按实际输入顺序编号，并共同定义一个 `<Subject 1>`。使用 Chloe 造型资产时，`<Picture 1>` 取同套造型已采用的面部三视图，负责身份、脸型、五官和妆容。`<Picture 2>` 取全身定装三视图遮面版，负责体型、头身比例、服装、鞋履和配饰。发型结合两图。成片露脸，双三视图作普通参考时 `pins` 留空。[Chloe 造型作为视频角色参考](../../chloe-assets/references/模特与服装图片制作流程.md#造型作为视频角色参考)
+- 调用业务提供同一角色的两张参考图及各自分工。按实际输入顺序编号为 `<Picture 1>` 和 `<Picture 2>`，共同定义一个 `<Subject 1>`。模板以第一张提供面部、第二张提供体型与穿搭为例，按实际素材和目标调整。双三视图作普通参考时 `pins` 留空。
 - 提示词按 Viggle 官方六段顺序写成目标成片描述。各段可复用同一份正文和造型图。原片里辨认人物的线索或镜头安排改变时，调整该段正文，时码从段内 00:00.000 起算。[Viggle 官方提示词指南](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md)
 
 ## 2. 规范源片和确定分段
@@ -24,7 +24,7 @@
 | 节点 | API 输入字段 | 填写内容 |
 | --- | --- | --- |
 | `#62` | `file` | 当前段的 24 fps 源片 |
-| `#9`、`#64` | `image` | 按顺序绑定面部三视图、全身定装遮面版 |
+| `#9`、`#64` | `image` | 按实际顺序绑定 `<Picture 1>`、`<Picture 2>` |
 | `#34` | `value` | 当前段的完整六段英文提示词 |
 | `#66` | `value` | 当前段拟保留的时长，单位为秒 |
 | `#54` | `value` | 视频画布及普通参考图的短边设定 |

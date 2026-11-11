@@ -22,6 +22,7 @@ def workflow_locations(root):
         skills = SKILL_ROOT.parent
         return [('Qwen-image-2-1', skills / 'studio-qwen-image/references/workflows', 'formal'),
                 ('Minimax-H3', root / 'Minimax-H3', 'formal'),
+                ('Minimax-H3', skills / 'studio-h3-remake/references/workflows', 'formal'),
                 ('后处理综合', skills / 'studio-video-processing/references/workflows', 'formal'),
                 ('后处理综合', skills / 'studio-image-processing/references/workflows', 'formal'),
                 ('非正式工作流', root / '非正式工作流', 'backup')]

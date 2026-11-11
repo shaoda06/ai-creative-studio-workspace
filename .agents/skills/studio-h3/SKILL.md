@@ -1,15 +1,17 @@
 ---
 name: studio-h3
-description: MiniMax H3 共用提示词模式、正文格式、参考素材语义和导演台选择入口。
+description: MiniMax H3 共用提示词模式、正文格式、参考素材语义和具体工作流入口。
 ---
 
 # Studio H3 共用规则
 
-调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对提示词前，按当前任务读取所用的 [AiMixer 导演台](../studio-h3-aimixer/SKILL.md) 或 [Songssx 导演台](../studio-h3-songssx/SKILL.md)；按实际模式阅读[官方提示词技能](../h3-prompt-writing/SKILL.md)及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，读取对应的[官方提示词技能](../h3-prompt-writing/SKILL.md)及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+
+- [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)负责运行组和缓存一采、二采。
+- [Songssx 导演台](../studio-h3-songssx/SKILL.md)负责 GEN 时间线和 SelfLift。
+- 已有原片并明确使用 Viggle Remake Swap 换人时，进入 [Remake 单人换人](../studio-h3-remake/SKILL.md)。
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
-
-已有原片并明确使用 Viggle Remake Swap 换人时，见[单人换人画布、API 与分段流程试行稿](references/Viggle-Remake单人换人流程.md)。提示词采用 Viggle 的六段格式，参考图按实际绑定顺序编号。
 
 ## 生成段时长
 
