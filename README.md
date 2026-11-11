@@ -6,7 +6,7 @@
 
 在Codex中选择本总目录。Nora、Iris、Chloe是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
 
-统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)，只识别业务和登记共用工具。连续短剧由[一级业务](.agents/skills/nora-serial-drama/SKILL.md)组织D01–D12二级阶段，各业务共用的运营由[运营一级业务](.agents/skills/studio-social-operations/SKILL.md)组织六个阶段。业务决定内容、来源和采用，共用工具处理模型与接口，后台处理队列、结果事实及展示。现行引用直接指向维护者，已被替代的技能入口不保留跳转。商业任务由同库[商业一级业务](.agents/skills/iris-commercial-video/SKILL.md)接续，自营带货由[Chloe一级业务](.agents/skills/chloe-commerce-video/SKILL.md)接续。
+统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)。[共用视频制作核心](.agents/skills/studio-video-production/SKILL.md)从已确认脚本接续到视频候选与技术结果，按环节调用共用规则和工具。[Nora 短剧](.agents/skills/nora-serial-drama/SKILL.md)、[Iris 商业视频](.agents/skills/iris-commercial-video/SKILL.md)与[Chloe 带货](.agents/skills/chloe-commerce-video/SKILL.md)分别负责业务准备、审阅、返修接续、采用及交付。[Studio 社媒运营](.agents/skills/studio-social-operations/SKILL.md)等附加能力按实际任务接入。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
 2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属业务工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
@@ -71,7 +71,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 
 ### 本工作区技能与风格资源
 
-[统一入口](.agents/skills/studio-entry/SKILL.md)路由Nora、Iris、Chloe及Studio运营；各业务及公共工具分别维护规则和调用条件。第三方适配资源保留来源与许可，详见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)、[创作技法](.agents/skills/studio-creative-techniques/SKILL.md)和[Krea2风格库](.agents/skills/studio-krea2-style-library/SKILL.md)按任务选用，不因已随仓库提供而自动成为项目采用方案。
+[统一入口](.agents/skills/studio-entry/SKILL.md)登记核心流程、各业务入口和共用附加能力。[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)和[Krea2风格库](.agents/skills/studio-krea2-style-library/SKILL.md)按项目需要选用。第三方适配资源的来源与许可见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。
 
 | 资源 | 来源与作者 |
 | --- | --- |
