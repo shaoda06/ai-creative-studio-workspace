@@ -57,7 +57,7 @@ export function ChloeReferenceVideoDetail({ query, workspaceQuery }: {
         <h2>参考视频信息</h2>
         <dl className="chloe-overview-fields">
           <div><dt>标题</dt><dd>{video.name}</dd></div>
-          <div><dt>来源</dt><dd>{video.sourceUrl ? <a href={video.sourceUrl} target="_blank" rel="noreferrer">{video.source}</a> : video.source}</dd></div>
+          <div><dt>来源</dt><dd>{video.sourceUrl ? <a href={video.sourceUrl} target="_blank" rel="noreferrer">{video.source.split('－', 1)[0]}</a> : video.source}</dd></div>
           <div><dt>时长</dt><dd>{formatProductionDuration({ seconds: video.duration, estimated: false })}</dd></div>
           <div><dt>比例</dt><dd>{video.aspectRatio}</dd></div>
           <div><dt>分辨率</dt><dd>{video.width} × {video.height}</dd></div>
