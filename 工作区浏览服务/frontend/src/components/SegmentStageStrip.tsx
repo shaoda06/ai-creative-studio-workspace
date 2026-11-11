@@ -9,6 +9,7 @@ import { latestVideo, workVideoState } from './SegmentVideo';
 import './SegmentStageStrip.css';
 
 const stages = ['一采', '二采', '后处理'];
+type StripSegment = NonNullable<FileItem['segments']>[string][number] & { outputDuration?: number };
 
 export function segmentStageStatus(videos: SegmentVideo[], stage: string, chosen?: ReviewVersions[string]) {
   const recorded = videos.filter(video => video.stage === stage);
@@ -24,7 +25,7 @@ export function segmentStageStatus(videos: SegmentVideo[], stage: string, chosen
 }
 
 export function SegmentStageStrip({ segments, selected, onSelect, vertical = false, newVideoSegments, previousEnding, previousSelected, onPreviousSelect, roundVersions, showStages = true }: {
-  segments: NonNullable<FileItem['segments']>[string]; newVideoSegments: Set<string>; selected: string; vertical?: boolean; onSelect: (id: string) => void;
+  segments: StripSegment[]; newVideoSegments: Set<string>; selected: string; vertical?: boolean; onSelect: (id: string) => void;
   previousEnding: PreviousEpisodeEnding | null; previousSelected: boolean; onPreviousSelect: () => void;
   roundVersions?: ReviewVersions;
   showStages?: boolean;
@@ -37,6 +38,18 @@ export function SegmentStageStrip({ segments, selected, onSelect, vertical = fal
     const offset = active.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     if (offset < 0 || offset + active.offsetHeight > scroller.clientHeight) scroller.scrollTop += offset;
   }, [selected, vertical]);
+  const segmentButton = (item: StripSegment) => {
+    const { outputDuration } = item;
+    const isOutput = outputDuration !== undefined;
+    const seconds = `${isOutput ? Number(outputDuration.toFixed(3)) : item.duration}秒`;
+    const duration = `${isOutput ? '成片时长' : '计划时长'} ${seconds}`;
+    const isNew = newVideoSegments.has(item.id);
+    return <PointerTooltip key={item.id} text={`${item.id} · ${duration}${isNew ? ' · 本轮新生成视频' : ''}`}>
+      <button aria-label={`分段 ${item.id}，${duration}${isNew ? '，本轮新生成视频' : ''}`} aria-pressed={item.id === selected} onClick={() => onSelect(item.id)}>
+        <span>{item.label || item.id}</span><span>{!showStages && !isOutput ? `计划 ${seconds}` : seconds}</span>{isNew && <RoundNewDot />}
+      </button>
+    </PointerTooltip>;
+  };
   const previousAvailable = previousEnding?.segment?.videos.some(video => video.url);
   const previousButton = previousEnding && <button className="previous-ending-button" data-selected={previousSelected}
     aria-label={`查看${previousEnding.episode}上集末段`} aria-pressed={previousSelected} disabled={!previousAvailable} onClick={onPreviousSelect}
@@ -53,15 +66,15 @@ export function SegmentStageStrip({ segments, selected, onSelect, vertical = fal
   if (vertical) return <div ref={rail} className="segment-vertical-strip" role="group" aria-label="本场分段">
     {previousEnding && <div className="segment-vertical-item is-previous-ending" data-selected={previousSelected}>{previousButton}</div>}
     {segments.map(item => <div className="segment-vertical-item" key={item.id} data-selected={item.id === selected}>
-      <PointerTooltip text={`${item.id} · 计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? ' · 本轮新生成视频' : ''}`}><button aria-label={`分段 ${item.id}，计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? '，本轮新生成视频' : ''}`} aria-pressed={item.id === selected} onClick={() => onSelect(item.id)}><span>{item.label || item.id}</span><span>{item.duration}秒</span>{newVideoSegments.has(item.id) && <RoundNewDot />}</button></PointerTooltip>
+      {segmentButton(item)}
     </div>)}
   </div>;
   return <div className="segment-scroll segment-progress-scroll">
-    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '') + (showStages ? '' : ' segment-timeline-navigation')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
+    <div className={'segment-timeline' + (previousEnding ? ' has-previous-ending' : '') + (showStages ? '' : ' segment-timeline-navigation')} style={{ '--segment-columns': segments.map(item => `minmax(84px, ${item.outputDuration ?? item.duration}fr)`).join(' '), '--segment-count': segments.length } as CSSProperties}>
       {previousButton}
       {previousStatus}
       <div className="segment-strip" role="group" aria-label="本场分段">
-        {segments.map(item => <PointerTooltip key={item.id} text={`${item.id} · 计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? ' · 本轮新生成视频' : ''}`}><button  aria-label={`分段 ${item.id}，计划时长 ${item.duration}秒${newVideoSegments.has(item.id) ? '，本轮新生成视频' : ''}`}  aria-pressed={item.id === selected} onClick={() => onSelect(item.id)}><span>{item.label || item.id}</span><span>{item.duration}秒</span>{newVideoSegments.has(item.id) && <RoundNewDot />}</button></PointerTooltip>)}
+        {segments.map(segmentButton)}
       </div>
       {showStages && <div className="segment-stage-strip" role="group" aria-label="分段制作进度：一采、二采、后处理">
         {segments.map(item => <div className="segment-stage-cell" key={item.id} data-segment={item.id} data-selected={item.id === selected}>

@@ -36,6 +36,12 @@ export async function checkSharedPlayback(page, width) {
       await repeat.uncheck();
     }
   }
+  const descriptionToggle = demo.getByRole('button', { name: '显示整场视频标注', exact: true });
+  await descriptionToggle.click();
+  assert.equal(await demo.locator('.segment-video video').getAttribute('aria-label'), '第3轮 · 后处理');
+  await demo.getByText('第3轮 · 后处理', { exact: true }).waitFor();
+  await descriptionToggle.click();
+  assert.match(await demo.locator('.segment-video video').getAttribute('aria-label'), /一采 · R001 · 候选一/);
   const video = business.locator('.segment-video video');
   const repeat = business.getByRole('checkbox', { name: '重复播放', exact: true });
   await video.evaluate(async el => {

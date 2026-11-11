@@ -266,15 +266,14 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       {recordRounds.map(({ id, item }) => {
         const candidates = current.segments?.[id] || [];
         const generated = newVideoSegmentsForRound(candidates, current.sceneRounds![id], item.number);
+        const sceneVideo = item.songssx?.video;
         return <section key={id}>
           <h3>{id === 'whole' ? '整片' : `场次 ${id}`}</h3>
           <ul>
             {([[contentLabel, item.script], ['分镜', item.storyboard], ['制作记录', item.record]] as const).map(([label, file]) =>
               file && <li key={label}><button className="link" onClick={() => openRecordFile(file)}>{label}{file.version ? ` ${file.version}` : ''}</button></li>)}
-            {item.songssx?.video?.url && <li><LinkButton onClick={() => {
-              const video = item.songssx!.video!;
-              openRecordFile({ ...video, kind: 'video', name: `整场视频 · ${video.run}`, downloadFromPlayer: false });
-            }}>整场视频 · {item.songssx.video.run}</LinkButton></li>}
+            {sceneVideo?.url && <li><LinkButton onClick={() => openRecordFile({ ...sceneVideo, kind: 'video',
+              name: `${id} · 第${item.number}轮 · ${sceneVideo.stage}`, downloadFromPlayer: false })}>整场视频 · {sceneVideo.stage}</LinkButton></li>}
             {!item.songssx && item.segments.filter(entry => generated.has(entry.id)).map(entry => {
               const video = candidates.find(candidate => candidate.id === entry.id)?.videos.find(video =>
                 video.url && video.stage === entry.stage && video.run === entry.run && (!entry.key || video.key === entry.key));

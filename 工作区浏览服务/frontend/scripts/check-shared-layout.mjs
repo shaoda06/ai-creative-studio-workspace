@@ -567,6 +567,14 @@ try {
     assert.equal(await showcase.getByRole('link', { name: '查看原图 ↗', exact: true }).count(), 1);
     assert.equal(await showcase.getByRole('link', { name: '下载原图', exact: true }).count(), 1);
     await showcase.getByRole('button', { name: '选集与分段', exact: true }).click();
+    const stripDemo = showcase.getByRole('region', { name: '分段与制作状态', exact: true });
+    for (const layout of ['切换竖排', '切换横排']) {
+      const output = stripDemo.getByRole('button', { name: /^分段 P001，成片时长 2\.375秒/ });
+      const planned = stripDemo.getByRole('group', { name: '本场分段' }).last().getByRole('button', { name: '分段 P002，计划时长 3秒' });
+      assert.ok((await output.innerText()).includes('2.375秒'));
+      assert.ok((await planned.innerText()).includes('计划 3秒'));
+      await stripDemo.getByRole('button', { name: layout }).click();
+    }
     const episodeButtons = showcase.locator('.episode-grid-pairs .episode-button');
     assert.equal(await episodeButtons.count(), 5);
     assert.deepEqual(await episodeButtons.locator('.episode-button-duration').allTextContents(), ['1分20秒', '2分5.5秒*', '9.4秒', '20秒*']);

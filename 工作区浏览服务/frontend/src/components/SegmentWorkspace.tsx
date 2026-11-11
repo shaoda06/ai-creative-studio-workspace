@@ -48,7 +48,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   plannedScript?: { html: string; url?: string; label: string; shotIds?: string[] }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
   cachedSources: Record<string, string>;
   retainSource: (source: string) => () => void;
-  scenePlayback?: { player: RefObject<SegmentVideoHandle | null>; start: number; label?: string; onTimeChange: (time: number) => void };
+  scenePlayback?: { player: RefObject<SegmentVideoHandle | null>; start: number; label?: string; videoDescription?: string; onTimeChange: (time: number) => void };
 }) {
   const workMode = useProductionAccess().unitKind === 'work';
   const positionKey = `segment/${scope.notesUrl || scope.project}/${scope.episode}/${scope.scene}/${segment}`;
@@ -157,7 +157,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       awaitingGeneration ? { id: 'pending', content: `这版视频还没生成。${plannedScript?.html ? `当前分镜为${plannedScript.label}；` : ''}尚无实际生成时使用的提示词和素材记录。` }
         : context && context.issues.length > 0 && { id: 'issues', tone: 'warning', content: <details className="generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run}：当前候选有 {context.issues.length} 项资料关联问题</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details> },
     ]} />
-    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} downloadFromPlayer={!scenePlayback} onTimeChange={time => {
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} downloadFromPlayer={!scenePlayback} videoDescription={scenePlayback?.videoDescription} onTimeChange={time => {
       setPlayback({ key: current!.key, time });
       scenePlayback?.onTimeChange(time);
     }} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>

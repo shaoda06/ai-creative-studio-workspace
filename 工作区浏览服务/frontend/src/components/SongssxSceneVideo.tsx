@@ -30,7 +30,11 @@ export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatCo
     if (start !== undefined) player.current?.seekTo(start, true);
   };
   if (!segment) return <p className="muted">暂无可显示的分段。</p>;
-  const navigation = <SegmentStageStrip segments={segments} selected={segment.id}
+  const navigationSegments = segments.map(item => {
+    const interval = timings.find(entry => entry.id === item.id);
+    return interval ? { ...item, outputDuration: interval.end - interval.start } : item;
+  });
+  const navigation = <SegmentStageStrip segments={navigationSegments} selected={segment.id}
     newVideoSegments={newVideoSegments}
     onSelect={choose} vertical={wide} showStages={false}
     previousEnding={null} previousSelected={false} onPreviousSelect={noop} />;
@@ -47,6 +51,7 @@ export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatCo
       cachedSources={videoCache.sources} retainSource={videoCache.retainSource} onVideoEnded={onEnded} onVideoError={onError}
       notesExportControl={notesExportControl}
       scenePlayback={{ player, start: timing?.start ?? 0,
+        videoDescription: video && round && `第${round.number}轮 · ${video.stage}`,
         label: timing && `GEN ${timing.gen} · ${Number(timing.start.toFixed(3))}–${Number(timing.end.toFixed(3))} 秒`,
         onTimeChange: time => {
           const active = timings.find(item => time >= item.start && time < item.end);

@@ -66,6 +66,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [readState, setReadState] = useState('ready');
   const [sync, setSync] = useState<{ error?: string; errorKind?: string; retryAt?: number; updating?: boolean }>({});
   const [wide, setWide] = useState(false);
+  const [scenePlayback, setScenePlayback] = useState(false);
   const [continuous, setContinuous] = useState(false);
   const [repeat, setRepeat] = useState(false);
   const [time, setTime] = useState(0);
@@ -240,22 +241,23 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AudioReferenceCard name="AUD-SAMPLE@V001" duration={4} playing={sound.playingId==='reference'} progress={sound.currentId==='reference' ? sound.progress : 0} onPlay={()=>sound.toggle('reference',audio.url!)} />
         <AudioReferenceCard name="长声音标题用于检查容器边界LongAudioReferenceLongAudioReference@V002" duration={null} playing={sound.playingId==='long-reference'} progress={sound.currentId==='long-reference' ? sound.progress : 0} onPlay={()=>sound.toggle('long-reference',audio.url!)} />
       </ComponentExample>
-      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。示例演示这两个开关的联动。宽屏时显示右侧分段导航。播放器下方仅保留播放与布局控制；视频文件从资源下载获取。" usage="Nora 剧集制作、Iris 视频制作、Chloe 视频制作">
-        <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} />}>
+      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。宽屏时显示右侧分段导航。整场视频示例在播放器下方显示轮次和阶段。视频文件从资源下载获取。" usage="Nora 剧集制作（含 Songssx 整场播放）、Iris 视频制作、Chloe 视频制作">
+        <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} videoDescription={scenePlayback ? '第3轮 · 后处理' : undefined} />}>
           <section className="segment-script"><Rich html="<h3>示例分镜</h3><p>切换宽屏可查看播放器与分段导航的共同布局。</p>" /></section>
         </SegmentLayout>
         <p>示例播放位置：{time.toFixed(1)}秒</p><button onClick={() => playerRef.current!.seekTo(1)}>跳到1秒</button>
         <button onClick={() => playerRef.current!.seekTo(1, true)}>从1秒开始播放</button>
+        <button aria-pressed={scenePlayback} onClick={() => setScenePlayback(!scenePlayback)}>显示整场视频标注</button>
       </ComponentExample>
     </>}
     {category === 'production' && <>
       <ComponentExample fullWidth title="选集按钮" rule="点击只更新示例选集；制作页最多两列，窄屏单列。制作列表带时长的按钮统一48px单行，长标题省略并可悬停查看；displayName只控制显示，不改变选择键。可在制作状态前显示时长，*表示含计划值；片头片尾显示默认打开方案的时长，不累加独立方案；大纲不显示时长。集名状态与制作进度独立。" usage="分集大纲、剧集制作">
         <div className="episode-grid episode-grid-pairs">{(['待定集名', '临时集名', '最终定名'] as const).map((titleStatus, i) => <EpisodeButton key={titleStatus} duration={['1分20秒', '2分5.5秒*', undefined][i]} item={{ kind: 'episode', name: `EP00${i + 1}`, title: titleStatus === '待定集名' ? '待定' : '组件演示集与很长的题名显示检查', titleStatus, statusHtml: '<span class="status-badge status-gray">未开始</span>' }} onSelect={setSelected} />)}<EpisodeButton duration="9.4秒" item={{ kind: 'episode', name: '片头', statusHtml: '<span class="status-badge status-green">已完成</span>' }} onSelect={setSelected} /><EpisodeButton displayName="V001" duration="20秒*" item={{kind:'group',name:'V001-穿搭展示',title:'穿搭展示'}} onSelect={setSelected} /></div><p>已选择：{selected === 'one' ? '尚未选集' : selected}</p>
       </ComponentExample>
-      <ComponentExample fullWidth title="分段与制作状态" rule="P001标记本轮新生成；可切换分段和横竖布局，悬停状态图标查看详情。整场视频可只显示分段导航。" usage="分段制作、宽屏分段导航、Nora Songssx 整场候选">
+      <ComponentExample fullWidth title="分段与制作状态" rule="P001标记本轮新生成；可切换分段和横竖布局，悬停状态图标查看详情。整场视频的分段导航优先显示成片时长，缺少成片区间时标明计划时长。" usage="分段制作、宽屏分段导航、Nora Songssx 整场候选">
         <button onClick={() => setVertical(!vertical)}>{vertical ? '切换横排' : '切换竖排'}</button>
         <SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical={vertical} newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />
-        <SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical={vertical} showStages={false} newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />
+        <SegmentStageStrip segments={[{ ...segments[0], outputDuration: 2.375 }, segments[1]]} selected={segment} onSelect={setSegment} vertical={vertical} showStages={false} newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />
         <p>当前分段：{segment}</p>
       </ComponentExample>
     </>}
