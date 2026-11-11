@@ -11,6 +11,7 @@ from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
 from chloe_documents import MISSING, asset_status, read_document, records, template
+from chloe_init import asset_template_skill
 import project_resources as resources
 
 @dataclass
@@ -37,7 +38,7 @@ def asset_documents(root, kind):
         if identity in seen:
             raise ValueError(kind.label+'编号重复：' + identity)
         seen.add(identity)
-        doc = read_document(root, path, template('chloe-assets', kind.label+'说明模板.md'),
+        doc = read_document(root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
                             {'identity': identity, 'title': name})
         yield identity, name, path, doc
 

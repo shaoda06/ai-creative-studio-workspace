@@ -6,8 +6,9 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import sys
+from urllib.parse import urlsplit
 
-from chloe_init import ASSETS, SKILLS, resources, workspace_path, project_path
+from chloe_init import ASSETS, SKILLS, asset_template_skill, resources, workspace_path, project_path
 
 sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
 from storyboard_fields import read_shots
@@ -85,7 +86,7 @@ def documents(root):
         yield root/f'综合资料/{name}.md', template('chloe-positioning', name+'模板.md'), {}
     for kind, (folder, prefix, filename) in ASSETS.items():
         parent = root/'综合资料'/folder
-        if kind in {'发型', '配饰'} and not parent.exists():
+        if kind in {'发型', '配饰', '参考视频'} and not parent.exists():
             continue
         if not parent.is_dir():
             raise ValueError('缺少固定目录：'+str(parent))
@@ -93,8 +94,7 @@ def documents(root):
             if not re.fullmatch(prefix+r'\d{3,}-.+', item.name):
                 raise ValueError('资产目录编号格式错误：'+str(item))
             identity, title = item.name.split('-', 1)
-            skill = 'chloe-selection' if kind == '商品' else 'chloe-assets'
-            yield item/filename, template(skill, filename.replace('.md', '模板.md')), {'identity': identity, 'title': title}
+            yield item/filename, template(asset_template_skill(kind), filename.replace('.md', '模板.md')), {'identity': identity, 'title': title}
     for item in sorted(p for p in (root/'projects').iterdir() if p.is_dir() and not p.name.startswith('.')):
         if not re.fullmatch(r'V\d{3,}-.+', item.name):
             raise ValueError('视频目录编号格式错误：'+str(item))
@@ -311,6 +311,20 @@ def linked_object(root, path, identity, value, prefix):
 
 
 def check_relations(root, path, doc):
+    if path.name == ASSETS['参考视频'][2]:
+        info = {row['字段']: row['内容'] for row in records(doc, '参考视频信息')}
+        if info['播放版本引用'] not in MISSING:
+            if any(info[key] in MISSING for key in ('来源', '内容简介', '原件引用', '登记依据')):
+                raise ValueError('参考视频登记须记录来源、内容简介、原件和登记依据')
+            if info['来源'] != '用户提供':
+                platform, _, address = info['来源'].partition('－')
+                url = urlsplit(address)
+                if not platform.strip() or not re.fullmatch(r'https?://[^\s<>]+', address) or not url.hostname:
+                    raise ValueError('来源须为用户提供或平台名－实际视频网址')
+            for key in ('原件引用', '播放版本引用'):
+                ref = media_reference(root, path, info[key])
+                if ref['owner'] != '综合资料' or resources.media_kind(ref['file']) != '视频':
+                    raise ValueError(key+'须引用本项目的准确共用视频版本')
     if path.name in {'模特说明.md', '造型说明.md'}:
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
@@ -355,9 +369,10 @@ def check_relations(root, path, doc):
     for row in records(doc,'关联资料'):
         identity = row['对象编号']
         if identity not in MISSING:
-            if identity[:1] not in {item[1] for item in ASSETS.values()}:
+            prefix = identity.rstrip('0123456789')
+            if prefix not in {item[1] for item in ASSETS.values()}:
                 raise ValueError('关联对象编号类型错误')
-            linked_object(root,path,identity,row['说明文件'],identity[0])
+            linked_object(root,path,identity,row['说明文件'],prefix)
             linked.add(identity)
     look = {r['字段']:r['内容'] for r in records(doc,'造型信息')}
     if look and look['模特编号'] not in MISSING:

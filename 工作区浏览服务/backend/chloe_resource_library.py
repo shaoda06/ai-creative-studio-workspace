@@ -37,6 +37,15 @@ def visual_titles(root):
             path = resources.local(root, path)
             doc = parse(path.read_text('utf-8-sig'))
             name = fields(doc, '商品身份' if kind == '商品' else '资产身份')['商品名称' if kind == '商品' else '资产名称']
+            if kind == '参考视频':
+                info = fields(doc, '参考视频信息')
+                original = reference_key(path, info['原件引用'])
+                playback = reference_key(path, info['播放版本引用'])
+                if playback:
+                    titles.setdefault(playback, []).append(name+' · 参考视频')
+                    if original and original != playback:
+                        titles.setdefault(original, []).append(name+' · 原件')
+                continue
             for row in records(doc, '原始素材' if kind == '商品' else '参考版本'):
                 key = reference_key(path, row['资源引用'])
                 if key:
