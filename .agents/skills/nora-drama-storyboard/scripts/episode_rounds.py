@@ -24,6 +24,8 @@ def validate_episode_manifest(data, episode):
         numbers.append(number)
         if not item['scenes'] or not isinstance(item['script'], dict):
             raise ValueError('修改轮次必须包含完整场次组合')
+        if item.get('review_only') and not all(value.get('songssx_execution') for value in item['scenes'].values()):
+            raise ValueError('联调查看轮次须引用各场已留存的 Songssx 执行附件')
         for scene, value in item['scenes'].items():
             manifest_key(episode, scene)
             validate_manifest({'episode': episode, 'scene': scene, 'rounds': [
@@ -77,14 +79,17 @@ def append_round(project, episode, plan, target):
         maximum = max(maximum, max((item['number'] for item in values), default=0))
         if values:
             legacy[scene] = values[-1]
-    previous = data['rounds'][-1] if data['rounds'] else None
+    review_only = plan.get('review_only') is True
+    production_rounds = [item for item in data['rounds'] if not item.get('review_only')]
+    bases = [] if review_only else production_rounds
+    previous = bases[-1] if bases else None
     if 'base_round' in plan:
-        previous = next((item for item in data['rounds'] if item['number'] == plan['base_round']), None)
+        previous = next((item for item in bases if item['number'] == plan['base_round']), None)
         if previous is None:
             raise ValueError('指定的修改基轮不存在')
     scenes = deepcopy(previous['scenes'] if previous else {
         scene: {key: value for key, value in item.items() if key not in ('number', 'script', 'created_at')}
-        for scene, item in sorted(legacy.items())})
+        for scene, item in sorted(legacy.items()) if not review_only})
     script = plan.get('script') or (previous['script'] if previous else None)
     changes = plan['scenes']
     if not changes:
@@ -93,6 +98,8 @@ def append_round(project, episode, plan, target):
         manifest_key(episode, scene)
         base = scenes.get(scene)
         if 'base_round' in change:
+            if review_only:
+                raise ValueError('联调查看轮次须提供完整场次组合')
             from scene_rounds import referenced_round
             base = referenced_round(project, episode + '-' + scene, change['base_round'])
         if script is None:
@@ -125,13 +132,15 @@ def append_round(project, episode, plan, target):
     scenes = {scene: scenes[scene] for scene in order}
     workflows = {bool(value.get('songssx_execution')) for value in scenes.values()}
     prior_workflows = {bool(value.get('songssx_execution'))
-                       for item in data['rounds'] for value in item['scenes'].values()}
+                       for item in production_rounds for value in item['scenes'].values()}
     prior_workflows.update(bool(value.get('songssx_execution')) for value in legacy.values())
-    if len(workflows) > 1 or (len(prior_workflows) == 1 and workflows != prior_workflows):
+    if len(workflows) > 1 or (not review_only and len(prior_workflows) == 1 and workflows != prior_workflows):
         raise ValueError('同一集的新制作轮次须沿用同一套导演台')
     number = maximum + 1
     item = {'number': number, 'created_at': datetime.now().astimezone().isoformat(timespec='seconds'),
             'note': plan.get('note', ''), 'script': script, 'scenes': scenes, 'changed_scenes': list(changes)}
+    if review_only:
+        item['review_only'] = True
     validate_episode_manifest({'episode': episode, 'rounds': [item]}, episode)
     sources = [('script', None, script, source, script_text)]
     for scene, value in scenes.items():

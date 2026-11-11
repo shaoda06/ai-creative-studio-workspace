@@ -112,6 +112,6 @@ def check_episode_composition(data, prepared_input):
     mapping = prepared_input['mapping']
     episode = mapping['scene'].split('-')[0]
     manifest = Path(data.project) / episode_manifest_key(episode)
-    if not manifest.exists() or not any(item['number'] == mapping['scene_modification_round']
+    if not manifest.exists() or not any(item['number'] == mapping['scene_modification_round'] and not item.get('review_only')
             for item in validate_episode_manifest(json.loads(manifest.read_text('utf-8-sig')), episode)['rounds']):
-        raise ValueError('新视频任务须先登记单集共用的修改轮次，旧场次轮次仅用于历史任务')
+        raise ValueError('新视频任务须先登记单集共用的制作轮次，历史或联调查看轮次仅供查阅')

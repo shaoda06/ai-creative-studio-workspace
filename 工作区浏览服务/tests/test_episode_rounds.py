@@ -19,6 +19,21 @@ class EpisodeRoundTests(unittest.TestCase):
     plan = fixture.SceneRoundTests.plan
     episode = fixture.SceneRoundTests.episode
 
+    def test_songssx_review_round_preserves_aimixer_production_base(self):
+        aimixer = self.plan()
+        create_episode_round(self.project, 'EP001', {'scenes': {'C001': aimixer}})
+        review = {**aimixer, 'songssx_execution': self.root + '/其他资料/执行附件/C001-联调',
+                  'segments': [{**entry, 'stage': '场次生成', 'run': 'R001'} for entry in aimixer['segments']]}
+        saved = create_episode_round(self.project, 'EP001', {'review_only': True, 'scenes': {'C001': review}})
+        self.assertEqual(saved['number'], 2)
+        self.assertTrue(json.loads(Path(saved['file']).read_text())['rounds'][1]['review_only'])
+        self.assertEqual(self.episode()['episodeRounds'][-1], {'number': 2, 'scenes': ['C001']})
+        with self.assertRaisesRegex(ValueError, '修改基轮不存在'):
+            create_episode_round(self.project, 'EP001', {'base_round': 2, 'scenes': {'C001': aimixer}})
+        updated = create_episode_round(self.project, 'EP001', {'script': aimixer['script'], 'scenes': {'C001': aimixer}})
+        self.assertEqual(updated['number'], 3)
+        self.assertNotIn('songssx_execution', rounds.referenced_round(self.project, 'EP001-C001', 3))
+
     def test_current_cli_preserves_shared_episode_history(self):
         scripts = Path(__file__).resolve().parents[2] / '.agents/skills'
         plan = self.project / 'plan.json'
