@@ -45,6 +45,17 @@ def songssx_contexts(project, data, workflow, segments, storyboard, storyboard_k
         yield context
 
 
+def songssx_task(project, key, task_type):
+    from execution_records import exists, read
+    from project_paths import project_file
+    directory = project_file(project, key)
+    report = directory / '执行检查报告.json'
+    state_file = directory / '后台任务状态.json'
+    state = read(state_file) if exists(state_file) else {}
+    recorded = state.get('task_type') == task_type and state.get('record_dir') == key and bool(state.get('id'))
+    return directory, state, recorded, read(report)['prepared_input'] if exists(report) else None
+
+
 def songssx_scene(project, entry, storyboard, storyboard_key):
     from execution_records import exists, read
     from project_paths import project_file
@@ -52,17 +63,12 @@ def songssx_scene(project, entry, storyboard, storyboard_key):
     from songssx_workflow import FPS, TASK_TYPE, WORKFLOW
 
     key = entry['songssx_execution']
-    directory = project_file(project, key)
-    report = directory / '执行检查报告.json'
-    state_file = directory / '后台任务状态.json'
-    state = read(state_file) if exists(state_file) else {}
-    recorded = state.get('task_type') == TASK_TYPE and state.get('record_dir') == key and bool(state.get('id'))
+    directory, state, recorded, data = songssx_task(project, key, TASK_TYPE)
     result = {'recorded': recorded, 'segments': []}
-    if not exists(report):
+    if data is None:
         if recorded:
             entry['issues'].append('Songssx 执行检查报告缺失')
         return result
-    data = read(report)['prepared_input']
     plan = data.get('video_plan', {})
     segments = plan.get('segments', [])
     if (data.get('task_type') != TASK_TYPE or plan.get('workflow_id') != WORKFLOW
@@ -72,15 +78,6 @@ def songssx_scene(project, entry, storyboard, storyboard_key):
         entry['issues'].append('Songssx 执行记录与本轮场次或分段不匹配')
         result['recorded'] = False
         return result
-    target, = data['outputs']
-    media = project_file(project, target['path'])
-    actual = resolve_file(project, media)
-    relative = actual.relative_to(project).as_posix()
-    run = entry['segments'][0]['run']
-    receipt = directory / target['response_name']
-    saved = recorded and exists(receipt) and actual.is_file()
-    stamp = actual.stat() if saved else None
-    revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
     result['segments'] = [{'id': row['p'], 'gen': row['gen'], 'start': row['output_frames'][0] / FPS,
                            'end': row['output_frames'][1] / FPS} for row in segments]
     request = directory / data.get('request_name', '请求.json')
@@ -88,12 +85,34 @@ def songssx_scene(project, entry, storyboard, storyboard_key):
     for segment, context in zip(result['segments'], songssx_contexts(
             project, data, workflow, segments, storyboard, storyboard_key), strict=True):
         segment['context'] = context
+    target, = data['outputs']
+    if postprocess := entry.get('songssx_postprocess'):
+        source = resolve_file(project, project_file(project, target['path']))
+        directory, state, recorded, processed = songssx_task(project, postprocess, 'video-postprocess')
+        key = postprocess
+        if processed is None:
+            if recorded:
+                entry['issues'].append('Songssx 后处理执行检查报告缺失')
+            return result
+        if (processed.get('task_type') != 'video-postprocess' or processed.get('record_dir') != key
+                or len(processed['outputs']) != 1 or Path(processed['outputs'][0]['path']).suffix.lower() != '.mp4'
+                or {resolve_file(project, project_file(project, upload['file'])) for upload in processed['uploads']} != {source}):
+            entry['issues'].append('Songssx 后处理须对应本场原视频及一个整场 MP4')
+            return result
+        target, = processed['outputs']
+    actual = resolve_file(project, project_file(project, target['path']))
+    relative = actual.relative_to(project).as_posix()
+    stage = entry['segments'][0]['stage']
+    run = entry['segments'][0]['run']
+    saved = recorded and exists(directory / target['response_name']) and actual.is_file()
+    stamp = actual.stat() if saved else None
+    revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
     result['video'] = {
         'key': relative, 'url': quote(relative, safe='/-._~') + '?v=' + revision if saved else '',
-        'run': run, 'stage': rounds.SCENE_GENERATION, 'approved': False, 'candidateNumber': int(run[1:]),
+        'run': run, 'stage': stage, 'approved': False, 'candidateNumber': int(run[1:]),
         'fileRevision': revision,
         'taskStatus': state.get('status', ''), 'deliveryStatus': '已取回' if saved else '',
-        'taskStateUrl': quote((Path(key) / state_file.name).as_posix(), safe='/-._~') if recorded else '',
+        'taskStateUrl': quote((Path(key) / '后台任务状态.json').as_posix(), safe='/-._~') if recorded else '',
         'checkedAt': state.get('updated_at', ''),
     }
     return result

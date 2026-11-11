@@ -17,6 +17,23 @@ execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x263a42:s=
   '-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=0x425a4b:t=fill:enable='gte(t,14.375)',drawbox=x=0:y=0:w=iw:h=ih:color=0x514557:t=fill:enable='gte(t,22.375)'",
   '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-movflags', '+faststart', clip]);
 const media = await readFile(clip);
+const service = fileURLToPath(new URL('../', import.meta.url));
+const python = join(service, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
+execFileSync(python, ['-B', '-c', `
+from pathlib import Path
+import sys
+from backend.services import episode_downloads
+
+clip, directory = map(Path, sys.argv[1:])
+episode_downloads.DOWNLOAD_DIRECTORY = directory
+for count in (1, 2):
+    files = [(clip, f'C{i:03d}.mp4') for i in range(1, count + 1)]
+    for format_ in ('zip', 'jypack'):
+        response = episode_downloads.zip_response(files, '本轮视频.zip', format_, videos_only=True)
+        Path(response.path).replace(directory / f'{count}.{format_}')
+`, clip, output], { cwd: service });
+const packages = new Map(await Promise.all(['1.zip', '1.jypack', '2.zip', '2.jypack']
+  .map(async key => [key, await readFile(join(output, key))])));
 const unexpected = [];
 const savedNotes = {};
 const ids = ['P001', 'P002', 'P003'];
@@ -29,12 +46,12 @@ const episodes = [
 const video = (key, stage, run) => ({ key, stage, run, url: '/sample/' + key + '.mp4', fileRevision: key,
   approved: false, candidateNumber: Number(run.slice(1)), taskStatus: '成功', deliveryStatus: '已取回', checkedAt: '',
   context: { scriptHtml: '<p>隔离分镜</p>', issues: [], shots: [], prompts: {}, references: { common: [], segment: [] } } });
-const round = (number, songssx, run) => ({
+const round = (number, songssx, run, stage = songssx ? '场次生成' : '一采', available = true) => ({
   number, episodeRound: true, created_at: '2026-11-11T12:00:00+08:00', note: '隔离审阅示例',
   script: null, storyboard: null, issues: [],
-  segments: ids.map(id => ({ id, stage: songssx ? '场次生成' : '一采', run, duration: 10,
+  segments: ids.map(id => ({ id, stage, run, duration: 10,
     scriptHtml: '<p>' + id + ' 的隔离分镜内容</p>' })),
-  ...(songssx ? { songssx: { recorded: true, video: video('整场-' + run, '场次生成', run),
+  ...(songssx ? { songssx: { recorded: true, video: { ...video('整场-' + run, stage, run), ...(!available ? { url: '', taskStatus: '排队中' } : {}) },
     segments: ids.map((id, i) => ({ id, gen: i + 1, start: [0, 14.375, 22.375][i], end: [14.375, 22.375, 32.292][i],
       context: { scriptHtml: '<p>' + id + ' 隔离分镜</p>', issues: [], shotTimingSource: 'plan',
         shots: [{ id: 'SH00' + (i + 1), duration: 10, html: '<p>' + id + ' 当前镜头</p>' }],
@@ -46,12 +63,13 @@ const round = (number, songssx, run) => ({
 const detail = episode => {
   const aimixer = episode.name !== 'EP002', songssx = episode.name !== 'EP001';
   const sceneRounds = [...(aimixer ? [round(1, false, 'R001')] : []),
-    ...(songssx ? [round(2, true, 'R002'), round(3, true, 'R003')] : [])];
-  return { ...episode, scenes: ['C001'], productionWorkflows: [...(aimixer ? ['aimixer'] : []), ...(songssx ? ['songssx'] : [])],
-    episodeRounds: sceneRounds.map(item => ({ number: item.number, scenes: ['C001'] })),
-    sceneRounds: { C001: sceneRounds },
-    segments: { C001: ids.map(id => ({ id, duration: 10, scriptHtml: '<p>' + id + '</p>',
-      videos: aimixer ? [video(id + '-R001', '一采', 'R001')] : [] })) },
+    ...(songssx ? [round(2, true, 'R002'), round(3, true, 'R003', '后处理')] : [])];
+  const scenes = songssx ? ['C001', 'C002'] : ['C001'];
+  return { ...episode, scenes, productionWorkflows: [...(aimixer ? ['aimixer'] : []), ...(songssx ? ['songssx'] : [])],
+    episodeRounds: sceneRounds.map(item => ({ number: item.number, scenes: item.number === 3 ? scenes : ['C001'] })),
+    sceneRounds: { C001: sceneRounds, ...(songssx ? { C002: [round(3, true, 'R004', '后处理', episode.name === 'EP002')] } : {}) },
+    segments: Object.fromEntries(scenes.map(scene => [scene, ids.map(id => ({ id, duration: 10, scriptHtml: '<p>' + id + '</p>',
+      videos: aimixer && scene === 'C001' ? [video(id + '-R001', '一采', 'R001')] : [] }))])),
   };
 };
 const server = await createServer({
@@ -60,7 +78,8 @@ const server = await createServer({
   server: { host: '127.0.0.1', port: 0 },
   plugins: [react(), { name: 'nora-songssx-fixture', configureServer(vite) {
     vite.middlewares.use(async (req, res, next) => {
-      const path = decodeURIComponent(new URL(req.url, 'http://fixture.invalid').pathname);
+      const address = new URL(req.url, 'http://fixture.invalid');
+      const path = decodeURIComponent(address.pathname);
       if (path.startsWith('/sample/')) {
         res.setHeader('Content-Type', 'video/mp4');
         const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
@@ -70,6 +89,14 @@ const server = await createServer({
         return res.end(media.subarray(start, end + 1));
       }
       if (!path.startsWith('/api/')) return next();
+      const download = /\/episodes\/(EP002|EP003)\/rounds\/(2|3)\/download$/.exec(path);
+      if (download) {
+        const format = address.searchParams.get('format') === 'jypack' ? 'jypack' : 'zip';
+        const count = download[1] === 'EP002' && download[2] === '3' ? 2 : 1;
+        res.writeHead(200, { 'Content-Type': format === 'zip' ? 'application/zip' : 'application/vnd.bytedance.jypack',
+          'Content-Disposition': `attachment; filename="round-${download[2]}-${count}.${format}"` });
+        return res.end(packages.get(`${count}.${format}`));
+      }
       const noteScene = /\/revision-notes\/(EP\d+)\/(C\d+)$/.exec(path);
       const send = value => { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(value)); };
       if (noteScene && req.method === 'PUT') {
@@ -107,7 +134,7 @@ if (process.argv.includes('--preview')) {
     process.exit(0);
   });
 } else {
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     for (const [width, height] of [[1280, 640], [1366, 768], [1920, 1080]]) {
       const page = await browser.newPage({ viewport: { width, height } });
@@ -162,19 +189,52 @@ if (process.argv.includes('--preview')) {
       const saved = page.waitForResponse(response => response.request().method() === 'PUT' && response.url().endsWith('/revision-notes/EP002/C001'));
       await opinion.blur();
       assert.equal((await saved).ok(), true);
-      assert.equal(savedNotes.EP002.C001.notes['round/3/P003/场次生成/R003'].text, '第三段隔离意见');
+      assert.equal(savedNotes.EP002.C001.notes['round/3/P003/后处理/R003'].text, '第三段隔离意见');
       await page.getByRole('button', { name: '宽屏显示' }).click();
       await page.getByRole('button', { name: /^分段 P002/ }).click();
       await page.waitForFunction(() => {
         const video = document.querySelector('.segment-video video');
         return video && !video.paused && video.currentTime >= 14.3 && video.currentTime < 16;
       });
+      await page.getByRole('button', { name: '恢复布局' }).click();
+      await page.getByText('第3轮整场视频已准备 1／1').waitFor();
+      assert.equal(await player.getAttribute('controlslist'), 'nodownload');
+      assert.equal(await page.getByRole('combobox', { name: '版本切换' }).count(), 0);
+      const downloads = page.getByRole('button', { name: '资源下载', exact: true });
+      const segmentsTab = page.getByRole('button', { name: '分段制作', exact: true });
+      const downloadFile = async (button, name) => {
+        const file = page.waitForEvent('download');
+        await page.getByRole('button', { name: button, exact: true }).click();
+        assert.equal((await file).suggestedFilename(), name);
+      };
+      await downloads.click();
+      assert.deepEqual(await page.getByRole('region', { name: '本轮资源' }).getByRole('button').allTextContents(),
+        ['本轮打包下载', '剪映草稿下载']);
+      await downloadFile('本轮打包下载', 'round-3-2.zip');
+      await downloadFile('剪映草稿下载', 'round-3-2.jypack');
+      await segmentsTab.click();
+      await page.getByRole('checkbox', { name: '连续播放' }).check();
+      await player.evaluate(async video => {
+        if (!Number.isFinite(video.duration)) await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true }));
+        video.currentTime = video.duration - 0.1;
+        await video.play();
+      });
+      await page.waitForFunction(() => {
+        const video = document.querySelector('.segment-video video');
+        return video?.getAttribute('aria-label')?.includes('R004') && !video.paused;
+      });
+      assert.equal(await selector.getAttribute('data-value'), '3');
       await selector.click();
       await page.getByRole('option', { name: /^第2轮/ }).click();
-      await page.waitForFunction(() => document.querySelector('.segment-video video')?.getAttribute('src')?.includes('R002'));
+      await page.waitForFunction(() => document.querySelector('.segment-video video')?.getAttribute('aria-label')?.includes('场次生成 · R002'));
+      await downloads.click();
+      await downloadFile('本轮打包下载', 'round-2-1.zip');
+      await downloadFile('剪映草稿下载', 'round-2-1.jypack');
+      await segmentsTab.click();
       await page.getByRole('button', { name: '轮次记录' }).click();
       const records = page.getByRole('dialog', { name: '轮次记录' });
-      assert.equal(await records.getByRole('button', { name: '整场视频 · R002' }).count(), 1);
+      await records.getByRole('button', { name: '整场视频 · R002' }).click();
+      assert.equal(await page.getByRole('dialog', { name: '整场视频 · R002' }).locator('video').getAttribute('controlslist'), 'nodownload');
       await page.keyboard.press('Escape');
       await go('EP003');
       await chooser.waitFor();
@@ -188,6 +248,14 @@ if (process.argv.includes('--preview')) {
       await player.waitFor();
       assert.equal(await selector.getAttribute('data-value'), '3');
       assert.equal(await page.getByRole('button', { name: 'AiMixer 制作记录' }).count(), 0);
+      await page.getByRole('checkbox', { name: '连续播放' }).check();
+      await player.evaluate(async video => {
+        if (!Number.isFinite(video.duration)) await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true }));
+        video.currentTime = video.duration - 0.1;
+        await video.play();
+      });
+      await page.getByText('C002 本轮整场视频暂不可播。连续播放已停止。').waitFor();
+      assert.equal(await page.getByRole('checkbox', { name: '连续播放' }).isChecked(), false);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(errors, []);
       await page.close();

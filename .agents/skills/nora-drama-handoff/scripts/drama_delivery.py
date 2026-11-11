@@ -66,6 +66,27 @@ def completed_episode_videos(store, name, episode, data):
     return files
 
 
+def songssx_round_videos(store, name, episode, number, data):
+    selected = indexed_episode(episode, data)
+    composition = next((item for item in selected.get('episodeRounds', []) if item['number'] == number), None)
+    if not composition:
+        raise FileNotFoundError('本集没有这个制作轮次')
+    files = []
+    for scene in composition['scenes']:
+        round_ = next((item for item in selected['sceneRounds'].get(scene, []) if item['number'] == number), {})
+        video = round_.get('songssx', {}).get('video')
+        if not video or not video['url']:
+            continue
+        path = store.file(name, video['key'])
+        stat = path.stat()
+        if video['fileRevision'] != f'{stat.st_mtime_ns}-{stat.st_size}':
+            raise ValueError('本轮视频文件已变化，请刷新制作页后重新下载')
+        files.append((path, f'{scene}-{video["stage"]}-{video["run"]}{path.suffix}'))
+    if not files:
+        raise FileNotFoundError('本轮暂无可下载的场次视频')
+    return files
+
+
 def resources(store, name, episode, data, scene=None):
     selected = indexed_episode(episode, data)
     if scene is not None and scene not in selected['scenes']:

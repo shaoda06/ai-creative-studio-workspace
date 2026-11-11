@@ -46,6 +46,40 @@ class EpisodeDownloadTests(HttpTestCase):
         path.write_bytes(content)
         return path
 
+    def test_songssx_round_download_packs_only_selected_videos_in_scene_order(self):
+        def record(number, scene, stage, content):
+            path = self.source(f'{scene}-{number}.mp4', content)
+            stat = path.stat()
+            self.episode['sceneRounds'].setdefault(scene, []).append({'number': number, 'songssx': {
+                'video': {'url': path.name, 'key': path.name, 'stage': stage, 'run': 'R001',
+                          'fileRevision': f'{stat.st_mtime_ns}-{stat.st_size}'}}})
+        self.episode['episodeRounds'] = [{'number': 1, 'scenes': ['C001']}, {'number': 2, 'scenes': ['C002', 'C001']}]
+        self.episode['sceneRounds'] = {}
+        record(1, 'C001', '场次生成', b'original')
+        record(2, 'C001', '后处理', b'processed')
+        record(2, 'C002', '场次生成', b'second-scene')
+        base = self.url.removesuffix('/downloads') + '/rounds'
+        for number, expected in [
+            (1, [('C001-场次生成-R001.mp4', b'original')]),
+            (2, [('C002-场次生成-R001.mp4', b'second-scene'), ('C001-后处理-R001.mp4', b'processed')]),
+        ]:
+            url = f'{base}/{number}/download'
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            with ZipFile(BytesIO(response.content)) as archive:
+                self.assertEqual([(name, archive.read(name)) for name in archive.namelist()], expected)
+            response = self.client.get(url, params={'format': 'jypack'})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('.jypack', response.headers['content-disposition'])
+            with ZipFile(BytesIO(restore_package(response.content))) as archive:
+                self.assertEqual([(name, archive.read(name)) for name in archive.namelist() if name.endswith('.mp4')], expected)
+                draft = json.loads(archive.read('draft_content.json'))
+                self.assertEqual(len(draft['tracks'][0]['segments']), len(expected))
+        self.assertEqual(self.client.get(f'{base}/3/download').status_code, 404)
+        self.episode['sceneRounds']['C001'][-1]['songssx']['video']['url'] = ''
+        with ZipFile(BytesIO(self.client.get(f'{base}/2/download').content)) as archive:
+            self.assertEqual(archive.namelist(), ['C002-场次生成-R001.mp4'])
+
     def video(self, stage, scene, number, approved=True):
         filename = f'EP001-{scene}-{number}-R001-{stage}.mp4'
         relative = f'09-剧集制作/EP001/06-阶段采用视频/{episode_downloads.STAGES[stage]}/{scene}-场次/{filename}'

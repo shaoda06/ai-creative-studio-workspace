@@ -100,6 +100,8 @@ def append_round(project, episode, plan, target):
         if change.get('script') and change['script'] != script:
             raise ValueError('同一轮各场须引用相同的本集剧本版本')
         value = {**(base or {}), **change}
+        if 'songssx_execution' in change and 'songssx_postprocess' not in change and change['songssx_execution'] != (base or {}).get('songssx_execution'):
+            value.pop('songssx_postprocess', None)
         if 'segment_changes' in change:
             if value.get('songssx_execution'):
                 raise ValueError('Songssx 场次使用完整 segments 和整场执行附件')

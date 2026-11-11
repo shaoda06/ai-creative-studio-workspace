@@ -34,17 +34,23 @@ def validate_manifest(data, episode, scene):
             if not item[kind].get('file') or not item[kind].get('version'):
                 raise ValueError('轮次缺少剧本或分镜的准确文件与版本')
         execution = item.get('songssx_execution')
-        if execution is not None:
-            folder = PurePosixPath(execution).parts if isinstance(execution, str) else ()
+        postprocess = item.get('songssx_postprocess')
+        if postprocess is not None and not execution:
+            raise ValueError('Songssx 后处理轮次须引用原场次生成附件')
+        for path in (execution, postprocess):
+            if path is None:
+                continue
+            folder = PurePosixPath(path).parts if isinstance(path, str) else ()
             if (folder[:4] != ('09-剧集制作', episode, '其他资料', '执行附件')
                     or len(folder) < 5 or any(part.startswith('.') or '\\' in part for part in folder)):
                 raise ValueError('Songssx 执行附件须位于本集执行附件目录内')
+        stages = ('后处理',) if postprocess else (SCENE_GENERATION,) if execution else STAGES
         ids = []
         for entry in item['segments']:
             if not re.fullmatch(r'P\d{3,}', entry['id']) or entry['id'] in ids:
                 raise ValueError('轮次分段编号无效或重复')
             ids.append(entry['id'])
-            if entry['stage'] not in ((SCENE_GENERATION,) if execution else STAGES) or not re.fullmatch(r'R\d{3,}', entry['run']) or int(entry['run'][1:]) < 1:
+            if entry['stage'] not in stages or not re.fullmatch(r'R\d{3,}', entry['run']) or int(entry['run'][1:]) < 1:
                 raise ValueError('轮次中的阶段或R编号无效')
             if not isinstance(entry['duration'], (int, float)) or entry['duration'] <= 0:
                 raise ValueError('轮次分段计划时长须为正数秒')
@@ -66,7 +72,7 @@ def referenced_round(project, scene, number):
     item = next((item for item in scene_entries(project, episode, scene_number) if item['number'] == number), None)
     if item is None:
         raise ValueError('输入映射引用的场次修改轮次不存在')
-    return {key: item[key] for key in ('number', 'script', 'storyboard', 'segments')}
+    return {key: item[key] for key in ('number', 'script', 'storyboard', 'segments', 'songssx_execution') if key in item}
 
 def snapshot_text(text, source, target):
     """Preserve document text while keeping relative links usable after archiving."""

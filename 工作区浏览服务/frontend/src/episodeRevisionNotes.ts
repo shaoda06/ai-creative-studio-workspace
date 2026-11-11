@@ -6,6 +6,7 @@ import { candidateLabel } from './components/SegmentVideo';
 export interface EpisodeReview {
   number?: number;
   workflow?: ProductionWorkflow;
+  sourceRounds?: Record<string, SceneRound[]>;
   rounds: number[];
   scenes: { id: string; number?: number; segments: { id: string; videos: SegmentVideo[] }[];
     versions: { id: string; stage: string; run: string }[];
@@ -41,8 +42,11 @@ export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeRevi
     const selected = review.scenes.find(item => item.id === scene);
     const ids = selected?.versions.map(item => item.id) || selected?.segments.map(item => item.id) || [];
     const order = (id: string) => { const index = ids.indexOf(id); return index < 0 ? ids.length + Number(id.slice(1)) : index; };
-    return Object.values(saved.scenes[scene]?.notes || {}).filter(note => hasNoteContent(note) &&
-      (!review.workflow || (note.stage === '场次生成') === (review.workflow === 'songssx')))
+    return Object.values(saved.scenes[scene]?.notes || {}).filter(note => {
+      const round = review.sourceRounds?.[scene]?.find(item => item.number === note.roundNumber);
+      const workflow = round?.songssx || note.stage === '场次生成' ? 'songssx' : 'aimixer';
+      return hasNoteContent(note) && (!review.workflow || workflow === review.workflow);
+    })
       .sort((a, b) => order(a.segment) - order(b.segment) || (a.roundNumber ?? 0) - (b.roundNumber ?? 0)
         || ['一采', '二采', '后处理'].indexOf(a.stage) - ['一采', '二采', '后处理'].indexOf(b.stage) || Number(b.run.slice(1)) - Number(a.run.slice(1)))
       .map(note => {

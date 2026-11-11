@@ -115,6 +115,27 @@ class SceneRoundTests(unittest.TestCase):
             notes.save_note(self.project, 'EP001', 'C001', value.model_copy(update={'run': 'R099'}))
         with self.assertRaisesRegex(ValueError, '同一集的新制作轮次须沿用同一套导演台'):
             self.create({**self.plan(), 'songssx_execution': None})
+        postprocess = self.root + '/其他资料/执行附件/C001-R003'
+        processed = self.root + '/其他资料/候选视频/EP001-C001-R003-后处理.mp4'
+        self.create({**planned, 'songssx_postprocess': postprocess,
+                     'segments': [{**entry, 'stage': '后处理', 'run': 'R003'} for entry in planned['segments']]})
+        pending = self.episode()['sceneRounds']['C001'][1]['songssx']
+        self.assertNotIn('video', pending)
+        self.write(postprocess + '/执行检查报告.json', json.dumps({'prepared_input': {
+            'record_dir': postprocess, 'task_type': 'video-postprocess',
+            'uploads': [{'file': output}], 'outputs': [{'path': processed, 'response_name': '取回.json'}],
+        }}))
+        self.write(processed, 'processed fixture')
+        write_entries(self.project / postprocess, {
+            '后台任务状态.json': {'id': 'test-postprocess', 'task_type': 'video-postprocess',
+                             'status': 'completed', 'record_dir': postprocess},
+            '取回.json': {},
+        })
+        before, after = self.episode()['sceneRounds']['C001']
+        self.assertEqual(before['songssx']['video']['key'], output)
+        self.assertEqual(after['songssx']['video']['key'], processed)
+        self.assertEqual(after['songssx']['video']['stage'], '后处理')
+        self.assertEqual(after['songssx']['segments'], before['songssx']['segments'])
 
     def test_video_task_links_follow_candidate_stage_and_shared_owner(self):
         from urllib.parse import unquote

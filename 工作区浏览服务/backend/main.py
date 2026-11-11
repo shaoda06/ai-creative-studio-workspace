@@ -21,7 +21,7 @@ from backend.services.workspaces import Workspaces, project_tree, scope_links
 from backend.services.project_packages import package_response
 from workspace_project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
-from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, zip_response, clear_downloads, video_archive_name
+from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, songssx_round_videos, zip_response, clear_downloads, video_archive_name
 from backend.services import krea2
 from backend.services.comfy_tasks import DesktopConnection, TaskInput, TaskStore, client as comfy_client
 from backend.services.workflows import catalogue as workflow_catalogue
@@ -619,6 +619,19 @@ def completed_episode_download(name: str, episode: Episode,
     try:
         files = completed_episode_videos(store, name, episode, entry(name, '09-剧集制作', episode, mode='playback')['data'])
         return zip_response(files, video_archive_name(name, episode), archive_format)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@app.get('/api/projects/{name}/episodes/{episode}/rounds/{number}/download')
+def episode_round_download(name: str, episode: Episode, number: int,
+                           archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
+    try:
+        data = entry(name, '09-剧集制作', episode, mode='playback')['data']
+        files = songssx_round_videos(store, name, episode, number, data)
+        return zip_response(files, f'{name}-{episode}-第{number}轮.zip', archive_format, videos_only=True)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

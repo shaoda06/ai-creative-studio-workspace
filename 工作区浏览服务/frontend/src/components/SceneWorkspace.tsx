@@ -19,7 +19,6 @@ import { SegmentStageStrip } from './SegmentStageStrip';
 import { MessagePanel } from './MessagePanel';
 import { PointerTooltip } from './PointerTooltip';
 import { SongssxSceneVideo } from './SongssxSceneVideo';
-import { DownloadButton } from './DownloadButton';
 import './LatestSelection.css';
 import { PREVIOUS_ENDING } from '../previousEpisodeEnding';
 import type { PreviousEpisodeEnding } from '../previousEpisodeEnding';
@@ -36,7 +35,7 @@ export type EpisodePlayback = {
 
 type ReviewRound = { stage: string; order: string[]; versions: ReviewVersions };
 
-export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view: requestedView, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource, songssx = false }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'>; songssx?: boolean }) {
+export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segmentTab, onSegmentTabChange, episodeNotesExportControl, episodePlayback, view: requestedView, onViewChange, scope, segments: allSegments, sceneRounds = [], selectedRound, onRoundChange, previousEnding, emptyMessage, revision, storyboardDocument, directorScenes, integrateSheets, onIntegrateSheetsChange, storyboardVersion, storyboardSource, songssx = false, roundDownloads }: { wideVideo: boolean; onToggleWide: () => void; repeatControl: RepeatPlaybackControl; segmentTab: string; onSegmentTabChange: (value: string) => void; episodeNotesExportControl?: ReactNode; episodePlayback: EpisodePlayback; view: string; onViewChange: (view: string) => void; scope: NoteScope; segments: Segments; sceneRounds?: SceneRound[]; selectedRound?: number; onRoundChange: (number: number) => void; previousEnding: PreviousEpisodeEnding | null; emptyMessage: string; revision: number; storyboardDocument?: RecordData; directorScenes: DirectorSheetScene[]; integrateSheets: boolean; onIntegrateSheetsChange: (value: boolean) => void; storyboardVersion: string; storyboardSource?: Pick<FileItem, 'key' | 'version'>; songssx?: boolean; roundDownloads?: ReactNode }) {
   const access = useProductionAccess();
   const preview = useContext(PreviewContext);
   const view = requestedView === 'dialogue' && access.showStoryboardEditor === false ? 'storyboard' : requestedView;
@@ -123,7 +122,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
   const preparationOrder = reviewRound?.order || [
     ...(previousVideo ? [PREVIOUS_ENDING] : []), ...segments.map(item => item.id),
   ];
-  const preparationVideos = reviewRound ? reviewRound.order.flatMap(id => {
+  const preparationVideos = songssx ? (sceneVideo?.url ? [sceneVideo] : []) : reviewRound ? reviewRound.order.flatMap(id => {
     const video = roundVideo(id);
     return video?.url ? [video] : [];
   }) : [
@@ -142,6 +141,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
   const toggleContinuous = (checked: boolean) => {
     setAutoPlay(false);
     if (!checked) { setContinuous(false); return; }
+    if (songssx) { setContinuous(!!sceneVideo?.url && !!productionRound); setError(null); return; }
     if (!reviewRound) { setContinuous(false); return; }
     const video = roundVideo(segment);
     if (!video?.url || selectedRevision(currentSegment!.videos, chosen)?.key !== video.key) { setContinuous(false); setError(null); return; }
@@ -160,13 +160,16 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
   const advance = () => {
     const next = reviewRound?.order[reviewRound.order.indexOf(segment) + 1];
     if (!continuous) { setAutoPlay(false); return; }
-    if (!next) {
+    if (songssx || !next) {
       const target = episodePlayback.next;
       setAutoPlay(false);
       if (!target) return;
       if (!target.round || !target.segment || !target.video?.url) {
         const issue = missingVideoState(target.video);
-        setError({ unavailable: issue.unavailable, message: `${target.scene}${!target.round ? '尚未登记整场轮次' : !target.segment ? '本轮尚无分段' : `的第${target.round}轮 ${target.segment}${issue.message}`}；连续播放已停止，不会跳过场次或换用其他版本。` });
+        const message = songssx ? `${target.scene} 本轮整场视频暂不可播。连续播放已停止。`
+          : `${target.scene}${!target.round ? '尚未登记整场轮次' : !target.segment ? '本轮尚无分段' : `的第${target.round}轮 ${target.segment}${issue.message}`}；连续播放已停止，不会跳过场次或换用其他版本。`;
+        setError({ unavailable: issue.unavailable, message });
+        if (songssx) setContinuous(false);
         return;
       }
       episodePlayback.onNext();
@@ -212,9 +215,13 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     setSelections(previous => ({ ...previous, [segment]: value }));
   };
   const preparationStatus = !wideVideo && (videoCache.total > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
-      {productionRound ? `第${productionRound.number}轮分段视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
+      {songssx ? `第${productionRound!.number}轮整场视频已准备 ${videoCache.ready}／1${videoCache.failures.length ? '，准备失败' : !sceneVideo?.url ? '，尚无可播放视频' : ''}`
+        : productionRound ? `第${productionRound.number}轮分段视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
         : videoCache.ready === videoCache.total ? `${reviewRound ? '本轮' : '最新'}视频已全部准备好` : `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
     </p></PointerTooltip>;
+  const continuousControl = <label className="scene-continuous"><input type="checkbox" checked={continuous}
+    disabled={songssx ? !sceneVideo?.url || !productionRound : !chosen.stage || !productionRound || !viewingRoundRevision}
+    onChange={event => toggleContinuous(event.target.checked)} />连续播放</label>;
   return <>
     <div className="scene-workspace-tabs">
       <UnderlineTabs label={workMode ? "作品制作内容" : "场次内容"} items={[{ value: 'segments', label: '分段制作' }, { value: 'storyboard', label: access.storyboardLabel ?? (workMode ? '分镜与声音' : '场次分镜') }, { value: 'director-sheets', label: '导演分镜表' }, ...(!scope.readOnly && access.showStoryboardEditor !== false ? [{ value: 'dialogue', label: '分镜修改' }] : []), { value: 'downloads', label: '资源下载' }]} selected={view} onChange={value => { setAutoPlay(false); onViewChange(value); }} />
@@ -243,6 +250,8 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     ]} />
     {view === 'segments' && songssx ? <SongssxSceneVideo round={productionRound} planned={allSegments} wide={wideVideo}
       onToggleWide={onToggleWide} repeatControl={repeatControl} newVideoSegments={newVideoSegments}
+      preparationStatus={preparationStatus} videoCache={videoCache} continuous={continuous} continuousControl={continuousControl}
+      autoPlay={autoPlay} onEnded={advance} onError={() => { setAutoPlay(false); setContinuous(false); }}
       scope={scope} tab={segmentTab} onTabChange={onSegmentTabChange} revision={revision} notesExportControl={episodeNotesExportControl} />
     : view === 'segments' ? <>
     {currentSegment && <SegmentWorkspace key={`${displayScope.episode}/${displayScope.scene}/${currentSegment.id}`} scope={displayScope} roundNumber={viewingPrevious || workMode && !viewingRoundRevision ? undefined : productionRound?.number} segment={currentSegment.id} revision={revision} items={currentSegment.videos} selection={chosen} cachedSources={videoCache.sources} retainSource={videoCache.retainSource}
@@ -255,7 +264,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       segmentNavigation={navigation(true)}
       wideVideo={wideVideo} onToggleWide={onToggleWide} repeatControl={repeatControl}
       continuous={continuous}
-      continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} disabled={!chosen.stage || !productionRound || !viewingRoundRevision} onChange={event => toggleContinuous(event.target.checked)} />连续播放</label>}
+      continuousControl={continuousControl}
       autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance}
       onSelectionChange={changeSelection}
       notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
@@ -268,7 +277,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       : view === 'dialogue' ? productionRound && productionRound.number !== latestRound?.number ? null
         : segments.length ? <SceneStoryboardEditor key={positionKey} scope={scope} segments={segments} source={`${productionRound ? `第${productionRound.number}轮 · ` : ''}${storyboardSource?.key || '分镜文件路径未提供'} · ${storyboardSource?.version || '版本未记录'}`} />
         : <div className="scene-empty" role="status"><h3>尚无可修改的分镜</h3><p className="muted">登记分段计划后可在这里修改。</p></div>
-      : songssx ? (sceneVideo?.url ? <DownloadButton url={sceneVideo.url} label="下载整场视频" title="下载本轮整场视频" /> : <p className="muted">本轮暂无可下载的整场视频。</p>)
+      : songssx ? roundDownloads
       : scene ? <SceneDownloads project={scope.project} episode={scope.episode} scene={scene} revision={revision} segments={allSegments} selectedRound={selectedRound} roundNote={productionRound?.note} />
       : <div className="scene-empty" role="status"><h3>暂无可下载资源</h3></div>}
   </div></>;

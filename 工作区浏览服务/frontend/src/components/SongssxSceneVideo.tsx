@@ -5,14 +5,16 @@ import type { NoteScope } from './RevisionNotes';
 import { SegmentWorkspace } from './SegmentWorkspace';
 import { SegmentStageStrip } from './SegmentStageStrip';
 import type { RepeatPlaybackControl, SegmentVideoHandle } from './SegmentVideo';
+import type { useSceneVideoCache } from './useSceneVideoCache';
 
 const noop = () => {};
-const retainStream = () => noop;
 
-export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatControl, newVideoSegments, scope, tab, onTabChange, revision, notesExportControl }: {
+export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatControl, newVideoSegments, scope, tab, onTabChange, revision, notesExportControl, preparationStatus, videoCache, continuous, continuousControl, autoPlay, onEnded, onError }: {
   round?: SceneRound; planned: NonNullable<FileItem['segments']>[string]; wide: boolean;
   onToggleWide: () => void; repeatControl: RepeatPlaybackControl; newVideoSegments: Set<string>;
   scope: NoteScope; tab: string; onTabChange: (tab: string) => void; revision: number; notesExportControl: ReactNode;
+  preparationStatus: ReactNode; videoCache: ReturnType<typeof useSceneVideoCache>;
+  continuous: boolean; continuousControl: ReactNode; autoPlay: boolean; onEnded: () => void; onError: () => void;
 }) {
   const segments = round ? round.segments.map(segment => ({ ...segment, videos: [] })) : planned.filter(segment => !segment.historical);
   const timings = round?.songssx?.segments || [];
@@ -35,12 +37,14 @@ export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatCo
 
   return <>
     {!wide && navigation}
+    {preparationStatus}
     <SegmentWorkspace scope={scope} segment={segment.id} roundNumber={round?.number} revision={revision}
       tab={tab} onTabChange={onTabChange} readOnly={scope.readOnly}
       items={selectedVideo ? [selectedVideo] : []} selection={{ stage: video?.stage || '', key: video?.key || '' }} onSelectionChange={noop}
       plannedScript={{ html: segment.scriptHtml, url: segment.scriptUrl, label: round ? `第${round.number}轮保存的分镜` : '当前分段计划' }}
       wideVideo={wide} onToggleWide={onToggleWide} repeatControl={repeatControl} segmentNavigation={navigation}
-      autoPlay={false} continuousControl={null} cachedSources={{}} retainSource={retainStream} onVideoEnded={noop} onVideoError={noop}
+      autoPlay={autoPlay} continuous={continuous} continuousControl={continuousControl}
+      cachedSources={videoCache.sources} retainSource={videoCache.retainSource} onVideoEnded={onEnded} onVideoError={onError}
       notesExportControl={notesExportControl}
       scenePlayback={{ player, start: timing?.start ?? 0,
         label: timing && `GEN ${timing.gen} · ${Number(timing.start.toFixed(3))}–${Number(timing.end.toFixed(3))} 秒`,

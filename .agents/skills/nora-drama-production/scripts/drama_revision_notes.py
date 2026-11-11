@@ -24,7 +24,7 @@ def validate_note_round(project, episode, scene, note):
             raise ValueError('Songssx 修改意见须关联已登记的制作轮次')
         return
     selected = rounds.referenced_round(project, f'{episode}-{scene}', note.roundNumber)
-    if note.stage == rounds.SCENE_GENERATION and not any(
+    if (note.stage == rounds.SCENE_GENERATION or selected.get('songssx_execution')) and not any(
             item['id'] == note.segment and item['run'] == note.run and item['stage'] == note.stage
             for item in selected['segments']):
         raise ValueError('Songssx 修改意见的分段或候选与本轮不符')

@@ -9,7 +9,7 @@ import sys
 
 _SKILL = Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-handoff/scripts"
 sys.path.insert(0, str(_SKILL))
-from drama_delivery import (STAGES, KINDS, VideoFiles, video_archive_name, video_member_name, indexed_episode, append_revision, completed_episode_videos, resources)
+from drama_delivery import (STAGES, KINDS, VideoFiles, video_archive_name, video_member_name, indexed_episode, append_revision, completed_episode_videos, songssx_round_videos, resources)
 sys.path.insert(0, str(_SKILL.parents[1] / 'studio-jianying/scripts'))
 import jianying_export
 
