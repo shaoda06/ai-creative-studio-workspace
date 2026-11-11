@@ -1,17 +1,46 @@
 # ComfyUI-Songssx导演台使用规范
 
-适用于 [SelfLift 标准画布](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.workflow.json)及[配套 API 基准](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.api.json)。定制参数以 fork 的 `material-planner-options` 分支为准。参阅[上游 Agent 指南](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/main/docs/AGENT_LONG_VIDEO_GUIDE_CN.md)及[低内存工作流](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector#2-all-in-one-low-memory-video-output)。
+适用于 [SelfLift 标准画布](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.workflow.json)及[配套 API 基准](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.api.json)。素材规划与提示词参阅[上游 Agent 指南](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/main/docs/AGENT_LONG_VIDEO_GUIDE_CN.md)。执行使用[低内存工作流](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector#2-all-in-one-low-memory-video-output)，定制控件按 [fork 的使用说明](https://github.com/shaoda06/ComfyUI-MiniMaxH3-TimelineDirector/blob/f8b8697869429174dee183d02310856f8706e591/README_CN.md)处理。
+
+## 参数选择与装配前询问
+
+按字段依次使用本次明确选择、适用且经确认的项目配置。用户指定使用标准版配置时，从配套基准读取相应值，并核对是否符合本次画幅及参考图要求。只询问缺失或需要取舍的字段，已有答案直接沿用。选项用弹窗提供，根据本次需求标注推荐项，支持填写自定义值。参数选择与本次生成授权分别确认。
+
+| 询问项 | 选项和装配方式 |
+| --- | --- |
+| 成片画幅与分辨率 | 画幅未确定时先选横屏、竖屏或自定义。已确定画幅时直接提供对应宽高。横屏可选 1664×928（1.5 MP）或 1920×1088（2.0 MP），竖屏可选 928×1664 或 1088×1920；也可填写符合交付画幅的自定义宽高。常用档位使用 32 像素对齐后的尺寸。装配写入 `width`、`height`。 |
+| 独立参考图居中裁切 | 需要按成片画幅取参考图中央时选开启；需要保留整张图的构图和边缘信息时选关闭。写入 `reference_image_center_crop`。 |
+| SelfLift 一采缩放倍率 | 可沿用标准版或填写 0.25–1.0 内的倍率，写入 `lowres_scale`。倍率分别作用于低清阶段的宽和高，实际低清尺寸由节点对齐，成片宽高仍由规划台指定。 |
+| 种子 | 按调用业务提供本次实际种子。有指定对照或重做来源时按用户选择沿用；需要用户决定沿用还是更换时才询问。写入 `seed`，场内所有 GEN 使用同一个种子。 |
+
+总采样步数、高清采样步数、参考图编码档位 `match`／`max`、模型及 LoRA 继承标准版。现行清单入口接收上表字段。需要调整基准字段时，先明确所用工作流和装配方式。SelfLift 在同一次场次任务内完成低清采样、latent 放大和高清采样，低清步数等于总步数减去高清步数。`match` 按成片像素面积匹配参考图编码尺寸，`max` 在模型限制内尽量保留参考图尺寸。两档均适用于独立参考图，与居中裁切分别作用。
+
+装配前汇总实际宽高、裁切、倍率、种子及所沿用的采样步数。装配脚本把已确定的参数写入本次画布和 API。查询、取回或恢复原任务使用原请求中的实际参数。
 
 ## 场次装配
 
-一次提交一个场次。每个 P 对应一个 GEN。按[共用制作层级](../../studio-storyboard/references/分镜写作规范.md#制作对象场次与分段)提供分段身份、时长、提示词、准确素材版本和接续意图。不同机位的直接切镜使用零帧重叠。同机位连续时按分镜指定前段尾部、重叠帧与后段开头的声音和动作。固定帧数按目标插件对齐，后段提示词先交代接续部分，内容时码与实际采样窗口一起核对。
+一次提交一个场次，每个 P 对应一个 GEN。按[共用制作层级](../../studio-storyboard/references/分镜写作规范.md#制作对象场次与分段)提供分段身份、计划新增时长、提示词、准确素材版本和接续意图。首段和直接切镜使用 0 帧重叠。需要连续动作、运镜或声音时，按分镜选取上一段尾部稳定、可辨识的内容作为重叠，按动作和声音的实际长度决定接点。
 
-标准低内存采样器在一次任务中完成 SelfLift、原生段间接续和合并。插件负责移除重叠画面并接续音频。执行产物为 `SaveVideo` 的整场 MP4。保留每个 P 对应的 GEN、采样窗口、重叠帧及成片计划帧区间。SelfLift 技术参数中的一采倍率与高分辨率步数属于同一次场次生成。后处理、采用和正式资料归调用业务。局部返修待生成链路验证后按上游支持另定。
+清单填写实际合法重叠帧数。规划台会把界面中的重叠输入向下对齐，例如 24 帧对齐到 22 帧，48 帧对齐到 39 帧。清单脚本校验已对齐的重叠值。脚本按 24 fps 将计划新增时长换算成帧，加上重叠后向上对齐到 H3 采样帧格。单 GEN 对齐后的采样窗口须符合 4–15 秒，超限时调整分段方案。提交前使用脚本给出的 P／GEN 映射、重叠帧、采样区间和成片计划区间；帧区间统一采用左闭右开。
+
+有重叠的 GEN 在开头提示词交代上一段尾部的画面、动作与声音，再按实际接点描述新增内容。持续同一镜头时在该镜头内写清动作如何继续；接点确有切镜时，按新镜头写。按[共用 H3](../../studio-h3/SKILL.md)编写各 GEN 的完整 Ref2VA 正文。
+
+## 素材绑定与检查
+
+当前标准清单支持逐 GEN 的 Ref2VA 独立参考图及场内原生音画接续。每个 GEN 提供实际用到的 1–9 张参考图，`<Picture N>` 按该 GEN 的实际图片顺序编号。调整素材或顺序时同步核对提示词。独立音频、参考视频、手工 Fixed Guide 和导入预设各有上游用途，使用这些输入需有对应的已验证装配入口。
+
+现有准备检查负责合法帧区间、重叠、图片绑定与标签、提示词格式和长度，以及整场输出目标。Agent 负责判断素材用途、接续意图和内容对应，使用脚本结果核对可执行性。
 
 ## 场次生成任务接口
 
-通过[共用准备与入队入口](../../studio-comfyui/references/固定脚本接口规范.md#准备检查与提交复用)调用。清单的任务项使用 `task_type: "video-scene-generation"`，提供 `title`、`record_dir`、`output` 和 `songssx`。准备检查通过并具备本次执行授权后才入队。
+落实[本次参数选择](#参数选择与装配前询问)后，调用[共用准备与入队入口](../../studio-comfyui/references/固定脚本接口规范.md#准备检查与提交复用)。清单的任务项使用 `task_type: "video-scene-generation"`，提供 `title`、`record_dir`、`output` 和 `songssx`。准备检查通过并具备本次执行授权后才入队。
 
 - `songssx` 提供对齐 32 的 `width`、`height`，明确的 `reference_image_center_crop`、`lowres_scale`、`seed` 及 `remote_prefix`。
-- `segments` 按播放顺序，每项提供 `p`、内容 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。图片顺序与段内 Picture 标签一致。当前装配支持 Ref2VA 独立参考图及原生场内音画接续。
-- `scripts/songssx_workflow.py` 装配任务画布、API、图片上传绑定、单一取回目标及帧区间。后台保存原准备结果和实际上传路径。返回后沿共用任务的成功状态和取回凭据做基础登记，出现媒体异常或时码疑问时按需检查。
+- `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。
+- [装配脚本](../scripts/songssx_workflow.py)写出任务画布、API、图片上传绑定、单一取回目标及帧区间。后台保存原准备结果和实际上传路径。
+
+## 取回、恢复与返修边界
+
+低内存采样器负责原生接续、去除重叠画面及合并音轨。开启音频 latent 接续时，重叠处的声音过渡保留在最终音轨里。交付直接使用 `SaveVideo` 输出的一条整场 MP4。共用后台依据原任务的终态和取回凭据做基础登记，有媒体异常或时码疑问时再定点核对。取回失败沿[原任务取回重试](../../studio-workspace-browser/references/固定脚本接口规范.md#后台取回重试)接续，提交状态不明时沿[原任务恢复](../../studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#重新调度与失败恢复)核对。后处理和采用由调用业务负责。
+
+低内存采样器在合并后清理分段临时文件，没有可恢复的分段 latent 或原位单段重跑入口。已生成的整场 MP4 和原执行记录可用于定位问题及评估返修。局部返修的素材准备、生成范围和接点处理待专项验证后规定。
