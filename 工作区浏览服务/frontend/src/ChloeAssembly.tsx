@@ -66,12 +66,12 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className="asset-media-grid">{cards}</div>
       : <p className="muted">暂无可用{label}。</p>)}
-    <div className="chloe-assembly-picker-footer">
+    <div className={multi ? 'chloe-assembly-picker-footer chloe-assembly-picker-footer-sticky' : 'chloe-assembly-picker-footer'}>
       {showFilters && filter.types.length > 0 && <ChloeAccessoryTypes id={filtersId} {...filter} />}
       <div className="chloe-assembly-confirm">
-        {filter.types.length > 0 && <button type="button" aria-expanded={showFilters}
+        {multi && <button type="button" disabled={!filter.types.length} aria-expanded={showFilters}
           aria-controls={showFilters ? filtersId : undefined} onClick={() => setShowFilters(previous => !previous)}>
-          筛选{filter.activeTypes.length > 0 && `（${filter.activeTypes.length}）`}
+          筛选
         </button>}
         <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
       </div>
