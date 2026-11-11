@@ -212,6 +212,9 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     setViewedWorkflow(null);
     setRecordNumber(null);
     setScene('');
+    const songssxScope = name + '/songssx';
+    setRoundNumbers(previous => Object.fromEntries(Object.entries(previous)
+      .filter(([key]) => key !== songssxScope && !key.startsWith(songssxScope + '/'))));
     onSelect(name);
   };
   const renderActions = () => <div className="episode-heading-actions">
