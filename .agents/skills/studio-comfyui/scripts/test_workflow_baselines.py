@@ -214,11 +214,22 @@ class BaselineTests(unittest.TestCase):
 
     def test_all_pairs_and_reference_branches(self):
         results = wb.verify(BASELINES)
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 7)
         for folder, group in workflow_directories(BASELINES):
             self.assertEqual(len(wb.verify(folder)), len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]
         self.assertEqual(h3, [])
+
+    def test_viggle_remake_pair_exports_the_save_chain(self):
+        stem = 'Viggle-Remake-单人换人-双参考图'
+        canvas = wb.Canvas(json.loads(workflow_file(stem).read_text(encoding='utf-8')))
+        api = json.loads(workflow_file(stem, 'api').read_text(encoding='utf-8'))
+        self.assertEqual(canvas.api(wb.output_for(stem), optional=False), api)
+        self.assertEqual(api['65']['class_type'], 'SaveVideo')
+        self.assertEqual(api['42']['inputs']['frames'], ['67', 1])
+        self.assertEqual(api['68']['inputs']['strength_model'], 0.35)
+        self.assertEqual(api['16']['inputs']['sigmas'], ['15', 0])
+        self.assertEqual(canvas.nodes[33]['widgets_values'], ['1.0, 0.983607, 0.96, 0.923077, 0.857143, 0.705882, 0.0'])
 
     def test_standard_default_lora_chain(self):
         standard = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'api').read_text(encoding='utf-8'))

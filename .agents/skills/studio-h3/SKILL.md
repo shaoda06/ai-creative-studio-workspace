@@ -9,6 +9,8 @@ description: MiniMax H3 共用提示词模式、正文格式、参考素材语�
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
 
+已有原片并明确使用 Viggle Remake Swap 换人时，见[单人换人画布、API 与分段流程试行稿](references/Viggle-Remake单人换人流程.md)。提示词采用 Viggle 的六段格式，参考图按实际绑定顺序编号。
+
 ## 生成段时长
 
 MiniMax H3 官方输出规格为 24 fps、单次 4–15 秒。分镜规划采用本次选定的工作流与模式限制，入队前核对实际参数。模型规格、执行窗口和剪辑采用时长分别记录。[MiniMax H3 官方输出规格](https://github.com/MiniMax-AI/MiniMax-H3#system-overview)
