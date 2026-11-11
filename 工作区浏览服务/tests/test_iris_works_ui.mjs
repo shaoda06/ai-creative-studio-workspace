@@ -26,6 +26,7 @@ try {
     {id:'F004',name:'待启动作品',key:'作品/F004-待启动作品',status:'待启动'}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
+  let songssxDetail=false;
   let overviewStatus='待启动';
   saved.F001.notes['round/2/P001/一采/R002']={...saved.F001.notes['P001/一采/R001'],roundNumber:2,run:'R002'};
   const file=key=>({kind:'file',key,name:key.split('/').at(-1),url:base+'/files/'+key});
@@ -58,8 +59,24 @@ try {
      if(identity==='F002'&&failWork){failWork=false;return route.fulfill({status:503,json:{detail:'隔离作品读取失败'}})}
      return route.fulfill({json:{productionSection:key+'/06-视频生产',files:[{kind:'group',name:'03-创意脚本',key:key+'/03-创意脚本',children:[file(script)]},{kind:'group',name:'06-视频生产',key:key+'/06-视频生产',children:[]}],irisPresentation:{primary:{'03-创意脚本':[script]},adopted:[],delivery:{status:'草稿可交接',summary:work.name+'交付版本',archivedHandoff:null,items:[{title:work.name+'横版',type:'剪映草稿',version:'v01',purpose:'本片版本',file:{...file(packageKey),jianying:{jypack:base+'/jianying-download?path='+encodeURIComponent(packageKey)}}}]}}}});
     }
-    if(identity==='F004' && suffix==='/production-detail')
-     return route.fulfill({json:{kind:'group',name:identity,scenes:['whole'],segments:{whole:[]}}});
+    if(identity==='F004' && suffix==='/production-detail'){
+     const detail={kind:'group',name:identity,scenes:['whole'],segments:{whole:[]}};
+     if(songssxDetail){
+      const parts=['P001','P002'].map(id=>({id,duration:1,stage:'一采',run:'R001',scriptHtml:'<p>隔离分镜</p>',videos:[]}));
+      const video={key:'整场.webm',url:'/component-samples/video.webm',stage:'一采',run:'R001',candidateNumber:1,
+       fileRevision:'fixture',taskStatus:'completed',deliveryStatus:'已取回',approved:false};
+      const context={scriptHtml:'<p>隔离分镜</p>',shots:[],dialogues:[],issues:[],prompts:{},references:{common:[],segment:[]}};
+      Object.assign(detail,{productionWorkflows:['songssx'],segments:{whole:parts},
+       episodeRounds:[{number:1,scenes:['whole']}],sceneRounds:{whole:[{number:1,episodeRound:true,issues:[],segments:parts,
+        songssx:{recorded:true,video,segments:parts.map((item,index)=>({id:item.id,gen:index+1,start:index,end:index+1,context}))}}]}});
+     }
+     return route.fulfill({json:detail});
+    }
+    if(identity==='F004' && suffix==='/production-detail/rounds/1/download'){
+     assert.equal(url.searchParams.get('view'),'current');
+     assert.equal(url.searchParams.get('format'),'jypack');
+     return route.fulfill({body:'isolated scene package',headers:{'Content-Disposition':'attachment; filename="scene.jypack"'}});
+    }
     if(identity==='F004' && suffix==='/production-downloads'){
      const empty={count:0,url:null,files:[]};
      return route.fulfill({json:Object.fromEntries(['一采','二采','后处理'].map(stage=>[stage,{videos:empty,canvas:empty}]))});
@@ -474,6 +491,17 @@ try {
   await page.getByRole('button',{name:'轮次记录',exact:true}).click();
   await page.getByText('尚未登记轮次。',{exact:true}).waitFor();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  songssxDetail=true;
+  await page.reload();
+  await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
+  await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/^分段 P002/}).click();
+  await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'资源下载',exact:true}).click();
+  const scenePack=page.waitForEvent('download');
+  await page.getByRole('button',{name:'剪映草稿下载',exact:true}).click();
+  assert.equal((await scenePack).suggestedFilename(),'scene.jypack');
   await location.getByRole('link',{name:'视频制作',exact:true}).click();
   await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();

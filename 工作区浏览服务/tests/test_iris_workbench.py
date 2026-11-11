@@ -1,7 +1,9 @@
 """Real temporary files exercise Iris's full-page projection and review writes."""
 import json
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from tests import test_iris_works as fixtures
 from backend.services import episode_downloads
@@ -62,6 +64,63 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             video, = data['segments']['whole'][0]['videos']
             self.assertEqual(self.client.get(video['url']).text, identity + '候选')
             self.assertFalse(video['approved'])
+
+    def test_accepted_songssx_scene_uses_one_output_and_preserves_other_workflow(self):
+        first = self.register()
+        root = self.works['F001'] + '/06-视频生产/'
+        record = root + '执行记录/R002-场次生成'
+        journal = record + '/任务清单-装配结果.json'
+        output = root + '候选/整场.mp4'
+        media = self.write(output, '整场原始视频')
+        timeline = {'images': [], 'segmentConfig': {'segments': [
+            {'prompt': 'First GEN.', 'images': []}, {'prompt': 'Second GEN.', 'images': []},
+        ]}}
+        task = {'task_type': 'video-scene-generation', 'record_dir': record, 'project': str(self.project),
+                'video_plan': {'workflow_id': 'songssx-selflift', 'segments': [
+                    {'p': 'P001', 'gen': 1, 'planned_seconds': 5, 'output_frames': [0, 124]},
+                    {'p': 'P002', 'gen': 2, 'planned_seconds': 5, 'output_frames': [124, 248], 'prompt_zh': '第二段。'},
+                ]},
+                'workflow': {'402': {'inputs': {'timeline_data': json.dumps(timeline)}}}, 'uploads': [],
+                'outputs': [{'path': output, 'response_name': '场次视频-取回响应.json'}]}
+        self.write(journal, json.dumps({'accepted': [], 'tasks': [task]}))
+        board = self.works['F001'] + '/04-分镜声音/分镜与声音制作稿-v02.md'
+        self.write(board, '| 生成段 | 场次 | 对应镜号 | 请求时长 | 段内Shot及时间 |\n'
+                   '| --- | --- | --- | --- | --- |\n'
+                   '| P001 | S001 | SH001 | 5秒 | Shot 1：0–5秒 |\n'
+                   '| P002 | S001 | SH002 | 5秒 | Shot 1：0–5秒 |\n\n'
+                   '### 分段 P002\n#### SH002｜第二镜\n**台词**：六娘：进来。\n')
+        second = {**first, 'number': 2, 'storyboard': {'file': board, 'version': 'v02'}, 'batches': [journal],
+                  'segments': [{'id': segment, 'duration': 5, 'stage': '一采', 'run': 'R002', 'file': output}
+                               for segment in ('P001', 'P002')]}
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, second]}))
+        self.assertEqual(self.detail()['productionWorkflows'], ['aimixer'])
+
+        self.write(journal, json.dumps({'accepted': [{'local_task_id': 'scene-task'}], 'tasks': [task]}))
+        self.write(record + '/执行检查报告.json', json.dumps({'prepared_input': task}))
+        self.write(record + '/后台任务状态.json', json.dumps({
+            'id': 'scene-task', 'task_type': task['task_type'], 'record_dir': record, 'status': 'completed'}))
+        self.write(record + '/请求.json', json.dumps({'prompt': task['workflow']}))
+        data = self.detail()
+        self.assertEqual(data['productionWorkflows'], ['aimixer', 'songssx'])
+        self.assertEqual(data['sceneRounds']['S001'][0]['songssx']['video']['url'], '')
+        self.write(record + '/场次视频-取回响应.json', '{}')
+        data = self.detail()
+        scene = data['sceneRounds']['S001'][0]['songssx']
+        self.assertEqual(self.client.get(scene['video']['url']).content, media.read_bytes())
+        self.assertEqual([part['start'] for part in scene['segments']], [0, 124 / 24])
+        self.assertEqual(scene['segments'][1]['context']['prompts'], {'english': 'Second GEN.', 'chinese': '第二段。'})
+        self.assertEqual(scene['segments'][1]['context']['dialogues'][0]['original'], '进来。')
+        self.assertFalse(data['segments']['S001'][1]['videos'])
+        api = self.api + '/works/F001'
+        response = self.client.get(api + '/production-detail/rounds/2/download?view=current')
+        self.assertEqual(response.status_code, 200, response.text if response.status_code != 200 else '')
+        with ZipFile(BytesIO(response.content)) as bundle:
+            member, = bundle.namelist()
+            self.assertEqual(bundle.read(member), media.read_bytes())
+        note = {'segment': 'P002', 'stage': '一采', 'run': 'R002', 'roundNumber': 2,
+                'text': '第二段意见', 'fileRevision': scene['video']['fileRevision'], 'expectedText': ''}
+        self.assertEqual(self.client.put(api + '/production-notes?view=current', json=note).status_code, 200)
+        self.assertEqual(self.detail('F002')['productionWorkflows'], ['aimixer'])
 
     def test_missing_candidate_retains_round_and_recovery_uses_same_path(self):
         spec = self.register()

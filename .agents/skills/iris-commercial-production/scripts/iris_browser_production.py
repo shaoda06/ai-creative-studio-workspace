@@ -14,6 +14,8 @@ from iris_works import work_root, historical_sources
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
 from postprocess_products import product_rows
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-h3-songssx/scripts'))
+from songssx_workflow import TASK_TYPE as SONGSSX_TASK
 
 STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-postprocess': '后处理'}
 VIDEO_EXTENSIONS = ('.mp4', '.mov', '.webm')
@@ -52,7 +54,7 @@ def video_products(project, api, declared):
     return products
 
 
-def production_data(project, api, work=None, *, legacy_fallback=True, executions=None):
+def production_data(project, api, work=None, *, legacy_fallback=True, executions=None, scene_executions=None):
     section = production_section(project, work)
     segments, batches, contexts, bindings = {}, [], {}, {}
     if not section:
@@ -73,6 +75,14 @@ def production_data(project, api, work=None, *, legacy_fallback=True, executions
             raise ValueError('商业批次记录缺少R编号：' + batch_key)
         batch_segments = []
         for task in journal['tasks']:
+            if scene_executions is not None and task['task_type'] == SONGSSX_TASK:
+                target, = task['outputs']
+                key = local_key(project, target['path'], task['project'])
+                scene_executions.setdefault(key, []).append({
+                    'batch': batch_key, 'record': local_key(project, task['record_dir'], task['project']),
+                    'run': run[1], 'segments': [row['p'] for row in task['video_plan']['segments']],
+                })
+                continue
             stage = STAGES.get(task['task_type'])
             if not stage:
                 continue

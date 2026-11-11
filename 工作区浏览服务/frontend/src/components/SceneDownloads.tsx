@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { TabSelect } from './TabSelect';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { get } from '../api';
-import { projectUrl, type FileItem } from '../api';
+import type { FileItem } from '../api';
 import { Result } from '../components';
 import { DownloadButton } from './DownloadButton';
 import './SceneDownloads.css';
@@ -22,10 +22,9 @@ export function workPackageLabel({ label, rounds }: WorkPackage) {
   return rounds.length ? `${rounds.map(number => `第${number}轮`).join('、')} · ${label}` : label;
 }
 
-export function SongssxRoundDownloads({ project, episode, round, ready, total }: {
-  project: string; episode: string; round?: number; ready: number; total: number;
+export function SongssxRoundDownloads({ url, round, ready, total }: {
+  url: string | null; round?: number; ready: number; total: number;
 }) {
-  const url = round && ready ? `${projectUrl(project)}/episodes/${episode}/rounds/${round}/download` : null;
   return <div className="stage-downloads" aria-label="资源下载">
     <section className="stage-download-section" aria-label="本轮资源">
       <h3>{round ? `第${round}轮` : '本轮资源'}</h3>
@@ -34,7 +33,7 @@ export function SongssxRoundDownloads({ project, episode, round, ready, total }:
       {!round && <p className="muted">请先选择制作轮次。</p>}
       <div className="stage-download-actions stage-download-packages">
         <DownloadButton url={url} label="本轮打包下载" title="按场次顺序打包本轮视频 ZIP" pack />
-        <DownloadButton url={url && url + '?format=jypack'} label="剪映草稿下载" title="按本轮场次顺序生成剪映草稿" pack />
+        <DownloadButton url={url && url + (url.includes('?') ? '&' : '?') + 'format=jypack'} label="剪映草稿下载" title="按本轮场次顺序生成剪映草稿" pack />
       </div>
     </section>
   </div>;

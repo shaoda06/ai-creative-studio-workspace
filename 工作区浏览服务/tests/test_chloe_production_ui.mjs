@@ -110,6 +110,7 @@ try {
   }
   await card.click();
   await page.locator('.episode-detail').waitFor();
+  assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
   assert.ok(page.url().includes('video='));
   const tabs=page.getByRole('navigation',{name:'作品制作内容'});
   await tabs.waitFor();
@@ -215,6 +216,23 @@ try {
   assert.ok(await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1}));
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(),0);
+  // A work detail with two formal workflows uses the same selector as an episode.
+  const scene = fixture.detail.sceneRounds.whole.at(-1);
+  const sceneVideo = fixture.detail.segments.whole[0].videos.at(-1);
+  const songssxRound = {...scene, songssx:{recorded:true,video:{...sceneVideo,stage:'场次生成'},
+   segments:scene.segments.map((entry,i)=>({id:entry.id,gen:i+1,start:i*3,end:(i+1)*3,context:sceneVideo.context}))}};
+  scopedDetail={...fixture.detail,productionWorkflows:['aimixer','songssx'],
+   sceneRounds:{whole:[fixture.detail.sceneRounds.whole[0],songssxRound]}};
+  taskMode=false;
+  await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=production&video='+encodeURIComponent('V001-隔离演示'));
+  await page.reload();
+  const workflow=page.getByRole('region',{name:'选择制作记录'});
+  await workflow.waitFor();
+  assert.ok(await workflow.evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1));
+  await workflow.getByRole('button',{name:'Songssx 制作记录'}).click();
+  await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  await page.getByText('GEN 1 · 0–3 秒',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次'}).getAttribute('data-value'),'2');
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

@@ -21,7 +21,7 @@ from backend.services.workspaces import Workspaces, project_tree, scope_links
 from backend.services.project_packages import package_response
 from workspace_project_index import INDEX_NAME
 from backend.services.request_diagnostics import RequestDiagnostics, RequestDiagnosticsMiddleware
-from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, songssx_round_videos, zip_response, clear_downloads, video_archive_name
+from backend.services.episode_downloads import KINDS, resources as episode_resources, completed_episode_videos, indexed_episode, songssx_round_videos, zip_response, clear_downloads, video_archive_name
 from backend.services import krea2
 from backend.services.comfy_tasks import DesktopConnection, TaskInput, TaskStore, client as comfy_client
 from backend.services.workflows import catalogue as workflow_catalogue
@@ -630,7 +630,7 @@ def episode_round_download(name: str, episode: Episode, number: int,
                            archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
     try:
         data = entry(name, '09-剧集制作', episode, mode='playback')['data']
-        files = songssx_round_videos(store, name, episode, number, data)
+        files = songssx_round_videos(store, name, indexed_episode(episode, data), number)
         return zip_response(files, f'{name}-{episode}-第{number}轮.zip', archive_format, videos_only=True)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
@@ -1016,6 +1016,23 @@ def workspace_production_downloads(name: str, work: str, request: Request, scene
         raise HTTPException(409, '作品下载资料读取失败：' + str(error)) from error
 
 
+@spaces_router.get('/projects/{name}/works/{work}/production-detail/rounds/{number}/download')
+def workspace_scene_round_download(name: str, work: str, number: int, request: Request,
+                                   view: Literal['current', 'archive'] | None = None,
+                                   archive_format: Annotated[Literal['zip', 'jypack'], Query(alias='format')] = 'zip'):
+    if not management_request(request):
+        raise HTTPException(403, '视频打包仅允许本机或局域网工作台访问')
+    space = request.state.workspace_space
+    try:
+        detail = production.workbench(space).detail(space.projects, name, space.api, work, view)
+        files = songssx_round_videos(space.projects, name, detail, number)
+        return zip_response(files, f'{name}-{work}-第{number}轮.zip', archive_format, videos_only=True)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品下载资料读取失败：' + str(error)) from error
+
+
 @spaces_router.get('/projects/{name}/works/{work}/production-download')
 def workspace_production_download(name: str, work: str, request: Request,
                                   round_number: Annotated[int, Query(alias='round', ge=1)],
@@ -1084,7 +1101,21 @@ def update_production_notes(name, request, changes, work=None, view=None):
         data = business.production_data(project, space.api + '/projects/' + quote(name, safe=''), work, legacy_fallback=work is None)
         identities = {(item['id'], video['stage'], video['run']) for item in data['segments'] for video in item['videos']}
         if work:
-            production.workbench(space).validate_notes(project, work, identities, changes, view)
+            workbench = production.workbench(space)
+            missing = [note for note in changes.notes
+                       if (note.segment, note.stage, note.run) not in identities and note.roundNumber is not None]
+            if missing:
+                detail = workbench.detail(space.projects, name, space.api, work, view)
+                for note in missing:
+                    for rounds in detail.get('sceneRounds', {}).values():
+                        for round_ in rounds:
+                            songssx = round_.get('songssx', {})
+                            video = songssx.get('video', {})
+                            if (round_['number'] == note.roundNumber and songssx.get('recorded')
+                                    and (video.get('stage'), video.get('run')) == (note.stage, note.run)
+                                    and any(segment['id'] == note.segment for segment in round_['segments'])):
+                                identities.add((note.segment, note.stage, note.run))
+            workbench.validate_notes(project, work, identities, changes, view)
         elif changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
             raise ValueError('意见必须对应项目中已有的分段与候选版本')
         return production_notes.save(business.notes_path(project, work), changes)

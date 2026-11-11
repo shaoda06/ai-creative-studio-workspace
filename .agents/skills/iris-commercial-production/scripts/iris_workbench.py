@@ -10,11 +10,37 @@ from urllib.parse import quote, unquote, urlsplit
 from backend.parsers import documents
 from backend.parsers.documents import cells
 from backend.services.iris_presentation import asset_review, delivery_overview, table, entries, work_view
+from backend.services.workspaces import scope_links
 from iris_works import discover_works, work_root, work_status_label
 import iris_browser_production as production
+from production_workflows import recorded_workflows
+from songssx_browser import songssx_scene
 
 
 SHOT_HEADING = re.compile(r'(?m)^####\s+(SH\d{3,})(?!\d)[^\n]*\n')
+
+
+def songssx_storyboard_context(text, row, segment, plan, api):
+    context = {'scriptHtml': segment['scriptHtml'], 'scriptUrl': segment['scriptUrl'],
+               'shots': [], 'dialogues': [], 'issues': []}
+    headings = list(SHOT_HEADING.finditer(text))
+    ids = [heading[1] for heading in headings]
+    for index, heading in enumerate(headings):
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+        shot = text[heading.start():end]
+        rendered = production.legacy_links(documents.markdown(shot, plan['key']), api + '/files/')
+        context['shots'].append({'id': f'SH{index + 1:03d}', 'duration': None, 'html': rendered})
+        dialogue = re.search(r'(?ms)^\*\*台词\*\*[：:]\s*(.*?)(?=^\*\*|\Z)', shot)
+        if dialogue:
+            for line in dialogue[1].splitlines():
+                speaker, separator, original = line.partition('：')
+                if separator and original.strip():
+                    context['dialogues'].append({'shot': heading[1], 'index': len(context['dialogues']),
+                                                 'speaker': speaker.strip(), 'original': original.strip()})
+    apply_plan_timing(context, row, segment['duration'], ids)
+    for shot, identity in zip(context['shots'], ids, strict=True):
+        shot['id'] = identity
+    return context
 
 
 def document_ref(project, api, path):
@@ -285,7 +311,9 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
         if has_archive:
             status['deliverySummary'] = ''
         status['label'] = current_status_label(status, delivery, has_archive)
-    data = production.production_data(project, api, work, legacy_fallback=False, executions=executions)
+    scene_executions = {}
+    data = production.production_data(project, api, work, legacy_fallback=False, executions=executions,
+                                      scene_executions=scene_executions)
     segments = data['segments']
     adoption = records.get('视频采用记录')
     if adoption:
@@ -297,6 +325,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
     by_id = {item['id']: item for item in segments}
     rounds = []
     groups_by_round = {}
+    songssx_by_round = {}
     numbers = set()
     for spec in round_spec(project, work):
         number = spec['number']
@@ -310,6 +339,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
         plan_text = projects.file(name, plan['key']).read_text('utf-8-sig') if plan else ''
         rows = segment_rows(plan_text)
         values = []
+        contexts = {}
         for value in spec['segments']:
             identity = value['id']
             if not re.fullmatch(r'P\d{3,}', identity) or any(item['id'] == identity for item in values):
@@ -318,7 +348,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
             item = by_id.setdefault(identity, {'id': identity, 'duration': value['duration'], 'scriptHtml': '', 'videos': []})
             candidate = next((video for video in item['videos'] if video['key'] == key
                               and video['stage'] == value['stage'] and video['run'] == value['run']), None)
-            if not candidate:
+            if not candidate and key not in scene_executions:
                 issues.append(identity + ' 的指定候选未在原执行记录找到，不换用其他版本')
             text = segment_text(plan_text, identity)
             rendered = production.legacy_links(documents.markdown(text, plan['key']), api + '/files/') if text else ''
@@ -328,6 +358,8 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
             item['scriptHtml'] = rendered
             values.append({**{k: value[k] for k in ('id', 'duration', 'stage', 'run')}, 'key': key,
                            'scriptHtml': rendered, 'scriptUrl': plan['url'] if plan else '', 'shotIds': shot_ids})
+            if key in scene_executions:
+                contexts[identity] = songssx_storyboard_context(text, row, values[-1], plan, api)
             if candidate and plan:
                 context = candidate.get('context')
                 if context and not context.get('businessSource'):
@@ -376,6 +408,24 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
         if not values:
             raise ValueError('整片轮次至少需要一个明确分段')
         groups_by_round[number] = scene_segments([item['id'] for item in values], rows)
+        songssx_by_round[number] = {}
+        entries_by_id = {item['id']: item for item in values}
+        for scene, identities in groups_by_round[number].items():
+            selected = [entries_by_id[identity] for identity in identities]
+            key = selected[0]['key']
+            matches = [execution for execution in scene_executions.get(key, [])
+                       if execution['segments'] == identities
+                       and (not spec.get('batches') or execution['batch'] in spec['batches'])
+                       and all(item['key'] == key and item['run'] == execution['run'] for item in selected)]
+            if len(matches) == 1:
+                scene_entry = {'songssx_execution': matches[0]['record'], 'segments': selected, 'issues': issues}
+                value = songssx_scene(project, scene_entry, contexts.__getitem__)
+                if value.get('video', {}).get('key', key) == key:
+                    songssx_by_round[number][scene] = scope_links(
+                        production.legacy_links(value, api + '/files/'), space_api)
+                    continue
+            if any(item['key'] in scene_executions for item in selected):
+                issues.append(scene + ' 的 Songssx 场次与本轮登记不匹配')
         outputs = []
         for output in spec.get('review_outputs', []):
             try:
@@ -426,7 +476,10 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
             earlier_candidates.add(identity)
         for scene, identities in groups.items():
             scene_members.setdefault(scene, {}).update((identity, by_id[identity]) for identity in identities)
-            scene_rounds.setdefault(scene, []).append({**round_, 'segments': [entries_by_id[identity] for identity in identities]})
+            scene_round = {**round_, 'segments': [entries_by_id[identity] for identity in identities]}
+            if scene in songssx_by_round[round_['number']]:
+                scene_round['songssx'] = songssx_by_round[round_['number']][scene]
+            scene_rounds.setdefault(scene, []).append(scene_round)
     current_plan = production_task or current_sources['storyboard']
     if not rounds and current_plan:
         text = projects.file(name, current_plan['key']).read_text('utf-8-sig')
@@ -456,7 +509,10 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
                  for item in review if item['media']['kind'] == 'image']
     label = status['label'] if status else ''
     status_html = '<span class="status-badge status-gray">' + escape(label) + '</span>' if label else ''
+    workflows = recorded_workflows(scene_rounds, aimixer_recorded=any(
+        video['stage'] in ('一采', '二采') for item in segments for video in item['videos']))
     return {'kind': 'group', 'name': work, 'title': entry['name'], 'key': entry['key'], 'scenes': list(scene_members),
+            'productionWorkflows': workflows,
             'segments': {scene: list(items.values()) for scene, items in scene_members.items()},
             'sceneRounds': {scene: scene_rounds.get(scene, []) for scene in scene_members}, 'episodeRounds': episode_rounds,
             'script': current_sources['script'], 'storyboards': {scene: current_sources['storyboard'] for scene in scene_members} if current_sources['storyboard'] else {},
