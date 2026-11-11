@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 from backend.main import SubmissionPlanInput
 from backend.services import comfy_tasks, result_registration, submission_plans
 from prepared_documents import read_journal
+from songssx_workflow import aligned_frames
 
 
 PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
@@ -17,6 +18,17 @@ PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
 
 
 class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    def test_gen_duration_and_aligned_window_limits(self):
+        for seconds, overlap, frames in [(4, 0, 107), (15, 0, 362), (15, 1, 362), (14, 22, 362)]:
+            with self.subTest(seconds=seconds, overlap=overlap):
+                self.assertEqual(aligned_frames(seconds, overlap), frames)
+        for seconds in (3.999, 15.001):
+            with self.subTest(seconds=seconds):
+                with self.assertRaisesRegex(ValueError, '计划新增时长须在 4 至 15 秒之间'):
+                    aligned_frames(seconds, 0)
+        with self.assertRaisesRegex(ValueError, '396 帧.*22 帧重叠.*362 帧上限'):
+            aligned_frames(15, 22)
+
     async def test_scene_prepare_upload_and_recovery_use_one_output(self):
         with TemporaryDirectory() as directory:
             workspace = Path(directory).resolve()
@@ -33,9 +45,9 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 'record_dir': 'record', 'output': 'out/scene.mp4',
                 'songssx': {'width': 640, 'height': 384, 'reference_image_center_crop': False,
                             'lowres_scale': .6, 'seed': 7, 'remote_prefix': 'video/test/scene',
-                            'segments': [{'p': f'P{i:03d}', 'duration': 15, 'overlap_frames': overlap,
+                            'segments': [{'p': f'P{i:03d}', 'duration': duration, 'overlap_frames': overlap,
                                           'images': [source.name], 'prompt': PROMPT, 'prompt_zh': f'第{i}段参考。'}
-                                         for i, overlap in enumerate((0, 0, 22), 1)]},
+                                         for i, (duration, overlap) in enumerate(((15, 0), (15, 0), (14, 22)), 1)]},
             }]}))
             desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
             payload = SubmissionPlanInput(project=project.name, plan_file=plan.name,
@@ -49,8 +61,8 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
                 segments = task['video_plan']['segments']
                 self.assertEqual([seg['overlap_frames'] for seg in segments], [0, 0, 22])
-                self.assertEqual([seg['generation_frames'] for seg in segments], [[0, 362], [362, 724], [702, 1098]])
-                self.assertEqual([seg['output_frames'] for seg in segments], [[0, 362], [362, 724], [724, 1098]])
+                self.assertEqual([seg['generation_frames'] for seg in segments], [[0, 362], [362, 724], [702, 1064]])
+                self.assertEqual([seg['output_frames'] for seg in segments], [[0, 362], [362, 724], [724, 1064]])
                 self.assertEqual(segments[2]['prompt_zh'], '第3段参考。')
                 self.assertEqual(len(task['uploads']), 1)
                 self.assertEqual(task['workflow']['331']['inputs']['model'], ['407', 0])

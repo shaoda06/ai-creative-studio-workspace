@@ -67,9 +67,22 @@
 
 一次提交一个场次，每个 P 对应一个 GEN。按[共用制作层级](../../studio-storyboard/references/分镜写作规范.md#制作对象场次与分段)提供分段身份、计划新增时长、提示词、准确素材版本和接续意图。首段和直接切镜使用 0 帧重叠。需要连续动作、运镜或声音时，按分镜选取上一段尾部稳定、可辨识的内容作为重叠，按动作和声音的实际长度决定接点。
 
-清单填写实际合法重叠帧数。规划台会把界面中的重叠输入向下对齐，例如 24 帧对齐到 22 帧，48 帧对齐到 39 帧。清单脚本校验已对齐的重叠值。脚本按 24 fps 将计划新增时长换算成帧，加上重叠后向上对齐到 `5 + 17n`，保证去除重叠后仍有足够的新增帧。15 秒、无重叠时装配为 362 帧，约 15.083 秒。MiniMax 公布的常规输出规格为 4–15 秒，装配按 Songssx 节点的单 GEN 校验上限 3592 帧检查采样窗口。[MiniMax 输出规格](https://github.com/MiniMax-AI/MiniMax-H3#system-overview) · [Songssx 上游节点校验](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/050226d37d25e20d878b47bdf92c8f912afccdaa/minimax_h3_finite_segments.py#L428-L434)
+### 单段时长与帧数校验
 
-提交前使用脚本给出的 P／GEN 映射、重叠帧、采样区间和成片计划区间。帧区间统一采用左闭右开。
+Studio 的标准 Ref2VA 装配按 MiniMax H3 的 4–15 秒、24 fps 规格校验每个 GEN。Songssx 上游节点的单段帧数校验范围为 5–3592 帧，步长为 17 帧。[MiniMax 输出规格](https://github.com/MiniMax-AI/MiniMax-H3#system-overview) · [Songssx 上游节点校验](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/050226d37d25e20d878b47bdf92c8f912afccdaa/minimax_h3_finite_segments.py#L429-L435)
+
+1. 先检查 `duration`，即扣除入段重叠后计划新增的时长。允许 4–15 秒，含两个端点，支持小数。超出范围的值在换算前报错。
+2. 将 `duration × 24` 加上 `overlap_frames`，取大于或等于该值的最小 `5 + 17n`，使去掉重叠后仍有足够的新增帧。清单填写已对齐的重叠帧数，允许 0、1、5、22、39 等值。规划台会把界面的重叠输入向下对齐，例如 24 帧对齐到 22 帧，48 帧对齐到 39 帧。
+3. 检查对齐后的整个采样窗口，含重叠帧。最短窗口由 4 秒向上对齐得出，为 107 帧。最长为 362 帧，含 362 帧。超出时按分镜缩短该段新增时长、调整重叠或拆段，再重新装配。
+
+| 计划新增时长 | 入段重叠 | 对齐前 | 实际采样窗口 | 校验结果 |
+| --- | ---: | ---: | ---: | --- |
+| 4 秒 | 0 帧 | 96 帧 | 107 帧 | 通过 |
+| 15 秒 | 0 帧 | 360 帧 | 362 帧 | 通过，约 15.083 秒 |
+| 14 秒 | 22 帧 | 358 帧 | 362 帧 | 通过，去掉重叠后输出 340 帧 |
+| 15 秒 | 22 帧 | 382 帧 | 396 帧 | 报错，超过 362 帧 |
+
+提交前核对脚本给出的 P／GEN 映射和帧区间。`generation_frames` 是包含重叠的采样区间，`output_frames` 是扣除重叠后写入成片的区间。两者都包含起始帧，结束帧为下一帧的位置。
 
 有重叠的 GEN 在开头提示词交代上一段尾部的画面、动作与声音，再按实际接点描述新增内容。持续同一镜头时在该镜头内写清动作如何继续；接点确有切镜时，按新镜头写。按[共用 H3](../../studio-h3/SKILL.md)编写各 GEN 的完整 Ref2VA 正文。
 
@@ -88,7 +101,7 @@
 - `songssx` 提供对齐 32 的 `width`、`height`、`seed`、`remote_prefix` 及 `configuration`。画幅由调用方用于选择实际宽高。
 - `configuration` 提供 `high_steps`（实际高清步数）、`scene_type`（打戏 `combat` 或文戏 `dialogue`）、`speed`（按[第 5 步](#第-5-步)填写）及 `loras`（所选附加 LoRA 的数字编号数组，选 0 时传 `[]`）。脚本根据现行六步配置固定低清步数、缩放倍率和居中裁切，按基准权重启用所选打戏组和附加 LoRA。
 - 已有清单缺少 `configuration` 时，兼容入口沿用原 `reference_image_center_crop`、`lowres_scale` 和当时的标准装配方式。已有任务使用各自的执行副本。
-- `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。已有同版中文参考时可填 `prompt_zh`，随装配记录留存，供网页审阅。
+- `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。时长与重叠按[单段时长与帧数校验](#单段时长与帧数校验)填写。已有同版中文参考时可填 `prompt_zh`，随装配记录留存，供网页审阅。
 - [装配脚本](../scripts/songssx_workflow.py)写出任务画布、API、图片上传绑定、单一取回目标及帧区间。后台保存原准备结果和实际上传路径。
 
 ## 取回、恢复与返修边界

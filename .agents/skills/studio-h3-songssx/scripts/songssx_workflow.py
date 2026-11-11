@@ -17,7 +17,7 @@ from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings
 WORKFLOW = 'songssx-selflift'
 TASK_TYPE = 'video-scene-generation'
 FPS = 24
-MAX_GEN_FRAMES = 3592  # Songssx finite timeline segment limit.
+MAX_GEN_FRAMES = 362  # 15 seconds at 24 fps, rounded up to the H3 frame grid.
 LOW_STEPS = 6
 LOWRES_SCALE = 0.6
 MAX_SCHEDULER_STEPS = 1_000  # H3's simple scheduler draws from 1,000 distinct sigmas.
@@ -100,12 +100,13 @@ def configure_sampling(canvas, api, nodes, timeline, options):
 
 
 def aligned_frames(seconds, overlap):
-    if type(seconds) not in (int, float) or not 0 < seconds < math.inf:
-        raise ValueError('GEN 的计划新增时长须为有限正数')
+    if type(seconds) not in (int, float) or not 4 <= seconds <= 15:
+        raise ValueError('GEN 的计划新增时长须在 4 至 15 秒之间')
     requested_frames = seconds * FPS + overlap
-    if requested_frames > MAX_GEN_FRAMES:
-        raise ValueError(f'GEN 采样窗口超过 Songssx 节点的 {MAX_GEN_FRAMES} 帧上限')
-    return 5 + 17 * math.ceil((requested_frames - 5) / 17)
+    frames = 5 + 17 * math.ceil((requested_frames - 5) / 17)
+    if frames > MAX_GEN_FRAMES:
+        raise ValueError(f'GEN 对齐后为 {frames} 帧（含 {overlap} 帧重叠），超过 {MAX_GEN_FRAMES} 帧上限')
+    return frames
 
 
 def validate(workflow, video_plan, outputs, uploads):
