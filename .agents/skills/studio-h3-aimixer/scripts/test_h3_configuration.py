@@ -50,8 +50,10 @@ class ConfigurationTests(unittest.TestCase):
                     self.assertEqual(api['407']['inputs']['sigmas'], ['289', 1])
                     self.assertTrue(api['407']['inputs']['confirm_first_pass'])
                     chain = [53] + ([128] if 1 in loras else []) + ([507] if 2 in loras else []) + ([342, 344, 345] if combat else []) + [343]
-                    for parent, child in zip([331, *chain], [*chain, 405]):
+                    for parent, child in zip([331, *chain[:-1]], chain):
                         self.assertEqual(api[str(child)]['inputs']['model'], [str(parent), 0])
+                    for consumer in ('261', '502', '408'):
+                        self.assertEqual(api[consumer]['inputs']['model'], ['343', 0])
                     for node, active, weight in ((128, 1 in loras, .35), (507, 2 in loras, .8), (342, combat, .65), (344, combat, .35), (345, combat, .35)):
                         self.assertEqual(str(node) in api, active)
                         if active:

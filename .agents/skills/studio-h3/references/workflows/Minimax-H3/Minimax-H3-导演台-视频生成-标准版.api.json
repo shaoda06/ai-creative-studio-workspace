@@ -50,24 +50,6 @@
       "title": "动作速度LoRA｜LoraLoaderModelOnly"
     }
   },
-  "405": {
-    "class_type": "TESpeedMiniMaxH3",
-    "inputs": {
-      "processing_control_value": 0.08,
-      "processing_percent_1": 0.1,
-      "processing_percent_2": 0.9,
-      "mcs": 2,
-      "device": "auto",
-      "mode": "8-step LoRA",
-      "model": [
-        "343",
-        0
-      ]
-    },
-    "_meta": {
-      "title": "TE加速｜TESpeedMiniMaxH3"
-    }
-  },
   "36": {
     "class_type": "VAELoader",
     "inputs": {
@@ -104,7 +86,7 @@
       "steps": 12,
       "denoise": 1,
       "model": [
-        "405",
+        "343",
         0
       ]
     },
@@ -188,7 +170,7 @@
       "precise_segment_memory": true,
       "minimax_director_ui": "",
       "model": [
-        "405",
+        "343",
         0
       ],
       "video_vae": [
@@ -233,7 +215,7 @@
     "class_type": "MiniMaxLowVRAMAttention",
     "inputs": {
       "model": [
-        "405",
+        "343",
         0
       ],
       "head_chunks": 4
