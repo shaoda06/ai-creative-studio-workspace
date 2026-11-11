@@ -33,6 +33,8 @@ let browser;
 try {
   browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
   for (const viewport of [{ width: 1280, height: 640 }, { width: 1366, height: 768 }, { width: 1920, height: 1080 }]) {
+    const sceneGeneration = viewport.width === 1280;
+    task.task_type = sceneGeneration ? 'video-scene-generation' : 'video-second-pass';
     task.status = 'running'; snapshot.remote_nodes[0].queue[0].status = 'running';
     const page = await browser.newPage({ viewport }), errors = [], writes = [];
     page.on('pageerror', error => errors.push(String(error)));
@@ -42,7 +44,7 @@ try {
       const url = new URL(route.request().url());
       const data = url.pathname === '/api/workspaces' ? [{ id: 'nora', name: '示例空间', view: 'serial-drama', projects: [] }] : url.pathname === '/api/projects' ? [] : url.pathname === '/api/service'
         ? { version: 'fixture', ready: false, environment: 'development' }
-        : url.pathname === '/api/comfy/tasks' ? snapshot : undefined;
+        : url.pathname === '/api/task-monitor' ? snapshot : undefined;
       assert.notEqual(data, undefined, 'unexpected API: ' + url.pathname);
       return route.fulfill({ json: data });
     });
@@ -52,6 +54,7 @@ try {
     await page.getByRole('button', { name: '展开任务进度', exact: true }).click();
     const card = page.locator('.comfy-task');
     await card.getByRole('heading', { name: task.title, exact: true }).waitFor();
+    await card.getByText(sceneGeneration ? '场次生成' : '视频二采', { exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     const geometry = () => card.evaluate(element => {
       const rect = selector => element.querySelector(selector).getBoundingClientRect().toJSON();

@@ -27,7 +27,8 @@ export interface ExternalTask {
 export type Task = LocalTask | ExternalTask;
 
 export const taskTypeLabels = { image: '图片生成', 'image-upscale': '图片超分',
-  'video-first-pass': '视频一采', 'video-second-pass': '视频二采', 'video-postprocess': '视频后处理' } as const;
+  'video-first-pass': '视频一采', 'video-second-pass': '视频二采',
+  'video-scene-generation': '场次生成', 'video-postprocess': '视频后处理' } as const;
 
 export function clockText(seconds: number) {
   const pad = (value: number) => String(value).padStart(2, '0');

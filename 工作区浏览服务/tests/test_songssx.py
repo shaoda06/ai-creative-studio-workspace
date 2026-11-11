@@ -106,6 +106,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 ('combat', 4, 4.0, [1, 2], ('343', '345', '344', '342', '407', '400', '53')),
                 ('combat', 6, 4.0, [1], ('343', '345', '344', '342', '400', '53')),
                 ('dialogue', 2, -2.5, [2], ('343', '407', '53')),
+                ('dialogue', 994, 3.0, [], ('343', '53')),
             ]
             try:
                 for index, (scene, high_steps, speed, loras, chain) in enumerate(cases, 1):
@@ -145,6 +146,21 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(nodes[261]['widgets_values_named']['steps'], 6 + high_steps)
                         self.assertEqual(nodes[343]['widgets_values_named']['strength_model'], speed)
                         self.assertEqual(nodes[343]['mode'], 0)
+                invalid_source = json.loads(plan.read_text())
+                invalid_source['tasks'][0]['songssx']['configuration']['high_steps'] = 995
+                (project / 'invalid-steps.json').write_text(json.dumps(invalid_source))
+                invalid_payload = payload.model_copy(update={'plan_file': 'invalid-steps.json'})
+                with self.assertRaisesRegex(ValueError, '高清采样步数须为 1 至 994'):
+                    await submission_plans.execute(store, invalid_payload)
+                self.assertFalse((project / 'invalid-steps-装配结果.json').exists())
+                mistyped_options = invalid_source['tasks'][0]['songssx']
+                mistyped_options['configuraton'] = mistyped_options.pop('configuration')
+                mistyped_options.update(reference_image_center_crop=False, lowres_scale=.6)
+                (project / 'mistyped-config.json').write_text(json.dumps(invalid_source))
+                mistyped_payload = payload.model_copy(update={'plan_file': 'mistyped-config.json'})
+                with self.assertRaisesRegex(ValueError, '未知 Songssx 配置字段：configuraton'):
+                    await submission_plans.execute(store, mistyped_payload)
+                self.assertFalse((project / 'mistyped-config-装配结果.json').exists())
                 self.assertEqual(store.rows, {})
             finally:
                 await store.close()

@@ -14,7 +14,7 @@ Nora 新制作默认使用 Songssx 导演台，输入模式默认 Ref2VA。用�
 | [AiMixer 导演台标准版](../../studio-h3-aimixer/SKILL.md) | 兼容选项。使用原有一采、二采和逐段审核。装配前读取[配置选择与询问](../../studio-h3-aimixer/references/参数与基准规范.md#标准版配置选择与装配前询问)。 |
 | [共用视频后处理工作流](../../studio-video-processing/references/视频技术处理规范.md#实际装配) | 输入当前工作流已获批的具体源片，按[后处理交付规格](#后处理交付规格)和实际目标装配。 |
 
-Songssx 按本次分镜、画幅和已确认配置提供实际宽高、种子及素材，调用[场次生成任务接口](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#场次生成任务接口)。下文关于一采、二采、导演台组、Refine 和缓存的配置适用于 AiMixer。二采与后处理按具体获批来源及执行授权接续。
+Songssx 按[装配前六步询问](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#参数选择与装配前询问)落实本次配置，按分镜提供种子和实际素材，调用[场次生成任务接口](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#场次生成任务接口)。下文关于一采、二采、导演台组、Refine 和缓存的配置适用于 AiMixer。二采与后处理按具体获批来源及执行授权接续。
 
 ## 1. 当前固定基准与任务副本
 
@@ -46,7 +46,7 @@ Songssx 按本次分镜、画幅和已确认配置提供实际宽高、种子及
 
 旧一采请求超过现行制作上限且本次仅授权二采接续时，先说明上限与保持来源输入之间的冲突；已有授权覆盖调整分段或重做方案时按其范围执行，否则先取得相应方案授权。不能为满足上限擅自缩短二采或重做一采，也不自动给予历史来源豁免；原请求和批准事实保留。
 
-配置选择与询问统一读取[共用H3装配规则](../../studio-h3-aimixer/references/参数与基准规范.md#标准版配置选择与装配前询问)。Nora项目默认保存于项目`00-项目定位/项目基本定位.md`的“制作规格 → 视频生成默认配置”，记录字段按共用规则填写。
+使用 AiMixer 时，配置选择与询问读取[AiMixer 装配规则](../../studio-h3-aimixer/references/参数与基准规范.md#标准版配置选择与装配前询问)。Nora 项目预设保存在项目`00-项目定位/项目基本定位.md`的“制作规格 → 视频生成默认配置”，记录字段按该工作流规则填写。
 
 在本次任务清单的`authorization`写明六步配置的确认来源（本次选择或项目默认及其决定入口）及本次执行授权；六步答案通过共用`h3_first_pass`字段装配，脚本写入已有`mapping.baseline.fixed_configuration`，记录实际比例尺寸、步数、戏型、速度、附加LoRA及采样关联；二采按[共用分辨率询问](../../studio-h3-aimixer/references/参数与基准规范.md#二采分辨率询问)接续，h3_second_pass装配结果写入已有mapping.baseline.refine_configuration，保留一采配置事实。技术参数和执行事实继续由固定工具保存，不新增配置台账。
 

@@ -19,7 +19,7 @@ TASK_TYPE = 'video-scene-generation'
 FPS = 24
 LOW_STEPS = 6
 LOWRES_SCALE = 0.6
-MAX_SCHEDULER_STEPS = 10_000
+MAX_SCHEDULER_STEPS = 1_000  # H3's simple scheduler draws from 1,000 distinct sigmas.
 PLANNER, SAMPLER, SAVE = '402', '403', '404'
 OUTPUT_KEY = 'images'  # ComfyUI PreviewVideo uses this history key.
 STEM = 'MiniMax-H3-Songssx导演台-Selflift-标准版'
@@ -167,6 +167,14 @@ def prepare(root, spec, documents):
     api = json.loads(workflow_file(STEM, 'api').read_text('utf-8-sig'))
     nodes = {str(node['id']): node for node in canvas['nodes']}
     options = spec['songssx']
+    if not isinstance(options, dict):
+        raise ValueError('songssx 须为任务配置对象')
+    legacy_fields = {'reference_image_center_crop', 'lowres_scale'}
+    unknown = options.keys() - {'width', 'height', 'seed', 'remote_prefix', 'segments', 'configuration'} - legacy_fields
+    if unknown:
+        raise ValueError('未知 Songssx 配置字段：' + '、'.join(sorted(unknown)))
+    if 'configuration' not in options and not legacy_fields <= options.keys():
+        raise ValueError('Songssx 六步任务须提供 configuration，旧清单须保留原裁切与缩放字段')
     width, height = options['width'], options['height']
     if any(type(value) is not int or value <= 0 or value % 32 for value in (width, height)):
         raise ValueError('Songssx 的宽高必须为正且对齐 32')
