@@ -30,6 +30,7 @@ description: AI创作与制作统一入口，识别业务和项目，路由共�
 | Markdown与实际配图的带水印PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
 | 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 外部浏览器任务、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
+| 从用户指定的作品链接取得视频文件 | [视频下载](../studio-video-download/SKILL.md) |
 | 视频读取、提示词库和风格库 | [视频读取](../studio-video-study/SKILL.md)、[提示词管理](../studio-prompt-library/SKILL.md)、[风格库](../studio-krea2-style-library/SKILL.md) |
 
 所有业务与公共技能统一在总目录.agents/skills中维护。Nora资料在workspaces/Nora Workspace，Iris资料在workspaces/Iris Workspace，Chloe资料在workspaces/Chloe Workspace；先明确真实项目，读取所属资料区README、项目README和唯一进度或状态文件，再按同库入口接续。用户只需从总工作区新建对话，不要求切换到子目录发现技能。
