@@ -130,7 +130,7 @@ export function watchVideoPlayback(element: HTMLVideoElement, recover: (reason: 
   };
 }
 
-export interface SegmentVideoHandle { seekTo: (time: number) => void }
+export interface SegmentVideoHandle { seekTo: (time: number, play?: boolean) => void }
 export interface RepeatPlaybackControl { checked: boolean; onChange: (checked: boolean) => void }
 
 export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef }: {
@@ -180,13 +180,18 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
   const attempts = useRef(0);
   const restore = useRef<{ volume: number; muted: boolean; playbackRate: number } | null>(null);
   const pendingSeek = useRef<number | null>(null);
-  const seekTo = (time: number) => {
+  const seekTo = (time: number, play = false) => {
     const element = video.current;
     if (!element || !Number.isFinite(time) || time < 0) return;
-    if (element.readyState === 0) { pendingSeek.current = time; return; }
-    pendingSeek.current = null;
-    element.currentTime = Number.isFinite(element.duration) ? Math.min(time, element.duration) : time;
-    onTimeChange(element.currentTime);
+    if (element.readyState === 0) pendingSeek.current = time;
+    else {
+      pendingSeek.current = null;
+      element.currentTime = Number.isFinite(element.duration) ? Math.min(time, element.duration) : time;
+      onTimeChange(element.currentTime);
+    }
+    if (play) void element.play().catch(reason => {
+      if (reason.name !== 'AbortError') { setError(true); onError?.(); }
+    });
   };
   const recoverPlayback = (reason: 'stalled' | 'resume' = 'stalled', paused?: boolean) => {
     const element = video.current;

@@ -101,6 +101,8 @@ def append_round(project, episode, plan, target):
             raise ValueError('同一轮各场须引用相同的本集剧本版本')
         value = {**(base or {}), **change}
         if 'segment_changes' in change:
+            if value.get('songssx_execution'):
+                raise ValueError('Songssx 场次使用完整 segments 和整场执行附件')
             if 'segments' in change or base is None or ('base_round' not in change and 'base_round' not in plan):
                 raise ValueError('局部分段修改须明确base_round，且不能同时填写segments')
             replacements = {item['id']: item for item in change['segment_changes']}
@@ -119,6 +121,12 @@ def append_round(project, episode, plan, target):
     if not order or set(order) - scenes.keys() or changes.keys() - set(order):
         raise ValueError('修改轮次必须覆盖本集剧本的全部场次，且修改场次须在剧本中定义')
     scenes = {scene: scenes[scene] for scene in order}
+    workflows = {bool(value.get('songssx_execution')) for value in scenes.values()}
+    prior_workflows = {bool(value.get('songssx_execution'))
+                       for item in data['rounds'] for value in item['scenes'].values()}
+    prior_workflows.update(bool(value.get('songssx_execution')) for value in legacy.values())
+    if len(workflows) > 1 or (len(prior_workflows) == 1 and workflows != prior_workflows):
+        raise ValueError('同一集的新制作轮次须沿用同一套导演台')
     number = maximum + 1
     item = {'number': number, 'created_at': datetime.now().astimezone().isoformat(timespec='seconds'),
             'note': plan.get('note', ''), 'script': script, 'scenes': scenes, 'changed_scenes': list(changes)}

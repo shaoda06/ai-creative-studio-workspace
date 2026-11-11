@@ -1410,6 +1410,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                         if video_record_body(record, run, stage):
                             revisions.add((run, stage))
                 for scene_round in episode_node['sceneRounds'].get(identity[1], []):
+                    if scene_round.get('songssx_execution'):
+                        continue
                     revisions.update((entry['run'], entry['stage']) for entry in scene_round['segments'] if entry['id'] == identity[2])
                 present = {(video["run"], video["stage"]) for video in videos}
                 for run, stage in sorted(revisions - present):
@@ -1458,6 +1460,21 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     "scriptHtml": markdown(script_text, storyboard_source),
                     "videos": videos,
                     **({"scriptUrl": quote(storyboard_source, safe="/-._~")} if read(storyboard_source) is not None else {})})
+            if episode_mode != 'ending':
+                from execution_records import exists
+                workflows = []
+                if any(video['url'] or (video['taskStateUrl'] and exists(project / unquote(urlsplit(video['taskStateUrl']).path)))
+                       or video['taskStatus'].split('；')[0] in ('已提交', '成功', '正在生成', '取回中')
+                       for segments in episode_node['segments'].values() for segment in segments for video in segment['videos']
+                       if video['stage'] in ('一采', '二采')):
+                    workflows.append('aimixer')
+                rounds = [round_ for entries in episode_node['sceneRounds'].values() for round_ in entries]
+                if any(round_.get('songssx', {}).get('recorded') for round_ in rounds):
+                    workflows.append('songssx')
+                episode_node['productionWorkflows'] = workflows
+                if not workflows and (any(round_.get('songssx_execution') for round_ in rounds)
+                                      or (number.startswith('EP') and not rounds)):
+                    episode_node['productionWorkflow'] = 'songssx'
         episodes.append(episode_node)
     catalogues[production] = {"kind": "group", "key": production, "name": "剧集制作", "children": episodes,
         "statistics": {"total": sum(number.startswith("EP") for number in episode_numbers), "completed": counts["已完成"],

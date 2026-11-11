@@ -8,6 +8,8 @@ export type ProductionDuration = { seconds: number; estimated: boolean };
 export function sceneDurationEntries(episode: FileItem, scene: string, number?: number): DurationEntry[] {
   const segments = episode.segments?.[scene] || [];
   const round = episode.sceneRounds?.[scene]?.find(item => item.number === number);
+  if (round?.songssx) return [{ planned: round.segments.reduce((sum, entry) => sum + entry.duration, 0),
+    url: round.songssx.video?.url }];
   return (round?.segments || segments.filter(item => !item.historical)).map(entry => {
     const videos = segments.find(item => item.id === entry.id)?.videos || [];
     const video = 'stage' in entry ? videos.find(item => item.stage === entry.stage && item.run === entry.run && (!("key" in entry) || !entry.key || item.key === entry.key))

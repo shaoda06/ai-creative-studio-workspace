@@ -3,10 +3,11 @@ import argparse
 import json
 import os
 from urllib.parse import urlsplit, unquote
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 
 STAGES = ('一采', '二采', '后处理')
+SCENE_GENERATION = '场次生成'
 
 
 def production_scene_ids(text, episode):
@@ -32,17 +33,25 @@ def validate_manifest(data, episode, scene):
         for kind in ('script', 'storyboard'):
             if not item[kind].get('file') or not item[kind].get('version'):
                 raise ValueError('轮次缺少剧本或分镜的准确文件与版本')
+        execution = item.get('songssx_execution')
+        if execution is not None:
+            folder = PurePosixPath(execution).parts if isinstance(execution, str) else ()
+            if (folder[:4] != ('09-剧集制作', episode, '其他资料', '执行附件')
+                    or len(folder) < 5 or any(part.startswith('.') or '\\' in part for part in folder)):
+                raise ValueError('Songssx 执行附件须位于本集执行附件目录内')
         ids = []
         for entry in item['segments']:
             if not re.fullmatch(r'P\d{3,}', entry['id']) or entry['id'] in ids:
                 raise ValueError('轮次分段编号无效或重复')
             ids.append(entry['id'])
-            if entry['stage'] not in STAGES or not re.fullmatch(r'R\d{3,}', entry['run']) or int(entry['run'][1:]) < 1:
+            if entry['stage'] not in ((SCENE_GENERATION,) if execution else STAGES) or not re.fullmatch(r'R\d{3,}', entry['run']) or int(entry['run'][1:]) < 1:
                 raise ValueError('轮次中的阶段或R编号无效')
             if not isinstance(entry['duration'], (int, float)) or entry['duration'] <= 0:
                 raise ValueError('轮次分段计划时长须为正数秒')
         if not ids:
             raise ValueError('轮次必须明确完整分段顺序')
+        if execution and len({entry['run'] for entry in item['segments']}) != 1:
+            raise ValueError('Songssx 同一场次的所有分段须引用同一整场候选 R')
     if numbers != sorted(numbers):
         raise ValueError('场次修改轮次须按编号递增保存')
     return data

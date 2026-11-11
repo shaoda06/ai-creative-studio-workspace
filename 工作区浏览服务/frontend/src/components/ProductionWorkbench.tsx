@@ -1,9 +1,9 @@
 import { newVideoSegmentsForRound } from '../sceneRoundVideos';
 import { PointerTooltip } from './PointerTooltip';
-import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import type { FileItem } from '../api';
+import type { FileItem, ProductionWorkflow } from '../api';
 import { Dialog, FileActions, PreviewContext, Result, Rich } from '../components';
 import { TabNav } from './TabNav';
 import { Pagination } from './Pagination';
@@ -15,6 +15,7 @@ import { TabSelect } from './TabSelect';
 import { get } from '../api';
 import { useProductionAccess } from './ProductionAccess';
 import { DownloadButton } from './DownloadButton';
+import { LinkButton } from './LinkButton';
 import { previousEpisodeEnding } from '../previousEpisodeEnding';
 import type { EpisodeReview } from '../episodeRevisionNotes';
 import { workSceneLabel } from '../episodeRevisionNotes';
@@ -24,6 +25,23 @@ import { FloatingMessage } from './Notifications';
 import { workPackageLabel, type Downloads } from './SceneDownloads';
 import './SceneDownloads.css';
 import './EpisodeProduction.css';
+
+const workflowLabels = { aimixer: 'AiMixer 制作记录', songssx: 'Songssx 制作记录' };
+
+function workflowView(episode: FileItem, workflow: ProductionWorkflow) {
+  const songssx = workflow === 'songssx';
+  const sceneRounds = Object.fromEntries(Object.entries(episode.sceneRounds || {}).map(([scene, rounds]) =>
+    [scene, rounds.filter(round => Boolean(round.songssx) === songssx)]));
+  const episodeRounds = (episode.episodeRounds || []).flatMap(round => {
+    const scenes = round.scenes.filter(scene => sceneRounds[scene]?.some(entry => entry.number === round.number));
+    return scenes.length ? [{ ...round, scenes }] : [];
+  });
+  const scenes = episode.scenes?.filter(scene => sceneRounds[scene]?.length || !episode.sceneRounds?.[scene]?.length
+    || (!songssx && episode.segments?.[scene]?.some(segment => segment.videos.length)));
+  const segments = songssx ? Object.fromEntries(Object.entries(episode.segments || {}).map(([scene, rows]) =>
+    [scene, rows.map(row => ({ ...row, videos: [] }))])) : episode.segments;
+  return { ...episode, scenes, sceneRounds, episodeRounds, segments };
+}
 
 export function ProductionWorkbench({ project, items, statistics, selected, onSelect, revision, detailControls, inlineListHeading = false, showHeadingDownloads = true, workStatusLabels = [] }: { project: string; items: FileItem[]; statistics: { total: number; completed: number; notStarted: number; running: number }; selected: string | null; onSelect: (episode: string | null) => void; revision: number; detailControls?: ReactNode; inlineListHeading?: boolean; showHeadingDownloads?: boolean; workStatusLabels?: readonly string[] }) {
   const access = useProductionAccess();
@@ -43,6 +61,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const [handoffKey, setHandoffKey] = useState('');
   const [roundEntry, setRoundEntry] = useState(0);
   const [recordNumber, setRecordNumber] = useState<number | null>(null);
+  const [viewedWorkflow, setViewedWorkflow] = useState<{ episode: string; workflow: ProductionWorkflow } | null>(null);
   const [playback, setPlayback] = useState<{ episode: string; rounds: Record<string, number | undefined>; start?: EpisodePlayback['start'] } | null>(null);
   const cards = useRef<HTMLDivElement>(null);
   const previousEpisode = useRef(selected);
@@ -63,13 +82,24 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const detail = useQuery({ queryKey: ['episode', namespace, selected, revision],
     queryFn: () => get<FileItem>(access.detail(project, selected!)), enabled: !!selectedItem, refetchInterval: workMode ? 5000 : false,
     placeholderData: (previous, query) => query?.queryKey[2] === selected ? previous : undefined });
-  const current = selectedItem && detail.data?.name === selected ? detail.data : undefined;
+  const loaded = selectedItem && detail.data?.name === selected ? detail.data : undefined;
+  const workflows = workMode ? [] : loaded?.productionWorkflows || [];
+  const mixed = workflows.includes('aimixer') && workflows.includes('songssx');
+  const workflow = workMode ? undefined : mixed
+    ? (viewedWorkflow?.episode === selected ? viewedWorkflow?.workflow : undefined)
+    : workflows[0] || loaded?.productionWorkflow;
+  const songssx = workflow === 'songssx';
+  const current = useMemo(() => loaded && (!mixed || workflow)
+    ? (songssx || loaded.sceneRounds && Object.values(loaded.sceneRounds).some(rounds => rounds.some(round => round.songssx)))
+      ? workflowView(loaded, workflow || 'aimixer') : loaded
+    : undefined, [loaded, mixed, workflow, songssx]);
   useEffect(() => {
     if (selected && !selectedItem) onSelect(null);
   }, [selected, selectedItem, onSelect]);
   const [roundNumbers, setRoundNumbers] = useRefreshState<Record<string, number | null>>(`project/${namespace}/production/rounds`, {});
+  const roundScope = current?.name + (songssx ? '/songssx' : '');
   const episodeRounds = current?.episodeRounds || [];
-  const episodeChoice = current ? roundNumbers[current.name] === undefined ? episodeRounds.at(-1)?.number : roundNumbers[current.name] : undefined;
+  const episodeChoice = current ? roundNumbers[roundScope] === undefined ? episodeRounds.at(-1)?.number : roundNumbers[roundScope] : undefined;
   const episodeRound = episodeRounds.find(item => item.number === episodeChoice);
   const scenes = episodeRound?.scenes || (episodeChoice === null
     ? (current?.scenes || []).filter(id => current?.sceneRounds?.[id]?.some(item => !item.episodeRound)) : current?.scenes || []);
@@ -77,7 +107,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const roundNumberForScene = (id: string) => {
     if (episodeRound) return episodeRound.number;
     const rounds = (current?.sceneRounds?.[id] || []).filter(item => episodeChoice !== null || !item.episodeRound);
-    return rounds.find(item => item.number === roundNumbers[current!.name + '/' + id])?.number ?? rounds.at(-1)?.number;
+    return rounds.find(item => item.number === roundNumbers[roundScope + '/' + id])?.number ?? rounds.at(-1)?.number;
   };
   const durations = useEpisodeDurations(Object.fromEntries(scenes.map(id => [id, sceneDurationEntries(current!, id, roundNumberForScene(id))])));
   const episodeReview: EpisodeReview | undefined = current ? {
@@ -89,7 +119,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         history: workMode ? current.sceneRounds?.[id] : undefined };
     }),
   } : undefined;
-  const episodeNotesExport = useRevisionNotesExport(current && selectedScene && (current.readOnly || current.segments?.[selectedScene]?.length)
+  const episodeNotesExport = useRevisionNotesExport(!songssx && current && selectedScene && (current.readOnly || current.segments?.[selectedScene]?.length)
     ? { ...access.scope(project, current.name, selectedScene), episodeTitle: current.title } : null, [], null, undefined, episodeReview);
   const workSheets = workMode && !scenes.includes('whole') ? current?.directorSheets?.whole : undefined;
   const directorScenes = (workSheets ? [selectedScene] : scenes).map(id => {
@@ -140,24 +170,24 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     onChange: checked => setPlayback(checked ? { episode: current!.name, rounds: Object.fromEntries(scenes.map(id =>
       [id, roundNumberForScene(id)])) } : null),
     onNext: () => {
-      setRoundNumbers(previous => ({ ...previous, [current!.name + '/' + nextScene]: nextRoundNumber! }));
+      setRoundNumbers(previous => ({ ...previous, [roundScope + '/' + nextScene]: nextRoundNumber! }));
       setPlayback(previous => ({ ...previous!, start: { segment: nextEntry!.id, selection: { stage: nextVideo!.stage, key: nextVideo!.key } } }));
       setScene(nextScene);
     },
   };
 
   useEffect(() => {
-    if (current && episodeRounds.length && roundNumbers[current.name] === undefined)
-      setRoundNumbers(previous => ({ ...previous, [current.name]: episodeRounds.at(-1)!.number }));
-    const key = (current?.name || '') + '/' + selectedScene;
+    if (current && episodeRounds.length && roundNumbers[roundScope] === undefined)
+      setRoundNumbers(previous => ({ ...previous, [roundScope]: episodeRounds.at(-1)!.number }));
+    const key = roundScope + '/' + selectedScene;
     const fallback = episodeChoice === null ? sceneRounds.filter(item => !item.episodeRound).at(-1) : sceneRounds.at(-1);
     if (current && selectedScene && fallback && roundNumbers[key] === undefined)
       setRoundNumbers(previous => ({ ...previous, [key]: fallback.number }));
-  }, [current?.name, selectedScene, sceneRounds, episodeRounds, roundNumbers, setRoundNumbers]);
+  }, [current?.name, roundScope, selectedScene, sceneRounds, episodeRounds, roundNumbers, setRoundNumbers]);
   const selectRound = (number: number) => {
     setPlayback(null);
-    setRoundNumbers(previous => ({ ...previous, [current!.name + '/' + selectedScene]: number,
-      ...(episodeRounds.length ? { [current!.name]: episodeRounds.some(item => item.number === number) ? number : null } : {}) }));
+    setRoundNumbers(previous => ({ ...previous, [roundScope + '/' + selectedScene]: number,
+      ...(episodeRounds.length ? { [roundScope]: episodeRounds.some(item => item.number === number) ? number : null } : {}) }));
   };
   const openRound = (number: number) => {
     setRoundEntry(previous => previous + 1);
@@ -174,6 +204,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     : !current?.script ? `尚未登记${contentLabel}。` : '尚未登记分段计划。';
   const open = (name: string) => {
     setPlayback(null);
+    setViewedWorkflow(null);
+    setRecordNumber(null);
     setScene('');
     onSelect(name);
   };
@@ -198,7 +230,13 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   return <>
     {breadcrumbSelector && selectedItem && createPortal(<TabSelect iconOnly label="快速选择制作对象" selected={selected!} onChange={open}
       items={items.map(item => ({ value: item.name, label: `${item.name} · ${item.title || (item.name === '片头' || item.name === '片尾' ? '全剧通用' : '题名未记录')}${item.titleStatus ? `（${item.titleStatus}）` : ''}` }))} />, breadcrumbSelector)}
-    {selectedItem && !current ? <Result page loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} /> : current ? <div className="episode-detail">
+    {mixed && loaded && !workflow ? <section aria-label="选择制作记录">
+      <h2>选择查看的制作记录</h2>
+      <ul>{workflows.map(value => <li key={value}><LinkButton onClick={() => {
+        setViewedWorkflow({ episode: loaded.name, workflow: value });
+        setScene('');
+      }}>{workflowLabels[value]}</LinkButton></li>)}</ul>
+    </section> : selectedItem && !current ? <Result page loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} /> : current ? <div className="episode-detail">
     {breadcrumbActions && createPortal(renderActions(), breadcrumbActions)}
     {detailControls}
     {workMode && downloads.error && <FloatingMessage tone="error">交接清单读取失败：{downloads.error.message}。<button className="link" onClick={() => void downloads.refetch()}>重新读取</button></FloatingMessage>}
@@ -228,7 +266,11 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
           <ul>
             {([[contentLabel, item.script], ['分镜', item.storyboard], ['制作记录', item.record]] as const).map(([label, file]) =>
               file && <li key={label}><button className="link" onClick={() => openRecordFile(file)}>{label}{file.version ? ` ${file.version}` : ''}</button></li>)}
-            {item.segments.filter(entry => generated.has(entry.id)).map(entry => {
+            {item.songssx?.video?.url && <li><LinkButton onClick={() => {
+              const video = item.songssx!.video!;
+              openRecordFile({ ...video, kind: 'video', name: `整场视频 · ${video.run}` });
+            }}>整场视频 · {item.songssx.video.run}</LinkButton> <FileActions url={item.songssx.video.url} downloadOnly /></li>}
+            {!item.songssx && item.segments.filter(entry => generated.has(entry.id)).map(entry => {
               const video = candidates.find(candidate => candidate.id === entry.id)?.videos.find(video =>
                 video.url && video.stage === entry.stage && video.run === entry.run && (!entry.key || video.key === entry.key));
               const label = `${entry.id} · ${entry.stage} · ${entry.run}`;
@@ -249,7 +291,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         <PointerTooltip text={issue.key}><button className="link"  onClick={() => preview({ kind: 'document', key: issue.key, name: issue.key.split('/').pop()! })}>{issue.key.split('/').pop()}</button></PointerTooltip>：{issue.message}
       </li>)}</ul>
     </div> : null}
-    <SceneWorkspace wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
+    <SceneWorkspace songssx={songssx} wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode || songssx ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
     {episodeNotesExport.dialog}
     {(!!current.materials?.length || current.materialRecord) && <details className="asset-candidate-type production-materials"><summary>制作素材与审阅（{current.materials?.length || 0}）</summary>
       {current.materialRecord && <p><button className="link" onClick={() => preview(current.materialRecord!)}>查看素材记录</button></p>}

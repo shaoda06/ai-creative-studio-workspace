@@ -10,6 +10,55 @@ import scene_rounds as rounds
 from episode_rounds import episode_manifest_key, scene_entries, validate_episode_manifest
 
 
+def songssx_scene(project, entry):
+    from execution_records import exists, read
+    from project_paths import project_file
+    from project_resources import resolve_file
+    from songssx_workflow import FPS, TASK_TYPE, WORKFLOW
+
+    key = entry['songssx_execution']
+    directory = project_file(project, key)
+    report = directory / '执行检查报告.json'
+    state_file = directory / '后台任务状态.json'
+    state = read(state_file) if exists(state_file) else {}
+    recorded = state.get('task_type') == TASK_TYPE and state.get('record_dir') == key and bool(state.get('id'))
+    result = {'recorded': recorded, 'segments': []}
+    if not exists(report):
+        if recorded:
+            entry['issues'].append('Songssx 执行检查报告缺失')
+        return result
+    data = read(report)['prepared_input']
+    plan = data.get('video_plan', {})
+    segments = plan.get('segments', [])
+    if (data.get('task_type') != TASK_TYPE or plan.get('workflow_id') != WORKFLOW
+            or data.get('record_dir') != key
+            or [(row['p'], row['planned_seconds']) for row in segments]
+            != [(segment['id'], segment['duration']) for segment in entry['segments']]):
+        entry['issues'].append('Songssx 执行记录与本轮场次或分段不匹配')
+        result['recorded'] = False
+        return result
+    target, = data['outputs']
+    media = project_file(project, target['path'])
+    actual = resolve_file(project, media)
+    relative = actual.relative_to(project).as_posix()
+    run = entry['segments'][0]['run']
+    receipt = directory / target['response_name']
+    saved = recorded and exists(receipt) and actual.is_file()
+    stamp = actual.stat() if saved else None
+    revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
+    result['segments'] = [{'id': row['p'], 'gen': row['gen'], 'start': row['output_frames'][0] / FPS,
+                           'end': row['output_frames'][1] / FPS} for row in segments]
+    result['video'] = {
+        'key': relative, 'url': quote(relative, safe='/-._~') + '?v=' + revision if saved else '',
+        'run': run, 'stage': rounds.SCENE_GENERATION, 'approved': False, 'candidateNumber': int(run[1:]),
+        'fileRevision': revision,
+        'taskStatus': state.get('status', ''), 'deliveryStatus': '已取回' if saved else '',
+        'taskStateUrl': quote((Path(key) / state_file.name).as_posix(), safe='/-._~') if recorded else '',
+        'checkedAt': state.get('updated_at', ''),
+    }
+    return result
+
+
 def load_episode_rounds(episode, read):
     raw = read(episode_manifest_key(episode))
     if raw is None:
@@ -42,5 +91,7 @@ def load_scene_rounds(project, episode, scene, read):
         item['segments'] = [{**segment,
             'scriptHtml': markdown(segment_body(documents.get('storyboard', ''), segment['id']), entry['storyboard']['file']),
             'scriptUrl': quote(entry['storyboard']['file'], safe='/-._~')} for segment in entry['segments']]
+        if item.get('songssx_execution'):
+            item['songssx'] = songssx_scene(project, item)
         result.append(item)
     return result

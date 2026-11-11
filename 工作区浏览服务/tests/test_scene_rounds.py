@@ -7,6 +7,7 @@ from backend.parsers.project import build_data
 from backend.parsers.scene_rounds import rounds
 from backend.services.projects import ProjectStore
 from tests.test_generation_context import writer
+from execution_records import write_entries
 
 
 class SceneRoundTests(unittest.TestCase):
@@ -51,6 +52,42 @@ class SceneRoundTests(unittest.TestCase):
     def episode(self):
         data = build_data(self.project, web_episode_navigation=True, load_scope='09-剧集制作', episode_id='EP001')
         return data['catalogues']['09-剧集制作']['children'][0]
+
+    def test_songssx_whole_scene_uses_original_round_and_accepted_record(self):
+        execution = self.root + '/其他资料/执行附件/C001-R002'
+        output = self.root + '/其他资料/候选视频/EP001-C001-R002-场次生成.mp4'
+        planned = self.plan()
+        for item in planned['segments']:
+            item.update(stage='场次生成', run='R002', duration=5)
+        planned['songssx_execution'] = execution
+        self.create(planned)
+        plan = {'workflow_id': 'songssx-selflift', 'segments': [
+            {'p': 'P001', 'gen': 1, 'output_frames': [0, 124], 'planned_seconds': 5},
+            {'p': 'P002', 'gen': 2, 'output_frames': [124, 254], 'planned_seconds': 5},
+            {'p': 'P003', 'gen': 3, 'output_frames': [254, 384], 'planned_seconds': 5},
+        ]}
+        prepared = {'record_dir': execution, 'task_type': 'video-scene-generation', 'video_plan': plan,
+                    'outputs': [{'path': output, 'response_name': '场次视频-取回响应.json'}]}
+        self.write(execution + '/执行检查报告.json', json.dumps({'prepared_input': prepared}))
+        self.write(output, 'fixture scene video')
+        episode = self.episode()
+        self.assertEqual(episode['productionWorkflows'], ['aimixer'], 'prepare-only is not a second official workflow')
+        self.assertEqual(episode['sceneRounds']['C001'][0]['songssx']['video']['url'], '')
+        write_entries(self.project / execution, {
+            '后台任务状态.json': {'id': 'test', 'task_type': 'video-scene-generation', 'status': 'completed', 'record_dir': execution},
+            '场次视频-取回响应.json': {},
+        })
+        episode = self.episode()
+        self.assertEqual(episode['productionWorkflows'], ['aimixer', 'songssx'])
+        round_ = episode['sceneRounds']['C001'][0]
+        self.assertEqual(round_['number'], 1)
+        self.assertEqual(round_['songssx']['video']['key'], output)
+        self.assertTrue(round_['songssx']['video']['url'])
+        self.assertFalse(round_['songssx']['video']['approved'])
+        self.assertEqual(round_['songssx']['segments'][-1]['start'], 254 / 24)
+        self.assertTrue(all(len(segment['videos']) == 1 for segment in episode['segments']['C001']))
+        with self.assertRaisesRegex(ValueError, '同一集的新制作轮次须沿用同一套导演台'):
+            self.create({**self.plan(), 'songssx_execution': None})
 
     def test_video_task_links_follow_candidate_stage_and_shared_owner(self):
         from urllib.parse import unquote

@@ -1,6 +1,7 @@
 .segment-progress-scroll{overflow-x:auto}
 .segment-timeline{width:100%;min-width:calc(var(--segment-count)*84px + 2px)}
 .segment-timeline>.segment-strip{border-radius:7px 7px 0 0}
+.segment-timeline-navigation>.segment-strip{border-radius:7px}
 .segment-stage-strip{display:grid;grid-template-columns:var(--segment-columns);border:1px solid var(--line);border-top:0;border-radius:0 0 7px 7px;overflow:hidden;background:white}
 .segment-stage-cell{display:flex;justify-content:center;align-items:center;gap:4px;min-width:0;padding:8px 0;border-right:1px solid var(--line)}
 .segment-stage-cell:last-child{border-right:0}
