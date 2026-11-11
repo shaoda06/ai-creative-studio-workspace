@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { GenerationContext, SegmentVideo as VideoItem } from '../api';
 import { get, projectUrl } from '../api';
@@ -37,7 +37,7 @@ function SegmentReferences({ context }: { context?: GenerationContext }) {
   </section>;
 }
 
-export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false }: {
+export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false, scenePlayback }: {
   readOnly?: boolean;
   scope: NoteScope; segment: string; roundNumber?: number;
   revision: number;
@@ -48,6 +48,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   plannedScript?: { html: string; url?: string; label: string; shotIds?: string[] }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
   cachedSources: Record<string, string>;
   retainSource: (source: string) => () => void;
+  scenePlayback?: { player: RefObject<SegmentVideoHandle | null>; start: number; label?: string; onTimeChange: (time: number) => void };
 }) {
   const workMode = useProductionAccess().unitKind === 'work';
   const positionKey = `segment/${scope.notesUrl || scope.project}/${scope.episode}/${scope.scene}/${segment}`;
@@ -57,7 +58,8 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const [loadedFile, setLoadedFile] = useState({ key: '', revision: '' });
   const scriptContent = useRef<HTMLDivElement>(null);
   const shotTimeline = useRef<HTMLDivElement>(null);
-  const player = useRef<SegmentVideoHandle>(null);
+  const segmentPlayer = useRef<SegmentVideoHandle>(null);
+  const player = scenePlayback?.player || segmentPlayer;
   const latest = latestVideo(items.filter(item => item.stage === stage));
   const versions = items.filter(item => item.stage === stage).sort((a, b) => b.candidateNumber - a.candidateNumber);
   const current = versions.find(item => item.key === selected);
@@ -72,7 +74,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const detail = useQuery({ queryKey: ['generation-context', scope.notesUrl || scope.project, identity, revision],
     queryFn: () => get<GenerationContext>(current?.contextUrl || `${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
     placeholderData: (previous, query) => query?.queryKey[1] === (scope.notesUrl || scope.project) && query.queryKey[2] === identity ? previous : undefined,
-    enabled: !!current && !current.context });
+    enabled: !scenePlayback && !!current && !current.context });
   const context = current?.context || (current ? detail.data : undefined);
   const language = preferredLanguage || (context?.prompts.english && !context.prompts.chinese ? 'en' : 'zh');
   const awaitingGeneration = current && !current.url && !missingVideoState(current).unavailable
@@ -81,7 +83,9 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const scriptHtml = context?.scriptHtml || plannedScript?.html || '';
   const shots: GenerationContext['shots'] = context?.shots.length ? context.shots : workMode ? (plannedScript?.shotIds || []).map(id => ({ id, duration: null, html: '' })) : [];
   const canAlign = !!current?.url && shots.length > 0 && shots.every(shot => shot.duration !== null);
-  const time = playback.key === current?.key ? playback.time : 0;
+  const startInScene = scenePlayback?.start ?? 0;
+  const mediaTime = playback.key === current?.key ? playback.time : startInScene;
+  const time = Math.max(0, mediaTime - startInScene);
   let plannedDuration = 0;
   const timedShots = canAlign ? shots.map(shot => {
     const start = workMode ? shot.start ?? plannedDuration : plannedDuration;
@@ -95,12 +99,12 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const aligned = scriptMode === 'aligned' && canAlign;
   const editingNotes = tab === 'notes' && !readOnly;
   const showShotTimeline = (canAlign || (workMode && shots.length > 0)) && (tab === 'script' || editingNotes);
-  const shotTimingHint = workMode && context?.shotTimingSource
+  const shotTimingHint = (workMode || scenePlayback) && context?.shotTimingSource
     ? context.shotTimingSource === 'plan' ? '按计划时码定位，实际切点以画面为准。' : '按执行记录时码定位。'
     : '';
   useEffect(() => {
     scriptContent.current!.scrollTop = 0;
-  }, [current?.key, tab, scriptMode, tab === 'script' && aligned ? activeShot?.id : undefined]);
+  }, [current?.key, segment, tab, scriptMode, tab === 'script' && aligned ? activeShot?.id : undefined]);
   useEffect(() => {
     if (!showShotTimeline || !activeShot) return;
     const container = shotTimeline.current!;
@@ -116,19 +120,20 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
         {shots.map((shot, index) => {
           const start = timedShots[index]?.start;
           const label = shot.id.match(/SH\d+$/)?.[0] || shot.id;
-          const jumpText = start === undefined ? '暂无可用时码' : `跳转到 ${Number(start.toFixed(3))}秒`;
+          const seekTime = start === undefined ? undefined : start + startInScene;
+          const jumpText = seekTime === undefined ? '暂无可用时码' : `跳转到 ${Number(seekTime.toFixed(3))}秒`;
           const tooltip = start !== undefined && shotTimingHint ? `${jumpText}。${shotTimingHint}` : jumpText;
           return <div className="shot-timeline-cell" key={shot.id}>
             <PointerTooltip text={tooltip}>
               <button type="button" className="shot-timeline-item" aria-current={shot.id === activeShot?.id ? 'step' : undefined}
-                aria-label={start === undefined ? label : `跳转到${shot.id}，${Number(start.toFixed(3))}秒`}
-                disabled={start === undefined} onClick={start === undefined ? undefined : () => player.current?.seekTo(start)}>
+                aria-label={seekTime === undefined ? label : `跳转到${shot.id}，${Number(seekTime.toFixed(3))}秒`}
+                disabled={seekTime === undefined} onClick={seekTime === undefined ? undefined : () => player.current?.seekTo(seekTime)}>
                 <span className="shot-timeline-title">{label}</span>
                 <span className="shot-timeline-track">{start !== undefined && <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, (time - start) / shot.duration!))})` }} />}</span>
               </button>
             </PointerTooltip>
-            {passShot && start !== undefined && <LinkButton className="shot-timeline-pass" aria-label={`${label} 本镜通过`} disabled={disabled} onPointerDown={preserveFocus}
-              onClick={() => passShot(label, start)}>本镜通过</LinkButton>}
+            {passShot && seekTime !== undefined && <LinkButton className="shot-timeline-pass" aria-label={`${label} 本镜通过`} disabled={disabled} onPointerDown={preserveFocus}
+              onClick={() => passShot(label, seekTime)}>本镜通过</LinkButton>}
           </div>;
         })}
       </div>
@@ -145,18 +150,22 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       <span className="production-latest">当前最新{latest ? selected !== latest.key && <>：{candidateLabel(latest.candidateNumber)}，<button className="production-latest-link" aria-label="切换到本段最新版本" onClick={() => onSelectionChange({ stage: latest.stage, key: latest.key })}>点击切换</button></> : '：暂无版本'}</span>
     </div>;
   return <>
-    {selectors}
+    {!scenePlayback && selectors}
     <MessagePanel key={current?.key || 'empty'} label="当前候选提示" messages={[
-      current && !current.context && detail.isPending && { id: 'loading', content: '正在读取当前候选资料…' },
+      !scenePlayback && current && !current.context && detail.isPending && { id: 'loading', content: '正在读取当前候选资料…' },
       current && !current.context && detail.error && { id: 'error', tone: 'error', content: '当前候选资料读取失败。', actions: <LinkButton disabled={detail.isFetching} onClick={() => { void detail.refetch(); }}>{detail.isFetching ? '正在读取…' : '重新读取'}</LinkButton> },
       awaitingGeneration ? { id: 'pending', content: `这版视频还没生成。${plannedScript?.html ? `当前分镜为${plannedScript.label}；` : ''}尚无实际生成时使用的提示词和素材记录。` }
         : context && context.issues.length > 0 && { id: 'issues', tone: 'warning', content: <details className="generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run}：当前候选有 {context.issues.length} 项资料关联问题</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details> },
     ]} />
-    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => setPlayback({ key: current!.key, time })} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onTimeChange={time => {
+      setPlayback({ key: current!.key, time });
+      scenePlayback?.onTimeChange(time);
+    }} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
       <SegmentReferences context={context} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
           <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current && !plannedScript?.html} />
+          {scenePlayback?.label && <span className="muted">{scenePlayback.label}</span>}
           {(editingNotes || readOnly) && <div className="segment-notes-export">{notesExportControl}</div>}
           {!editingNotes && <Original url={tab === 'script' ? (context?.scriptUrl || plannedScript?.url) : context?.prompts[language === 'zh' ? 'chineseUrl' : 'englishUrl']} label="查看原文件" />}
         </div>
@@ -165,7 +174,10 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
           <TabNav compact label="分镜显示方式" items={[{ value: 'aligned', label: '跟视频对齐', disabled: !canAlign }, { value: 'all', label: '显示全部' }]} selected={aligned ? 'aligned' : 'all'} onChange={setScriptMode} disabled={!current} />
         </div>}
         <div className={'segment-script-content' + (aligned && tab === 'script' ? ' is-aligned' : '')} ref={scriptContent}>
-        {editingNotes && current ? <RevisionNoteEditor key={`${roundNumber}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} dialogues={context?.scriptHtml ? context.dialogues : undefined} time={time} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} renderShotTimeline={renderShotTimeline} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} /> : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{editingNotes ? '尚无视频候选可审阅。' : tab === 'script' ? '尚未登记分镜。' : '生成后可查看本次提示词。'}</div> : <>
+        {editingNotes ? current && (!scenePlayback || current.url)
+          ? <RevisionNoteEditor key={`${roundNumber}/${segment}/${current.stage}/${current.run}`} roundNumber={roundNumber} scope={scope} segment={segment} current={current} dialogues={context?.scriptHtml ? context.dialogues : undefined} time={mediaTime} shot={activeShot?.id.match(/SH\d+$/)?.[0] || activeShot?.id} renderShotTimeline={renderShotTimeline} fileRevision={loadedFile.key === current.key ? loadedFile.revision : current.fileRevision} />
+          : <div className="script-placeholder">尚无视频候选可审阅。</div>
+          : !context ? tab === 'script' && scriptHtml ? <Rich html={scriptHtml} /> : <div className="script-placeholder">{tab === 'script' ? '尚未登记分镜。' : '生成后可查看本次提示词。'}</div> : <>
           {context.source && <p className="muted">生成资料来源：{context.source}</p>}
           {tab === 'script' ? scriptHtml ? <Rich html={aligned && activeShot ? activeShot.html : scriptHtml} /> : <div className="script-placeholder">该次分镜原文尚未关联或已缺失。</div> : <>
             <div className="segment-prompt-actions">

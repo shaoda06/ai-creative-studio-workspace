@@ -64,18 +64,31 @@ class SceneRoundTests(unittest.TestCase):
         plan = {'workflow_id': 'songssx-selflift', 'segments': [
             {'p': 'P001', 'gen': 1, 'output_frames': [0, 124], 'planned_seconds': 5},
             {'p': 'P002', 'gen': 2, 'output_frames': [124, 254], 'planned_seconds': 5},
-            {'p': 'P003', 'gen': 3, 'output_frames': [254, 384], 'planned_seconds': 5},
+            {'p': 'P003', 'gen': 3, 'output_frames': [254, 384], 'planned_seconds': 5, 'prompt_zh': '第三段。'},
         ]}
+        images = ['reference-a.png', 'reference-b.png']
+        self.write(images[0], 'fixture A')
+        self.write(images[1], 'fixture B')
+        timeline = {'images': [{'id': 'a'}, {'id': 'b'}], 'segmentConfig': {'segments': [
+            {'prompt': 'First GEN.', 'images': ['a']}, {'prompt': 'Second GEN.', 'images': ['b']},
+            {'prompt': 'Third GEN.', 'images': ['b', 'a']},
+        ]}}
         prepared = {'record_dir': execution, 'task_type': 'video-scene-generation', 'video_plan': plan,
+                    'workflow': {'402': {'inputs': {'timeline_data': json.dumps(timeline)}}},
+                    'uploads': [{'file': name, 'node': '402', 'input': 'timeline_data', 'json-path': ['images', index, 'file']}
+                                for index, name in enumerate(images)],
                     'outputs': [{'path': output, 'response_name': '场次视频-取回响应.json'}]}
         self.write(execution + '/执行检查报告.json', json.dumps({'prepared_input': prepared}))
         self.write(output, 'fixture scene video')
         episode = self.episode()
         self.assertEqual(episode['productionWorkflows'], ['aimixer'], 'prepare-only is not a second official workflow')
         self.assertEqual(episode['sceneRounds']['C001'][0]['songssx']['video']['url'], '')
+        self.assertEqual(episode['sceneRounds']['C001'][0]['songssx']['segments'][-1]['context']['prompts']['chinese'], '第三段。')
+        timeline['segmentConfig']['segments'][-1]['prompt'] = 'Third GEN submitted.'
         write_entries(self.project / execution, {
             '后台任务状态.json': {'id': 'test', 'task_type': 'video-scene-generation', 'status': 'completed', 'record_dir': execution},
             '场次视频-取回响应.json': {},
+            '请求.json': {'prompt': {'402': {'inputs': {'timeline_data': json.dumps(timeline)}}}},
         })
         episode = self.episode()
         self.assertEqual(episode['productionWorkflows'], ['aimixer', 'songssx'])
@@ -85,7 +98,21 @@ class SceneRoundTests(unittest.TestCase):
         self.assertTrue(round_['songssx']['video']['url'])
         self.assertFalse(round_['songssx']['video']['approved'])
         self.assertEqual(round_['songssx']['segments'][-1]['start'], 254 / 24)
+        context = round_['songssx']['segments'][-1]['context']
+        self.assertEqual(context['prompts'], {'english': 'Third GEN submitted.', 'chinese': ''})
+        self.assertEqual([item['url'] for item in context['references']['segment']], images[::-1])
+        self.assertEqual([item['label'] for item in context['references']['segment']], ['<Picture 1>', '<Picture 2>'])
+        self.assertEqual(context['shots'][0]['id'], 'EP001-C001-SH003')
         self.assertTrue(all(len(segment['videos']) == 1 for segment in episode['segments']['C001']))
+        from backend.services.episode_revision_notes import EpisodeRevisionNotes
+        from backend.services.revision_notes import NoteChange, RevisionNotes
+        notes = EpisodeRevisionNotes(RevisionNotes())
+        value = NoteChange(roundNumber=1, segment='P003', stage='场次生成', run='R002',
+                           text='00.10.5秒：继续检查', fileRevision=round_['songssx']['video']['fileRevision'], expectedText='')
+        notes.save_note(self.project, 'EP001', 'C001', value)
+        self.assertEqual(notes.read_scene(self.project, 'EP001', 'C001').notes[value.key()].text, value.text)
+        with self.assertRaisesRegex(ValueError, '与本轮不符'):
+            notes.save_note(self.project, 'EP001', 'C001', value.model_copy(update={'run': 'R099'}))
         with self.assertRaisesRegex(ValueError, '同一集的新制作轮次须沿用同一套导演台'):
             self.create({**self.plan(), 'songssx_execution': None})
 

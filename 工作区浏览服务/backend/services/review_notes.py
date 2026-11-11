@@ -21,7 +21,7 @@ class DialogueEdit(BaseModel):
 class NoteInput(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     segment: Annotated[str, Field(pattern=r'^P[0-9]{3,}$')]
-    stage: Literal['一采', '二采', '后处理']
+    stage: Literal['一采', '二采', '后处理', '场次生成']
     run: Annotated[str, Field(pattern=r'^R[0-9]{3,}$')]
     text: Annotated[str, Field(max_length=20000)]
     fileRevision: Annotated[str, Field(min_length=1, max_length=128)]

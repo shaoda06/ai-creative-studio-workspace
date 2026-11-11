@@ -17,6 +17,19 @@ Scene = Annotated[str, Field(pattern=r'^C[0-9]{3,}$')]
 from backend.services.review_notes import (NoteInput, RevisionNote, OverallNote, NoteChange, OverallChange, ExportChanges, NotesChangedError)
 
 
+def validate_note_round(project, episode, scene, note):
+    from backend.parsers.scene_rounds import rounds
+    if note.roundNumber is None:
+        if note.stage == rounds.SCENE_GENERATION:
+            raise ValueError('Songssx 修改意见须关联已登记的制作轮次')
+        return
+    selected = rounds.referenced_round(project, f'{episode}-{scene}', note.roundNumber)
+    if note.stage == rounds.SCENE_GENERATION and not any(
+            item['id'] == note.segment and item['run'] == note.run and item['stage'] == note.stage
+            for item in selected['segments']):
+        raise ValueError('Songssx 修改意见的分段或候选与本轮不符')
+
+
 class SceneNotes(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     episode: Episode
@@ -82,11 +95,9 @@ class RevisionNotes:
                 data.notes[assigned.key()] = assigned
 
     def save(self, project: Path, episode: str, scene: str, value: NoteChange) -> RevisionNote:
-        from backend.parsers.scene_rounds import rounds
         with self.lock:
             data = self.read(project, episode, scene)
-            if value.roundNumber is not None:
-                rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
+            validate_note_round(project, episode, scene, value)
             old = data.notes.get(value.key())
             if not value.matches(old):
                 raise NotesChangedError('分段意见已在其他页面更新，请保留本页文字，核对最新意见后再保存。')
@@ -100,8 +111,7 @@ class RevisionNotes:
         with self.lock:
             data = self.read(project, episode, scene)
             for value in changes.notes:
-                if value.roundNumber is not None:
-                    rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
+                validate_note_round(project, episode, scene, value)
                 old = data.notes.get(value.key())
                 if not value.matches(old):
                     raise NotesChangedError('分段意见已在其他位置更新，请保留当前输入，重新读取后核对。')

@@ -1,4 +1,4 @@
-// Real Nora page with a read-only, isolated API and generated sample media.
+// Real Nora page with an isolated API, in-memory opinions and generated sample media.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -18,6 +18,7 @@ execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x263a42:s=
   '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-movflags', '+faststart', clip]);
 const media = await readFile(clip);
 const unexpected = [];
+const savedNotes = {};
 const ids = ['P001', 'P002', 'P003'];
 const title = 'Nora 制作页示例';
 const episodes = [
@@ -34,7 +35,13 @@ const round = (number, songssx, run) => ({
   segments: ids.map(id => ({ id, stage: songssx ? '场次生成' : '一采', run, duration: 10,
     scriptHtml: '<p>' + id + ' 的隔离分镜内容</p>' })),
   ...(songssx ? { songssx: { recorded: true, video: video('整场-' + run, '场次生成', run),
-    segments: ids.map((id, i) => ({ id, gen: i + 1, start: [0, 14.375, 22.375][i], end: [14.375, 22.375, 32.292][i] })) } } : {}),
+    segments: ids.map((id, i) => ({ id, gen: i + 1, start: [0, 14.375, 22.375][i], end: [14.375, 22.375, 32.292][i],
+      context: { scriptHtml: '<p>' + id + ' 隔离分镜</p>', issues: [], shotTimingSource: 'plan',
+        shots: [{ id: 'SH00' + (i + 1), duration: 10, html: '<p>' + id + ' 当前镜头</p>' }],
+        prompts: { english: 'GEN ' + (i + 1) + ' isolated prompt.', chinese: id + ' 中文提示词示例。' },
+        references: { common: [], segment: [{ name: id + ' 参考图', label: '<Picture 1>', kind: 'image',
+          url: '/component-samples/image.svg?segment=' + id }] },
+      } })) } } : {}),
 });
 const detail = episode => {
   const aimixer = episode.name !== 'EP002', songssx = episode.name !== 'EP001';
@@ -52,7 +59,7 @@ const server = await createServer({
   define: { __APP_VERSION__: JSON.stringify('Nora preview') },
   server: { host: '127.0.0.1', port: 0 },
   plugins: [react(), { name: 'nora-songssx-fixture', configureServer(vite) {
-    vite.middlewares.use((req, res, next) => {
+    vite.middlewares.use(async (req, res, next) => {
       const path = decodeURIComponent(new URL(req.url, 'http://fixture.invalid').pathname);
       if (path.startsWith('/sample/')) {
         res.setHeader('Content-Type', 'video/mp4');
@@ -63,6 +70,17 @@ const server = await createServer({
         return res.end(media.subarray(start, end + 1));
       }
       if (!path.startsWith('/api/')) return next();
+      const noteScene = /\/revision-notes\/(EP\d+)\/(C\d+)$/.exec(path);
+      const send = value => { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(value)); };
+      if (noteScene && req.method === 'PUT') {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const { expectedText, expectedDialogueEdits, ...note } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const sceneNotes = (savedNotes[noteScene[1]] ??= {})[noteScene[2]] ??= { notes: {}, rounds: {} };
+        const key = `round/${note.roundNumber}/${note.segment}/${note.stage}/${note.run}`;
+        sceneNotes.notes[key] = { ...note, updatedAt: new Date().toISOString() };
+        return send(sceneNotes.notes[key]);
+      }
       if (req.method !== 'GET') { unexpected.push(req.method + ' ' + path); res.writeHead(405); return res.end(); }
       let value;
       if (path === '/api/workspaces') value = [{ id: 'nora', name: 'Nora 示例空间', view: 'serial-drama', projects: [{ id: title, name: title }] }];
@@ -72,10 +90,10 @@ const server = await createServer({
       else if (path.endsWith('/sections/00-项目定位')) value = { exists: false, groups: [] };
       else if (path.endsWith('/sections/09-剧集制作')) value = { kind: 'group', statistics: { total: 3, completed: 0, notStarted: 0, running: 3 }, children: episodes };
       else if (path.includes('/episodes/')) value = detail(episodes.find(episode => path.endsWith('/' + episode.name)));
-      else if (path.includes('/revision-notes/')) value = { rounds: {}, notes: {} };
+      else if (noteScene) value = savedNotes[noteScene[1]]?.[noteScene[2]] || { rounds: {}, notes: {} };
+      else if (path.includes('/revision-notes/')) value = { rounds: {}, scenes: savedNotes[path.split('/').at(-1)] || {} };
       else { unexpected.push(path); res.statusCode = 404; value = {}; }
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify(value));
+      return send(value);
     });
   } }],
 });
@@ -93,6 +111,7 @@ if (process.argv.includes('--preview')) {
   try {
     for (const [width, height] of [[1280, 640], [1366, 768], [1920, 1080]]) {
       const page = await browser.newPage({ viewport: { width, height } });
+      delete savedNotes.EP002;
       page.setDefaultTimeout(10000);
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -122,6 +141,8 @@ if (process.argv.includes('--preview')) {
       assert.equal(await chooser.count(), 0);
       assert.equal(await selector.getAttribute('data-value'), '3');
       const src = await player.getAttribute('src');
+      const references = page.getByRole('region', { name: '参考素材区域' });
+      await references.getByRole('button', { name: /P001 参考图/ }).waitFor();
       await page.getByRole('button', { name: /^分段 P003/ }).click();
       await page.waitForFunction(() => {
         const video = document.querySelector('.segment-video video');
@@ -129,6 +150,19 @@ if (process.argv.includes('--preview')) {
       });
       assert.equal(await player.getAttribute('src'), src);
       assert.equal(await page.getByText('GEN 3 · 22.375–32.292 秒').count(), 1);
+      await references.getByRole('button', { name: /P003 参考图/ }).waitFor();
+      await page.getByRole('button', { name: '提示词', exact: true }).click();
+      await page.locator('.segment-prompt-text').filter({ hasText: 'P003 中文提示词示例。' }).waitFor();
+      await page.getByRole('button', { name: '英文', exact: true }).click();
+      await page.locator('.segment-prompt-text').filter({ hasText: 'GEN 3 isolated prompt.' }).waitFor();
+      await player.evaluate(video => video.pause());
+      await page.getByRole('button', { name: '修改意见', exact: true }).click();
+      const opinion = page.getByRole('textbox', { name: '修改意见', exact: true });
+      await opinion.fill('第三段隔离意见');
+      const saved = page.waitForResponse(response => response.request().method() === 'PUT' && response.url().endsWith('/revision-notes/EP002/C001'));
+      await opinion.blur();
+      assert.equal((await saved).ok(), true);
+      assert.equal(savedNotes.EP002.C001.notes['round/3/P003/场次生成/R003'].text, '第三段隔离意见');
       await page.getByRole('button', { name: '宽屏显示' }).click();
       await page.getByRole('button', { name: /^分段 P002/ }).click();
       await page.waitForFunction(() => {

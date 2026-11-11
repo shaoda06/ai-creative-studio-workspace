@@ -242,7 +242,8 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       view === 'dialogue' && !!productionRound && productionRound.number !== sceneRounds.at(-1)?.number && { id: 'historical-round', content: '当前为历史轮次，请切换到最新修改轮次后编辑。' },
     ]} />
     {view === 'segments' && songssx ? <SongssxSceneVideo round={productionRound} planned={allSegments} wide={wideVideo}
-      onToggleWide={onToggleWide} repeatControl={repeatControl} newVideoSegments={newVideoSegments} />
+      onToggleWide={onToggleWide} repeatControl={repeatControl} newVideoSegments={newVideoSegments}
+      scope={scope} tab={segmentTab} onTabChange={onSegmentTabChange} revision={revision} notesExportControl={episodeNotesExportControl} />
     : view === 'segments' ? <>
     {currentSegment && <SegmentWorkspace key={`${displayScope.episode}/${displayScope.scene}/${currentSegment.id}`} scope={displayScope} roundNumber={viewingPrevious || workMode && !viewingRoundRevision ? undefined : productionRound?.number} segment={currentSegment.id} revision={revision} items={currentSegment.videos} selection={chosen} cachedSources={videoCache.sources} retainSource={videoCache.retainSource}
       tab={segmentTab} onTabChange={onSegmentTabChange}

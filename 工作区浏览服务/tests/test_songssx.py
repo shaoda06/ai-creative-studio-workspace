@@ -34,7 +34,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 'songssx': {'width': 640, 'height': 384, 'reference_image_center_crop': False,
                             'lowres_scale': .6, 'seed': 7, 'remote_prefix': 'video/test/scene',
                             'segments': [{'p': f'P{i:03d}', 'duration': 5, 'overlap_frames': overlap,
-                                          'images': [source.name], 'prompt': PROMPT}
+                                          'images': [source.name], 'prompt': PROMPT, 'prompt_zh': f'第{i}段参考。'}
                                          for i, overlap in enumerate((0, 0, 22), 1)]},
             }]}))
             desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
@@ -48,6 +48,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(store.rows, {})
                 task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
                 self.assertEqual([seg['overlap_frames'] for seg in task['video_plan']['segments']], [0, 0, 22])
+                self.assertEqual(task['video_plan']['segments'][2]['prompt_zh'], '第3段参考。')
                 self.assertEqual(len(task['uploads']), 1)
                 self.assertEqual(task['workflow']['331']['inputs']['model'], ['407', 0])
                 self.assertNotIn('343', task['workflow'])
@@ -61,6 +62,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 upload.assert_called_once()
                 planner = json.loads(bound['402']['inputs']['timeline_data'])
                 self.assertEqual(planner['images'][0]['file'], 'record/ref.png')
+                self.assertNotIn('prompt_zh', planner['segmentConfig']['segments'][2])
                 canvas = json.loads((project / 'record/任务.workflow.json').read_text())
                 node = next(item for item in canvas['nodes'] if item['id'] == 402)
                 self.assertEqual(json.loads(node['widgets_values'][3]), planner)

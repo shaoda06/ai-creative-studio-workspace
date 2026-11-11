@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.parsers.scene_rounds import load_episode_rounds, rounds
 from drama_revision_notes import (
     Episode, Scene, NoteChange, RevisionNote, OverallChange, OverallNote,
-    SceneNotes, RevisionNotes, ExportChanges, NotesChangedError,
+    SceneNotes, RevisionNotes, ExportChanges, NotesChangedError, validate_note_round,
 )
 
 
@@ -117,7 +117,7 @@ class EpisodeRevisionNotes:
         with self.notes.lock:
             if value.roundNumber not in self.registered(project, episode):
                 return self.notes.save(project, episode, scene, value)
-            rounds.referenced_round(project, f'{episode}-{scene}', value.roundNumber)
+            validate_note_round(project, episode, scene, value)
             saved = self.read_file(project, episode)
             old = self.read_scene(project, episode, scene).notes.get(value.key())
             if not value.matches(old):
@@ -136,7 +136,7 @@ class EpisodeRevisionNotes:
             for value in changes.notes:
                 if value.roundNumber not in registered:
                     raise ValueError('场次历史意见在本场编辑区修改；整集导出只整理真实整集轮次的意见')
-                rounds.referenced_round(project, f'{episode}-{value.scene}', value.roundNumber)
+                validate_note_round(project, episode, value.scene, value)
                 old = data.scenes.get(value.scene)
                 note = old.notes.get(value.key()) if old else None
                 if not value.matches(note):

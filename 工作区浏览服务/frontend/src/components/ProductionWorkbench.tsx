@@ -111,15 +111,17 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   };
   const durations = useEpisodeDurations(Object.fromEntries(scenes.map(id => [id, sceneDurationEntries(current!, id, roundNumberForScene(id))])));
   const episodeReview: EpisodeReview | undefined = current ? {
-    number: episodeRound?.number, rounds: episodeRounds.map(item => item.number),
+    number: episodeRound?.number, rounds: episodeRounds.map(item => item.number), workflow: workMode ? undefined : workflow || 'aimixer',
     scenes: (workMode ? [...new Set([...scenes, ...(current.scenes || [])])] : scenes).map(id => {
       const number = roundNumberForScene(id);
       const round = current.sceneRounds?.[id]?.find(item => item.number === number);
-      return { id, number, segments: current.segments?.[id] || [], versions: round?.segments || [],
+      const video = round?.songssx?.video;
+      const segments = video ? round.segments.map(segment => ({ id: segment.id, videos: [video] })) : current.segments?.[id] || [];
+      return { id, number, segments, versions: round?.segments || [],
         history: workMode ? current.sceneRounds?.[id] : undefined };
     }),
   } : undefined;
-  const episodeNotesExport = useRevisionNotesExport(!songssx && current && selectedScene && (current.readOnly || current.segments?.[selectedScene]?.length)
+  const episodeNotesExport = useRevisionNotesExport(current && selectedScene && (current.readOnly || current.segments?.[selectedScene]?.length)
     ? { ...access.scope(project, current.name, selectedScene), episodeTitle: current.title } : null, [], null, undefined, episodeReview);
   const workSheets = workMode && !scenes.includes('whole') ? current?.directorSheets?.whole : undefined;
   const directorScenes = (workSheets ? [selectedScene] : scenes).map(id => {

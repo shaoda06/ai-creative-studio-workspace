@@ -30,7 +30,7 @@ export type ProductionWorkflow = 'aimixer' | 'songssx';
 export interface SongssxScene {
   recorded: boolean;
   video?: SegmentVideo;
-  segments: { id: string; gen: number; start: number; end: number }[];
+  segments: { id: string; gen: number; start: number; end: number; context?: GenerationContext }[];
 }
 export interface SceneRound { number: number; created_at: string; note?: string; episodeRound?: boolean; record?: FileItem | null; reviewOutputs?: FileItem[]; script: (FileItem & { version: string }) | null; storyboard: (FileItem & { version: string }) | null; issues: string[]; songssx?: SongssxScene; segments: { key?: string; carried?: boolean; id: string; duration: number; stage: string; run: string; scriptHtml: string; scriptUrl: string; shotIds?: string[] }[] }
 export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean; sourceRecord?: FileItem };

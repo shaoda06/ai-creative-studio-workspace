@@ -228,6 +228,10 @@ def prepare(root, spec, documents):
         rows.append({'p': entry['p'], 'gen': index, 'planned_seconds': entry['duration'],
                      'generation_frames': [begin, stop], 'output_frames': [end, stop],
                      'overlap_frames': overlap})
+        if 'prompt_zh' in entry:
+            if not isinstance(entry['prompt_zh'], str):
+                raise ValueError('GEN 的中文提示词参考版须为文本')
+            rows[-1]['prompt_zh'] = entry['prompt_zh']
         end = stop
     timeline['segmentConfig'] = dict(count=len(segments), activeIndex=0, mode='timeline', segments=segments)
     timeline['selection'] = dict(start=0, duration=end / FPS)

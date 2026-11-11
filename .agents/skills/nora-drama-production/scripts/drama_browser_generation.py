@@ -48,6 +48,23 @@ def shot_dialogues(text, shot):
     return lines
 
 
+def storyboard_context(text, segment, key):
+    body = segment_body(text, segment)
+    result = dict(scriptHtml=markdown(body, key), scriptUrl=quote(key, safe="/-._~"),
+                  shots=[], dialogues=[], issues=[])
+    for shot in re.finditer(r"^####[ \t]+((?:EP\d+|片头|片尾)(?:-C\d+)?-SH\d+)[ \t]*\n.*?(?=^####[ \t]|\Z)", body, re.M | re.S):
+        duration = re.search(r"^(?:-[ \t]+)?\*\*时长\*\*[：:][ \t]*(\d+(?:\.\d+)?)[ \t]*秒[。.]?[ \t]*$", shot[0], re.M)
+        seconds = float(duration[1]) if duration else 0
+        result["shots"].append({"id": shot[1], "duration": seconds if seconds > 0 else None,
+                                "html": markdown(shot[0], key)})
+        result["dialogues"].extend(shot_dialogues(shot[0], shot[1]))
+    if any(shot["duration"] is None for shot in result["shots"]):
+        result["issues"].append("该次分镜存在缺失或无效的镜头时长，无法跟视频对齐。")
+    if not body:
+        result["issues"].append("该次分镜中未找到对应分段的镜头正文。")
+    return result
+
+
 def resolve_context(identity, contexts, project, read, read_plain, previews, trail=(), dependencies=None):
     empty = {"scriptHtml": "", "shots": [], "dialogues": [], "prompts": {"english": "", "chinese": ""},
              "references": {"common": [], "segment": []}, "issues": []}
@@ -80,19 +97,7 @@ def resolve_context(identity, contexts, project, read, read_plain, previews, tra
         if field(text, "文档版本").rstrip("。") != storyboard["version"]:
             result["issues"].append("该次分镜的文件版本与记录不一致。")
         else:
-            body = segment_body(text, identity.split("-")[2])
-            result.update(scriptHtml=markdown(body, storyboard["file"]),
-                          scriptUrl=quote(storyboard["file"], safe="/-._~"))
-            for shot in re.finditer(r"^####[ \t]+((?:EP\d+|片头|片尾)(?:-C\d+)?-SH\d+)[ \t]*\n.*?(?=^####[ \t]|\Z)", body, re.M | re.S):
-                duration = re.search(r"^(?:-[ \t]+)?\*\*时长\*\*[：:][ \t]*(\d+(?:\.\d+)?)[ \t]*秒[。.]?[ \t]*$", shot[0], re.M)
-                seconds = float(duration[1]) if duration else 0
-                result["shots"].append({"id": shot[1], "duration": seconds if seconds > 0 else None,
-                                        "html": markdown(shot[0], storyboard["file"])})
-                result["dialogues"].extend(shot_dialogues(shot[0], shot[1]))
-            if any(shot["duration"] is None for shot in result["shots"]):
-                result["issues"].append("该次分镜存在缺失或无效的镜头时长，无法跟视频对齐。")
-            if not body:
-                result["issues"].append("该次分镜中未找到对应分段的镜头正文。")
+            result.update(storyboard_context(text, identity.split("-")[2], storyboard["file"]))
     else:
         result["issues"].append("该次分镜原文件尚未关联或已缺失。")
 

@@ -10,7 +10,42 @@ import scene_rounds as rounds
 from episode_rounds import episode_manifest_key, scene_entries, validate_episode_manifest
 
 
-def songssx_scene(project, entry):
+def songssx_contexts(project, data, workflow, segments, storyboard, storyboard_key):
+    from drama_browser_generation import storyboard_context
+    from project_paths import project_file, scope_workspace, SHARED_DIRECTORY
+    from project_resources import resolve_file
+    from songssx_workflow import PLANNER
+
+    timeline = json.loads(workflow[PLANNER]['inputs']['timeline_data'])
+    prepared = timeline if workflow is data['workflow'] else json.loads(data['workflow'][PLANNER]['inputs']['timeline_data'])
+    sources = {binding['json-path'][1]: binding['file'] for binding in data['uploads']
+               if binding['node'] == PLANNER and binding['input'] == 'timeline_data'}
+    images = {item['id']: sources[index] for index, item in enumerate(timeline['images'])}
+    for row, gen, prepared_gen in zip(segments, timeline['segmentConfig']['segments'], prepared['segmentConfig']['segments'], strict=True):
+        context = (storyboard_context(storyboard, row['p'], storyboard_key) if storyboard is not None else
+                   {'scriptHtml': '', 'shots': [], 'dialogues': [], 'issues': []})
+        chinese = row.get('prompt_zh', '') if gen['prompt'] == prepared_gen['prompt'] else ''
+        context.update(shotTimingSource='plan', prompts={'english': gen['prompt'], 'chinese': chinese},
+                       references={'common': [], 'segment': []})
+        for index, identity in enumerate(gen['images'], 1):
+            key = images[identity]
+            root = project
+            if key.startswith('@shared/'):
+                root = scope_workspace(project) / SHARED_DIRECTORY
+                key = key.removeprefix('@shared/')
+            source = resolve_file(root, project_file(root, key, recorded=True))
+            item = {'name': source.name, 'label': f'<Picture {index}>', 'kind': 'image'}
+            if source.is_file():
+                url = quote(source.relative_to(root).as_posix(), safe='/-._~')
+                item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+            else:
+                item['missing'] = True
+                context['issues'].append('该次输入原素材缺失：' + source.name)
+            context['references']['segment'].append(item)
+        yield context
+
+
+def songssx_scene(project, entry, storyboard, storyboard_key):
     from execution_records import exists, read
     from project_paths import project_file
     from project_resources import resolve_file
@@ -48,6 +83,11 @@ def songssx_scene(project, entry):
     revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
     result['segments'] = [{'id': row['p'], 'gen': row['gen'], 'start': row['output_frames'][0] / FPS,
                            'end': row['output_frames'][1] / FPS} for row in segments]
+    request = directory / data.get('request_name', '请求.json')
+    workflow = read(request)['prompt'] if exists(request) else data['workflow']
+    for segment, context in zip(result['segments'], songssx_contexts(
+            project, data, workflow, segments, storyboard, storyboard_key), strict=True):
+        segment['context'] = context
     result['video'] = {
         'key': relative, 'url': quote(relative, safe='/-._~') + '?v=' + revision if saved else '',
         'run': run, 'stage': rounds.SCENE_GENERATION, 'approved': False, 'candidateNumber': int(run[1:]),
@@ -92,6 +132,6 @@ def load_scene_rounds(project, episode, scene, read):
             'scriptHtml': markdown(segment_body(documents.get('storyboard', ''), segment['id']), entry['storyboard']['file']),
             'scriptUrl': quote(entry['storyboard']['file'], safe='/-._~')} for segment in entry['segments']]
         if item.get('songssx_execution'):
-            item['songssx'] = songssx_scene(project, item)
+            item['songssx'] = songssx_scene(project, item, documents.get('storyboard'), entry['storyboard']['file'])
         result.append(item)
     return result

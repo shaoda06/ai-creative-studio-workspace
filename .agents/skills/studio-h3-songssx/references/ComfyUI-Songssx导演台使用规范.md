@@ -86,7 +86,7 @@
 - `songssx` 提供对齐 32 的 `width`、`height`、`seed`、`remote_prefix` 及 `configuration`。画幅由调用方用于选择实际宽高。
 - `configuration` 提供 `high_steps`（实际高清步数）、`scene_type`（打戏 `combat` 或文戏 `dialogue`）、`speed`（按[第 5 步](#第-5-步)填写）及 `loras`（所选附加 LoRA 的数字编号数组，选 0 时传 `[]`）。脚本根据现行六步配置固定低清步数、缩放倍率和居中裁切，按基准权重启用所选打戏组和附加 LoRA。
 - 已有清单缺少 `configuration` 时，兼容入口沿用原 `reference_image_center_crop`、`lowres_scale` 和当时的标准装配方式。已有任务使用各自的执行副本。
-- `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。
+- `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。已有同版中文参考时可填 `prompt_zh`，随装配记录留存，供网页审阅。
 - [装配脚本](../scripts/songssx_workflow.py)写出任务画布、API、图片上传绑定、单一取回目标及帧区间。后台保存原准备结果和实际上传路径。
 
 ## 取回、恢复与返修边界
