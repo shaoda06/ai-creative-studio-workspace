@@ -36,11 +36,11 @@ export function useChloeAccessoryFilter<T extends { type?: string | null }>(card
   return { types, activeTypes, visibleCards, setTypeChecked };
 }
 
-export function ChloeAccessoryTypes({ id, types, activeTypes, setTypeChecked }: {
-  id?: string; types: string[]; activeTypes: string[];
+export function ChloeAccessoryTypes({ types, activeTypes, setTypeChecked }: {
+  types: string[]; activeTypes: string[];
   setTypeChecked: (type: string, checked: boolean) => void;
 }) {
-  return <fieldset id={id} className="chloe-accessory-types"><legend>按类型筛选</legend>
+  return <fieldset className="chloe-accessory-types"><legend>按类型筛选</legend>
     {types.map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
       onChange={event => setTypeChecked(type, event.target.checked)} />{type}</label>)}
   </fieldset>;

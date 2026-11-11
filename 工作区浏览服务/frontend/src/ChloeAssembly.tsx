@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
@@ -25,8 +25,6 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
 }) {
   const { api } = useChloeScope();
   const [draftIds, setDraftIds] = useState(() => initial.map(asset => asset.id));
-  const [showFilters, setShowFilters] = useState(false);
-  const filtersId = useId();
   const isModel = kind === 'models';
   const multi = kind === 'accessories';
   const label = isModel ? '模特' : referenceAssetKinds[kind].label;
@@ -66,15 +64,9 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className="asset-media-grid">{cards}</div>
       : <p className="muted">暂无可用{label}。</p>)}
-    <div className={multi ? 'chloe-assembly-picker-footer chloe-assembly-picker-footer-sticky' : 'chloe-assembly-picker-footer'}>
-      {showFilters && filter.types.length > 0 && <ChloeAccessoryTypes id={filtersId} {...filter} />}
-      <div className="chloe-assembly-confirm">
-        {multi && <button type="button" disabled={!filter.types.length} aria-expanded={showFilters}
-          aria-controls={showFilters ? filtersId : undefined} onClick={() => setShowFilters(previous => !previous)}>
-          筛选
-        </button>}
-        <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
-      </div>
+    <div className={multi ? 'chloe-assembly-confirm chloe-assembly-confirm-sticky' : 'chloe-assembly-confirm'}>
+      {filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}
+      <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
     </div>
   </Dialog>;
 }

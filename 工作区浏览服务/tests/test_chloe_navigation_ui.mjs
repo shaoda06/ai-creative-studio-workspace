@@ -285,16 +285,18 @@ try {
     const [shortCard, tallCard, followingCard] = await Promise.all(['C001','C003','C004'].map(id =>
       dialog.locator('article').filter({has:page.getByRole('img',{name:id,exact:true})}).boundingBox()));
     assert.ok(shortCard.height < tallCard.height && followingCard.y < tallCard.y + tallCard.height);
-    const filter = dialog.getByRole('button',{name:'筛选',exact:true});
-    const [filterBox, confirmBox] = await Promise.all([filter.boundingBox(),confirm.boundingBox()]);
-    assert.ok(filterBox.x < confirmBox.x && Math.abs(filterBox.y - confirmBox.y) <= 1);
+    const filters = dialog.getByRole('group',{name:'按类型筛选'});
+    const [filterBox, confirmBox] = await Promise.all([filters.boundingBox(),confirm.boundingBox()]);
+    assert.ok(filterBox.x + filterBox.width <= confirmBox.x &&
+      Math.abs(filterBox.y + filterBox.height / 2 - confirmBox.y - confirmBox.height / 2) <= 1);
+    assert.equal(await dialog.getByRole('button',{name:'筛选',exact:true}).count(),0);
     if (height === 640) {
       const footerVisibility = await dialog.evaluate(element => {
-        const footer = element.querySelector('.chloe-assembly-confirm');
+        const filterBox = element.querySelector('fieldset');
         const visible = () => {
           const dialogBox = element.getBoundingClientRect();
-          const footerBox = footer.getBoundingClientRect();
-          return footerBox.top >= dialogBox.top && footerBox.bottom <= dialogBox.bottom;
+          const bounds = filterBox.getBoundingClientRect();
+          return bounds.top >= dialogBox.top && bounds.bottom <= dialogBox.bottom;
         };
         element.scrollTop = 0;
         const before = visible();
@@ -304,12 +306,10 @@ try {
       assert.ok(footerVisibility.scrollTop > 0 && footerVisibility.before && footerVisibility.after);
     }
     await accessoryChoice(0).click();
-    await filter.click();
-    const bagFilter = dialog.getByRole('checkbox',{name:'包袋',exact:true});
-    const hatFilter = dialog.getByRole('checkbox',{name:'帽饰',exact:true});
-    assert.equal(await dialog.getByRole('checkbox',{name:'首饰',exact:true}).count(),0);
+    const bagFilter = filters.getByRole('checkbox',{name:'包袋',exact:true});
+    const hatFilter = filters.getByRole('checkbox',{name:'帽饰',exact:true});
+    assert.equal(await filters.getByRole('checkbox',{name:'首饰',exact:true}).count(),0);
     await bagFilter.check();
-    assert.equal(await filter.count(),1);
     assert.equal(await accessoryChoice(0).count(),0);
     assert.equal(await accessoryChoice(1).count(),1);
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 1/5');
@@ -317,7 +317,6 @@ try {
     assert.equal(await accessoryChoice(0).count(),1);
     await hatFilter.uncheck();
     await bagFilter.uncheck();
-    await filter.click();
     for (let index=1; index<5; index++) {
       await accessoryChoice(index).click();
       assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),`选择配饰 ${index+1}/5`);
@@ -331,7 +330,6 @@ try {
     await accessoryChoice(4).click();
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 4/5');
     await accessoryChoice(5).click();
-    await filter.click();
     await bagFilter.check();
     assert.equal(await accessoryChoice(0).count(),0);
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 5/5');
