@@ -82,6 +82,9 @@ class ChloeClothingTests(unittest.TestCase):
         endpoint = f'{self.api}/{self.kind.endpoint}'
         with TestClient(app) as client:
             media = client.get(endpoint).json()[0]['media']
+            detail_media = client.get(f'{endpoint}/{self.identity}').json()['images'][0]['media']
+            self.assertEqual(detail_media['thumbnailUrl'], media['thumbnailUrl'])
+            self.assertEqual(detail_media['originalDimensions'], [1200, 1800])
             self.assertFalse(space.runtime.exists())
             original = Path(first['absolute_file']).read_bytes()
             preview = client.get(media['thumbnailUrl'])

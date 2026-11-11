@@ -198,8 +198,8 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="外层已命名的采用图" item={imageRecord} revision={1} formal hideTitle />
         <AssetMediaCard title="外层已命名的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle />
       </ComponentExample>
-      <ComponentExample title="只显示尺寸的图片卡片" rule="showFileActions与showVersion默认开启，可分别关闭文件操作与版本字段；尺寸与图片预览不受影响。" usage="Chloe模特图片页当前采用图">
-        <AssetMediaCard title="仅保留尺寸的采用图" item={{media:image,version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
+      <ComponentExample title="只显示尺寸的图片卡片" rule="showFileActions与showVersion可分别关闭文件操作与版本字段。卡面加载缩略图时，尺寸读取原图数据，点开预览读取原图。" usage="Chloe 模特、造型与图片资产详情的采用图">
+        <AssetMediaCard title="仅保留尺寸的采用图" item={{media:{...thumbnailRecord.media,originalDimensions:[1280,720]},version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
         <AssetMediaCard title="仅保留尺寸的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
       </ComponentExample>
       <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe共用资产入口封面、参考图、正式图及其他版本">
@@ -224,8 +224,8 @@ export function ShowcaseExamples({ category }: { category: string }) {
             selection={{selected:selectedImage==='preview',onSelect:()=>setSelectedImage('preview'),onPreview:()=>setFullscreenImage(true)}} />
         </div>
       </ComponentExample>
-      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
-        <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />
+      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、图片预览和资源版本。无图保留紧凑图片区域及提示；提供缩略图地址时卡面使用缩略图，点击查看或下载原图。" usage="Iris 已采用素材、Chloe 参考图及其他版本">
+        <AssetMediaCard title="A001 · 已采用示例" item={{ ...thumbnailRecord, version: 'V002' }} revision={1} formal compact />
         <AssetMediaCard title="A002 · 无图示例" item={{}} revision={1} compact />
       </ComponentExample>
       <ComponentExample title="音视频卡片与试听" rule="试听播放2秒轻提示音，可暂停；视频入口打开公共预览。无音频时按钮禁用。" usage="参考音视频、人物音色">

@@ -3,10 +3,13 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from fastapi import Depends, FastAPI, Request
+from fastapi.testclient import TestClient
 from PIL import Image
 
-from backend.chloe_models import model_cards, portrait_file, model_detail, model_file
+from backend.chloe_models import model_cards, portrait_file, model_detail, model_file, router
 from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
@@ -72,6 +75,10 @@ class ChloeModelsTests(unittest.TestCase):
         value = model_detail(self.root, 'M001', self.api)
         self.assertEqual(len(value['images']), 3)
         self.assertEqual(sum(i['adopted'] for i in value['images']), 2)
+        for image in value['images']:
+            self.assertEqual(image['media']['thumbnailUrl'].split('?')[0], image['media']['url'])
+            if image['adopted']:
+                self.assertEqual(image['media']['originalDimensions'], [32, 48])
         candidate = next(i for i in value['images'] if i['purpose'] == '正面面部' and i['version'] == second['version'])
         self.assertFalse(candidate['adopted'])
         self.assertIn('/shared-models/M001/files/', candidate['sourceHtml'])
@@ -123,6 +130,8 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertEqual((face_image['resource'], face_image['version']), (face['resource_id'], face['version']))
         self.assertEqual(model_file(self.root, 'M001', face_image['media']['key']), Path(face['absolute_file']))
         self.assertEqual(look['media']['key'], Path(first['absolute_file']).relative_to(self.root).as_posix())
+        full_body = next(image for image in look['images'] if image['purpose'] == '全身三视图原图')
+        self.assertEqual(look['media']['thumbnailUrl'], full_body['media']['thumbnailUrl'])
         self.assertEqual(detail['images'], [])
         self.assertIn('造型信息', [x['heading'] for x in look['sections']])
         self.assertNotIn('资产身份', [x['heading'] for x in look['sections']])
@@ -157,6 +166,23 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertEqual(clothing[0]['executions'],['E001','E002'])
         self.assertEqual(model_file(self.root,'M001',clothing[0]['media']['key']),Path(first['absolute_file']))
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        space = SimpleNamespace(root=self.root, api=self.api, runtime=self.base/'runtime', view='chloe-commerce')
+
+        def select(request: Request):
+            request.state.workspace_space = space
+
+        app = FastAPI()
+        app.include_router(router, prefix=self.api, dependencies=[Depends(select)])
+        with TestClient(app) as client:
+            for item, ref in zip(clothing, (first, second)):
+                media = item['media']
+                thumbnail = client.get(media['thumbnailUrl'])
+                self.assertEqual(thumbnail.status_code, 200)
+                self.assertEqual(thumbnail.headers['content-type'], 'image/webp')
+                download = client.get(media['url'], params={'download': True})
+                self.assertEqual(download.content, Path(ref['absolute_file']).read_bytes())
+            self.assertNotEqual(clothing[0]['media']['thumbnailUrl'], clothing[1]['media']['thumbnailUrl'])
+            self.assertEqual(client.get(clothing[0]['media']['thumbnailUrl'].replace('/M001/', '/M002/')).status_code, 404)
         good = self.path.read_text()
         self.path.write_text(good.replace('| 服装参考 |','| 猜测用途 |'))
         with self.assertRaisesRegex(ValueError,'输入用途'):

@@ -37,6 +37,7 @@ export type DirectorSheetImage = FileItem & { page: number; version: string; sou
 export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; history?: DirectorSheetImage[]; record: FileItem | null }
 export interface FileItem {
   thumbnailUrl?: string;
+  originalDimensions?: [number, number];
   productionWorkflow?: ProductionWorkflow;
   productionWorkflows?: ProductionWorkflow[];
   downloadFromPlayer?: boolean;

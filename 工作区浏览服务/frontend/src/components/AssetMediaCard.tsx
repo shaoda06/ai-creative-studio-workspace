@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { PointerTooltip } from './PointerTooltip';
 import { useContext, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { RecordData } from '../api';
+import type { FileItem, RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
 import { FileActions } from './FileActions';
 
@@ -21,7 +21,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const fixedRatioStyle = typeof aspectRatio === 'number' ? { aspectRatio, height: 'auto' } : undefined;
   const naturalRatio = aspectRatio === 'natural';
   const imageStyle = naturalRatio ? { height: 'auto', maxHeight: 'none' } : fixedRatioStyle && { maxHeight: 'none' };
-  const thumbnail = entry && item.media?.thumbnailUrl;
+  const media: FileItem | undefined = item.media;
+  const thumbnail = media?.thumbnailUrl;
+  const originalDimensions = media?.originalDimensions;
+  const shownDimensions = originalDimensions?.join(' × ') ?? (thumbnail ? '未取得' : dimensions || '读取中');
   const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}${selection ? ' asset-media-card-selectable' : ''}${separatePreview ? ' asset-media-card-selectable-preview' : ''}`;
   const selectionButton = selection && <button type="button" className={separatePreview ? 'asset-media-card-select-inline' : 'asset-media-card-select'}
     aria-label={separatePreview ? `选择${title}` : title} aria-pressed={selection.selected} disabled={selection.disabled} onClick={selection.onSelect}>
@@ -34,7 +37,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
       {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={separatePreview ? `查看${title}大图` : undefined}
-        onClick={linked ? undefined : separatePreview ? selection?.onPreview : selection ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
+        onClick={linked ? undefined : separatePreview ? selection?.onPreview : selection ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry || thumbnail || originalDimensions ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         setDimensions(`${width} × ${height}`);
       }} /></Cover> : <div style={fixedRatioStyle} className="cover asset-media-placeholder">
@@ -42,7 +45,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}
       {!entry && <>
-      {!compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{dimensions || '读取中'}</p>}
+      {!compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{shownDimensions}</p>}
       {showFileActions && !compact && item.media && !onDetails && <div className="asset-media-field file-entry-main"><span className="field-label">文件：</span><FileActions url={item.media.url} /></div>}
       {showVersion && version ? <p className="asset-media-field"><span className="field-label">{compact ? '资源版本' : formal ? '采用版本' : '版本'}：</span>{version}</p> : null}
       {!compact && <>

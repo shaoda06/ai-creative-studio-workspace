@@ -75,7 +75,7 @@ function AssemblyPreview({ label, media, empty, onPreview }: { label: string; me
   return <figure className="chloe-assembly-preview">
     <figcaption>{label}</figcaption>
     {media?.url ? <button type="button" aria-label={`查看${label}大图`} onClick={() => onPreview(label, media.url!)}>
-      <img src={media.url} alt={label} loading="lazy" />
+      <img src={media.thumbnailUrl || media.url} alt={label} loading="lazy" />
     </button> : <span className="muted">{empty}</span>}
   </figure>;
 }

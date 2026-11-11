@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
-from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
+from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
 from chloe_documents import MISSING, asset_status, read_document, records, template
 import project_resources as resources
@@ -73,15 +73,13 @@ def asset_cards(root, api, kind):
     for identity, name, path, doc in asset_documents(root, kind):
         base = f'{api}/{kind.endpoint}/{quote(identity)}'
         content = asset_content(root, path, doc, linked_files(root, path, doc), base,
-                                ('audio', 'video') if kind == VOICES else ('image',))
+                                ('audio', 'video') if kind == VOICES else ('image',), include_image_dimensions=False)
         purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
         current = next((image for image in content['images']
                         if image['adopted'] and image['purpose'] == purpose), None)
         card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
         if kind != VOICES:
             card['status'] = asset_status(path, doc)['status']
-            if current:
-                card['media']['thumbnailUrl'] = thumbnail_url(card['media']['url'])
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None
