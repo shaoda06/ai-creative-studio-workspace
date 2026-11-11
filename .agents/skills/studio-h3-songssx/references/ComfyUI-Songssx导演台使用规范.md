@@ -1,6 +1,16 @@
 # ComfyUI-Songssx导演台使用规范
 
-适用于 [SelfLift 标准画布](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.workflow.json)及[配套 API 基准](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.api.json)。素材规划与提示词参阅[上游 Agent 指南](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/main/docs/AGENT_LONG_VIDEO_GUIDE_CN.md)。执行使用[低内存工作流](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector#2-all-in-one-low-memory-video-output)，定制控件按 [fork 的使用说明](https://github.com/shaoda06/ComfyUI-MiniMaxH3-TimelineDirector/blob/f8b8697869429174dee183d02310856f8706e591/README_CN.md)处理。
+适用于 [SelfLift 标准画布](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.workflow.json)及[配套 API 基准](../../studio-h3/references/workflows/Minimax-H3/MiniMax-H3-Songssx导演台-Selflift-标准版.api.json)。低内存节点及定制控件按 [fork 的中文说明](upstream/README_CN.md)核对。
+
+## 上游资料的读取入口
+
+按实际工作流读取随技能保存的上游资料，将适用要求落实到 GEN 时间线、提示词和装配检查。
+
+- **场内原生分段。** 划分或调整 GEN 前，读取[时间框分段](upstream/docs/TIMELINE_SEGMENT_WINDOWS_CN.md)和[有限分段采样](upstream/docs/FINITE_SEGMENT_EXPANSION_CN.md#参考生成)的相关章节，核对分段范围、接缝和素材分配。
+- **原生重叠提示词。** 有入段重叠时，编写、修订和提交前核对实际提示词均须读取[上游首镜规则 §1.3](upstream/docs/MiniMax_H3_循环分段提示词_Agent规范.md#13-下一段-shot-1-必须逐项复现上一段最后重叠镜头)及[后续段写法 §7.2–7.3](upstream/docs/MiniMax_H3_循环分段提示词_Agent规范.md#72-重叠结束后不切镜头)。按装配给出的实际采样区间核对首镜内容与切镜时点。各 GEN 的 Ref2VA 正文分别填写；循环节点的分隔符和自动注入选项按实际调用的节点判断。
+- **手动视频参考与 Guide。** 使用已生成视频做参考或固定 Guide 时，先读[规划台的参考模式](upstream/README_CN.md#基本使用方法)和[长视频 Agent 指南](upstream/docs/AGENT_LONG_VIDEO_GUIDE_CN.md)中适用的重叠、提示词、合并和音频章节。按实际选区与节点产生的绑定核对提示词和参考标签。
+
+各 GEN 的模型格式由[共用 H3 与对应模式指南](../../studio-h3/SKILL.md)维护。资料版本与更新要求见[公共依赖登记](../../studio-entry/维护规范.md#本地适配来源与更新)。
 
 ## 参数选择与装配前询问
 
@@ -65,14 +75,14 @@
 
 ## 场次装配
 
-一次提交一个场次，每个 P 对应一个 GEN。按[共用制作层级](../../studio-storyboard/references/分镜写作规范.md#制作对象场次与分段)提供分段身份、计划新增时长、提示词、准确素材版本和接续意图。首段和直接切镜使用 0 帧重叠。需要连续动作、运镜或声音时，按分镜选取上一段尾部稳定、可辨识的内容作为重叠，按动作和声音的实际长度决定接点。
+一次提交一个场次，每个 P 对应一个 GEN。按[共用制作层级](../../studio-storyboard/references/分镜写作规范.md#制作对象场次与分段)提供分段身份、计划新增时长、提示词、准确素材版本和接续意图。场次分段点是直接切镜时，使用 0 帧重叠。需要连续动作、运镜或声音时，按实际分镜和[时间框的接缝规则](upstream/docs/TIMELINE_SEGMENT_WINDOWS_CN.md#时间与接缝)确定是否重叠及重叠范围。
 
 ### 单段时长与帧数校验
 
-Studio 的标准 Ref2VA 装配按 MiniMax H3 的 4–15 秒、24 fps 规格校验每个 GEN。Songssx 上游节点的单段帧数校验范围为 5–3592 帧，步长为 17 帧。[MiniMax 输出规格](https://github.com/MiniMax-AI/MiniMax-H3#system-overview) · [Songssx 上游节点校验](https://github.com/Songssx/ComfyUI-MiniMaxH3-TimelineDirector/blob/050226d37d25e20d878b47bdf92c8f912afccdaa/minimax_h3_finite_segments.py#L429-L435)
+Studio 的标准 Ref2VA 装配按[共用 H3 的生成段时长](../../studio-h3/SKILL.md#生成段时长)与[上游时间框规则](upstream/docs/TIMELINE_SEGMENT_WINDOWS_CN.md#时间与接缝)校验每个 GEN。以下是 Studio 清单与装配的换算口径。
 
 1. 先检查 `duration`，即扣除入段重叠后计划新增的时长。允许 4–15 秒，含两个端点，支持小数。超出范围的值在换算前报错。
-2. 将 `duration × 24` 加上 `overlap_frames`，取大于或等于该值的最小 `5 + 17n`，使去掉重叠后仍有足够的新增帧。清单填写已对齐的重叠帧数，允许 0、1、5、22、39 等值。规划台会把界面的重叠输入向下对齐，例如 24 帧对齐到 22 帧，48 帧对齐到 39 帧。
+2. 清单的 `overlap_frames` 填实际对齐后的帧数。将 `duration × 24` 加上 `overlap_frames`，按上游帧网格向上对齐，使去掉重叠后仍有足够的新增帧。
 3. 检查对齐后的整个采样窗口，含重叠帧。最短窗口由 4 秒向上对齐得出，为 107 帧。最长为 362 帧，含 362 帧。超出时按分镜缩短该段新增时长、调整重叠或拆段，再重新装配。
 
 | 计划新增时长 | 入段重叠 | 对齐前 | 实际采样窗口 | 校验结果 |
@@ -84,15 +94,13 @@ Studio 的标准 Ref2VA 装配按 MiniMax H3 的 4–15 秒、24 fps 规格校�
 
 提交前核对脚本给出的 P／GEN 映射和帧区间。`generation_frames` 是包含重叠的采样区间，`output_frames` 是扣除重叠后写入成片的区间。两者都包含起始帧，结束帧为下一帧的位置。
 
-有重叠的 GEN 在开头提示词交代上一段尾部的画面、动作与声音，再按实际接点描述新增内容。持续同一镜头时在该镜头内写清动作如何继续；接点确有切镜时，按新镜头写。按[共用 H3](../../studio-h3/SKILL.md)编写各 GEN 的完整 Ref2VA 正文。
-
 ## 素材绑定与检查
 
 当前标准清单支持逐 GEN 的 Ref2VA 独立参考图及场内原生音画接续。每个 GEN 提供实际用到的 1–9 张参考图，`<Picture N>` 按该 GEN 的实际图片顺序编号。调整素材或顺序时同步核对提示词。独立音频、参考视频、手工 Fixed Guide 和导入预设各有上游用途，使用这些输入需有对应的已验证装配入口。
 
 居中裁切关闭时保留整张独立参考图的构图。参考图编码档位继承标准版 `match`，按成片像素面积匹配编码尺寸。`max` 在模型限制内尽量保留参考图尺寸。编码尺寸、参考图裁切与成片尺寸各有对应的控件。
 
-现有准备检查负责合法帧区间、重叠、图片绑定与标签、提示词格式和长度，以及整场输出目标。Agent 负责判断素材用途、接续意图和内容对应，使用脚本结果核对可执行性。
+现有准备检查负责合法帧区间、重叠、图片绑定与标签、提示词格式和长度，以及整场输出目标。Agent 按[上游资料的读取入口](#上游资料的读取入口)核对素材用途、接续意图和实际提示词。场内原生接续按本次分镜及前段提示词核对重叠区内容；使用已生成视频时按实际绑定素材核对。
 
 ## 场次生成任务接口
 
@@ -106,6 +114,10 @@ Studio 的标准 Ref2VA 装配按 MiniMax H3 的 4–15 秒、24 fps 规格校�
 
 ## 取回、恢复与返修边界
 
-低内存采样器负责原生接续、去除重叠画面及合并音轨。开启音频 latent 接续时，重叠处的声音过渡保留在最终音轨里。交付直接使用 `SaveVideo` 输出的一条整场 MP4。共用后台依据原任务的终态和取回凭据做基础登记，有媒体异常或时码疑问时再定点核对。取回失败沿[原任务取回重试](../../studio-workspace-browser/references/固定脚本接口规范.md#后台取回重试)接续，提交状态不明时沿[原任务恢复](../../studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#重新调度与失败恢复)核对。后处理和采用由调用业务负责。
+采样、去重和音频合并查 [fork 的低内存工作流](upstream/README_CN.md#2-全功能合一低内存视频输出)及[原生接续说明](upstream/README_CN.md#有限分段直接-latent-续写)。交付直接使用 `SaveVideo` 输出的一条整场 MP4。共用后台依据原任务的终态和取回凭据做基础登记，有媒体异常或时码疑问时再定点核对。取回失败沿[原任务取回重试](../../studio-workspace-browser/references/固定脚本接口规范.md#后台取回重试)接续，提交状态不明时沿[原任务恢复](../../studio-comfyui/references/ComfyUI-服务配置与任务提交规范.md#重新调度与失败恢复)核对。后处理和采用由调用业务负责。
 
-低内存采样器在合并后清理分段临时文件，没有可恢复的分段 latent 或原位单段重跑入口。已生成的整场 MP4 和原执行记录可用于定位问题及评估返修。局部返修的素材准备、生成范围和接点处理待专项验证后规定。
+### 局部返修
+
+低内存采样器的临时分段随合并清理。以准确的整场 MP4 和原执行记录定位问题，从成片实际画面、动作和声音判断可保留的两侧及替换范围。Agent 根据接点、反馈和实际可用的节点选择局部替换、扩大范围或重新生成整场，必要时与用户确认来源、修改范围和执行方式。
+
+局部替换可独立生成修订内容，再与原片保留区间合成。按需要从保留区间取视频或声音参考，Guide 的绑定和重复部分的处理读[上游资料的读取入口](#上游资料的读取入口)。前后两端视频如何绑定、音画如何接合，按拟用工作流验证后确定。现有场次脚本的输入范围见[素材绑定与检查](#素材绑定与检查)。
