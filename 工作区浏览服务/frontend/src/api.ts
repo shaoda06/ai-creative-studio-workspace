@@ -36,6 +36,7 @@ export interface SceneRound { number: number; created_at: string; note?: string;
 export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean; sourceRecord?: FileItem };
 export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; history?: DirectorSheetImage[]; record: FileItem | null }
 export interface FileItem {
+  thumbnailUrl?: string;
   productionWorkflow?: ProductionWorkflow;
   productionWorkflows?: ProductionWorkflow[];
   downloadFromPlayer?: boolean;

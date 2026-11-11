@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from backend.chloe_overview import fields
+from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
 from chloe_documents import LINK, asset_status, media_reference, read_document, records, template
 import project_resources as resources
@@ -31,7 +32,7 @@ def model_documents(root):
                             {'identity': identity, 'title': name})
         portraits = [row for row in records(doc, '当前采用') if row['用途'] == '正面面部']
         portrait = media_reference(root, path, portraits[0]['资源引用']) if portraits else None
-        if portrait and Path(portrait['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+        if portrait and Path(portrait['file']).suffix.lower() not in IMAGE_EXTENSIONS:
             raise ValueError('正面面部采用必须为PNG、JPEG或WebP图片')
         yield identity, name, path, doc, portrait
 
@@ -42,8 +43,9 @@ def model_cards(root, api):
         media = None
         if portrait:
             key = portrait['resource_id'] + '@' + portrait['version']
+            url = f'{api}/shared-models/{quote(identity)}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'
             media = {'kind': 'image', 'name': name + ' · 正面面部', 'key': key,
-                     'url': f'{api}/shared-models/{quote(identity)}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'}
+                     'url': url, 'thumbnailUrl': thumbnail_url(url)}
         cards.append({'id': identity, 'name': name, 'identity': fields(doc, '资产身份'),
                       'features': fields(doc, '人物特征'), 'media': media, 'status': asset_status(path, doc)['status'],
                       'version': portrait['version'] if portrait else None})
@@ -71,12 +73,15 @@ def listing(request: Request):
 
 
 @router.get('/{identity}/portrait/{resource_id}/{version}')
-def portrait(identity: str, resource_id: str, version: str, request: Request, download: bool = False):
+def portrait(identity: str, resource_id: str, version: str, request: Request, download: bool = False,
+             thumbnail: int | None = None):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
         raise HTTPException(404, '该空间未接入带货共用资产')
     try:
         path = portrait_file(space.root, identity, resource_id, version)
+        if thumbnail is not None and not download:
+            return thumbnail_response(space, path, thumbnail)
         return FileResponse(path, filename=path.name if download else None,
                             headers={'X-Content-Type-Options': 'nosniff'})
     except FileNotFoundError as error:

@@ -21,6 +21,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const fixedRatioStyle = typeof aspectRatio === 'number' ? { aspectRatio, height: 'auto' } : undefined;
   const naturalRatio = aspectRatio === 'natural';
   const imageStyle = naturalRatio ? { height: 'auto', maxHeight: 'none' } : fixedRatioStyle && { maxHeight: 'none' };
+  const thumbnail = entry && item.media?.thumbnailUrl;
   const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}${selection ? ' asset-media-card-selectable' : ''}${separatePreview ? ' asset-media-card-selectable-preview' : ''}`;
   const selectionButton = selection && <button type="button" className={separatePreview ? 'asset-media-card-select-inline' : 'asset-media-card-select'}
     aria-label={separatePreview ? `选择${title}` : title} aria-pressed={selection.selected} disabled={selection.disabled} onClick={selection.onSelect}>
@@ -33,7 +34,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
       {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={separatePreview ? `查看${title}大图` : undefined}
-        onClick={linked ? undefined : separatePreview ? selection?.onPreview : selection ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
+        onClick={linked ? undefined : separatePreview ? selection?.onPreview : selection ? undefined : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         setDimensions(`${width} × ${height}`);
       }} /></Cover> : <div style={fixedRatioStyle} className="cover asset-media-placeholder">

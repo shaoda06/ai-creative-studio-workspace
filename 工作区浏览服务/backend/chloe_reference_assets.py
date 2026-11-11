@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
+from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
 from chloe_documents import MISSING, asset_status, read_document, records, template
 import project_resources as resources
@@ -79,6 +80,8 @@ def asset_cards(root, api, kind):
         card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
         if kind != VOICES:
             card['status'] = asset_status(path, doc)['status']
+            if current:
+                card['media']['thumbnailUrl'] = thumbnail_url(card['media']['url'])
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None
@@ -127,11 +130,13 @@ def asset_router(kind):
 
 
     @router.get('/{identity}/files/{key:path}')
-    def file(identity: str, key: str, request: Request, download: bool = False):
+    def file(identity: str, key: str, request: Request, download: bool = False, thumbnail: int | None = None):
         space = request_space(request)
         try:
             path = asset_file(space.root, identity, key, kind)
-            inline = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'} | resources.KINDS['音频'] | resources.KINDS['视频']
+            if thumbnail is not None and not download:
+                return thumbnail_response(space, path, thumbnail)
+            inline = path.suffix.lower() in IMAGE_EXTENSIONS | resources.KINDS['音频'] | resources.KINDS['视频']
             return FileResponse(path, filename=path.name if download or not inline else None,
                                 headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
         except FileNotFoundError as error:
