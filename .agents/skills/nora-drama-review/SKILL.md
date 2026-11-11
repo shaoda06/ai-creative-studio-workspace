@@ -25,7 +25,7 @@ license: MIT
 | 镜头表达检查或针对实际镜头效果的反馈 | [镜头语言与表达](../studio-creative-techniques/SKILL.md#镜头表达)，核对观看目的、可见过程及相容性；指南验证更新沿其反馈规则，文本检查不等于生成有效，也不扩大媒体查看或项目修订授权 |
 | 转场、特效或动作等技法的实际效果反馈 | [共用反馈复核](../studio-creative-techniques/references/学习与反馈维护规范.md#实际反馈复核)，按主题归属更新原专业参考；文本检查与媒体查看边界沿原任务 |
 | 如何说明问题与复核 | [审查方法](references/review-method.md)；返修归属以[共用规则](../nora-serial-drama/references/制作返修接续规范.md)为准 |
-| 模板感及重复写法 | [反模板方法](references/anti-template-repair.md)，具体表达可按需使用humanizer-zh |
+| 模板感及重复写法 | [反模板方法](references/anti-template-repair.md)，具体表达按[共用中文润色](../studio-creative-techniques/references/对白与场次表演方法.md#中文表达润色)处理 |
 | 用户授权的媒体审查与生产观察 | [生产质量参考](references/production-quality-gates.md)、[项目校准方法](references/project-calibration.md)，仅在主控允许的查看范围内使用 |
 
 ## 完成与边界

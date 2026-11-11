@@ -1,6 +1,6 @@
 ---
 name: studio-imagegen
-description: 共用内置Imagegen生成与编辑工具，说明Agent实际调用、参考输入、原生结果保存和异常恢复；不规定业务图片类型、布局、正式规格或采用流程。
+description: 在本次选用内置 Imagegen 创建或编辑图片、保存原生结果或恢复该次调用时使用。按实际参考顺序、目标比例与授权执行。
 ---
 
 # Studio Imagegen图片生成与编辑

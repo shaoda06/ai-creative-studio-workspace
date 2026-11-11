@@ -1,6 +1,6 @@
 ---
 name: studio-h3-remake
-description: 使用 Viggle Remake Swap 为已有视频替换一名表演者，维护双参考图画布与 API，准备分段、参考绑定、提示词、逐段生成及合片。
+description: 在已有源视频并选择 Viggle Remake Swap 替换一名表演者时使用。准备双参考图、分段和提示词，接续逐段生成、取回与合片。
 ---
 
 # Viggle Remake 单人换人

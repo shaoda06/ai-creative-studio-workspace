@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio Imagegen图片生成与编辑"
-  short_description: "共用内置Imagegen生成与编辑工具，说明Agent实际调用、参考输入、原生结果保存和异常恢复；不规定业务图片类型、布局、正式"
+  short_description: "使用内置 Imagegen 生成或编辑图片，绑定参考图并保存原生结果"
   default_prompt: "使用$studio-imagegen处理当前任务，先确定输入、授权和实际范围。"

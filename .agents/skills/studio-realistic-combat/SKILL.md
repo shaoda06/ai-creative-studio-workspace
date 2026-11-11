@@ -1,6 +1,6 @@
 ---
 name: studio-realistic-combat
-description: 为写实格斗、警匪追逐、动作喜剧及小规模多人战斗提供步法、防守、动力链和真实受力方法。
+description: 在构思、分镜或返修写实格斗、追逐、动作喜剧及多人打斗时使用。处理步法、防守、动力链和真实受力。
 ---
 
 # Studio 写实格斗方法

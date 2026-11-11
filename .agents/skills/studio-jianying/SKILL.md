@@ -1,6 +1,6 @@
 ---
 name: studio-jianying
-description: 共用剪映草稿与归档工具，按明确视频顺序、包内文件名和时间线选择输出ZIP或原生jypack；不决定业务采用、完集状态或剪辑内容。
+description: 在需要按已明确的媒体和顺序生成剪映草稿或打包交接时使用。生成 ZIP 或原生 jypack，维护包内名称、时间线及素材箱。
 ---
 
 # Studio 剪映草稿与打包

@@ -1,11 +1,11 @@
 ---
 name: studio-h3
-description: MiniMax H3 共用提示词模式、正文格式、参考素材语义和具体工作流入口。
+description: 在规划 MiniMax H3 生成模式，或编写、修订与核对 H3 提示词时使用。维护正文格式、参考语义和时长规则，按实际工作流进入专项。
 ---
 
 # Studio H3 共用规则
 
-调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，读取对应的[官方提示词技能](../h3-prompt-writing/SKILL.md)及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
 
 - [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)负责运行组和缓存一采、二采。
 - [Songssx 导演台](../studio-h3-songssx/SKILL.md)负责 GEN 时间线和 SelfLift。

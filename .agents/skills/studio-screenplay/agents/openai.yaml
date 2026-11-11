@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 共用剧本"
-  short_description: "共用剧本正文、台词与声源写法"
+  short_description: "编写、修订或审阅各类视频的剧本正文、动作、实际台词与声源"
   default_prompt: "使用 $studio-screenplay，在当前业务指定的剧本中写清动作、实际台词及声源。"

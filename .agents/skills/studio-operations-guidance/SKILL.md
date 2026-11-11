@@ -1,6 +1,6 @@
 ---
 name: studio-operations-guidance
-description: 通用社交媒体运营二级阶段，为当前制作筛选既有复盘结论，记录适用性、采用及验证目标，不主动返工。
+description: 在制作或准备发布时需要参考既有运营复盘时使用。按当前对象筛选建议，记录采用理由和验证目标。
 ---
 
 # Studio 后续制作参考与指导

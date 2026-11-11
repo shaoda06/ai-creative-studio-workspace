@@ -1,6 +1,6 @@
 ---
 name: studio-archive
-description: 按整个项目归档或恢复 Nora、Iris、Chloe，维护项目标记、索引与浏览页分类，并归档或恢复已核实归属的 Codex 对话；资料留在原位。
+description: 在用户要求归档或恢复整个项目时使用。维护项目标记、索引、浏览页分类及已核实归属的 Codex 对话，资料留在原位。
 ---
 
 # Studio 项目归档

@@ -1,6 +1,6 @@
 ---
 name: studio-qwen-image
-description: 共用Qwen Image 2.1图片工具，指导Agent按模型编写或适配提示词，按明确模式、宽高、种子和参考图装配文生图或图生图请求；不规定业务图种及排版。
+description: 在选用 Qwen Image 2.1 文生图或图生图，需要编写、核对提示词或装配请求时使用。按实际模式、规格、种子及参考图装配。
 ---
 
 # Studio Qwen图片生成与编辑

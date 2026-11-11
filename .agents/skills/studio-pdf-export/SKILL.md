@@ -1,6 +1,6 @@
 ---
 name: studio-pdf-export
-description: 共用Markdown到带水印PDF导出工具，按指定布局和配置嵌入实际图片、生成连续页码并核对文字、水印及比例；不整理业务内容或判断批准。
+description: 在需要把指定 Markdown 版本和实际配图导出为 PDF 时使用。按给定布局、品牌配置和输出位置排版，核对水印、页码和图片比例。
 ---
 
 # Studio PDF导出
