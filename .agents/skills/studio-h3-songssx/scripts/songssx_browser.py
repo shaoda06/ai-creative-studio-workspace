@@ -12,7 +12,8 @@ def songssx_contexts(project, data, workflow, segments, context_for):
     timeline = json.loads(workflow[PLANNER]['inputs']['timeline_data'])
     prepared = timeline if workflow is data['workflow'] else json.loads(data['workflow'][PLANNER]['inputs']['timeline_data'])
     sources = {binding['json-path'][1]: binding['file'] for binding in data['uploads']
-               if binding['node'] == PLANNER and binding['input'] == 'timeline_data'}
+               if binding['node'] == PLANNER and binding['input'] == 'timeline_data'
+               and binding['json-path'][0] == 'images'}
     images = {item['id']: sources[index] for index, item in enumerate(timeline['images'])}
     for row, gen, prepared_gen in zip(segments, timeline['segmentConfig']['segments'], prepared['segmentConfig']['segments'], strict=True):
         context = context_for(row['p'])
@@ -62,6 +63,10 @@ def songssx_scene(project, entry, context_for):
             entry['issues'].append('Songssx 执行检查报告缺失')
         return result
     plan = data.get('video_plan', {})
+    if 'gap_repair' in plan:
+        entry['issues'].append('Songssx 补生成结果是局部片段，接回原片后才可登记为整场')
+        result['recorded'] = False
+        return result
     segments = plan.get('segments', [])
     if (data.get('task_type') != TASK_TYPE or plan.get('workflow_id') != WORKFLOW
             or data.get('record_dir') != key

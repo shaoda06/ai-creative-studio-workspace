@@ -1,7 +1,9 @@
 """Exercise the scene workflow on the real task store with simulated ComfyUI IO."""
+from copy import deepcopy
 from hashlib import sha256
 import json
 from pathlib import Path
+from subprocess import run
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -9,7 +11,8 @@ from unittest.mock import AsyncMock, patch
 from backend.main import SubmissionPlanInput
 from backend.services import comfy_tasks, execution_checks, result_registration, submission_plans
 from prepared_documents import read_journal
-from songssx_workflow import aligned_frames
+from songssx_browser import songssx_scene
+from songssx_workflow import aligned_frames, validate
 
 
 PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
@@ -142,6 +145,103 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 with patch('backend.services.video_records.probe', side_effect=AssertionError('no routine probe')):
                     report = result_registration.register(store, key)
                 self.assertEqual(report['items'][0]['path'], 'out/scene.mp4')
+            finally:
+                await store.close()
+
+    async def test_gap_repair_uploads_two_visual_boundaries_and_collects_only_the_patch(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / 'projects/样本'
+            project.mkdir(parents=True)
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            for side, color in (('before', 'red'), ('after', 'blue')):
+                run(['ffmpeg', '-loglevel', 'error', '-nostdin', '-f', 'lavfi', '-i',
+                     f'color={color}:size=32x32:rate=24', '-frames:v', '3', '-c:v', 'libx264',
+                     str(project / f'{side}.mp4')], check=True, capture_output=True)
+            (project / 'reference.png').write_bytes(b'picture fixture')
+            plan = project / 'plan.json'
+            plan.write_text(json.dumps({'tasks': [{
+                'title': '双边界返修样本', 'task_type': 'video-scene-generation',
+                'record_dir': 'record', 'output': 'out/patch.mp4',
+                'songssx': {'width': 640, 'height': 384, 'seed': 7, 'remote_prefix': 'video/test/patch',
+                            'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': []},
+                            'gap_repair': {'before': 'before.mp4', 'after': 'after.mp4'},
+                            'segments': [{'p': 'P001', 'duration': 4, 'overlap_frames': 0,
+                                          'images': ['reference.png'], 'prompt': PROMPT}]},
+            }]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project=project.name, plan_file=plan.name,
+                                          prepare_only=True, desktop=desktop, thread_id='test')
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            try:
+                with patch.object(store.client, 'upload', side_effect=AssertionError('no preparation upload')):
+                    self.assertEqual((await submission_plans.execute(store, payload))['status'], 'prepared')
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                self.assertEqual(task['video_plan']['gap_repair'], {'before_source_frame': 2, 'replacement_frames': 96})
+                self.assertEqual(task['video_plan']['segments'][0]['output_frames'], [0, 107])
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                with patch.object(store, 'read_session_name', new_callable=AsyncMock):
+                    key = (await store.enqueue(data))['local_task_id']
+
+                def uploaded(_, args, *, source):
+                    return dict(remote={'name': source.name, 'subfolder': 'record', 'type': 'input'},
+                                input_path='record/' + source.name, sha256=sha256(source.read_bytes()).hexdigest())
+
+                with patch.object(store.client, 'upload', side_effect=uploaded) as upload:
+                    bound = await store.prepare(key)
+                self.assertEqual(upload.call_count, 3)
+                timeline = json.loads(bound['402']['inputs']['timeline_data'])
+                clips = timeline['videoClips']
+                self.assertEqual([c['file'] for c in clips], ['record/before.mp4', 'record/after.mp4'])
+                self.assertEqual([c['trimStart'] for c in clips], [2 / 24, 0])
+                self.assertEqual(clips[0]['start'] + clips[0]['duration'], 0)
+                self.assertEqual(clips[1]['start'], timeline['selection']['duration'])
+                self.assertTrue(timeline['videoAudioEnabled'])
+                self.assertEqual([c['hasAudio'] for c in clips], [False, False])
+                self.assertEqual(timeline['images'][0]['file'], 'record/reference.png')
+                self.assertEqual(timeline['segmentConfig']['segments'][0]['images'], ['image-1'])
+                validate(bound, data.video_plan, data.outputs, data.uploads)
+
+                for key_name, value in [('hasAudio', True), ('hasAudio', 0), ('start', 1)]:
+                    invalid = deepcopy(bound)
+                    bad = deepcopy(timeline)
+                    bad['videoClips'][1][key_name] = value
+                    invalid['402']['inputs']['timeline_data'] = json.dumps(bad)
+                    with self.assertRaisesRegex(ValueError, '视频边界须紧贴'):
+                        validate(invalid, data.video_plan, data.outputs, data.uploads)
+                with self.assertRaisesRegex(ValueError, '逐一绑定实际上传目标'):
+                    validate(bound, data.video_plan, data.outputs, data.uploads[:-1])
+                with self.assertRaisesRegex(ValueError, '仅在 gap_repair'):
+                    validate(bound, {k: v for k, v in data.video_plan.items() if k != 'gap_repair'},
+                             data.outputs, data.uploads)
+
+                with patch('backend.services.comfy_tasks.connect', new_callable=AsyncMock), \
+                        patch.object(store, 'watch', new_callable=AsyncMock), \
+                        patch.object(store, 'read_session_name', new_callable=AsyncMock), \
+                        patch.object(store.client, 'submit', return_value={'prompt_id': 'simulated-gap'}) as submit:
+                    receipt = await store.submit(data, key=key, workflow=bound)
+                self.assertEqual(receipt['prompt_id'], 'simulated-gap')
+                submit.assert_called_once()
+                self.assertEqual(submit.call_args.kwargs['workflow'], bound)
+                remote = {'filename': 'patch.mp4', 'subfolder': 'video/test', 'type': 'output'}
+                result = {'state': 'success', 'files': [{'node_id': '404', 'output_key': 'images',
+                                                         'index': 0, 'file': remote}]}
+
+                def download(_, args):
+                    destination = Path(args.output)
+                    destination.parent.mkdir()
+                    destination.write_bytes(b'mock patch')
+                    return {'remote': remote, 'path': args.output, 'bytes': 10}
+
+                with patch.object(store.client, 'download', side_effect=download) as fetch:
+                    await store.finish_collection(key, result)
+                fetch.assert_called_once()
+                self.assertEqual(result_registration.register(store, key)['items'][0]['path'], 'out/patch.mp4')
+                entry = {'songssx_execution': 'record', 'issues': [], 'segments': []}
+                projected = songssx_scene(project, entry, None)
+                self.assertFalse(projected['recorded'])
+                self.assertIn('接回原片', entry['issues'][0])
             finally:
                 await store.close()
 
