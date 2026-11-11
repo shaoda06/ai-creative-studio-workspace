@@ -1,0 +1,3 @@
+interface:
+  display_name: "Studio 视频下载"
+  short_description: "解析视频分享链接，按需用 Chrome 播放器下载并核对原件"

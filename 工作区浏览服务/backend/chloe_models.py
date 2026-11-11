@@ -1,5 +1,6 @@
 """Read Chloe model cards from their sole documents and adopted portrait versions."""
 import html
+import json
 import re
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
@@ -8,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from backend.chloe_overview import fields
+from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
 from chloe_documents import LINK, asset_status, media_reference, read_document, records, template
 import project_resources as resources
@@ -31,9 +33,13 @@ def model_documents(root):
                             {'identity': identity, 'title': name})
         portraits = [row for row in records(doc, '当前采用') if row['用途'] == '正面面部']
         portrait = media_reference(root, path, portraits[0]['资源引用']) if portraits else None
-        if portrait and Path(portrait['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+        if portrait and Path(portrait['file']).suffix.lower() not in IMAGE_EXTENSIONS:
             raise ValueError('正面面部采用必须为PNG、JPEG或WebP图片')
         yield identity, name, path, doc, portrait
+
+
+def portrait_url(base, portrait):
+    return f'{base}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'
 
 
 def model_cards(root, api):
@@ -42,8 +48,9 @@ def model_cards(root, api):
         media = None
         if portrait:
             key = portrait['resource_id'] + '@' + portrait['version']
+            url = portrait_url(f'{api}/shared-models/{quote(identity)}', portrait)
             media = {'kind': 'image', 'name': name + ' · 正面面部', 'key': key,
-                     'url': f'{api}/shared-models/{quote(identity)}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'}
+                     'url': url, 'thumbnailUrl': thumbnail_url(url)}
         cards.append({'id': identity, 'name': name, 'identity': fields(doc, '资产身份'),
                       'features': fields(doc, '人物特征'), 'media': media, 'status': asset_status(path, doc)['status'],
                       'version': portrait['version'] if portrait else None})
@@ -71,12 +78,15 @@ def listing(request: Request):
 
 
 @router.get('/{identity}/portrait/{resource_id}/{version}')
-def portrait(identity: str, resource_id: str, version: str, request: Request, download: bool = False):
+def portrait(identity: str, resource_id: str, version: str, request: Request, download: bool = False,
+             thumbnail: int | None = None):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
         raise HTTPException(404, '该空间未接入带货共用资产')
     try:
         path = portrait_file(space.root, identity, resource_id, version)
+        if thumbnail is not None and not download:
+            return thumbnail_response(space, path, thumbnail)
         return FileResponse(path, filename=path.name if download else None,
                             headers={'X-Content-Type-Options': 'nosniff'})
     except FileNotFoundError as error:
@@ -86,9 +96,9 @@ def portrait(identity: str, resource_id: str, version: str, request: Request, do
 
 
 def model_context(root, identity):
-    for model_id, name, path, doc, _ in model_documents(root):
+    for model_id, name, path, doc, portrait in model_documents(root):
         if model_id == identity:
-            return name, path, doc
+            return name, path, doc, portrait
     raise FileNotFoundError('模特资料不存在：' + identity)
 
 
@@ -141,7 +151,15 @@ def model_files(root, identity, path, doc):
     return allowed
 
 
-def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
+def linked_media(base, key, kind, name):
+    url = base + '/files/' + quote(key, safe='/')
+    media = {'kind': kind, 'name': name, 'key': key, 'url': url}
+    if kind == 'image' and Path(key).suffix.lower() in IMAGE_EXTENSIONS:
+        media['thumbnailUrl'] = thumbnail_url(url)
+    return media
+
+
+def asset_content(root, path, doc, allowed, base, media_kinds=('image',), *, include_image_dimensions=True):
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -152,16 +170,19 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
     for row in records(doc, '参考版本') + records(doc, '当前采用'):
         ref = media_reference(root, path, row['资源引用'])
         suffix = Path(ref['file']).suffix.lower()
-        media_kind = 'image' if suffix in {'.png', '.jpg', '.jpeg', '.webp'} else 'audio' if suffix in resources.KINDS['音频'] else 'video' if suffix in resources.KINDS['视频'] else None
+        media_kind = 'image' if suffix in IMAGE_EXTENSIONS else 'audio' if suffix in resources.KINDS['音频'] else 'video' if suffix in resources.KINDS['视频'] else None
         if media_kind not in media_kinds:
             raise ValueError('参考版本媒体类型不符合本资产要求')
         key = ref['resource_id'] + '@' + ref['version']
         slot = (row['用途'], key)
         if slot not in images:
+            media = linked_media(base, ref['file'], media_kind, row['用途'] + ' · ' + key)
+            if media_kind == 'image' and slot in adopted and include_image_dimensions:
+                metadata = (root / ref['file']).parent / '版本信息.json'
+                facts = json.loads(metadata.read_text('utf-8'))['facts']
+                media['originalDimensions'] = [facts['width'], facts['height']]
             images[slot] = {'purpose': row['用途'], 'resource': ref['resource_id'], 'version': ref['version'],
-                           'adopted': slot in adopted,
-                           'media': {'kind': media_kind, 'name': row['用途'] + ' · ' + key, 'key': ref['file'],
-                                     'url': base + '/files/' + quote(ref['file'], safe='/')},
+                           'adopted': slot in adopted, 'media': media,
                            'sourceHtml': linked_html(row.get('来源或原图引用', '未取得'), source, allowed, base),
                            'execution': row.get('执行编号', '不适用')}
     sections = []
@@ -178,18 +199,22 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
 
 
 def model_detail(root, identity, api):
-    name, path, doc = model_context(root, identity)
+    name, path, doc, portrait = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
     allowed = model_files(root, identity, path, doc)
     content = asset_content(root, path, doc, allowed, base)
+    if portrait:
+        url = thumbnail_url(portrait_url(base, portrait))
+        for image in content['images']:
+            if image['media']['key'] == portrait['file']:
+                image['media']['thumbnailUrl'] = url
     looks = []
     for look_id, look_name, look_path, look_doc in model_looks(root, identity):
         cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图原图'), None)
         media = None
         if cover:
             ref = media_reference(root, look_path, cover['资源引用'])
-            media = {'kind': 'image', 'key': ref['file'], 'name': look_name,
-                     'url': base + '/files/' + quote(ref['file'], safe='/')}
+            media = linked_media(base, ref['file'], 'image', look_name)
         clothing = {}
         for row in records(look_doc, '输入记录'):
             if row['输入用途'] not in {'服装参考', '配饰参考'}:
@@ -198,8 +223,7 @@ def model_detail(root, identity, api):
             reference = ref['resource_id'] + '@' + ref['version']
             if reference not in clothing:
                 clothing[reference] = {'reference': reference, 'executions': [],
-                    'media': {'kind': 'image', 'name': row['输入用途'] + ' · ' + reference, 'key': ref['file'],
-                              'url': base + '/files/' + quote(ref['file'], safe='/')}}
+                    'media': linked_media(base, ref['file'], 'image', row['输入用途'] + ' · ' + reference)}
             if row['执行编号'] not in clothing[reference]['executions']:
                 clothing[reference]['executions'].append(row['执行编号'])
         key = look_path.relative_to(root).as_posix()
@@ -214,7 +238,7 @@ def model_detail(root, identity, api):
 
 
 def model_file(root, identity, key):
-    _, path, doc = model_context(root, identity)
+    _, path, doc, _ = model_context(root, identity)
     if key not in model_files(root, identity, path, doc):
         raise FileNotFoundError('文件未被该模特直接引用')
     return resources.local(root, key)
@@ -239,11 +263,13 @@ def detail(identity: str, request: Request):
 
 
 @router.get('/{identity}/files/{key:path}')
-def linked_file(identity: str, key: str, request: Request, download: bool = False):
+def linked_file(identity: str, key: str, request: Request, download: bool = False, thumbnail: int | None = None):
     space = request_space(request)
     try:
         path = model_file(space.root, identity, key)
-        inline_image = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
+        if thumbnail is not None and not download:
+            return thumbnail_response(space, path, thumbnail)
+        inline_image = path.suffix.lower() in IMAGE_EXTENSIONS
         return FileResponse(path, filename=path.name if download or not inline_image else None,
                             headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
     except FileNotFoundError as error:
@@ -258,7 +284,7 @@ def linked_document(identity: str, path: str, request: Request):
     try:
         file = model_file(space.root, identity, path)
         if file.suffix.lower() == '.md':
-            _, source, doc = model_context(space.root, identity)
+            _, source, doc, _ = model_context(space.root, identity)
             allowed = model_files(space.root, identity, source, doc)
             base = f'{space.api}/shared-models/{quote(identity)}'
             return {'title': file.stem, 'html': linked_html(file.read_text('utf-8-sig'), path, allowed, base)}

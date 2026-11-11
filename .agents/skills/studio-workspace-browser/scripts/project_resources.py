@@ -96,9 +96,7 @@ def index_lock(project):
     with path.with_suffix('.lock').open('a+b') as lock:
         if sys.platform == 'win32':
             import msvcrt
-            lock.seek(0)
-            if not lock.read(1):
-                lock.write(b'0'); lock.flush()
+            # Windows byte-range locks can extend past EOF.
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
         else:
@@ -242,8 +240,17 @@ def facts(path):
         info = json.loads(probe.stdout)
         result['duration_seconds'] = float(info['format']['duration'])
         for stream in info['streams']:
-            if stream['codec_type'] == 'video' and kind == '视频':
+            if stream['codec_type'] == 'video' and kind == '视频' and not stream.get('disposition', {}).get('attached_pic'):
                 result.update(width=stream['width'], height=stream['height'], codec=stream['codec_name'])
+                width, height = stream['width'], stream['height']
+                aspect = stream.get('display_aspect_ratio', 'N/A')
+                ratio = Fraction(aspect.replace(':', '/')) if aspect not in ('N/A', '0:1') else Fraction(width, height)
+                rotation = next((data['rotation'] for data in stream.get('side_data_list', []) if 'rotation' in data), 0)
+                if round(rotation) % 180 == 90:
+                    width, height = height, width
+                    ratio = 1 / ratio
+                result.update(display_width=width, display_height=height,
+                              display_aspect_ratio=f'{ratio.numerator}:{ratio.denominator}')
                 if stream.get('avg_frame_rate') not in (None, '0/0'):
                     result['fps'] = float(Fraction(stream['avg_frame_rate']))
                 break

@@ -71,7 +71,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 
 ### 本工作区技能与风格资源
 
-[统一入口](.agents/skills/studio-entry/SKILL.md)登记核心流程、各业务入口和共用附加能力。[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)和[Krea2风格库](.agents/skills/studio-krea2-style-library/SKILL.md)按项目需要选用。第三方适配资源的来源与许可见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。
+[统一入口](.agents/skills/studio-entry/SKILL.md)登记核心流程、各业务入口和共用附加能力。[视频下载](.agents/skills/studio-video-download/SKILL.md)、[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)和[Krea2风格库](.agents/skills/studio-krea2-style-library/SKILL.md)按项目需要选用。第三方适配资源的来源与许可见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。
 
 | 资源 | 来源与作者 |
 | --- | --- |

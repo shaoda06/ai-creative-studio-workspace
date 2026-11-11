@@ -4,6 +4,7 @@ import json
 import math
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 SKILLS = Path(__file__).resolve().parents[2]
@@ -35,6 +36,10 @@ WIDGETS = {
     403: ('seed', None, 'continue_audio_latent', 'ref_image_size'),
     404: ('filename_prefix', 'format', 'format.codec', 'format.codec.encoding', None),
     407: ('lora_name', 'strength_model'),
+}
+REFERENCE_EXTENSIONS = {
+    'images': {'.png', '.jpg', '.jpeg', '.webp'},
+    'audios': {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wma'},
 }
 
 
@@ -170,17 +175,20 @@ def validate(workflow, video_plan, outputs, uploads):
         raise ValueError('Songssx 的 GEN 数量或帧率不符合装配记录')
     gap = 'gap_repair' in video_plan
     clips = timeline['videoClips']
-    if timeline['audios'] or (not gap and clips):
-        raise ValueError('Songssx 仅在 gap_repair 任务中接收两段边界视频，当前入口不接收独立音频')
-    required_paths = {
-        (PLANNER, 'timeline_data', ('images', index, 'file'))
-        for index in range(len(timeline['images']))
-    }
+    if not gap and clips:
+        raise ValueError('Songssx 仅在 gap_repair 任务中接收两段边界视频')
+    if gap and timeline['audios']:
+        raise ValueError('Songssx 双边界补生成只接收边界画面及独立参考图')
+    if any(item.get('audioMode') != 'reference' for item in timeline['audios']):
+        raise ValueError('Songssx 独立参考音频须使用参考音色模式')
+    asset_ids = {kind: {item['id'] for item in timeline[kind]} for kind in REFERENCE_EXTENSIONS}
+    expected_paths = {(PLANNER, 'timeline_data', (kind, index, 'file'))
+                      for kind in asset_ids for index in range(len(timeline[kind]))}
     if gap:
-        required_paths.update((PLANNER, 'timeline_data', ('videoClips', i, 'file')) for i in range(2))
-    asset_ids = [item['id'] for item in timeline['images']]
+        expected_paths.update((PLANNER, 'timeline_data', ('videoClips', i, 'file')) for i in range(2))
     paths = {(item['node'], item['input'], tuple(item.get('json-path', ()))) for item in uploads}
-    if len(set(asset_ids)) != len(asset_ids) or len(uploads) != len(required_paths) or paths != required_paths:
+    if (any(len(ids) != len(timeline[kind]) for kind, ids in asset_ids.items())
+            or len(uploads) != len(expected_paths) or paths != expected_paths):
         raise ValueError('Songssx 参考素材须逐一绑定实际上传目标')
     if gap:
         repair = video_plan['gap_repair']
@@ -209,17 +217,20 @@ def validate(workflow, video_plan, outputs, uploads):
                 or row['overlap_frames'] != overlap or row['generation_frames'] != [start, end]
                 or row['output_frames'] != [previous, end]):
             raise ValueError(f'GEN {index} 的 P 标识、时间线或接续帧与计划不一致')
-        refs = item['images']
-        if item['audios'] or not minimum_images <= len(refs) <= 9 or len(set(refs)) != len(refs) or not set(refs) <= set(asset_ids):
-            raise ValueError(f'GEN {index} 的参考图分配无效')
         prompt = item['prompt']
         findings = format_findings(prompt, mode='r2v', duration=(end - start) / FPS)
-        labels = {int(number) for number in re.findall(r'<Picture (\d+)>', prompt)}
         if findings:
             raise ValueError(f'GEN {index} 的提示词格式错误：{findings[0]["detail"]}')
         if len(prompt) > PROMPT_CHARACTER_LIMIT:
             raise ValueError(f'GEN {index} 的提示词有 {len(prompt)} 字符，超过 {PROMPT_CHARACTER_LIMIT}')
-        if labels != set(range(1, len(refs) + 1)) or re.search(r'<(?:Audio|Video) \d+>', prompt):
+        for kind, label, minimum, maximum in (('images', 'Picture', minimum_images, 9), ('audios', 'Audio', 0, 3)):
+            refs = item[kind]
+            if not minimum <= len(refs) <= maximum or len(set(refs)) != len(refs) or not set(refs) <= asset_ids[kind]:
+                raise ValueError(f'GEN {index} 的 {label} 参考素材分配无效')
+            labels = {int(number) for number in re.findall(rf'<{label} (\d+)>', prompt)}
+            if labels != set(range(1, len(refs) + 1)):
+                raise ValueError(f'GEN {index} 的 {label} 提示词标签与实际参考素材不符')
+        if re.search(r'<Video \d+>', prompt):
             raise ValueError(f'GEN {index} 的提示词标签与实际参考素材不符')
         validate_shots(prompt, index, end - start, overlap)
         identities.add(row['p'])
@@ -229,6 +240,28 @@ def validate(workflow, video_plan, outputs, uploads):
     if (timeline['selection'] != {'start': 0, 'duration': previous / FPS}
             or inputs['generation_seconds'] != previous / FPS):
         raise ValueError('Songssx 的场次总时长与 GEN 时间线不一致')
+
+
+def reference_audio_duration(path):
+    try:
+        result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+                                 '-show_entries', 'stream=duration:format=duration',
+                                 '-of', 'json', str(path)], capture_output=True, timeout=30)
+    except FileNotFoundError as error:
+        raise ValueError('Songssx 参考音频时长检查需要 ffprobe') from error
+    except subprocess.TimeoutExpired as error:
+        raise ValueError(f'Songssx 读取参考音频时长超时：{path.name}') from error
+    if result.returncode:
+        raise ValueError(f'Songssx 无法读取参考音频：{path.name}')
+    metadata = json.loads(result.stdout)
+    if not metadata['streams']:
+        raise ValueError(f'Songssx 参考音频没有音轨：{path.name}')
+    seconds = metadata['streams'][0].get('duration')
+    if seconds in (None, 'N/A'):
+        seconds = metadata['format'].get('duration')
+    if seconds in (None, 'N/A') or not 2 <= float(seconds) <= 15:
+        raise ValueError(f'Songssx 单条参考音频须为 2 至 15 秒：{path.name}')
+    return float(seconds)
 
 
 def prepare(root, spec, documents):
@@ -265,8 +298,11 @@ def prepare(root, spec, documents):
         if type(scale) not in (int, float) or not .25 <= scale <= 1:
             raise ValueError('一采缩放倍率须在 0.25 至 1 之间')
         timeline.update(secondPassLowresScale=scale, referenceImageCenterCrop=crop)
-    timeline['images'], segments, rows, uploads = [], [], [], []
-    images = {}
+    segments, rows, uploads = [], [], []
+    assets = {kind: {} for kind in REFERENCE_EXTENSIONS}
+    for kind in assets:
+        timeline[kind] = []
+    audio_durations = {}
     end = 0
     for index, entry in enumerate(options['segments'], 1):
         overlap = entry['overlap_frames']
@@ -274,21 +310,31 @@ def prepare(root, spec, documents):
             raise ValueError('GEN 重叠必须是非负整数帧')
         begin = end - overlap
         stop = begin + aligned_frames(entry['duration'], overlap)
-        assigned = []
-        for value in entry['images']:
-            path = input_file(root, value)
-            if path not in images:
-                asset = len(images) + 1
-                images[path] = f'image-{asset}'
-                suffix = path.suffix.lower()
-                if suffix not in ('.png', '.jpg', '.jpeg', '.webp'):
-                    raise ValueError('Songssx 参考图必须是 PNG、JPEG 或 WebP')
-                timeline['images'].append({'id': images[path], 'file': f'待上传/{images[path]}{suffix}', 'name': path.name})
-                uploads.append({'file': str(path), 'node': PLANNER, 'input': 'timeline_data',
-                                'subfolder': record.name, 'response-name': f'上传响应-{asset:03d}.json',
-                                'json-path': ['images', asset - 1, 'file']})
-            assigned.append(images[path])
-        segments.append({'images': assigned, 'audios': [], 'prompt': entry['prompt'],
+        assigned = {'images': [], 'audios': []}
+        for kind, values in (('images', entry['images']), ('audios', entry.get('audios', []))):
+            if not isinstance(values, list):
+                raise ValueError(f'GEN {index} 的 {kind} 须为素材路径数组')
+            for value in values:
+                path = input_file(root, value)
+                if path not in assets[kind]:
+                    slot = len(timeline[kind])
+                    asset_id = f'{kind[:-1]}-{slot + 1}'
+                    suffix = path.suffix.lower()
+                    if suffix not in REFERENCE_EXTENSIONS[kind]:
+                        raise ValueError(f'Songssx 不支持 {kind} 素材格式：{path.name}')
+                    material = {'id': asset_id, 'file': f'待上传/{asset_id}{suffix}', 'name': path.name}
+                    if kind == 'audios':
+                        material['audioMode'] = 'reference'
+                        audio_durations[asset_id] = reference_audio_duration(path)
+                    timeline[kind].append(material)
+                    assets[kind][path] = asset_id
+                    uploads.append({'file': str(path), 'node': PLANNER, 'input': 'timeline_data',
+                                    'subfolder': record.name, 'response-name': f'上传响应-{len(uploads) + 1:03d}.json',
+                                    'json-path': [kind, slot, 'file']})
+                assigned[kind].append(assets[kind][path])
+        if sum(audio_durations[asset] for asset in assigned['audios']) > 15:
+            raise ValueError(f'GEN {index} 的参考音频总时长不能超过 15 秒')
+        segments.append({**assigned, 'prompt': entry['prompt'],
                          'startFrame': begin, 'endFrame': stop})
         rows.append({'p': entry['p'], 'gen': index, 'planned_seconds': entry['duration'],
                      'generation_frames': [begin, stop], 'output_frames': [end, stop],

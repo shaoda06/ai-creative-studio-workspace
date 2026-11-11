@@ -11,30 +11,32 @@ def songssx_contexts(project, data, workflow, segments, context_for):
 
     timeline = json.loads(workflow[PLANNER]['inputs']['timeline_data'])
     prepared = timeline if workflow is data['workflow'] else json.loads(data['workflow'][PLANNER]['inputs']['timeline_data'])
-    sources = {binding['json-path'][1]: binding['file'] for binding in data['uploads']
-               if binding['node'] == PLANNER and binding['input'] == 'timeline_data'
-               and binding['json-path'][0] == 'images'}
-    images = {item['id']: sources[index] for index, item in enumerate(timeline['images'])}
+    media_types = (('images', 'Picture', 'image'), ('audios', 'Audio', 'audio'))
+    slots = {(binding['json-path'][0], binding['json-path'][1]): binding['file'] for binding in data['uploads']
+             if binding['node'] == PLANNER and binding['input'] == 'timeline_data'}
+    sources = {pool: {item['id']: slots[pool, index] for index, item in enumerate(timeline.get(pool, []))}
+               for pool, _, _ in media_types}
     for row, gen, prepared_gen in zip(segments, timeline['segmentConfig']['segments'], prepared['segmentConfig']['segments'], strict=True):
         context = context_for(row['p'])
         chinese = row.get('prompt_zh', '') if gen['prompt'] == prepared_gen['prompt'] else ''
         context.update(shotTimingSource='plan', prompts={'english': gen['prompt'], 'chinese': chinese},
                        references={'common': [], 'segment': []})
-        for index, identity in enumerate(gen['images'], 1):
-            key = images[identity]
-            root = project
-            if key.startswith('@shared/'):
-                root = scope_workspace(project) / SHARED_DIRECTORY
-                key = key.removeprefix('@shared/')
-            source = resolve_file(root, project_file(root, key, recorded=True))
-            item = {'name': source.name, 'label': f'<Picture {index}>', 'kind': 'image'}
-            if source.is_file():
-                url = quote(source.relative_to(root).as_posix(), safe='/-._~')
-                item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
-            else:
-                item['missing'] = True
-                context['issues'].append('该次输入原素材缺失：' + source.name)
-            context['references']['segment'].append(item)
+        for pool, label, kind in media_types:
+            for index, identity in enumerate(gen.get(pool, []), 1):
+                key = sources[pool][identity]
+                root = project
+                if key.startswith('@shared/'):
+                    root = scope_workspace(project) / SHARED_DIRECTORY
+                    key = key.removeprefix('@shared/')
+                source = resolve_file(root, project_file(root, key, recorded=True))
+                item = {'name': source.name, 'label': f'<{label} {index}>', 'kind': kind}
+                if source.is_file():
+                    url = quote(source.relative_to(root).as_posix(), safe='/-._~')
+                    item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+                else:
+                    item['missing'] = True
+                    context['issues'].append('该次输入原素材缺失：' + source.name)
+                context['references']['segment'].append(item)
         yield context
 
 

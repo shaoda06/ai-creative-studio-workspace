@@ -351,8 +351,10 @@ try {
     await compactAsset.getByText('资源版本：V002', { exact: true }).waitFor();
     await contained(compactAsset, `${width}px / 紧凑图片卡片`);
     assert.equal(await compactAsset.getByRole('link').count(), 0);
+    assert.equal(await compactAsset.locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
     await compactAsset.getByRole('button').click();
     await page.getByRole('dialog').getByRole('link', { name: '下载', exact: true }).waitFor();
+    assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'), '/component-samples/image.svg');
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     const entryImageCards = showcase.locator('.asset-media-card-entry:not(.asset-media-card-selectable)');
     assert.equal(await entryImageCards.count(), 4);
@@ -368,8 +370,11 @@ try {
     const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
     assert.equal(await entryLink.getAttribute('href'),'/');
     assert.equal(await entryLink.locator('button,a').count(),0);
+    assert.equal(await entryImageCards.first().locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
     await entryImageCards.first().getByRole('button').click();
-    await page.getByRole('dialog').getByRole('link',{name:'下载',exact:true}).waitFor();
+    const imageDownload = page.getByRole('dialog').getByRole('link',{name:'下载',exact:true});
+    assert.equal(new URL(await imageDownload.getAttribute('href')).search, '?download=true');
+    assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'), '/component-samples/image.svg');
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     const actionCard=entryImageCards.filter({hasText:'带声音的入口卡片长标题'});
     assert.equal(await actionCard.locator('a button').count(),0);
@@ -396,9 +401,12 @@ try {
     const previewChoice = showcase.getByRole('button', { name: '选择可放大的选项', exact: true });
     await previewChoice.click();
     assert.equal(await previewChoice.getAttribute('aria-pressed'), 'true');
-    await showcase.getByRole('button', { name: '查看可放大的选项大图', exact: true }).click();
+    const zoomChoice = showcase.getByRole('button', { name: '查看可放大的选项大图', exact: true });
+    assert.equal(await zoomChoice.locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
+    await zoomChoice.click();
     const zoomedChoice = page.getByRole('dialog', { name: '全屏图片示例', exact: true });
     await zoomedChoice.waitFor();
+    assert.equal(await zoomedChoice.locator('img').getAttribute('src'), '/component-samples/image.svg');
     await page.keyboard.press('Escape');
     await zoomedChoice.waitFor({ state: 'hidden' });
     assert.equal(await previewChoice.getAttribute('aria-pressed'), 'true');
@@ -488,7 +496,8 @@ try {
     await dimensionsCard.getByText('尺寸：',{exact:true}).waitFor();
     assert.equal(await dimensionsCard.locator('.asset-media-field').count(),1);
     assert.equal(await dimensionsCard.getByText('读取中',{exact:true}).count(),0);
-    assert.match(await dimensionsCard.locator('.asset-media-field').innerText(), /^尺寸：\s*\d+ × \d+$/);
+    assert.match(await dimensionsCard.locator('.asset-media-field').innerText(), /^尺寸：\s*1280 × 720$/);
+    assert.equal(await dimensionsCard.locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
     assert.equal(await dimensionsCard.locator('.file-entry-main').count(),0);
     await contained(dimensionsCard,`${width}px / 仅尺寸图片卡`);
     const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});

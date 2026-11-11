@@ -1,5 +1,6 @@
 import { useChloeScope } from './chloeScope';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -23,34 +24,49 @@ export const referenceAssetKinds = {
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
 
+export function useChloeAccessoryFilter<T extends { type?: string | null }>(cards: T[]) {
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const types = Array.from(new Set(cards.flatMap(card => card.type ? [card.type] : [])))
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const activeTypes = types.filter(type => selectedTypes.includes(type));
+  const visibleCards = activeTypes.length ? cards.filter(card => card.type && activeTypes.includes(card.type)) : cards;
+  const setTypeChecked = (type: string, checked: boolean) => {
+    setSelectedTypes(previous => checked ? [...previous, type] : previous.filter(value => value !== type));
+  };
+  return { types, activeTypes, visibleCards, setTypeChecked };
+}
+
+export function ChloeAccessoryTypes({ types, activeTypes, setTypeChecked }: {
+  types: string[]; activeTypes: string[];
+  setTypeChecked: (type: string, checked: boolean) => void;
+}) {
+  return <fieldset className="chloe-accessory-types"><legend>按类型筛选</legend>
+    {types.map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
+      onChange={event => setTypeChecked(type, event.target.checked)} />{type}</label>)}
+  </fieldset>;
+}
+
+export function ChloeAccessoryColumns({ cards }: { cards: ReactNode[] }) {
+  return <div className="asset-media-grid chloe-accessory-columns">{[0, 1, 2].map(column =>
+    <div className="chloe-accessory-column" key={column}>{cards.filter((_, index) => index % 3 === column)}</div>)}</div>;
+}
+
 export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: ReferenceAssetKind; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
   const { api, page } = useChloeScope();
   const query = useQuery({queryKey:['chloe-reference-assets',kind,api],queryFn:()=>get<ReferenceAssetCard[]>(`${api}/${endpoint}`),refetchInterval:5000});
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const cards = query.data || [];
-  const types = kind === 'accessories'
-    ? Array.from(new Set(cards.flatMap(card => card.type ? [card.type] : []))).sort((a,b) => a.localeCompare(b,'zh-CN'))
-    : [];
-  const activeTypes = types.filter(type => selectedTypes.includes(type));
-  const visibleCards = activeTypes.length ? cards.filter(card => card.type && activeTypes.includes(card.type)) : cards;
+  const { visibleCards, ...filter } = useChloeAccessoryFilter(kind === 'accessories' ? cards : []);
   const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
     to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
     item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {types.length > 0 && <fieldset className="chloe-accessory-types"><legend>按类型筛选</legend>
-      {types.map(type => <label key={type}><input type="checkbox" checked={selectedTypes.includes(type)}
-        onChange={event => {
-          const checked = event.target.checked;
-          setSelectedTypes(previous => checked ? [...previous,type] : previous.filter(value => value !== type));
-        }} />{type}</label>)}
-    </fieldset>}
-    {query.data && (visibleCards.length ? kind === 'accessories'
-      ? <div className="asset-media-grid chloe-accessory-columns">{[0,1,2].map(column =>
-        <div className="chloe-accessory-column" key={column}>{visibleCards.filter((_,index) => index % 3 === column).map(renderCard)}</div>)}</div>
-      : <div className="asset-media-grid">{visibleCards.map(renderCard)}</div>
+    {filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}
+    {query.data && (cards.length ? kind === 'accessories'
+      ? <ChloeAccessoryColumns cards={visibleCards.map(renderCard)} />
+      : <div className="asset-media-grid">{cards.map(renderCard)}</div>
       : <p className="muted">暂无{label}资料。</p>)}
   </>;
 }

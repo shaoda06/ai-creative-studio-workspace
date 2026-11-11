@@ -20,14 +20,16 @@ const server = await createServer({configFile:false,root:frontend,plugins:[react
 await server.listen();
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
-const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
+const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','参考视频','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
 const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
-const fixtureAccessories = Array.from({length:6},(_,i)=>fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`));
-fixtureAccessories.push(fixtureAsset('C007','制作中配饰','制作中'));
+const fixtureAccessories = Array.from({length:6},(_,i)=>({
+  ...fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`), type:i%2 === 0 ? '帽饰' : '包袋',
+}));
+fixtureAccessories.push({...fixtureAsset('C007','制作中配饰','制作中'), type:'首饰'});
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
@@ -42,7 +44,7 @@ try {
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
       if (path.startsWith('/api/assembly-fixture/')) {
         const width = path.endsWith('-front') ? 90 : 120;
-        const height = path.endsWith('/O001') ? 240 : /-(front|body)$/.test(path) ? 120 : 100;
+        const height = /\/(O001|C003)$/.test(path) ? 240 : /-(front|body)$/.test(path) ? 120 : 100;
         return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#edf5ef"/></svg>`});
       }
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
@@ -51,7 +53,7 @@ try {
         {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
         {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
       ]}});
-      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
+      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes','/api/workspaces/account-demo/shared-reference-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-hair') return route.fulfill({json:showAssemblyFixtures ? fixtureHair : []});
       if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
@@ -119,7 +121,8 @@ try {
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'装配');
     await page.getByRole('region',{name:'当前选择',exact:true}).waitFor();
     await page.goBack();
-    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='声音');
+    await page.getByText('暂无参考视频。', {exact:true}).waitFor();
+    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'参考视频');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
@@ -279,7 +282,43 @@ try {
     await accessoryChoice(0).waitFor();
     assert.equal(await dialog.getByText('C007 · 制作中配饰',{exact:true}).count(),0);
     assert.ok(await confirm.isDisabled());
-    for (let index=0; index<5; index++) {
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('.chloe-accessory-columns img')).filter(image => image.naturalWidth > 0).length === 6);
+    const [shortCard, tallCard, followingCard] = await Promise.all(['C001','C003','C004'].map(id =>
+      dialog.locator('article').filter({has:page.getByRole('img',{name:id,exact:true})}).boundingBox()));
+    assert.ok(shortCard.height < tallCard.height && followingCard.y < tallCard.y + tallCard.height);
+    const filters = dialog.getByRole('group',{name:'按类型筛选'});
+    const [filterBox, confirmBox] = await Promise.all([filters.boundingBox(),confirm.boundingBox()]);
+    assert.ok(filterBox.x + filterBox.width <= confirmBox.x &&
+      Math.abs(filterBox.y + filterBox.height / 2 - confirmBox.y - confirmBox.height / 2) <= 1);
+    assert.equal(await dialog.getByRole('button',{name:'筛选',exact:true}).count(),0);
+    if (height === 640) {
+      const footerVisibility = await dialog.evaluate(element => {
+        const filterBox = element.querySelector('fieldset');
+        const visible = () => {
+          const dialogBox = element.getBoundingClientRect();
+          const bounds = filterBox.getBoundingClientRect();
+          return bounds.top >= dialogBox.top && bounds.bottom <= dialogBox.bottom;
+        };
+        element.scrollTop = 0;
+        const before = visible();
+        element.scrollTop = 90;
+        return {before, after:visible(), scrollTop:element.scrollTop};
+      });
+      assert.ok(footerVisibility.scrollTop > 0 && footerVisibility.before && footerVisibility.after);
+    }
+    await accessoryChoice(0).click();
+    const bagFilter = filters.getByRole('checkbox',{name:'包袋',exact:true});
+    const hatFilter = filters.getByRole('checkbox',{name:'帽饰',exact:true});
+    assert.equal(await filters.getByRole('checkbox',{name:'首饰',exact:true}).count(),0);
+    await bagFilter.check();
+    assert.equal(await accessoryChoice(0).count(),0);
+    assert.equal(await accessoryChoice(1).count(),1);
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 1/5');
+    await hatFilter.check();
+    assert.equal(await accessoryChoice(0).count(),1);
+    await hatFilter.uncheck();
+    await bagFilter.uncheck();
+    for (let index=1; index<5; index++) {
       await accessoryChoice(index).click();
       assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),`选择配饰 ${index+1}/5`);
     }
@@ -292,6 +331,9 @@ try {
     await accessoryChoice(4).click();
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 4/5');
     await accessoryChoice(5).click();
+    await bagFilter.check();
+    assert.equal(await accessoryChoice(0).count(),0);
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 5/5');
     await confirm.click();
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 5/5');
     assert.equal(await choose('添加配饰').count(),0);

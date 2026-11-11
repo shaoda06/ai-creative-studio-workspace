@@ -30,6 +30,7 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 | Markdown与实际配图的带水印PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
 | 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 外部浏览器任务、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
+| 从用户指定的作品链接取得视频文件 | [视频下载](../studio-video-download/SKILL.md) |
 | 指定视频的字幕、转写或画面分析 | [视频读取](../studio-video-study/SKILL.md) |
 | 共用提示词的收录、检索和整理 | [提示词管理](../studio-prompt-library/SKILL.md) |
 | 按名称或视觉要求检索、预览、复制风格，或维护风格库 | [Krea2 风格库](../studio-krea2-style-library/SKILL.md) |

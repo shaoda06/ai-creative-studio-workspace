@@ -8,8 +8,10 @@ from fastapi.responses import FileResponse
 
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
+from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
 from chloe_documents import MISSING, asset_status, read_document, records, template
+from chloe_init import asset_template_skill
 import project_resources as resources
 
 @dataclass
@@ -36,7 +38,7 @@ def asset_documents(root, kind):
         if identity in seen:
             raise ValueError(kind.label+'编号重复：' + identity)
         seen.add(identity)
-        doc = read_document(root, path, template('chloe-assets', kind.label+'说明模板.md'),
+        doc = read_document(root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
                             {'identity': identity, 'title': name})
         yield identity, name, path, doc
 
@@ -72,7 +74,7 @@ def asset_cards(root, api, kind):
     for identity, name, path, doc in asset_documents(root, kind):
         base = f'{api}/{kind.endpoint}/{quote(identity)}'
         content = asset_content(root, path, doc, linked_files(root, path, doc), base,
-                                ('audio', 'video') if kind == VOICES else ('image',))
+                                ('audio', 'video') if kind == VOICES else ('image',), include_image_dimensions=False)
         purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
         current = next((image for image in content['images']
                         if image['adopted'] and image['purpose'] == purpose), None)
@@ -127,11 +129,13 @@ def asset_router(kind):
 
 
     @router.get('/{identity}/files/{key:path}')
-    def file(identity: str, key: str, request: Request, download: bool = False):
+    def file(identity: str, key: str, request: Request, download: bool = False, thumbnail: int | None = None):
         space = request_space(request)
         try:
             path = asset_file(space.root, identity, key, kind)
-            inline = path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'} | resources.KINDS['音频'] | resources.KINDS['视频']
+            if thumbnail is not None and not download:
+                return thumbnail_response(space, path, thumbnail)
+            inline = path.suffix.lower() in IMAGE_EXTENSIONS | resources.KINDS['音频'] | resources.KINDS['视频']
             return FileResponse(path, filename=path.name if download or not inline else None,
                                 headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
         except FileNotFoundError as error:

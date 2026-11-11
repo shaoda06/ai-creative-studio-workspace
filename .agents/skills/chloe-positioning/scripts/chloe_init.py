@@ -21,7 +21,12 @@ ASSETS = {
     '造型': ('共用素材/造型', 'L', '造型说明.md'),
     '场景': ('共用素材/场景', 'S', '场景说明.md'),
     '声音': ('共用素材/声音', 'A', '声音说明.md'),
+    '参考视频': ('共用素材/参考视频', 'RV', '参考视频说明.md'),
 }
+
+
+def asset_template_skill(kind):
+    return {'商品': 'chloe-selection', '参考视频': 'chloe-reference-videos'}.get(kind, 'chloe-assets')
 
 
 def workspace_path(value):
@@ -134,9 +139,8 @@ def initialize_asset(value, kind, identity, title):
     directory, prefix, filename = ASSETS[kind]
     with resources.index_lock(owner):
         asset = named_folder(owner / directory, identity, title, prefix)
-        skill = 'chloe-selection' if kind == '商品' else 'chloe-assets'
         template = filename.replace('.md', '模板.md')
-        write_template(asset / filename, skill, template, identity=identity, title=title, kind=kind)
+        write_template(asset / filename, asset_template_skill(kind), template, identity=identity, title=title, kind=kind)
     return asset
 
 
@@ -155,7 +159,7 @@ def main():
     asset = commands.add_parser('asset', help='建立商品或共用资产说明；不复制媒体')
     asset.add_argument('--project-name', required=True, help='所属已建档项目的准确目录名')
     asset.add_argument('--kind', choices=ASSETS, required=True)
-    asset.add_argument('--id', required=True, help='G/M/H/O/C/L/S/A 加正整数编号，例如 M001')
+    asset.add_argument('--id', required=True, help='G/M/H/O/C/L/S/A/RV 加正整数编号，例如 M001 或 RV001')
     asset.add_argument('--name', required=True)
     args = parser.parse_args()
     if args.action == 'workspace':

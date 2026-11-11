@@ -281,6 +281,11 @@ class ChloeReviewTest(unittest.TestCase):
         for kind, (_, prefix, filename) in ASSETS.items():
             if kind == '商品': continue
             asset = initialize_asset(self.root, kind, prefix+'001', '测试')/filename
+            if kind == '参考视频':
+                asset.write_text(asset.read_text().replace('| 登记依据 | 未取得 |',
+                    '| 登记依据 | 用户确认收录；'+self.verification_link(asset)+' |'))
+                checked.append(asset)
+                continue
             asset.write_text(asset.read_text().replace('| 来源说明 | 待核实 |', '| 来源说明 | 用户资料；调整依据：'+self.verification_link(asset)+' |'))
             self.append(asset, '执行记录', ['E001', '素材导入', '无', '本地', '不适用', '不适用',
                         '用户授权示例', '未取得', '未取得', '未取得', '准备中', self.verification_link(asset)])

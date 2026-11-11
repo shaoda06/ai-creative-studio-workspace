@@ -47,6 +47,7 @@ const audio: FileItem = { kind: 'audio', name: '示例提示音', key: 'tone.wav
 const video: FileItem = { kind: 'video', name: '示例视频', key: 'video.webm', url: '/component-samples/video.webm' };
 const imageDetails: FileItem = { kind: 'document', name: '图片详情示例', key: 'asset-details-demo', doc: { html: '<p>本地图片详情示例。</p>' } };
 const imageRecord = { type: '示例参考图', media: image, version: 'v1.0', statusHtml: '<span class="status-badge status-gray">示例</span>', scope: '仅供组件展示' };
+const thumbnailRecord = { ...imageRecord, media: { ...image, thumbnailUrl: `${image.url}?thumbnail=sample` } };
 const videoRecord: VideoItem = { key: 'sample-video', url: video.url!, stage: '一采', run: 'R001', approved: true, candidateNumber: 1, fileRevision: 'sample-1', deliveryStatus: '已取回', taskStatus: '已完成', checkedAt: '' };
 const segments = [{ id: 'P001', duration: 2, scriptHtml: '', videos: [videoRecord] }, { id: 'P002', duration: 3, scriptHtml: '', videos: [] }];
 const sampleDoc = { html: '<h2 id="sample-text">正文与代码</h2><p>这是一份示例文档。</p><pre><code>可以复制这段示例文字。</code></pre><h2 id="sample-end">附属资料</h2><p>展开下方其他资料查看目录。</p>', headerHtml: '<p>作者：演示</p><p>用途：查看折叠信息</p>', groups: [{ name: '示例附件', files: [{ kind: 'document', name: '附属说明', doc: { html: '<p>仅供演示的附属说明。</p>' } }] }] };
@@ -200,8 +201,8 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="外层已命名的采用图" item={imageRecord} revision={1} formal hideTitle />
         <AssetMediaCard title="外层已命名的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle />
       </ComponentExample>
-      <ComponentExample title="只显示尺寸的图片卡片" rule="showFileActions与showVersion默认开启，可分别关闭文件操作与版本字段；尺寸与图片预览不受影响。" usage="Chloe模特图片页当前采用图">
-        <AssetMediaCard title="仅保留尺寸的采用图" item={{media:image,version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
+      <ComponentExample title="只显示尺寸的图片卡片" rule="showFileActions与showVersion可分别关闭文件操作与版本字段。卡面加载缩略图时，尺寸读取原图数据，点开预览读取原图。" usage="Chloe 模特、造型与图片资产详情的采用图">
+        <AssetMediaCard title="仅保留尺寸的采用图" item={{media:{...thumbnailRecord.media,originalDimensions:[1280,720]},version:'V003'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
         <AssetMediaCard title="仅保留尺寸的空图片" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle showFileActions={false} showVersion={false} />
       </ComponentExample>
       <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe共用资产入口封面、参考图、正式图及其他版本">
@@ -209,25 +210,25 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="16:9空图片区域" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle aspectRatio={16 / 9} />
         <AssetMediaCard title="按原图比例展示" item={imageRecord} revision={1} formal hideTitle aspectRatio="natural" />
       </ComponentExample>
-      <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。默认卡片不变；entry传入to时整卡作为链接，图片不再单独打开预览，未传to时有图仍可预览。" usage="Chloe模特列表">
-        <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...imageRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
+      <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。有缩略图地址时用它展示卡面，预览和下载使用原图。entry传入to时整卡作为链接。" usage="Chloe模特、发型、服装、配饰与场景列表">
+        <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...thumbnailRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
         <AssetMediaCard title="带声音的入口卡片长标题：试听按钮不会跳转" item={imageRecord} revision={1} entry to="/"
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled playing={sound.playingId==='entry'} progress={sound.currentId==='entry' ? sound.progress : 0} onClick={()=>sound.toggle('entry',audio.url!)} />} />
         <AssetMediaCard title="未关联声音的入口卡片" item={{emptyLabel:'尚未采用图片'}} revision={1} entry to="/"
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
-      <ComponentExample title="图片选择卡片" rule="暂选时显示蒙版与对勾。需要看大图时，点击图片打开预览，用标题旁按钮选择。无可用图片时可禁用。" usage="Chloe 装配资产选择">
+      <ComponentExample title="图片选择卡片" rule="暂选时显示蒙版与对勾。卡面支持缩略图，点击图片打开原图，用标题旁按钮选择。无可用图片时可禁用。" usage="Chloe 装配资产选择">
         <div className="asset-media-grid">
           <AssetMediaCard title="单选图片甲" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
           <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
           <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,disabled:true,onSelect:()=>{}}} />
-          <AssetMediaCard title="可放大的选项" item={imageRecord} revision={1} entry
+          <AssetMediaCard title="可放大的选项" item={thumbnailRecord} revision={1} entry
             selection={{selected:selectedImage==='preview',onSelect:()=>setSelectedImage('preview'),onPreview:()=>setFullscreenImage(true)}} />
         </div>
       </ComponentExample>
-      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、缩略图和资源版本。无图保留紧凑图片区域及提示；有图时点击图片在公共预览中查看和下载。" usage="Iris 已采用素材">
-        <AssetMediaCard title="A001 · 已采用示例" item={{ ...imageRecord, version: 'V002' }} revision={1} formal compact />
+      <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、图片预览和资源版本。无图保留紧凑图片区域及提示；提供缩略图地址时卡面使用缩略图，点击查看或下载原图。" usage="Iris 已采用素材、Chloe 参考图及其他版本">
+        <AssetMediaCard title="A001 · 已采用示例" item={{ ...thumbnailRecord, version: 'V002' }} revision={1} formal compact />
         <AssetMediaCard title="A002 · 无图示例" item={{}} revision={1} compact />
       </ComponentExample>
       <ComponentExample title="音视频卡片与试听" rule="试听播放2秒轻提示音，可暂停；视频入口打开公共预览。无音频时按钮禁用。" usage="参考音视频、人物音色">
