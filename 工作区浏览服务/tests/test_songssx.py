@@ -33,7 +33,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 'record_dir': 'record', 'output': 'out/scene.mp4',
                 'songssx': {'width': 640, 'height': 384, 'reference_image_center_crop': False,
                             'lowres_scale': .6, 'seed': 7, 'remote_prefix': 'video/test/scene',
-                            'segments': [{'p': f'P{i:03d}', 'duration': 5, 'overlap_frames': overlap,
+                            'segments': [{'p': f'P{i:03d}', 'duration': 15, 'overlap_frames': overlap,
                                           'images': [source.name], 'prompt': PROMPT, 'prompt_zh': f'第{i}段参考。'}
                                          for i, overlap in enumerate((0, 0, 22), 1)]},
             }]}))
@@ -47,8 +47,11 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual((await submission_plans.execute(store, payload))['status'], 'prepared')
                 self.assertEqual(store.rows, {})
                 task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
-                self.assertEqual([seg['overlap_frames'] for seg in task['video_plan']['segments']], [0, 0, 22])
-                self.assertEqual(task['video_plan']['segments'][2]['prompt_zh'], '第3段参考。')
+                segments = task['video_plan']['segments']
+                self.assertEqual([seg['overlap_frames'] for seg in segments], [0, 0, 22])
+                self.assertEqual([seg['generation_frames'] for seg in segments], [[0, 362], [362, 724], [702, 1098]])
+                self.assertEqual([seg['output_frames'] for seg in segments], [[0, 362], [362, 724], [724, 1098]])
+                self.assertEqual(segments[2]['prompt_zh'], '第3段参考。')
                 self.assertEqual(len(task['uploads']), 1)
                 self.assertEqual(task['workflow']['331']['inputs']['model'], ['407', 0])
                 self.assertNotIn('343', task['workflow'])
