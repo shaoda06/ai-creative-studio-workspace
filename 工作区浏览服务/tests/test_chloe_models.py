@@ -75,14 +75,20 @@ class ChloeModelsTests(unittest.TestCase):
         value = model_detail(self.root, 'M001', self.api)
         self.assertEqual(len(value['images']), 3)
         self.assertEqual(sum(i['adopted'] for i in value['images']), 2)
+        card = model_cards(self.root, self.api)[0]
         for image in value['images']:
-            self.assertEqual(image['media']['thumbnailUrl'].split('?')[0], image['media']['url'])
+            media = image['media']
+            if image['purpose'] == '正面面部' and image['adopted']:
+                self.assertEqual(media['thumbnailUrl'], card['media']['thumbnailUrl'])
+                self.assertNotEqual(media['url'], card['media']['url'])
+            else:
+                self.assertEqual(media['thumbnailUrl'].split('?')[0], media['url'])
             if image['adopted']:
-                self.assertEqual(image['media']['originalDimensions'], [32, 48])
+                self.assertEqual(media['originalDimensions'], [32, 48])
         candidate = next(i for i in value['images'] if i['purpose'] == '正面面部' and i['version'] == second['version'])
         self.assertFalse(candidate['adopted'])
         self.assertIn('/shared-models/M001/files/', candidate['sourceHtml'])
-        self.assertEqual(model_cards(self.root, self.api)[0]['version'], first['version'])
+        self.assertEqual(card['version'], first['version'])
         self.assertEqual(model_file(self.root, 'M001', Path(second['absolute_file']).relative_to(self.root).as_posix()), Path(second['absolute_file']))
         self.assertEqual({str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}, before)
         unlinked, _ = self.add_image('yellow', 'unlinked')

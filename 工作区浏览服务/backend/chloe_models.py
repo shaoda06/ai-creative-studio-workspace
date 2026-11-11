@@ -38,13 +38,17 @@ def model_documents(root):
         yield identity, name, path, doc, portrait
 
 
+def portrait_url(base, portrait):
+    return f'{base}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'
+
+
 def model_cards(root, api):
     cards = []
     for identity, name, path, doc, portrait in model_documents(root):
         media = None
         if portrait:
             key = portrait['resource_id'] + '@' + portrait['version']
-            url = f'{api}/shared-models/{quote(identity)}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'
+            url = portrait_url(f'{api}/shared-models/{quote(identity)}', portrait)
             media = {'kind': 'image', 'name': name + ' · 正面面部', 'key': key,
                      'url': url, 'thumbnailUrl': thumbnail_url(url)}
         cards.append({'id': identity, 'name': name, 'identity': fields(doc, '资产身份'),
@@ -92,9 +96,9 @@ def portrait(identity: str, resource_id: str, version: str, request: Request, do
 
 
 def model_context(root, identity):
-    for model_id, name, path, doc, _ in model_documents(root):
+    for model_id, name, path, doc, portrait in model_documents(root):
         if model_id == identity:
-            return name, path, doc
+            return name, path, doc, portrait
     raise FileNotFoundError('模特资料不存在：' + identity)
 
 
@@ -195,10 +199,15 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',), *, inc
 
 
 def model_detail(root, identity, api):
-    name, path, doc = model_context(root, identity)
+    name, path, doc, portrait = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
     allowed = model_files(root, identity, path, doc)
     content = asset_content(root, path, doc, allowed, base)
+    if portrait:
+        url = thumbnail_url(portrait_url(base, portrait))
+        for image in content['images']:
+            if image['media']['key'] == portrait['file']:
+                image['media']['thumbnailUrl'] = url
     looks = []
     for look_id, look_name, look_path, look_doc in model_looks(root, identity):
         cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图原图'), None)
@@ -229,7 +238,7 @@ def model_detail(root, identity, api):
 
 
 def model_file(root, identity, key):
-    _, path, doc = model_context(root, identity)
+    _, path, doc, _ = model_context(root, identity)
     if key not in model_files(root, identity, path, doc):
         raise FileNotFoundError('文件未被该模特直接引用')
     return resources.local(root, key)
@@ -275,7 +284,7 @@ def linked_document(identity: str, path: str, request: Request):
     try:
         file = model_file(space.root, identity, path)
         if file.suffix.lower() == '.md':
-            _, source, doc = model_context(space.root, identity)
+            _, source, doc, _ = model_context(space.root, identity)
             allowed = model_files(space.root, identity, source, doc)
             base = f'{space.api}/shared-models/{quote(identity)}'
             return {'title': file.stem, 'html': linked_html(file.read_text('utf-8-sig'), path, allowed, base)}
