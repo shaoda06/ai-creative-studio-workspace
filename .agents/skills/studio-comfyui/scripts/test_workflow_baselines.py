@@ -14,7 +14,6 @@ from workflow_paths import workflow_file, workflow_root, workflow_directories
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINES = workflow_root()
-RETAINED = BASELINES / "非正式工作流"
 
 class BaselineTests(unittest.TestCase):
     def test_formal_rife_is_checked(self):
@@ -388,9 +387,10 @@ class BaselineTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Missing API output"):
                 wb.verify(tmp)
 
-    def test_songssx_is_registered_as_backup(self):
-        self.assertEqual([item["workflow"] for item in wb.verify(RETAINED)],
-                         ["MiniMax-H3-Songssx导演台-Selflift-标准版"])
+    def test_songssx_is_registered_as_formal(self):
+        name = "MiniMax-H3-Songssx导演台-Selflift-标准版"
+        for kind in ("workflow", "api"):
+            self.assertEqual(workflow_file(name, kind).parent, BASELINES / "Minimax-H3")
 
     def test_confirmation_pair_requires_report_output(self):
         with tempfile.TemporaryDirectory() as tmp:

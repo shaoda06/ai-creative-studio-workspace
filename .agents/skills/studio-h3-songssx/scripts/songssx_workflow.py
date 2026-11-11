@@ -11,6 +11,7 @@ for skill in ('studio-comfyui', 'studio-h3'):
     sys.path.insert(0, str(SKILLS / skill / 'scripts'))
 from project_paths import input_file, project_file
 from workflow_graph import Canvas
+from workflow_paths import workflow_file
 from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings
 
 WORKFLOW = 'songssx-selflift'
@@ -19,7 +20,6 @@ FPS = 24
 PLANNER, SAMPLER, SAVE = '402', '403', '404'
 OUTPUT_KEY = 'images'  # ComfyUI PreviewVideo uses this history key.
 STEM = 'MiniMax-H3-Songssx导演台-Selflift-标准版'
-BASE = SKILLS / 'studio-h3/references/workflows/非正式工作流' / STEM
 PLANNER_WIDGETS = ('width', 'height', 'generation_seconds', 'timeline_data', 'material_planner_ui')
 WIDGETS = {
     332: ('selection', 'selection.tau', 'start_percent', 'end_percent',
@@ -73,7 +73,7 @@ def validate(workflow, video_plan, outputs, uploads):
             or config['count'] != len(segments) or len(mapping) != len(segments)):
         raise ValueError('Songssx 的 GEN 数量或帧率不符合装配记录')
     if timeline['videoClips'] or timeline['audios']:
-        raise ValueError('当前 Songssx 试点仅接入独立参考图与原生场内接续')
+        raise ValueError('当前 Songssx 装配仅接入独立参考图与原生场内接续')
     asset_ids = [item['id'] for item in timeline['images']]
     paths = {(item['node'], item['input'], tuple(item.get('json-path', ()))) for item in uploads}
     if (len(set(asset_ids)) != len(asset_ids) or len(uploads) != len(asset_ids) or paths != {
@@ -114,8 +114,8 @@ def validate(workflow, video_plan, outputs, uploads):
 
 def prepare(root, spec, documents):
     record = project_file(root, spec['record_dir'])
-    canvas = json.loads(BASE.with_suffix('.workflow.json').read_text('utf-8-sig'))
-    api = json.loads(BASE.with_suffix('.api.json').read_text('utf-8-sig'))
+    canvas = json.loads(workflow_file(STEM).read_text('utf-8-sig'))
+    api = json.loads(workflow_file(STEM, 'api').read_text('utf-8-sig'))
     nodes = {str(node['id']): node for node in canvas['nodes']}
     options = spec['songssx']
     width, height = options['width'], options['height']
