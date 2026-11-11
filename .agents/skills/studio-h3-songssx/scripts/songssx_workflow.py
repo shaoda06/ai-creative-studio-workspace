@@ -12,12 +12,14 @@ for skill in ('studio-comfyui', 'studio-h3'):
 from project_paths import input_file, project_file
 from workflow_graph import Canvas
 from workflow_paths import workflow_file
-from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings
+from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings, shot_blocks
 
 WORKFLOW = 'songssx-selflift'
 TASK_TYPE = 'video-scene-generation'
 FPS = 24
 MAX_GEN_FRAMES = 362  # 15 seconds at 24 fps, rounded up to the H3 frame grid.
+MAX_SCENE_FRAMES = 150 * FPS  # Material Planner's scene duration limit.
+MAX_DIMENSION = 16384
 LOW_STEPS = 6
 LOWRES_SCALE = 0.6
 MAX_SCHEDULER_STEPS = 1_000  # H3's simple scheduler draws from 1,000 distinct sigmas.
@@ -109,6 +111,32 @@ def aligned_frames(seconds, overlap):
     return frames
 
 
+def validate_dimensions(width, height):
+    if any(type(value) is not int or not 32 <= value <= MAX_DIMENSION or value % 32
+           for value in (width, height)):
+        raise ValueError(f'Songssx 宽高须为 32 至 {MAX_DIMENSION} 之间且对齐 32 的整数')
+
+
+def validate_shots(prompt, gen, frames, overlap):
+    shots = shot_blocks(prompt)
+    if not shots or any(number != index or not body
+                        for index, (number, body) in enumerate(shots, 1)):
+        raise ValueError(f'GEN {gen} 须包含从 [Shot 1] 开始的连续镜号，每镜须有正文')
+    overlap_end_ms = round(overlap * 1000 / FPS)
+    previous_ms = 0
+    for number, body in shots[1:]:
+        match = re.match(r'At\s+(\d{2}):([0-5]\d)(?:\.(\d{1,3}))?(?=[\s,]|$)', body, re.IGNORECASE)
+        if match is None:
+            raise ValueError(f'GEN {gen} [Shot {number}] 须以 At MM:SS.mmm 标出切镜时码')
+        minutes, seconds, fraction = match.groups()
+        cut_ms = (60 * int(minutes) + int(seconds)) * 1000 + int((fraction or '').ljust(3, '0'))
+        if cut_ms <= previous_ms or cut_ms * FPS >= frames * 1000:
+            raise ValueError(f'GEN {gen} [Shot {number}] 的切镜时码须严格递增且位于采样区间内')
+        if cut_ms < overlap_end_ms:
+            raise ValueError(f'GEN {gen} [Shot {number}] 的切镜时码落在开头 {overlap} 帧重叠区内')
+        previous_ms = cut_ms
+
+
 def validate(workflow, video_plan, outputs, uploads):
     planner, sampler, save = (workflow[key] for key in (PLANNER, SAMPLER, SAVE))
     if ([node['class_type'] for node in (planner, sampler, save)] !=
@@ -121,6 +149,7 @@ def validate(workflow, video_plan, outputs, uploads):
             or Path(outputs[0].path).suffix.lower() != '.mp4'):
         raise ValueError('Songssx 须登记 SaveVideo 的一个整场 MP4 取回目标')
     inputs = planner['inputs']
+    validate_dimensions(inputs['width'], inputs['height'])
     timeline = json.loads(inputs['timeline_data'])
     config = timeline['segmentConfig']
     segments, mapping = config['segments'], video_plan['segments']
@@ -160,10 +189,13 @@ def validate(workflow, video_plan, outputs, uploads):
             raise ValueError(f'GEN {index} 的提示词有 {len(prompt)} 字符，超过 {PROMPT_CHARACTER_LIMIT}')
         if labels != set(range(1, len(refs) + 1)) or re.search(r'<(?:Audio|Video) \d+>', prompt):
             raise ValueError(f'GEN {index} 的提示词标签与实际参考素材不符')
+        validate_shots(prompt, index, end - start, overlap)
         identities.add(row['p'])
         previous_length, previous = end - start, end
+    if previous > MAX_SCENE_FRAMES:
+        raise ValueError(f'Songssx 整场输出为 {previous} 帧，超过 {MAX_SCENE_FRAMES} 帧上限')
     if (timeline['selection'] != {'start': 0, 'duration': previous / FPS}
-            or inputs['generation_seconds'] != previous / FPS or previous > 150 * FPS):
+            or inputs['generation_seconds'] != previous / FPS):
         raise ValueError('Songssx 的场次总时长与 GEN 时间线不一致')
 
 
@@ -182,8 +214,7 @@ def prepare(root, spec, documents):
     if 'configuration' not in options and not legacy_fields <= options.keys():
         raise ValueError('Songssx 六步任务须提供 configuration，旧清单须保留原裁切与缩放字段')
     width, height = options['width'], options['height']
-    if any(type(value) is not int or value <= 0 or value % 32 for value in (width, height)):
-        raise ValueError('Songssx 的宽高必须为正且对齐 32')
+    validate_dimensions(width, height)
     prefix = options['remote_prefix']
     if not re.fullmatch(r'video/[\w-]+(?:/[\w-]+)*', prefix):
         raise ValueError('场次输出前缀须位于远端 video 目录内')

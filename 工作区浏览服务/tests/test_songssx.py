@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from backend.main import SubmissionPlanInput
-from backend.services import comfy_tasks, result_registration, submission_plans
+from backend.services import comfy_tasks, execution_checks, result_registration, submission_plans
 from prepared_documents import read_journal
 from songssx_workflow import aligned_frames
 
@@ -28,6 +28,42 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                     aligned_frames(seconds, 0)
         with self.assertRaisesRegex(ValueError, '396 帧.*22 帧重叠.*362 帧上限'):
             aligned_frames(15, 22)
+
+    async def test_cached_preparation_does_not_bypass_current_shot_checks(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / 'projects/样本'
+            project.mkdir(parents=True)
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            (project / 'reference.png').write_bytes(b'fixture')
+            plan = project / 'plan.json'
+            plan.write_text(json.dumps({'tasks': [{
+                'title': '旧准备报告样本', 'task_type': 'video-scene-generation',
+                'record_dir': 'record', 'output': 'out/scene.mp4',
+                'songssx': {'width': 1280, 'height': 736, 'seed': 7, 'remote_prefix': 'video/test/scene',
+                            'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': []},
+                            'segments': [{'p': 'P001', 'duration': 5, 'overlap_frames': 0,
+                                          'images': ['reference.png'], 'prompt': PROMPT.replace('[Shot 1]', '')}]},
+            }]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project=project.name, plan_file=plan.name,
+                                          prepare_only=True, desktop=desktop, thread_id='test')
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            try:
+                with patch('songssx_workflow.validate_shots'):
+                    self.assertEqual((await submission_plans.execute(store, payload))['status'], 'prepared')
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                store.resolve_input(data)
+                with self.assertRaisesRegex(ValueError, '连续镜号'):
+                    execution_checks.check_prepared(store, data)
+                with self.assertRaisesRegex(ValueError, '连续镜号'):
+                    await submission_plans.execute(store, payload)
+                self.assertFalse(execution_checks.read_report(data)['ok'])
+                self.assertEqual(store.rows, {})
+            finally:
+                await store.close()
 
     async def test_scene_prepare_upload_and_recovery_use_one_output(self):
         with TemporaryDirectory() as directory:

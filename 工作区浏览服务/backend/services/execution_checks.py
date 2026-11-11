@@ -13,6 +13,7 @@ _SKILLS = Path(__file__).resolve().parents[3] / '.agents/skills'
 for _name in ('studio-h3', 'studio-h3-aimixer', 'studio-h3-songssx', 'nora-drama-production', 'nora-serial-drama', 'studio-workspace-browser'):
     sys.path.insert(0, str(_SKILLS / _name / 'scripts'))
 from h3_inputs import director_checks
+import songssx_workflow
 from drama_execution_checks import (context_checks, storyboard_index_checks, content_checks,
                                     read_mapping as read_business_mapping, basis_fields, associated_sources, check_episode_composition)
 from drama_execution_checks import check_existing_video_identity as check_drama_identity
@@ -117,6 +118,8 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
         actual.pop('url', None)
     if not report['ok'] or expected != actual:
         raise ValueError('准备资料已变化或检查未通过；请在准备阶段重新调用检查，不会边提交边修改')
+    if not legacy and data.task_type == songssx_workflow.TASK_TYPE:
+        songssx_workflow.validate(data.workflow, data.video_plan, data.outputs, data.uploads)
     if not legacy and require_scene_round and business_video(data) and 'scene_composition' not in expected:
         raise ValueError('新视频任务必须先关联场次修改轮次；请使用--prepare-only补齐准备，旧登记任务仍按原记录恢复')
     if not legacy and not report.get('new_task_ready'):
@@ -266,13 +269,12 @@ def fixed_checks(store, data, *, mapping=None, legacy=False):
             raise ValueError('分段计划或输入映射字段不完整：' + str(error)) from error
         if data.outputs:
             raise ValueError('原生分段任务使用segment-plan，不混用末段保存节点作为全组输出')
-    from songssx_workflow import TASK_TYPE, WORKFLOW, validate as validate_songssx
     plan = data.video_plan or {}
-    if data.task_type == TASK_TYPE:
-        if (plan.get('workflow_id') != WORKFLOW or plan.get('adapter') != 'technical'
+    if data.task_type == songssx_workflow.TASK_TYPE:
+        if (plan.get('workflow_id') != songssx_workflow.WORKFLOW or plan.get('adapter') != 'technical'
                 or plan.get('metadata') != 'receipt' or data.segment_plan is not None):
             raise ValueError('场次生成须使用已登记的 Songssx 取回计划')
-        validate_songssx(data.workflow, plan, data.outputs, data.uploads)
+        songssx_workflow.validate(data.workflow, plan, data.outputs, data.uploads)
     elif plan.get('workflow_id') or any(node['class_type'] == 'MiniMaxH3TimelinePlanner' for node in data.workflow.values()):
         raise ValueError('Songssx 时间线须使用场次生成任务入口')
     result = {'segments': director_checks(data.workflow, timelines)}
@@ -324,6 +326,8 @@ def prepare_report(store, data, *, at_execution=False, previous=...):
             index_files = previous.get('storyboard_index', {}).get('files', [])
             report['sources'] = sources(data, previous.get('context_sources', []) + previous.get('content_checks', {}).get('sources', []) + index_files, mapping, observed=observed, composition=composition)
             if previous['sources'] == report['sources']:
+                if not at_execution and data.task_type == songssx_workflow.TASK_TYPE:
+                    songssx_workflow.validate(data.workflow, data.video_plan, data.outputs, data.uploads)
                 report.update(previous)
                 changed = False
                 if not content_current:
