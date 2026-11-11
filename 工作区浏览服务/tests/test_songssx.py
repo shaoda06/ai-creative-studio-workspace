@@ -5,11 +5,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
+import wave
 
 from backend.main import SubmissionPlanInput
 from backend.services import comfy_tasks, execution_checks, result_registration, submission_plans
 from prepared_documents import read_journal
-from songssx_workflow import aligned_frames
+from songssx_workflow import aligned_frames, validate
 
 
 PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
@@ -18,6 +19,71 @@ PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
 
 
 class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_scene_binds_independent_audio_in_each_gen_order(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / 'projects/样本'
+            project.mkdir(parents=True)
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            (project / 'reference.png').write_bytes(b'fixture')
+            for name, seconds in (('male.wav', 3), ('female.wav', 4)):
+                with wave.open(str(project / name), 'wb') as audio:
+                    audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+                    audio.writeframes(b'\0\0' * (8000 * seconds))
+            plan = project / 'plan.json'
+            prompt = PROMPT.replace('Room tone.', 'Voices from <Audio 1> and <Audio 2>.')
+            plan.write_text(json.dumps({'tasks': [{
+                'title': '独立音色样本', 'task_type': 'video-scene-generation',
+                'authorization': '隔离样本，暂停登记',
+                'record_dir': 'record', 'output': 'out/scene.mp4',
+                'songssx': {'width': 1088, 'height': 1920, 'seed': 7, 'remote_prefix': 'video/test/audio',
+                            'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': [2]},
+                            'segments': [{'p': f'P{index:03d}', 'duration': 5, 'overlap_frames': 0,
+                                          'images': ['reference.png'], 'audios': files, 'prompt': prompt}
+                                         for index, files in enumerate(
+                                             (['male.wav', 'female.wav'], ['female.wav', 'male.wav']), 1)]},
+            }]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project=project.name, plan_file=plan.name,
+                                          start_paused=True, desktop=desktop, thread_id='test')
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            try:
+                with patch.object(store, 'read_session_name', new_callable=AsyncMock), \
+                        patch.object(store.client, 'submit', side_effect=AssertionError('paused cannot submit')), \
+                        patch.object(store.client, 'upload', side_effect=AssertionError('paused cannot upload')):
+                    await submission_plans.execute(store, payload)
+                key, row = next(iter(store.rows.items()))
+                self.assertEqual(row['state']['status'], 'paused')
+                self.assertIsNone(row['state']['prompt_id'])
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                self.assertEqual([binding['json-path'] for binding in task['uploads']],
+                                 [['images', 0, 'file'], ['audios', 0, 'file'], ['audios', 1, 'file']])
+
+                def remote_upload(_, args, *, source):
+                    path = Path(source)
+                    remote = {'name': path.name, 'subfolder': 'record', 'type': 'input'}
+                    return dict(remote=remote, input_path=f'record/{path.name}',
+                                sha256=sha256(path.read_bytes()).hexdigest())
+
+                # Exercise upload binding in isolation after verifying paused registration.
+                with patch.object(store.client, 'upload', side_effect=remote_upload):
+                    bound = await store.prepare(key)
+                planner = bound['402']['inputs']
+                timeline = json.loads(planner['timeline_data'])
+                self.assertEqual([(item['file'], item['audioMode']) for item in timeline['audios']],
+                                 [('record/male.wav', 'reference'), ('record/female.wav', 'reference')])
+                segments = timeline['segmentConfig']['segments']
+                self.assertEqual([segment['audios'] for segment in segments],
+                                 [['audio-1', 'audio-2'], ['audio-2', 'audio-1']])
+                segments[0]['prompt'] = prompt.replace('<Audio 2>', '<Audio 3>')
+                planner['timeline_data'] = json.dumps(timeline)
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                with self.assertRaisesRegex(ValueError, 'Audio 提示词标签'):
+                    validate(bound, data.video_plan, data.outputs, data.uploads)
+            finally:
+                await store.close()
+
     def test_gen_duration_and_aligned_window_limits(self):
         for seconds, overlap, frames in [(4, 0, 107), (15, 0, 362), (15, 1, 362), (14, 22, 362)]:
             with self.subTest(seconds=seconds, overlap=overlap):
