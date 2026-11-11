@@ -17,6 +17,9 @@ from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings
 WORKFLOW = 'songssx-selflift'
 TASK_TYPE = 'video-scene-generation'
 FPS = 24
+LOW_STEPS = 6
+LOWRES_SCALE = 0.6
+MAX_SCHEDULER_STEPS = 10_000
 PLANNER, SAMPLER, SAVE = '402', '403', '404'
 OUTPUT_KEY = 'images'  # ComfyUI PreviewVideo uses this history key.
 STEM = 'MiniMax-H3-Songssx导演台-Selflift-标准版'
@@ -43,6 +46,52 @@ def api_from_canvas(canvas):
         node['widgets_values_named'] = {name: value for name, value in zip(names, values, strict=True) if name}
         node['widgets_values'] = list(node['widgets_values_named'].values())
     return Canvas(graph).api(SAVE, optional=False)
+
+
+def configure_sampling(canvas, api, nodes, timeline, options):
+    choice = options['configuration']
+    if not isinstance(choice, dict) or set(choice) != {'high_steps', 'scene_type', 'speed', 'loras'}:
+        raise ValueError('Songssx 六步配置须提供 high_steps、scene_type、speed 和 loras')
+    high_steps = choice['high_steps']
+    if type(high_steps) is not int or not 1 <= high_steps <= MAX_SCHEDULER_STEPS - LOW_STEPS:
+        raise ValueError(f'高清采样步数须为 1 至 {MAX_SCHEDULER_STEPS - LOW_STEPS} 的整数')
+    scene = choice['scene_type']
+    if scene not in ('dialogue', 'combat'):
+        raise ValueError('scene_type 须为 dialogue 或 combat')
+    speed = choice['speed']
+    if type(speed) not in (int, float) or not -10 <= speed <= 10:
+        raise ValueError('动作速度须为 -10 至 10 的数值')
+    loras = choice['loras']
+    if (not isinstance(loras, list)
+            or any(type(value) is not int or value not in (1, 2) for value in loras)
+            or len(set(loras)) != len(loras)):
+        raise ValueError('附加 LoRA 使用不重复的编号 1、2，两项都关时传空列表')
+    if (options.get('reference_image_center_crop', False) is not False
+            or options.get('lowres_scale', LOWRES_SCALE) != LOWRES_SCALE):
+        raise ValueError('Songssx 六步配置固定关闭参考图居中裁切，低清缩放倍率固定为 0.60')
+
+    timeline.update(secondPassLowresScale=LOWRES_SCALE, referenceImageCenterCrop=False,
+                    secondPassHighSteps=high_steps)
+    total_steps = LOW_STEPS + high_steps
+    nodes['261']['widgets_values'][1] = total_steps
+    nodes['261']['widgets_values_named']['steps'] = total_steps
+    api['261']['inputs']['steps'] = total_steps
+    nodes['343']['widgets_values'][1] = speed
+    nodes['343']['widgets_values_named']['strength_model'] = speed
+
+    combat = scene == 'combat'
+    enabled_loras = {'400': 1 in loras, '407': 2 in loras, '342': combat,
+                     '344': combat, '345': combat, '343': True}
+    for key, enabled in enabled_loras.items():
+        nodes[key]['mode'] = 0 if enabled else 4
+    # Resolve bypassed model links using the shared canvas converter.
+    model_chain = api_from_canvas(canvas)
+    for key, enabled in enabled_loras.items():
+        if enabled:
+            api[key] = model_chain[key]
+        else:
+            api.pop(key, None)
+    api['331']['inputs']['model'] = model_chain['331']['inputs']['model']
 
 
 def aligned_frames(seconds, overlap):
@@ -121,11 +170,6 @@ def prepare(root, spec, documents):
     width, height = options['width'], options['height']
     if any(type(value) is not int or value <= 0 or value % 32 for value in (width, height)):
         raise ValueError('Songssx 的宽高必须为正且对齐 32')
-    if type(options['reference_image_center_crop']) is not bool:
-        raise ValueError('参考图居中裁切须明确为开或关')
-    scale = options['lowres_scale']
-    if type(scale) not in (int, float) or not .25 <= scale <= 1:
-        raise ValueError('一采缩放倍率须在 0.25 至 1 之间')
     prefix = options['remote_prefix']
     if not re.fullmatch(r'video/[\w-]+(?:/[\w-]+)*', prefix):
         raise ValueError('场次输出前缀须位于远端 video 目录内')
@@ -135,7 +179,15 @@ def prepare(root, spec, documents):
 
     planner = api[PLANNER]['inputs']
     timeline = json.loads(planner['timeline_data'])
-    timeline.update(secondPassLowresScale=scale, referenceImageCenterCrop=options['reference_image_center_crop'])
+    if 'configuration' in options:
+        configure_sampling(canvas, api, nodes, timeline, options)
+    else:
+        crop, scale = options['reference_image_center_crop'], options['lowres_scale']
+        if type(crop) is not bool:
+            raise ValueError('参考图居中裁切须明确为开或关')
+        if type(scale) not in (int, float) or not .25 <= scale <= 1:
+            raise ValueError('一采缩放倍率须在 0.25 至 1 之间')
+        timeline.update(secondPassLowresScale=scale, referenceImageCenterCrop=crop)
     timeline['images'], segments, rows, uploads = [], [], [], []
     images = {}
     end = 0
