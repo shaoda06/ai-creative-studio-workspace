@@ -132,16 +132,13 @@ def update_business(root, episode, scene, stage, summary, identities, finalized,
     else:
         first, _, rest = text.partition('\n')
         text = first + '\n\n- 当前状态及待办：' + status + '\n' + rest
-    folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[1] + '-场次')
-    file_entry = '[阶段采用视频](' + adopt.link(summary, folder) + ')'
-    if stage == '后处理':
-        links = []
-        for identity in identities:
-            part = identity.rsplit('-', 2)[0]
-            draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-            output = adopt.selected_output(root, draft, draft.read_text('utf-8-sig'), part, stage)
-            links.append('[' + identity + '](' + adopt.link(summary, output['path']) + ')')
-        file_entry = '；'.join(links)
+    links = []
+    for identity in identities:
+        part = identity.rsplit('-', 2)[0]
+        draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
+        output = adopt.selected_output(root, draft, draft.read_text('utf-8-sig'), part, stage)
+        links.append('[' + identity + '](' + adopt.link(summary, output['path']) + ')')
+    file_entry = '；'.join(links)
     body = '\n- 状态：' + status + '\n- 当前采用顺序：' + ' → '.join(identities) + '\n- 文件入口：' + file_entry + '\n'
     if re.search(r'^### ' + re.escape(heading) + r'\s*$', text, re.M):
         a, b = adopt.section(text, heading)
@@ -281,7 +278,8 @@ def approve(args):
                     result[key] = previous[key]
             result.update(phase='browser', local_completed=True)
             result['browser'] = browser_sync(root, episode, stage, ids, result['episode_completed'], args.timeout)
-            result['state'] = 'completed' if all(selected(root, p, stage) for p in expected) else 'adopted_partial'
+            ready = result['episode_completed'] or all(selected(root, p, stage) for p in expected)
+            result['state'] = 'completed' if ready else 'adopted_partial'
             return completion_handoff(result, summary)
         result['adoption'] = adopt.adoption(args, plan=adoption_plan)
         result['timings_seconds']['adoption'] = round(time.monotonic() - start, 3)
@@ -299,8 +297,8 @@ def approve(args):
                 source['selected_path'] = str(adopt.selected_output(root, root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md'),
                     (root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')).read_text('utf-8-sig'), part, stage)['path'])
         result['phase'] = 'business_records'
-        missing = episode_missing(root, episode) if stage == '后处理' and ready else []
-        complete = stage == '后处理' and ready and not missing
+        missing = episode_missing(root, episode) if stage == '后处理' else []
+        complete = stage == '后处理' and not missing
         result.update(episode_completed=complete, episode_missing=missing)
         chosen = [i for i in chosen if i]
         update_business(root, episode, scene, stage, summary, chosen, ready, complete)
@@ -308,7 +306,7 @@ def approve(args):
         began = time.monotonic()
         result['browser'] = browser_sync(root, episode, stage, ids, complete, args.timeout)
         result['timings_seconds']['browser'] = round(time.monotonic() - began, 3)
-        result['state'] = 'completed' if ready else 'adopted_partial'
+        result['state'] = 'completed' if ready or complete else 'adopted_partial'
         return completion_handoff(result, summary)
     except (ValueError, KeyError, OSError, TimeoutError, urllib.error.URLError, final.client.ClientError, AssertionError) as error:
         result.update(state='browser_pending' if result['phase'] == 'browser' else 'needs_attention', error=str(error))

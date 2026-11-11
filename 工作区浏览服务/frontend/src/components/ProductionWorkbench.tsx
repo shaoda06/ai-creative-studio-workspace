@@ -199,12 +199,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const issues = (current?.productionIssues || []).filter(issue => !issue.scene || issue.scene === selectedScene);
   const songssxReady = songssx ? episodeRound?.scenes.filter(id => current?.sceneRounds?.[id]
     .some(item => item.number === episodeRound.number && item.songssx?.video?.url)).length ?? 0 : 0;
-  const episodeComplete = current?.productionComplete && !current.productionIssues?.length && scenes.length > 0 && scenes.every(id => {
-    const sceneSegments = current.segments?.[id] || [];
-    return sceneSegments.length > 0 && sceneSegments.every(item =>
-      item.videos.filter(video => video.stage === '后处理' && video.approved).length === 1);
-  });
-  const segmentCount = scenes.reduce((count, id) => count + (current?.segments?.[id]?.length || 0), 0);
+  const episodeComplete = current?.deliveryReady;
   const emptyMessage = issues.length > 0 ? '请先修正上方提示的资料。'
     : !current?.script ? `尚未登记${contentLabel}。` : '尚未登记分段计划。';
   const open = (name: string) => {
@@ -228,12 +223,12 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         {handoff.zip && <DownloadButton key={handoff.zip} url={handoff.zip} pack
           label="本片 ZIP 下载" title={`按交接清单打包本轮 ${handoff.count} 段视频`} />}
       </div>}
-      {showHeadingDownloads && !workMode && !songssx && episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
+      {showHeadingDownloads && !workMode && episodeComplete && <><DownloadButton key={current!.name + '/draft'} pack
       url={access.package(project, current!.name) + '?format=jypack'} label="剪映草稿包"
-      title="下载全部后处理已采用视频的剪映草稿包；双击或拖入剪映导入，需对应会员权限" />
+      title="按正式采用顺序下载剪映草稿包；双击或拖入剪映导入，需对应会员权限" />
       <DownloadButton key={current!.name} pack
       url={access.package(project, current!.name)} label={`${sharedSelected ? current!.name : unitLabel}打包下载`}
-      title={`下载${current!.name}全部${scenes.length}个场次、${segmentCount}段后处理已采用视频 ZIP 包`} /></>}
+      title={`下载${current!.name}正式采用视频 ZIP 包`} /></>}
     </div>;
   return <>
     {breadcrumbSelector && selectedItem && createPortal(<TabSelect iconOnly label="快速选择制作对象" selected={selected!} onChange={open}

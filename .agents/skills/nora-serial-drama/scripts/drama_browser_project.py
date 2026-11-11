@@ -7,6 +7,7 @@ import json
 import posixpath
 from pathlib import Path
 import re
+import sys
 from datetime import datetime
 from urllib.parse import quote, unquote, urlsplit
 from backend.parsers.video_products import load_products
@@ -14,6 +15,9 @@ import project_resources as resources
 
 from backend.parsers.documents import (plain_text_preview, status_markup, field_markup, safe_link, inline, cells, phase_list, slug, STATUS_COLORS, STATUS_FIELDS, TEXT_PREVIEW_LIMIT, INLINE_PATTERN)
 from backend.parsers.documents import markdown as render_markdown
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'nora-drama-handoff/scripts'))
+from drama_delivery import delivery_records, delivery_selection, songssx_adoption
 
 
 def markdown(text, source):
@@ -1228,15 +1232,34 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                         "formal": [], "candidates": [], "record": episode_node["materialRecord"]})
                     collection[kind].append(dict(item, page=int(match[3]), version='v' + match[2] if match[2] else ''))
             sheet_keys = set()
+            sheet_drafts = (project / work_root).glob(number + '-C*-场次分镜-工作稿.md')
+            for draft in sheet_drafts:
+                scene = draft.name.removeprefix(number + '-').split('-', 1)[0]
+                if re.fullmatch(r'C\d{3,}', scene):
+                    director_sheets.setdefault(scene, {"formal": [], "candidates": [], "record": episode_node["materialRecord"]})
             for scene, collection in director_sheets.items():
                 sheet_record = work_root + number + '-' + scene + '-场次分镜-工作稿.md'
                 sheet_text = read(sheet_record) or ''
                 registrations = {row['图表版本']: row for row in table_records(
                     sheet_text, ('来源分镜版本', '图表版本', '候选编号'))}
+                candidates = {item['key']: item for item in collection['candidates']}
+                for version, registration in registrations.items():
+                    for link in markdown_links(registration.get('候选页', ''), sheet_record):
+                        item = file_entry(project / link['key'], metadata_only=True)
+                        match = sheet_name.fullmatch(item['name']) if item else None
+                        if match and match[1] == scene and match[2] and 'v' + match[2] == version:
+                            candidates.setdefault(item['key'], dict(item, page=int(match[3]), version=version))
+                collection['candidates'] = list(candidates.values())
                 adopted_pages = {}
                 for row in table_records(sheet_text, ('来源分镜版本', '图表版本', '候选原图', '正式图片')):
                     for link in markdown_links(row['正式图片'], sheet_record):
                         adopted_pages[link['key']] = row
+                formal = {item['key']: item for item in collection['formal'] if not adopted_pages or item['key'] in adopted_pages}
+                for key, row in adopted_pages.items():
+                    if key in candidates and row['图表版本'] == candidates[key]['version'] and any(
+                            link['key'] == key for link in markdown_links(row['候选原图'], sheet_record)):
+                        formal[key] = dict(candidates[key])
+                collection['formal'] = list(formal.values())
                 for item in collection['formal']:
                     row = adopted_pages.get(item['key'], {})
                     item.update(sourceVersion=row.get('来源分镜版本', ''), version=row.get('图表版本', ''))
@@ -1252,6 +1275,8 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 for kind in ('formal', 'candidates'):
                     collection[kind].sort(key=lambda item: (int(item['version'][1:]) if item['version'] else 0, item['page']))
                     sheet_keys.update(item['key'] for item in collection[kind])
+            episode_node["directorSheets"] = {scene: collection for scene, collection in director_sheets.items()
+                                               if collection['formal'] or collection['candidates']}
             from backend.parsers.production_materials import material_review_states
             episode_node['materials'] = material_review_states(
                 [item for item in episode_node['materials'] if item['key'] not in sheet_keys],
@@ -1462,6 +1487,24 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                     **({"scriptUrl": quote(storyboard_source, safe="/-._~")} if read(storyboard_source) is not None else {})})
             if episode_mode != 'ending':
                 from execution_records import exists
+                summary_key = work_root + number + '-生成说明-工作稿.md'
+                episode_node['deliveryScenes'] = source_scenes or episode_node['scenes']
+                episode_node['deliveryReady'] = False
+                try:
+                    records = delivery_records(read(summary_key) or '', summary_key)
+                    for record in records.values():
+                        record['key'] = resources.relative(project, resolved_path(record['key']))
+                    episode_node['deliveryRecords'] = records
+                    for scene in episode_node['deliveryScenes']:
+                        record = records.get(number + '-' + scene)
+                        if record:
+                            songssx_adoption(episode_node['sceneRounds'][scene], record)['approved'] = True
+                    if episode_node['productionComplete']:
+                        delivery_selection(episode_node)
+                        episode_node['deliveryReady'] = True
+                except ValueError as error:
+                    if episode_node['productionComplete'] or 'deliveryRecords' not in episode_node:
+                        issues.append({'key': summary_key, 'message': str(error)})
                 workflows = []
                 if any(video['url'] or (video['taskStateUrl'] and exists(project / unquote(urlsplit(video['taskStateUrl']).path)))
                        or video['taskStatus'].split('；')[0] in ('已提交', '成功', '正在生成', '取回中')

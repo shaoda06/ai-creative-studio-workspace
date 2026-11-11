@@ -65,7 +65,8 @@ const detail = episode => {
   const sceneRounds = [...(aimixer ? [round(1, false, 'R001')] : []),
     ...(songssx ? [round(2, true, 'R002'), round(3, true, 'R003', '后处理')] : [])];
   const scenes = songssx ? ['C001', 'C002'] : ['C001'];
-  return { ...episode, scenes, productionWorkflows: [...(aimixer ? ['aimixer'] : []), ...(songssx ? ['songssx'] : [])],
+  return { ...episode, scenes, productionComplete: episode.name === 'EP002', deliveryReady: episode.name === 'EP002',
+    productionWorkflows: [...(aimixer ? ['aimixer'] : []), ...(songssx ? ['songssx'] : [])],
     episodeRounds: sceneRounds.map(item => ({ number: item.number, scenes: item.number === 3 ? scenes : ['C001'] })),
     sceneRounds: { C001: sceneRounds, ...(songssx ? { C002: [round(3, true, 'R004', '后处理', episode.name === 'EP002')] } : {}) },
     segments: Object.fromEntries(scenes.map(scene => [scene, ids.map(id => ({ id, duration: 10, scriptHtml: '<p>' + id + '</p>',
@@ -89,6 +90,12 @@ const server = await createServer({
         return res.end(media.subarray(start, end + 1));
       }
       if (!path.startsWith('/api/')) return next();
+      if (/\/episodes\/EP002\/download$/.test(path)) {
+        const format = address.searchParams.get('format') === 'jypack' ? 'jypack' : 'zip';
+        res.writeHead(200, { 'Content-Type': format === 'zip' ? 'application/zip' : 'application/vnd.bytedance.jypack',
+          'Content-Disposition': `attachment; filename="approved-episode.${format}"` });
+        return res.end(packages.get(`2.${format}`));
+      }
       const download = /\/episodes\/(EP002|EP003)\/rounds\/(2|3)\/download$/.exec(path);
       if (download) {
         const format = address.searchParams.get('format') === 'jypack' ? 'jypack' : 'zip';
@@ -217,6 +224,8 @@ if (process.argv.includes('--preview')) {
         await page.getByRole('button', { name: button, exact: true }).click();
         assert.equal((await file).suggestedFilename(), name);
       };
+      await downloadFile('本集打包下载', 'approved-episode.zip');
+      await downloadFile('剪映草稿包', 'approved-episode.jypack');
       await downloads.click();
       assert.deepEqual(await page.getByRole('region', { name: '本轮资源' }).getByRole('button').allTextContents(),
         ['本轮打包下载', '剪映草稿下载']);

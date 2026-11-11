@@ -580,6 +580,22 @@ class ProjectParserTests(unittest.TestCase):
         (self.root / formal).unlink()
         self.assertFalse(any(item['adopted'] for item in collection()['candidates']), '登记有链接但正式图片缺失不冒称采用')
 
+    def test_director_sheet_adopts_registered_original_without_formal_copy(self):
+        root = '09-剧集制作/EP001/其他资料/工作稿'
+        image = '资源/图片/IMG-样例/V001/EP001-C001-手绘导演分镜表-v02-第01页.png'
+        self.put(image, 'original')
+        link = '[第一页](../../../../' + image + ')'
+        self.put(root + '/EP001-C001-场次分镜-工作稿.md',
+                 '| 来源分镜版本 | 图表版本 | 候选编号 | 候选页 |\n| --- | --- | --- | --- |\n'
+                 f'| v07 | v02 | 1 | {link} |\n\n'
+                 '| 页码 | 来源分镜版本 | 图表版本 | 候选原图 | 正式图片 |\n| --- | --- | --- | --- | --- |\n'
+                 f'| 1/1 | v07 | v02 | {link} | {link} |\n')
+        data = portal.build_data(self.root.resolve(), web_episode_navigation=True)
+        sheets = data['catalogues']['09-剧集制作']['children'][0]['directorSheets']['C001']
+        self.assertEqual([item['key'] for item in sheets['formal']], [image])
+        self.assertEqual([item['key'] for item in sheets['candidates']], [image])
+        self.assertTrue(sheets['candidates'][0]['adopted'])
+
     def test_episode_materials_index_record_then_images_by_filename(self):
         for episode, prefix in (("EP001", ""), ("EP002", "EP002-")):
             root = f"09-剧集制作/{episode}/04-专用素材"

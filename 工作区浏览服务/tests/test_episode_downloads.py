@@ -91,7 +91,7 @@ class EpisodeDownloadTests(HttpTestCase):
             segment = {'id': number, 'videos': []}
             segments.append(segment)
         segment['videos'].append({
-            'approved': approved, 'stage': stage, 'key': relative,
+            'approved': approved, 'stage': stage, 'run': 'R001', 'key': relative,
             'fileRevision': str(stat.st_mtime_ns) + '-' + str(stat.st_size)})
         return scene + '-场次/' + filename, path.read_bytes()
 
@@ -304,6 +304,45 @@ class EpisodeDownloadTests(HttpTestCase):
 
     def completed_download(self):
         return self.client.get(self.url.replace('/downloads', '/download'))
+
+    def test_completed_download_uses_explicit_scene_adoption_across_rounds(self):
+        self.episode['sceneRounds'] = {}
+        self.episode['deliveryRecords'] = {}
+        for scene, number, stage in [('C001', 1, '场次生成'), ('C002', 2, '后处理')]:
+            path = self.source(f'{scene}.mp4', scene.encode())
+            stat = path.stat()
+            video = {'key': path.name, 'url': path.name, 'run': 'R002', 'stage': stage,
+                     'fileRevision': f'{stat.st_mtime_ns}-{stat.st_size}'}
+            self.episode['segments'][scene] = [{'id': 'P001', 'videos': []}]
+            self.episode['sceneRounds'][scene] = [
+                {'number': number, 'segments': [{'id': 'P001'}], 'songssx': {'video': video}},
+                {'number': 3, 'segments': [{'id': 'P001'}], 'songssx': {'video': {**video, 'key': '待审.mp4'}}},
+            ]
+            self.episode['deliveryRecords']['EP001-' + scene] = {
+                'key': path.name, 'round': str(number), 'run': 'R002', 'stage': stage}
+        self.episode['scenes'].reverse()
+        response = self.completed_download()
+        self.assertEqual(response.status_code, 200)
+        with ZipFile(BytesIO(response.content)) as bundle:
+            self.assertEqual(bundle.read('第1场-已采用.mp4'), b'C002')
+            self.assertEqual(bundle.read('第2场-已采用.mp4'), b'C001')
+        self.episode['segments']['C002'].append({'id': 'P002', 'videos': []})
+        self.assertEqual(self.completed_download().status_code, 409)
+        self.episode['segments']['C002'].pop()
+        self.episode['deliveryRecords']['EP001-C002']['round'] = '3'
+        self.assertEqual(self.completed_download().status_code, 409)
+
+    def test_completed_download_requires_explicit_reuse_for_approved_second_pass(self):
+        self.video('后处理', 'C001', 'P001')
+        self.video('二采', 'C002', 'P001')
+        self.assertEqual(self.completed_download().status_code, 409)
+        reused = self.episode['segments']['C002'][0]['videos'][0]
+        self.episode['deliveryRecords'] = {
+            'EP001-C002-P001': {'stage': '二采', 'run': 'R001', 'key': reused['key']}}
+        with ZipFile(BytesIO(self.completed_download().content)) as bundle:
+            self.assertEqual(bundle.read('第2场-第1段-已采用.mp4'), '二采C002P001'.encode())
+        reused['approved'] = False
+        self.assertEqual(self.completed_download().status_code, 409)
 
     def test_completed_zip_contains_all_scenes_in_script_and_storyboard_order(self):
         expected = [self.video('后处理', 'C001', number) for number in ('P005', 'P012', 'P006')]

@@ -234,6 +234,23 @@ class ApprovalTests(unittest.TestCase):
         self.assertIsNone(tool.selected(self.root, 'EP001-C001-P001', '一采'))
         self.assertNotIn('EP001分段制作与交付已完成', (self.fixture.extra / '工作稿/EP001-生成说明-工作稿.md').read_text())
 
+    def test_episode_completes_with_one_processed_part_and_one_explicit_reuse(self):
+        items = self.setup_stage()
+        identity = items[0]['identity']
+        self.plan['identities'] = [identity]
+        self.plan['postprocess_delivery'] = {identity: 'workflow'}
+        summary = self.fixture.extra / '工作稿/EP001-生成说明-工作稿.md'
+        source = self.fixture.ep / '06-阶段采用视频/02-二采/C001-场次/EP001-C001-P002-R001-二采.mp4'
+        with summary.open('a') as out:
+            out.write('\n### 交付采用组合\n| 对象 | 轮次 | 阶段 | R编号 | 采用文件 | 采用依据 |\n'
+                      '| --- | --- | --- | --- | --- | --- |\n'
+                      f'| EP001-C001-P002 | — | 二采 | R001 | [原片]({tool.adopt.link(summary, source)}) | 原批准及规格核对 |\n')
+        result = self.run_plan()
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertTrue(result['episode_completed'])
+        self.assertIsNone(tool.selected(self.root, 'EP001-C001-P002', '后处理'))
+        self.assertNotIn('后处理未采用', (self.root / '项目进度.md').read_text())
+
     def test_completed_and_browser_pending_reports_recheck_other_stage_files(self):
         self.setup_stage(parts=('P001',))
         result = self.run_plan(browser_error='simulated browser failure')

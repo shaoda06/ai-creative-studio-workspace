@@ -18,6 +18,7 @@ from urllib.parse import unquote
 import video_adopt as adopt
 import workflow_baselines as pairs
 import project_progress
+from drama_delivery import delivery_records
 
 client = adopt.client
 MEDIA = ('imageFile', 'audioFile', 'videoFile', 'pairedAudioFile')
@@ -61,8 +62,18 @@ def selected(root, part, stage):
 
 def episode_missing(root, episode):
     """Completion requires adopted stage outputs."""
+    summary = Path('09-剧集制作') / episode / '其他资料/工作稿' / (episode + '-生成说明-工作稿.md')
+    records = delivery_records((root / summary).read_text('utf-8-sig'), summary.as_posix()) if (root / summary).is_file() else {}
     missing = []
     for scene, part in indexed_parts(root, episode):
+        record = records.get(part)
+        if record and record['stage'] == '二采':
+            draft = root / summary.parent / (part + '-视频制作-工作稿.md')
+            output = adopt.selected_output(root, draft, draft.read_text('utf-8-sig'), part, '二采') if draft.is_file() else None
+            if (not output or output['identity'] != part + '-' + record['run'] + '-二采'
+                    or output['path'] != adopt.local_path(root, record['key'])):
+                missing.append(part + ' 直接沿用与当前二采采用不一致')
+            continue
         for stage in adopt.STAGES:
             if selected(root, part, stage) is None:
                 missing.append(part + ' ' + stage + '未采用')
@@ -86,14 +97,15 @@ def update_progress(root, episode, scene, stage, summary):
     indexed = indexed_parts(root, episode)
     missing = episode_missing(root, episode)
     for current_scene, part in indexed:
-        if current_scene == scene and selected(root, part, stage) is None:
+        unresolved = ([problem.removeprefix(part + ' ') for problem in missing if problem.startswith(part + ' ')]
+                      if stage == '后处理' else ([] if selected(root, part, stage) else [stage + '未采用']))
+        if current_scene == scene and unresolved:
             draft = root / '09-剧集制作' / episode / '其他资料/工作稿' / (part + '-视频制作-工作稿.md')
-            pending.append('[' + part + '](' + adopt.link(path, draft) + ')的' + stage + '尚未采用')
+            pending.append('[' + part + '](' + adopt.link(path, draft) + ')：' + '、'.join(unresolved))
     complete = not missing
     if complete and retrospective_status(summary)['status'] == 'pending':
         next_steps.append('完成本集复盘与经验归并，记录于[生成说明工作稿](' + adopt.link(path, summary) + ')')
-    folder = root / '09-剧集制作' / episode / '06-阶段采用视频' / adopt.STAGES[stage] / (scene.split('-')[-1] + '-场次')
-    outputs = '[' + scene + stage + '采用视频](' + adopt.link(path, folder) + ')、[制作与留档记录](' + adopt.link(path, summary) + ')'
+    outputs = '[制作、采用与留档记录](' + adopt.link(path, summary) + ')'
     text = path.read_text('utf-8-sig')
     replace_file(path, project_progress.update(text, episode, status='已完成' if complete else '进行中',
                                              outputs=outputs, pending=pending, next_steps=next_steps))

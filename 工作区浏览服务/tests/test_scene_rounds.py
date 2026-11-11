@@ -136,6 +136,16 @@ class SceneRoundTests(unittest.TestCase):
         self.assertEqual(after['songssx']['video']['key'], processed)
         self.assertEqual(after['songssx']['video']['stage'], '后处理')
         self.assertEqual(after['songssx']['segments'], before['songssx']['segments'])
+        self.write('项目进度.md', '| 阶段名称 | 对应会话入口 | 当前状态 | 成果入口 | 待决事项 | 下一步 |\n'
+                   '| --- | --- | --- | --- | --- | --- |\n| EP001制作 | — | 已完成 | — | — | — |\n')
+        self.write(self.root + '/其他资料/工作稿/EP001-生成说明-工作稿.md',
+                   '# 生成说明\n### 交付采用组合\n| 对象 | 轮次 | 阶段 | R编号 | 采用文件 | 采用依据 |\n'
+                   '| --- | --- | --- | --- | --- | --- |\n'
+                   '| EP001-C001 | 1 | 场次生成 | R002 | [原片](../候选视频/EP001-C001-R002-场次生成.mp4) | 采用第1轮整场 |\n')
+        current = self.episode()
+        self.assertTrue(current['deliveryReady'], current.get('productionIssues'))
+        self.assertTrue(current['sceneRounds']['C001'][0]['songssx']['video']['approved'])
+        self.assertFalse(current['sceneRounds']['C001'][1]['songssx']['video']['approved'])
 
     def test_video_task_links_follow_candidate_stage_and_shared_owner(self):
         from urllib.parse import unquote

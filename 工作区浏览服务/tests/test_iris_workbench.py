@@ -43,6 +43,10 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         item = sheets['candidates'][0]
         self.assertEqual((item['sourceVersion'], item['version'], item['candidateNumber']), ('v02', 'v04', 3))
         self.assertEqual(before, set(self.project.rglob('*')))
+        self.write(key + '导演表来源与登记.md', text.replace('[采用](采用/第1页.png)', '[采用](候选/第1页.png)'))
+        sheets = self.detail()['directorSheets']['whole']
+        self.assertEqual(sheets['formal'][0]['key'], sheets['candidates'][0]['key'])
+        self.assertEqual(before, set(self.project.rglob('*')))
 
     def test_exact_round_sources_and_candidates_keep_work_identity(self):
         for identity in self.works:
