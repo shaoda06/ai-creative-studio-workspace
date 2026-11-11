@@ -65,10 +65,11 @@ try {
       const parts=['P001','P002'].map(id=>({id,duration:1,stage:'一采',run:'R001',scriptHtml:'<p>隔离分镜</p>',videos:[]}));
       const video={key:'整场.webm',url:'/component-samples/video.webm',stage:'一采',run:'R001',candidateNumber:1,
        fileRevision:'fixture',taskStatus:'completed',deliveryStatus:'已取回',approved:false};
-      const context={scriptHtml:'<p>隔离分镜</p>',shots:[],dialogues:[],issues:[],prompts:{},references:{common:[],segment:[]}};
+      const context=id=>({scriptHtml:'<p>隔离分镜</p>',shots:[],dialogues:[],issues:[],prompts:{},
+       references:{common:[],segment:[{kind:'image',name:id+' 隔离参考图',label:'<Picture 1>',url:'/component-samples/image.svg'}]}});
       Object.assign(detail,{productionWorkflows:['songssx'],segments:{whole:parts},
        episodeRounds:[{number:1,scenes:['whole']}],sceneRounds:{whole:[{number:1,episodeRound:true,issues:[],segments:parts,
-        songssx:{recorded:true,video,segments:parts.map((item,index)=>({id:item.id,gen:index+1,start:index,end:index+1,context}))}}]}});
+        songssx:{recorded:true,video,segments:parts.map((item,index)=>({id:item.id,gen:index+1,start:index,end:index+1,context:context(item.id)}))}}]}});
      }
      return route.fulfill({json:detail});
     }
@@ -496,8 +497,13 @@ try {
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
   await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
+  const references=page.getByRole('region',{name:'参考素材区域'});
+  assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
+  await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();
   await page.getByRole('button',{name:/^分段 P002/}).click();
   await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
+  await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
+  assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
   await page.getByRole('button',{name:'资源下载',exact:true}).click();
   const scenePack=page.waitForEvent('download');
   await page.getByRole('button',{name:'剪映草稿下载',exact:true}).click();

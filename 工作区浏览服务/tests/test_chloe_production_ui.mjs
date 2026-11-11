@@ -219,8 +219,11 @@ try {
   // A work detail with two formal workflows uses the same selector as an episode.
   const scene = fixture.detail.sceneRounds.whole.at(-1);
   const sceneVideo = fixture.detail.segments.whole[0].videos.at(-1);
-  const songssxRound = {...scene, songssx:{recorded:true,video:{...sceneVideo,stage:'场次生成'},
-   segments:scene.segments.map((entry,i)=>({id:entry.id,gen:i+1,start:i*3,end:(i+1)*3,context:sceneVideo.context}))}};
+  const songssxRound = {...scene, songssx:{recorded:true,
+   video:{...sceneVideo,stage:'场次生成',url:'/component-samples/video.webm'},
+   segments:scene.segments.map((entry,i)=>({id:entry.id,gen:i+1,start:i,end:i+1,
+    context:{...sceneVideo.context,references:{common:[],
+     segment:[{kind:'image',name:entry.id+' 隔离参考图',label:'<Picture 1>',url:'/component-samples/image.svg'}]}}}))}};
   scopedDetail={...fixture.detail,productionWorkflows:['aimixer','songssx'],
    sceneRounds:{whole:[fixture.detail.sceneRounds.whole[0],songssxRound]}};
   taskMode=false;
@@ -231,8 +234,15 @@ try {
   assert.ok(await workflow.evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1));
   await workflow.getByRole('button',{name:'Songssx 制作记录'}).click();
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
-  await page.getByText('GEN 1 · 0–3 秒',{exact:true}).waitFor();
+  await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'修改轮次'}).getAttribute('data-value'),'2');
+  const references=page.getByRole('region',{name:'参考素材区域'});
+  assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
+  await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();
+  await page.getByRole('button',{name:/^分段 P002/}).click();
+  await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
+  await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
+  assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

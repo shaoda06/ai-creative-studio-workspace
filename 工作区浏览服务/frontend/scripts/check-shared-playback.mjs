@@ -36,12 +36,31 @@ export async function checkSharedPlayback(page, width) {
       await repeat.uncheck();
     }
   }
-  const descriptionToggle = demo.getByRole('button', { name: '显示整场视频标注', exact: true });
-  await descriptionToggle.click();
+  const references = demo.getByRole('region', { name: '参考素材区域' });
+  const headings = references.getByRole('heading');
+  assert.deepEqual(await headings.allTextContents(), ['公共参考素材', '本组参考素材']);
+  await references.getByText('该次未使用此类参考素材。', { exact: true }).waitFor();
+  await demo.getByRole('button', { name: '恢复布局', exact: true }).click();
+  const sceneToggle = demo.getByRole('button', { name: '切换 Songssx 整场示例', exact: true });
+  await sceneToggle.click();
   assert.equal(await demo.locator('.segment-video video').getAttribute('aria-label'), '第3轮 · 后处理');
   await demo.getByText('第3轮 · 后处理', { exact: true }).waitFor();
-  await descriptionToggle.click();
+  for (const [toggleLayout, id, previousId] of [[false, 'P001', 'P002'], [true, 'P002', 'P001']]) {
+    if (toggleLayout) await demo.getByRole('button', { name: '宽屏显示', exact: true }).click();
+    await demo.getByRole('button', { name: new RegExp('^分段 ' + id) }).click();
+    assert.deepEqual(await headings.allTextContents(), ['本段参考素材']);
+    const picture = references.getByRole('button', { name: new RegExp(id + ' 示例参考图') });
+    await picture.waitFor();
+    assert.equal(await references.getByRole('button', { name: new RegExp(previousId + ' 示例参考图') }).count(), 0);
+    const box = await references.boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= width + 1, '参考素材区不越界');
+    await picture.click();
+    await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
+  }
+  await sceneToggle.click();
   assert.match(await demo.locator('.segment-video video').getAttribute('aria-label'), /一采 · R001 · 候选一/);
+  assert.deepEqual(await headings.allTextContents(), ['公共参考素材', '本组参考素材']);
+  console.log(`参考素材检查：${width}px普通／宽屏，Songssx 分段切换、预览和 AiMixer 两栏通过。`);
   const video = business.locator('.segment-video video');
   const repeat = business.getByRole('checkbox', { name: '重复播放', exact: true });
   await video.evaluate(async el => {
