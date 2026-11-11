@@ -59,7 +59,10 @@ def configure_sampling(canvas, api, nodes, timeline, options):
     if scene not in ('dialogue', 'combat'):
         raise ValueError('scene_type 须为 dialogue 或 combat')
     speed = choice['speed']
-    if type(speed) not in (int, float) or not -10 <= speed <= 10:
+    if speed is None:
+        if scene != 'dialogue':
+            raise ValueError('只有文戏默认关闭速度 LoRA 时可将 speed 设为 null')
+    elif type(speed) not in (int, float) or not -10 <= speed <= 10:
         raise ValueError('动作速度须为 -10 至 10 的数值')
     loras = choice['loras']
     if (not isinstance(loras, list)
@@ -76,12 +79,13 @@ def configure_sampling(canvas, api, nodes, timeline, options):
     nodes['261']['widgets_values'][1] = total_steps
     nodes['261']['widgets_values_named']['steps'] = total_steps
     api['261']['inputs']['steps'] = total_steps
-    nodes['343']['widgets_values'][1] = speed
-    nodes['343']['widgets_values_named']['strength_model'] = speed
+    if speed is not None:
+        nodes['343']['widgets_values'][1] = speed
+        nodes['343']['widgets_values_named']['strength_model'] = speed
 
     combat = scene == 'combat'
     enabled_loras = {'400': 1 in loras, '407': 2 in loras, '342': combat,
-                     '344': combat, '345': combat, '343': True}
+                     '344': combat, '345': combat, '343': speed is not None}
     for key, enabled in enabled_loras.items():
         nodes[key]['mode'] = 0 if enabled else 4
     # Resolve bypassed model links using the shared canvas converter.

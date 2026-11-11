@@ -24,7 +24,7 @@ class ConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.canvas = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow').read_text())
         self.choice = dict(aspect_ratio='16:9', width=1024, height=576, steps=8, refine_steps=4,
-                           scene_type='dialogue', speed=3.0, loras=[])
+                           scene_type='dialogue', speed=None, loras=[])
 
     def test_six_answers_reach_both_output_branches(self):
         for portrait, combat, loras, refine_steps in itertools.product((False, True), (False, True), ([], [1], [2], [1, 2]), (4, 6)):
@@ -33,8 +33,11 @@ class ConfigurationTests(unittest.TestCase):
                 choice = {**self.choice, 'aspect_ratio': '9:16' if portrait else '16:9',
                           'width': 576 if portrait else 1024, 'height': 1024 if portrait else 576,
                           'scene_type': 'combat' if combat else 'dialogue',
-                          'speed': 4.0 if combat else 3.0, 'loras': loras, 'refine_steps': refine_steps}
-                configure_first_pass(canvas, dict(task_type='video-first-pass', h3_first_pass=choice))
+                          'speed': 4.0 if combat else None, 'loras': loras, 'refine_steps': refine_steps}
+                record = configure_first_pass(canvas, dict(task_type='video-first-pass', h3_first_pass=choice))
+                self.assertEqual(record['speed'], choice['speed'])
+                speed_node = next(node for node in canvas['nodes'] if node['id'] == 343)
+                self.assertEqual(speed_node['mode'], 0 if combat else 4)
                 for output in (504, 506):
                     api = Canvas(canvas).api(output)
                     director = api['502']['inputs']
@@ -49,16 +52,18 @@ class ConfigurationTests(unittest.TestCase):
                     self.assertEqual(director['sigmas'], ['289', 0])
                     self.assertEqual(api['407']['inputs']['sigmas'], ['289', 1])
                     self.assertTrue(api['407']['inputs']['confirm_first_pass'])
-                    chain = [53] + ([128] if 1 in loras else []) + ([507] if 2 in loras else []) + ([342, 344, 345] if combat else []) + [343]
+                    chain = [53] + ([128] if 1 in loras else []) + ([507] if 2 in loras else []) + ([342, 344, 345, 343] if combat else [])
                     for parent, child in zip([331, *chain[:-1]], chain):
                         self.assertEqual(api[str(child)]['inputs']['model'], [str(parent), 0])
                     for consumer in ('261', '502', '408'):
-                        self.assertEqual(api[consumer]['inputs']['model'], ['343', 0])
+                        self.assertEqual(api[consumer]['inputs']['model'], [str(chain[-1]), 0])
                     for node, active, weight in ((128, 1 in loras, .35), (507, 2 in loras, .8), (342, combat, .65), (344, combat, .35), (345, combat, .35)):
                         self.assertEqual(str(node) in api, active)
                         if active:
                             self.assertEqual(api[str(node)]['inputs']['strength_model'], weight)
-                    self.assertEqual(api['343']['inputs']['strength_model'], choice['speed'])
+                    self.assertEqual('343' in api, combat)
+                    if combat:
+                        self.assertEqual(api['343']['inputs']['strength_model'], 4.0)
 
     def test_custom_values_override_presets_without_changing_content_or_timing(self):
         original = next(n for n in self.canvas['nodes'] if n['id'] == 502)['widgets_values_named']
@@ -87,7 +92,7 @@ class ConfigurationTests(unittest.TestCase):
         cases = [dict(width=1000), dict(width=1024, height=1024), dict(steps=0),
                  dict(steps=2.5), dict(refine_steps=0), dict(refine_steps=2.5), dict(speed=11), dict(speed=float('nan')),
                  dict(loras=[0, 1]), dict(loras=[3]), dict(loras=[1, 1]),
-                 dict(aspect_ratio='0:9'), dict(scene_type='unknown')]
+                 dict(aspect_ratio='0:9'), dict(scene_type='unknown'), dict(scene_type='combat', speed=None)]
         for change in cases:
             with self.subTest(change=change):
                 canvas = copy.deepcopy(self.canvas)
@@ -135,6 +140,7 @@ class ConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             nodes = {n['id']: n for n in self.canvas['nodes']}
+            nodes[343]['mode'] = 0
             nodes[343]['widgets_values_named']['strength_model'] = 2.25
             nodes[343]['widgets_values'] = list(nodes[343]['widgets_values_named'].values())
             (root / 'source.json').write_text(json.dumps(self.canvas))

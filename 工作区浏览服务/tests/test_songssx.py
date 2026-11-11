@@ -102,11 +102,11 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
             desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
             store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
             cases = [
-                ('dialogue', 4, 3.0, [], ('343', '53')),
+                ('dialogue', 4, None, [], ('53',)),
                 ('combat', 4, 4.0, [1, 2], ('343', '345', '344', '342', '407', '400', '53')),
                 ('combat', 6, 4.0, [1], ('343', '345', '344', '342', '400', '53')),
                 ('dialogue', 2, -2.5, [2], ('343', '407', '53')),
-                ('dialogue', 994, 3.0, [], ('343', '53')),
+                ('dialogue', 994, None, [1, 2], ('407', '400', '53')),
             ]
             try:
                 for index, (scene, high_steps, speed, loras, chain) in enumerate(cases, 1):
@@ -136,7 +136,8 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(timeline['secondPassHighSteps'], high_steps)
                         self.assertEqual(timeline['secondPassLowresScale'], 0.6)
                         self.assertIs(timeline['referenceImageCenterCrop'], False)
-                        self.assertEqual(api['343']['inputs']['strength_model'], speed)
+                        if speed is not None:
+                            self.assertEqual(api['343']['inputs']['strength_model'], speed)
                         active_loras = {key for key, node in api.items() if node['class_type'] == 'LoraLoaderModelOnly'}
                         self.assertEqual(active_loras, set(chain))
                         for target, source in zip(('331', *chain[:-1]), chain, strict=True):
@@ -144,8 +145,9 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                         canvas = json.loads((record / '任务.workflow.json').read_text())
                         nodes = {node['id']: node for node in canvas['nodes']}
                         self.assertEqual(nodes[261]['widgets_values_named']['steps'], 6 + high_steps)
-                        self.assertEqual(nodes[343]['widgets_values_named']['strength_model'], speed)
-                        self.assertEqual(nodes[343]['mode'], 0)
+                        if speed is not None:
+                            self.assertEqual(nodes[343]['widgets_values_named']['strength_model'], speed)
+                        self.assertEqual(nodes[343]['mode'], 4 if speed is None else 0)
                 invalid_source = json.loads(plan.read_text())
                 invalid_source['tasks'][0]['songssx']['configuration']['high_steps'] = 995
                 (project / 'invalid-steps.json').write_text(json.dumps(invalid_source))

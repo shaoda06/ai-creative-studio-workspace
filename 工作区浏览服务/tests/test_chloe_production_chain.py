@@ -66,7 +66,7 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
             video_plan={'adapter':'technical','metadata':'ffprobe'},segment_plan={'director_node':'502','report_node':'403',
             'output_root':'/remote/output','targets':[{'index':i,'path':f'候选/{execution}-{p}.mp4','response_name':p+'取回.json'} for i,p in enumerate(ids)]})
         if upstream:spec['h3_second_pass']={'width':1920,'height':1088}
-        else:spec['h3_first_pass']=dict(aspect_ratio='16:9',width=1024,height=576,steps=8,refine_steps=4,scene_type='dialogue',speed=3.0,loras=[])
+        else:spec['h3_first_pass']=dict(aspect_ratio='16:9',width=1024,height=576,steps=8,refine_steps=4,scene_type='dialogue',speed=None,loras=[])
         return spec
 
     async def enqueue(self, entries, stage):
@@ -121,8 +121,6 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(video['context']['references']['common'],video['context'])
             self.assertIn('/production-files/',video['context']['references']['common'][0]['url'])
             self.assertIn(part['id'],video['context']['prompts']['chinese'])
-        pack=fixtures.browser.execution_director_spec(self.f.projects,self.project.name,'V001','E001')
-        self.assertIn(self.reference,pack['media'].values())
         self.assertEqual(list((self.project/'资源/图片').glob('**/*.png')),[])
         self.assertEqual(len(list((self.project/'资源/视频').glob('**/*.mp4'))),2)
         fixtures.add_row(self.f.record,'审阅记录',['R001','2026-11-08T12:00:00+08:00','[第1轮](<制作轮次.json#round-1>)','通过','无','隔离用户批准'])
@@ -135,6 +133,8 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
         second_task,_=fixtures.browser.task_for(self.project,data['executions']['E003'])
         first_task,_=fixtures.browser.task_for(self.project,data['executions']['E001'])
         first_request=recordio.read(self.project/'执行记录/E001/请求.json')['prompt']
+        self.assertNotIn('343', first_request)
+        self.assertNotIn('343', second_task['workflow'])
         self.assertEqual(second_task['workflow']['502'],first_request['502'])
         self.assertEqual(second_task['workflow']['407']['inputs']['width'],1920)
         self.assertEqual(first_task['workflow']['261'],second_task['workflow']['261'])

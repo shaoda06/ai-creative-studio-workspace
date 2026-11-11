@@ -34,7 +34,10 @@ def configure_first_pass(canvas, spec):
     if scene not in ('dialogue', 'combat'):
         raise ValueError('scene_type须为dialogue或combat')
     speed = choice['speed']
-    if type(speed) not in (int, float) or not math.isfinite(speed) or not -10 <= speed <= 10:
+    if speed is None:
+        if scene != 'dialogue':
+            raise ValueError('只有文戏默认关闭速度 LoRA 时可将 speed 设为 null')
+    elif type(speed) not in (int, float) or not -10 <= speed <= 10:
         raise ValueError('动作速度须为-10～10之间的数值')
     loras = choice['loras']
     if not isinstance(loras, list) or any(type(v) is not int or v not in (1, 2) for v in loras) or len(set(loras)) != len(loras):
@@ -45,9 +48,10 @@ def configure_first_pass(canvas, spec):
     widget(canvas, nodes[289], step=steps)
     # The external SIGMAS link remains authoritative; do not disconnect it.
     widget(canvas, nodes[502], steps=steps, width=width, height=height)
-    widget(canvas, nodes[343], strength_model=speed)
-    nodes[343]['mode'] = 0
-    for node, enabled in ((128, 1 in loras), (507, 2 in loras), (342, combat), (344, combat), (345, combat)):
+    if speed is not None:
+        widget(canvas, nodes[343], strength_model=speed)
+    for node, enabled in ((128, 1 in loras), (507, 2 in loras), (342, combat),
+                          (344, combat), (345, combat), (343, speed is not None)):
         nodes[node]['mode'] = 0 if enabled else 4
     for node, weight in ((128, .35), (507, .8), (342, .65), (344, .35), (345, .35)):
         widget(canvas, nodes[node], strength_model=weight)

@@ -51,17 +51,7 @@
 
 ### 第 5 步
 
-**第 5 步｜是否要自定义动作速度？自定义时，请直接输入 −10～10 的数值。**
-
-上一步选「关闭打戏Lora组」时
-
-- 保持默认（文戏默认 3.0）
-
-上一步选「开启打戏Lora组」时
-
-- 保持默认（打戏默认 4.0）
-
-选择保持默认时使用所显示的数值，也可以直接输入动作速度。脚本启用 H3 Speed Slider 并写入实际值。
+按 [Studio H3 共用动作速度询问](../../studio-h3/SKILL.md#动作速度询问)逐字显示问题和上一步对应的选项，并记录 `speed`。
 
 ### 第 6 步
 
@@ -71,7 +61,7 @@
 - 1. 去油（MysticXXX，0.35）
 - 2. 口型修正（Natural Face & Speech V2，0.80）
 
-基础 DMAD 保留标准版配置。装配前汇总实际宽高、两阶段步数、低清倍率、居中裁切、打戏组、动作速度及附加 LoRA。种子由调用业务提供，场内所有 GEN 共用同一个种子。查询、取回或恢复原任务使用原请求中的实际参数。
+基础 DMAD 保留标准版配置。装配前汇总实际宽高、两阶段步数、低清倍率、居中裁切、打戏组、速度 LoRA 开关及启用时的数值，以及附加 LoRA。种子由调用业务提供，场内所有 GEN 共用同一个种子。查询、取回或恢复原任务使用原请求中的实际参数。
 
 ## 场次装配
 
@@ -94,7 +84,7 @@
 落实[本次参数选择](#参数选择与装配前询问)后，调用[共用准备与入队入口](../../studio-comfyui/references/固定脚本接口规范.md#准备检查与提交复用)。清单的任务项使用 `task_type: "video-scene-generation"`，提供 `title`、`record_dir`、`output` 和 `songssx`。准备检查通过并具备本次执行授权后才入队。
 
 - `songssx` 提供对齐 32 的 `width`、`height`、`seed`、`remote_prefix` 及 `configuration`。画幅由调用方用于选择实际宽高。
-- `configuration` 提供 `high_steps`（实际高清步数）、`scene_type`（打戏 `combat` 或文戏 `dialogue`）、`speed`（最终动作速度）及 `loras`（所选附加 LoRA 的数字编号数组，选 0 时传 `[]`）。脚本根据现行六步配置固定低清步数、缩放倍率和居中裁切，按基准权重启用对应 LoRA。
+- `configuration` 提供 `high_steps`（实际高清步数）、`scene_type`（打戏 `combat` 或文戏 `dialogue`）、`speed`（按[第 5 步](#第-5-步)填写）及 `loras`（所选附加 LoRA 的数字编号数组，选 0 时传 `[]`）。脚本根据现行六步配置固定低清步数、缩放倍率和居中裁切，按基准权重启用所选打戏组和附加 LoRA。
 - 已有清单缺少 `configuration` 时，兼容入口沿用原 `reference_image_center_crop`、`lowres_scale` 和当时的标准装配方式。已有任务使用各自的执行副本。
 - `segments` 按播放顺序，每项提供 `p`、计划新增时长 `duration`（秒）、入段 `overlap_frames`、完整英文 `prompt` 与对应 `images` 文件路径数组。
 - [装配脚本](../scripts/songssx_workflow.py)写出任务画布、API、图片上传绑定、单一取回目标及帧区间。后台保存原准备结果和实际上传路径。

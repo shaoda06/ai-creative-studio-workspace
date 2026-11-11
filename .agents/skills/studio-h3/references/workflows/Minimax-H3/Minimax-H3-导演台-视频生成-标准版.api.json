@@ -36,20 +36,6 @@
       "title": "DMAD加速LoRA｜LoraLoaderModelOnly"
     }
   },
-  "343": {
-    "class_type": "LoraLoaderModelOnly",
-    "inputs": {
-      "lora_name": "H3_speed_slider_1.1.safetensors",
-      "strength_model": 3.0,
-      "model": [
-        "53",
-        0
-      ]
-    },
-    "_meta": {
-      "title": "动作速度LoRA｜LoraLoaderModelOnly"
-    }
-  },
   "36": {
     "class_type": "VAELoader",
     "inputs": {
@@ -86,7 +72,7 @@
       "steps": 12,
       "denoise": 1,
       "model": [
-        "343",
+        "53",
         0
       ]
     },
@@ -170,7 +156,7 @@
       "precise_segment_memory": true,
       "minimax_director_ui": "",
       "model": [
-        "343",
+        "53",
         0
       ],
       "video_vae": [
@@ -215,7 +201,7 @@
     "class_type": "MiniMaxLowVRAMAttention",
     "inputs": {
       "model": [
-        "343",
+        "53",
         0
       ],
       "head_chunks": 4

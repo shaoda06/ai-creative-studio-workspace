@@ -222,7 +222,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_standard_default_lora_chain(self):
         standard = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'api').read_text(encoding='utf-8'))
-        for node in ("128", "507", "342", "344", "345"):
+        for node in ("128", "507", "342", "344", "345", "343"):
             self.assertNotIn(node, standard)
         self.assertEqual(standard["53"]["class_type"], "LoraLoaderModelOnly")
         self.assertEqual(standard["53"]["inputs"]["lora_name"], "minimax_h3_dmad_full_dareties_v4_step600_comfy_fro.safetensors")
@@ -232,12 +232,8 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(standard["331"]["inputs"], {"attention": "comfy kitchen attention", "model": ["192", 0]})
         for node in ("406", "58", "332"):
             self.assertNotIn(node, standard)
-        self.assertEqual(standard["343"]["class_type"], "LoraLoaderModelOnly")
-        self.assertEqual(standard["343"]["inputs"]["lora_name"], "H3_speed_slider_1.1.safetensors")
-        self.assertEqual(standard["343"]["inputs"]["strength_model"], 3.0)
-        self.assertEqual(standard["343"]["inputs"]["model"], ["53", 0])
         for consumer in ("261", "502", "408"):
-            self.assertEqual(standard[consumer]["inputs"]["model"], ["343", 0])
+            self.assertEqual(standard[consumer]["inputs"]["model"], ["53", 0])
         self.assertEqual(standard["261"]["inputs"]["steps"], 12)
         self.assertEqual(standard["289"]["inputs"]["step"], 8)
         self.assertEqual(standard["502"]["inputs"]["steps"], 8)
@@ -246,14 +242,14 @@ class BaselineTests(unittest.TestCase):
 
     def test_standard_presets_export_selected_models_and_sampling_in_both_stages(self):
         baseline = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow').read_text(encoding='utf-8'))
-        optional = {128, 342, 344, 345}
+        optional = {128, 342, 344, 345, 343}
         defaults = {node['id']: node for node in baseline['nodes']}
         self.assertEqual({key: defaults[key]['mode'] for key in optional}, dict.fromkeys(optional, 4))
-        for key in (53, 343):
-            self.assertEqual(defaults[key]['mode'], 0)
+        self.assertEqual(defaults[53]['mode'], 0)
+        self.assertEqual(defaults[343]['widgets_values_named']['lora_name'], 'H3_speed_slider_1.1.safetensors')
         expected = {
-            1: ([53, 343], 18),
-            2: ([53, 128, 343], 19),
+            1: ([53], 17),
+            2: ([53, 128], 18),
             3: ([53, 342, 344, 345, 343], 21),
             4: ([53, 128, 342, 344, 345, 343], 22),
         }
@@ -266,7 +262,7 @@ class BaselineTests(unittest.TestCase):
                             node['mode'] = 0 if node['id'] in chain else 4
                         field_value = {
                             261: ('steps', 12 if choice in (1, 2) else 14),
-                            343: ('strength_model', 3.0 if choice in (1, 2) else 4.0),
+                            343: ('strength_model', 4.0),
                             289: ('step', 8),
                             502: ('steps', 8),
                         }.get(node['id'])
@@ -301,7 +297,8 @@ class BaselineTests(unittest.TestCase):
                         for parent, node in zip([331, *chain[:-1]], chain):
                             self.assertEqual(graph[str(node)]['inputs']['model'], [str(parent), 0])
                         self.assertEqual(graph['53']['inputs']['strength_model'], 0.8)
-                        self.assertEqual(graph['343']['inputs']['strength_model'], 3.0 if choice in (1, 2) else 4.0)
+                        if 343 in chain:
+                            self.assertEqual(graph['343']['inputs']['strength_model'], 4.0)
                         total_steps = graph['261']['inputs']['steps']
                         split_step = graph['289']['inputs']['step']
                         self.assertEqual(total_steps, 12 if choice in (1, 2) else 14)
@@ -332,11 +329,11 @@ class BaselineTests(unittest.TestCase):
                 for combat in (False, True):
                     with self.subTest(mystic=mystic, speech=speech, combat=combat):
                         data = copy.deepcopy(baseline)
-                        selected = {128: mystic, 507: speech, 342: combat, 344: combat, 345: combat}
+                        selected = {128: mystic, 507: speech, 342: combat, 344: combat, 345: combat, 343: combat}
                         for node in data['nodes']:
                             if node['id'] in selected:
                                 node['mode'] = 0 if selected[node['id']] else 4
-                        chain = [53] + [key for key in (128, 507, 342, 344, 345) if selected[key]] + [343]
+                        chain = [53] + [key for key, enabled in selected.items() if enabled]
                         for output in (504, 506):
                             api = wb.Canvas(data).api(output)
                             for key, enabled in selected.items():
@@ -347,7 +344,7 @@ class BaselineTests(unittest.TestCase):
                                 self.assertEqual(api['507']['inputs']['lora_name'], 'natural_face_speech_h3_lora_v2_500.safetensors')
                                 self.assertEqual(api['507']['inputs']['strength_model'], 0.8)
                             for consumer in ('261', '502', '408'):
-                                self.assertEqual(api[consumer]['inputs']['model'], ['343', 0])
+                                self.assertEqual(api[consumer]['inputs']['model'], [str(chain[-1]), 0])
 
     def test_standard_saves_both_stages_without_final_output_dependency_in_first_pass(self):
         canvas = wb.Canvas(json.loads((workflow_file('Minimax-H3-导演台-视频生成-标准版', 'workflow')).read_text(encoding="utf-8")))
@@ -361,11 +358,10 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(first["503"]["inputs"]["images"], ["502", 6])
         self.assertEqual(second["505"]["inputs"]["images"], ["502", 0])
         for graph, create_id, save_id in ((first, "503", "504"), (second, "505", "506")):
-            for node in ("128", "507", "342", "344", "345"):
+            for node in ("128", "507", "342", "344", "345", "343"):
                 self.assertNotIn(node, graph)
-            self.assertEqual(graph["343"]["inputs"]["model"], ["53", 0])
             for consumer in ("261", "502", "408"):
-                self.assertEqual(graph[consumer]["inputs"]["model"], ["343", 0])
+                self.assertEqual(graph[consumer]["inputs"]["model"], ["53", 0])
             self.assertEqual(graph["409"]["inputs"]["chunks"], 2)
             self.assertEqual(graph[create_id]["inputs"]["audio"], ["502", 1])
             self.assertEqual(graph[create_id]["inputs"]["fps"], ["502", 2])

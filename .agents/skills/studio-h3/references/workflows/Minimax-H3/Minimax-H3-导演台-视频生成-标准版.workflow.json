@@ -433,7 +433,7 @@
       ],
       "flags": {},
       "order": 13,
-      "mode": 0,
+      "mode": 4,
       "title": "动作速度LoRA｜LoraLoaderModelOnly",
       "properties": {
         "Node name for S&R": "LoraLoaderModelOnly"
