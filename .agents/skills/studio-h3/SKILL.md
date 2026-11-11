@@ -9,6 +9,13 @@ description: MiniMax H3 共用提示词模式、正文格式、参考素材语�
 
 按当前任务选择 [AiMixer 导演台](../studio-h3-aimixer/SKILL.md) 或 [Songssx 导演台](../studio-h3-songssx/SKILL.md)。已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
 
+## 生成段时长
+
+MiniMax H3 官方输出规格为 24 fps、单次 4–15 秒。分镜规划采用本次选定的工作流与模式限制，入队前核对实际参数。模型规格、执行窗口和剪辑采用时长分别记录。[MiniMax H3 官方输出规格](https://github.com/MiniMax-AI/MiniMax-H3#system-overview)
+
+- [Songssx 标准版 Ref2VA](../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#单段时长与帧数校验)按 GEN 核对计划新增时长，以及包含入段重叠和帧格对齐的采样窗口。
+- [AiMixer](../studio-h3-aimixer/references/ComfyUI-AiMixer导演台节点使用规范.md#5-时长帧数与编辑状态同步)按组核对实际请求及帧数。已知在 15 秒失败的旧画布沿用当时适用的 14 秒上限；其他画布按各自的实际配置核对。按原缓存接续时保持获批来源的请求时长与帧数。
+
 ## 动作速度询问
 
 两套导演台的新任务均使用以下第 5 步。

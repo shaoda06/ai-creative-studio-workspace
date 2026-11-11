@@ -23,7 +23,7 @@ description: Nora、Iris、Chloe 共用的视频制作核心，从已确认的�
 
 写某段正式生成提示词前，按[镜头状态与参考差异](../studio-storyboard/references/分镜写作规范.md#镜头状态的变化延续与参考差异)及[实际参考核对](../studio-video-prompts/references/视频提示词制作规范.md#内容依据与实际参考)核对该段实际需要的参考图、首帧、参考视频、音色或音频样本。已有资产引用准确版本，缺项交相应资产阶段准备。后段依赖前段实际末帧或音视频时，先记明依赖，来源可用后再完成该段资产核对及正式提示词。依照业务规定的执行批次和送审条件接续已就绪的范围。
 
-业务确定资产设计、资格和采用。当前段需要制图、尺寸处理或音频裁切时，按明确输入和授权调用[Imagegen](../studio-imagegen/SKILL.md)、[Qwen 图像工具](../studio-qwen-image/SKILL.md)、[图片处理](../studio-image-processing/SKILL.md)或[音频处理](../studio-audio-processing/SKILL.md)，再核对实际返回的参考文件。
+业务确定资产设计、资格和采用。制作用于本段的参考图时，先按[共用参考图用途与取景](../studio-creative-techniques/references/图片参考与修订方法.md#参考图用途与取景)明确画面目标。当前段需要制图、尺寸处理或音频裁切时，按明确输入和授权调用[Imagegen](../studio-imagegen/SKILL.md)、[Qwen 图像工具](../studio-qwen-image/SKILL.md)、[图片处理](../studio-image-processing/SKILL.md)或[音频处理](../studio-audio-processing/SKILL.md)，再核对实际返回的参考文件。
 
 资产齐备后，按[共用视频提示词](../studio-video-prompts/SKILL.md)转写本版分镜、对照实际参考并完成同版中文参考。按需将[创作技法](../studio-creative-techniques/SKILL.md#提示词转写)落实到本段模型正文。正文格式、标签与输入语义执行所用模型及模式的规则。使用 H3 时由[Studio H3](../studio-h3/SKILL.md)接入实际模式和导演台。
 

@@ -212,14 +212,14 @@ Ref2VA的主体定义、保留说明及逐镜状态归属统一执行[参考定�
 
 ## 5. 时长、帧数与编辑状态同步
 
-每组`durationSec`使用调用方明确的请求时长，并符合模型接口限制；业务的制作上限由调用方核对。按当前24fps的H3帧格换算：
+每组`durationSec`使用实际请求时长，按[H3 生成段时长](../../studio-h3/SKILL.md#生成段时长)及选定画布核对。按当前 24 fps 的 H3 帧格换算：
 
 ```text
 frameCount = max(5, round(durationSec * 24))
              + (5 - (max(5, round(durationSec * 24)) % 17)) % 17
 ```
 
-10秒对应243帧，14秒对应345帧（24fps下实际为14.375秒）。`length` 与frameCount一致；第一组start为0，后续start为前面各组frameCount之和；根totalFrames及导演台的total_frames为全部组frameCount之和。根durationSec保留原生界面的字段语义，不用它代替各组durationSec或真实输出时长；输出时长以本次文件的实际帧数和fps核对。
+10 秒对应 243 帧，14 秒对应 345 帧，15 秒对应 362 帧。实际媒体时长另行核对。`length` 与frameCount一致；第一组start为0，后续start为前面各组frameCount之和；根totalFrames及导演台的total_frames为全部组frameCount之和。根durationSec保留原生界面的字段语义，不用它代替各组durationSec或真实输出时长；输出时长以本次文件的实际帧数和fps核对。
 
 修改后同步核对：
 
