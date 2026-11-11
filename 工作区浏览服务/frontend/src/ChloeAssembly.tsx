@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
-import { referenceAssetKinds } from './ChloeReferenceAssets';
+import { ChloeAccessoryColumns, ChloeAccessoryTypes, referenceAssetKinds, useChloeAccessoryFilter } from './ChloeReferenceAssets';
 import { Dialog, PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { CopyButton } from './components/CopyButton';
@@ -13,7 +13,7 @@ import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null };
+type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null; type?: string | null };
 type PickerKind = 'models' | 'clothing' | 'hair' | 'accessories';
 type OpenImage = (title: string, src: string) => void;
 
@@ -25,6 +25,8 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
 }) {
   const { api } = useChloeScope();
   const [draftIds, setDraftIds] = useState(() => initial.map(asset => asset.id));
+  const [showFilters, setShowFilters] = useState(false);
+  const filtersId = useId();
   const isModel = kind === 'models';
   const multi = kind === 'accessories';
   const label = isModel ? '模特' : referenceAssetKinds[kind].label;
@@ -34,6 +36,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
     queryFn: () => get<AssemblyAsset[]>(`${api}/${endpoint}`),
   });
   const available = query.data?.filter(asset => asset.status === '可用');
+  const { visibleCards, ...filter } = useChloeAccessoryFilter(multi ? available ?? [] : []);
   const selected = draftIds.flatMap(id => {
     const asset = available?.find(item => item.id === id && item.media?.url);
     return asset ? [asset] : [];
@@ -41,28 +44,37 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const atLimit = multi && selected.length >= accessoryLimit;
   const title = multi ? `选择配饰 ${selected.length}/${accessoryLimit}` : `选择${label}`;
   const canConfirm = !!query.data && !query.error && (selected.length > 0 || initial.length > 0);
+  const cards = (multi ? visibleCards : available ?? []).map(asset => {
+    const checked = selected.some(item => item.id === asset.id);
+    const src = asset.media?.url;
+    return <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
+      item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
+      selection={{selected: checked, disabled: !src || (atLimit && !checked),
+        onPreview: src ? () => onPreview(assetTitle(asset), src) : undefined,
+        onSelect: () => {
+          if (checked) {
+            setDraftIds(selected.filter(item => item.id !== asset.id).map(item => item.id));
+          } else {
+            setDraftIds(multi ? [...selected.map(item => item.id), asset.id] : [asset.id]);
+          }
+        }}} />;
+  });
 
   return <Dialog title={title} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {available && (available.length ? <div className="asset-media-grid">
-      {available.map(asset => {
-        const checked = selected.some(item => item.id === asset.id);
-        const src = asset.media?.url;
-        return <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
-          item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
-          selection={{selected: checked, disabled: !src || (atLimit && !checked),
-            onPreview: src ? () => onPreview(assetTitle(asset), src) : undefined,
-            onSelect: () => {
-              if (checked) {
-                setDraftIds(selected.filter(item => item.id !== asset.id).map(item => item.id));
-              } else {
-                setDraftIds(multi ? [...selected.map(item => item.id), asset.id] : [asset.id]);
-              }
-            }}} />;
-      })}
-    </div> : <p className="muted">暂无可用{label}。</p>)}
-    <div className="chloe-assembly-confirm">
-      <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
+    {available && (cards.length ? multi
+      ? <ChloeAccessoryColumns cards={cards} />
+      : <div className="asset-media-grid">{cards}</div>
+      : <p className="muted">暂无可用{label}。</p>)}
+    <div className="chloe-assembly-picker-footer">
+      {showFilters && filter.types.length > 0 && <ChloeAccessoryTypes id={filtersId} {...filter} />}
+      <div className="chloe-assembly-confirm">
+        {filter.types.length > 0 && <button type="button" aria-expanded={showFilters}
+          aria-controls={showFilters ? filtersId : undefined} onClick={() => setShowFilters(previous => !previous)}>
+          筛选{filter.activeTypes.length > 0 && `（${filter.activeTypes.length}）`}
+        </button>}
+        <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
+      </div>
     </div>
   </Dialog>;
 }
