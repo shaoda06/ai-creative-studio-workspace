@@ -9,7 +9,7 @@ description: 在本次选用内置 Imagegen 创建或编辑图片、保存原生
 
 由Agent调用当前可用的内置imagegen工具，使用实际工具说明和imagegen技能。调用方提供完整内容、参考图顺序、目标比例及有效授权；本工具不规定角色视图或业务目录。本地生图指会话内置能力，不表示本机GPU生成。
 
-图片返修先按[图片返修看图](../../../AGENTS.md#图片返修看图)核对问题，再按[返修模式与输入](references/Imagegen工具调用规范.md#返修时的模式与输入)准备调用。
+图片返修进入[返修时的模式与输入](references/Imagegen工具调用规范.md#返修时的模式与输入)，在准备正文前处理画面反馈。
 
 实际调用、执行代理、原生结果和恢复要求见[工具调用](references/Imagegen工具调用规范.md)。scripts/imagegen_tool.py只生成已备调用正文及原字节保存结果，不通过CLI执行生图，不创建ComfyUI任务。提示词的内容及模型语义适配由Agent负责。
 
