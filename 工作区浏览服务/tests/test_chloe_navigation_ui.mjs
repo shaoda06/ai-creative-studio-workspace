@@ -191,7 +191,7 @@ try {
     await libraryFilter.getByRole('checkbox',{name:'裤装',exact:true}).check();
     assert.equal(await clothingLinks.count(),2);
     await outfitTab.click();
-    assert.equal(await libraryFilter.count(),0);
+    await libraryFilter.waitFor({state:'detached'});
     assert.equal(await clothingLinks.count(),2);
     await page.getByRole('link',{name:'O001 · 套装甲',exact:true}).click();
     await page.getByText('隔离测试套装',{exact:true}).waitFor();
@@ -536,10 +536,10 @@ try {
     await generateHandoff.click();
     const text = await handoff.textContent();
     for (const value of ['Chloe AI视频带货','模特：M002 · 模特乙','套装：O001 · 套装甲','发型：H001 · 发型甲',
-      '按对象编号查找各自正式采用的参考图','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
+      '按对象编号和标题查找各自正式采用的参考图','造型面部三视图','全身定装三视图原图','遮面版']) assert.ok(text.includes(value),value);
     for (const i of [0,1,2,3,5]) assert.ok(text.includes(`${fixtureAccessories[i].id} · ${fixtureAccessories[i].name}`));
-    assert.match(text,/套装：O001 · 套装甲 · IMG-O001@V002 · O001/);
-    assert.doesNotMatch(text,/IMG-M002|正面基础图|基础全身三视图|C005/);
+    assert.match(text,/^套装：O001 · 套装甲$/m);
+    assert.doesNotMatch(text,/IMG-|@V\d+|文件：|正面基础图|基础全身三视图|C005/);
     const textBox = await handoff.evaluate(element => ({
       height:element.getBoundingClientRect().height, border:getComputedStyle(element).borderTopWidth,
       fits:element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth,

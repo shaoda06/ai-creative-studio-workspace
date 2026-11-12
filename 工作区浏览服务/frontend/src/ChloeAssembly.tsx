@@ -32,7 +32,6 @@ const assemblyTabs = [
 type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
 
 const garmentTitle = (asset: AssemblyAsset) => `${assetTitle(asset)}（${asset.bodyArea}）`;
-const clothingReference = (asset: AssemblyAsset) => `${asset.reference!.resource}@${asset.reference!.version} · ${asset.media!.key}`;
 
 function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" className="chloe-assembly-add" aria-label={label} onClick={onClick}>
@@ -198,13 +197,13 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
       `请在「${projectName}」按以下装配开始制作造型图。`,
       '',
       `模特：${assetTitle(model)}`,
-      `套装：${assetTitle(outfit)} · ${clothingReference(outfit)}`,
+      `套装：${assetTitle(outfit)}`,
       ...(hair ? [`发型：${assetTitle(hair)}`] : []),
       ...(accessories.length
         ? ['配饰：', ...accessories.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`)]
         : []),
       '',
-      '请按对象编号查找各自正式采用的参考图，按取景使用实际入镜的配饰，保持各视角的造型一致。若鞋履、妆发或搭配有需要确认的取舍，先确认再生成。',
+      '请按对象编号和标题查找各自正式采用的参考图，按取景使用实际入镜的配饰，保持各视角的造型一致。若鞋履、妆发或搭配有需要确认的取舍，先确认再生成。',
       '请按 Chloe 造型流程从造型面部三视图开始，按顺序送审并接续全身定装三视图原图和遮面版。',
     ].join('\n'));
   };
