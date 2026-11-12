@@ -219,7 +219,11 @@ export function Dialog({ title, children, close, headerActions, size = "default"
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   const className = [size === "default" ? '' : `dialog-${size}`, lockPageScroll ? 'dialog-lock-scroll' : ''].filter(Boolean).join(' ');
-  return <dialog ref={ref} className={className || undefined} aria-label={title} onCancel={event => { event.preventDefault(); if (!closeDisabled) close(); }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
+  return <dialog ref={ref} className={className || undefined} aria-label={title} onCancel={event => {
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    if (!closeDisabled) close();
+  }} onClick={event => { if (!closeDisabled && event.target === event.currentTarget) close(); }}>{showHeader && <header><h2>{title}</h2>{headerActions ?? <button type="button" className="dialog-close" aria-label="关闭" disabled={closeDisabled} onClick={close}>关闭 ×</button>}</header>}{!showHeader && size === "fullscreen" && <button type="button" className="dialog-close dialog-close-floating" aria-label="关闭" disabled={closeDisabled} onClick={close}>×</button>}<div className="dialog-body">{children}</div></dialog>;
 }
 export function Preview({ project, item, revision, close, baseUrl = projectUrl(project), showFileActions = true }: { project: string; item: FileItem; revision: number; close: () => void; baseUrl?: string; showFileActions?: boolean }) {
   // Keep the opened item and revision until the user chooses to load newer text.

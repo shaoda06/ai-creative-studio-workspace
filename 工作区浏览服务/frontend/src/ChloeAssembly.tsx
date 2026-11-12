@@ -7,8 +7,9 @@ import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
 import { ChloeAccessoryColumns, ChloeAccessoryTypes, referenceAssetKinds, useChloeAccessoryFilter } from './ChloeReferenceAssets';
-import { Dialog, PreviewContext, Result } from './components';
+import { PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { AssetSelectionDialog } from './components/AssetSelectionDialog';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import { UnderlineTabs } from './components/UnderlineTabs';
@@ -23,8 +24,8 @@ const accessoryLimit = 5;
 const assemblyTabs = [{ value: 'look', label: '造型装配' }, { value: 'video', label: '视频装配' }];
 type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
 
-function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
-  kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void; onPreview: OpenImage;
+function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
+  kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void;
 }) {
   const { api } = useChloeScope();
   const [draftIds, setDraftIds] = useState(() => initial.map(asset => asset.id));
@@ -48,11 +49,9 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const canConfirm = !!available && (selected.length > 0 || initial.length > 0);
   const cards = (multi ? visibleCards : available ?? []).map(asset => {
     const checked = selected.some(item => item.id === asset.id);
-    const src = asset.media?.url;
     return <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
       item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
-      selection={{selected: checked, disabled: !src || (atLimit && !checked),
-        onPreview: src ? () => onPreview(assetTitle(asset), src) : undefined,
+      selection={{selected: checked, disabled: atLimit && !checked,
         onSelect: () => {
           if (checked) {
             setDraftIds(selected.filter(item => item.id !== asset.id).map(item => item.id));
@@ -62,17 +61,14 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
         }}} />;
   });
 
-  return <Dialog title={title} close={onClose} lockPageScroll>
+  return <AssetSelectionDialog title={title} close={onClose} confirm={() => onConfirm(selected)} confirmDisabled={!canConfirm}
+    stickyFooter={multi} actions={filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}>
     <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {available && (cards.length ? multi
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className="asset-media-grid">{cards}</div>
       : <p className="muted">暂无可用{label}。</p>)}
-    <div className={multi ? 'chloe-assembly-confirm chloe-assembly-confirm-sticky' : 'chloe-assembly-confirm'}>
-      {filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}
-      <button type="button" disabled={!canConfirm} onClick={() => onConfirm(selected)}>确认选择</button>
-    </div>
-  </Dialog>;
+  </AssetSelectionDialog>;
 }
 
 export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) {
@@ -209,7 +205,7 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
       <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
         empty={canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，发型和配饰可选。'} />
     </div>
-    {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
+    {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} />}
     {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
   </>;

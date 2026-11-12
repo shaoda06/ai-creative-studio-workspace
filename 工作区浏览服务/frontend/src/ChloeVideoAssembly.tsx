@@ -6,8 +6,9 @@ import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
 import type { ReferenceVideoCard, ReferenceVideoDetail } from './ChloeReferenceVideos';
-import { Dialog, Result } from './components';
+import { Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { AssetSelectionDialog } from './components/AssetSelectionDialog';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
@@ -27,8 +28,8 @@ const labels = { video: '参考视频', look: '造型图', scene: '背景' };
 const faceLabel = '造型面部三视图';
 const maskedLabel = '全身定装三视图遮面版';
 
-function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
-  kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection) => void; onClose: () => void; onPreview: OpenImage;
+function VideoAssemblyPicker({ kind, initial, onConfirm, onClose }: {
+  kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection) => void; onClose: () => void;
 }) {
   const { api } = useChloeScope();
   const [modelId, setModelId] = useState(initial?.kind === 'look' ? initial.model.id : null);
@@ -48,13 +49,9 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const ready = !!query.data && !query.isFetching && !query.error;
   const label = selectingModel ? '模特' : labels[kind];
 
-  const card = (asset: NamedAsset, media: FileItem | null, onSelect: () => void, selected = false, previewImage = false) => {
-    const title = assetTitle(asset);
-    const url = media?.url;
-    return <AssetMediaCard key={asset.id} title={title} formal entry aspectRatio={kind === 'video' ? 3 / 4 : 'natural'} revision={0}
-      item={{ media, emptyLabel: '尚未采用正面面部图' }} selection={{ selected, onSelect,
-        onPreview: previewImage && url ? () => onPreview(title, url) : undefined }} />;
-  };
+  const card = (asset: NamedAsset, media: FileItem | null, onSelect: () => void, selected = false) =>
+    <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio={kind === 'video' ? 3 / 4 : 'natural'} revision={0}
+      item={{ media, emptyLabel: '尚未采用正面面部图' }} selection={{ selected, onSelect }} />;
   const choices: Selection[] = kind === 'video' ? (videos.data ?? []).filter(asset => asset.status === '可用').map(asset => ({ kind: 'video', asset }))
     : kind === 'scene' ? (scenes.data ?? []).filter(asset => asset.status === '可用' && asset.media?.url).map(asset => ({ kind: 'scene', asset }))
     : model ? (looks.data?.looks ?? []).filter(asset => asset.status === '可用').flatMap(asset => {
@@ -67,19 +64,17 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
     setDraftId(initial?.kind === 'look' && initial.model.id === asset.id ? initial.asset.id : null);
     setModelId(asset.id);
   })) : choices.map(choice => {
-    const media = choice.kind === 'video' ? { kind: 'image', key: choice.asset.id, url: choice.asset.coverUrl, name: `${choice.asset.name}的首帧` }
+    const media = choice.kind === 'video' ? { kind: 'video', key: choice.asset.id, url: choice.asset.videoUrl, thumbnailUrl: choice.asset.coverUrl, name: choice.asset.name }
       : choice.asset.media;
-    return card(choice.asset, media, () => setDraftId(choice.asset.id), draft === choice, choice.kind !== 'video');
+    return card(choice.asset, media, () => setDraftId(choice.asset.id), draft === choice);
   });
 
-  return <Dialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose} lockPageScroll>
+  return <AssetSelectionDialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose}
+    confirm={selectingModel ? undefined : () => onConfirm(draft!)} confirmDisabled={!draft || !ready}
+    actions={model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}>
     <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {ready && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
-    {!selectingModel && <div className="chloe-assembly-confirm">
-      {model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}
-      <button type="button" disabled={!draft || !ready} onClick={() => onConfirm(draft!)}>确认选择</button>
-    </div>}
-  </Dialog>;
+  </AssetSelectionDialog>;
 }
 
 export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
@@ -170,7 +165,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
         <AssemblyPreview label="背景图" media={scene?.asset.media} empty="沿用参考视频的场景" onPreview={openImage} />
       </section>
       {picker && <VideoAssemblyPicker kind={picker} initial={picker === 'video' ? video : picker === 'look' ? look : scene}
-        onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
+        onConfirm={confirm} onClose={() => setPicker(null)} />}
       {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
   </>;

@@ -24,9 +24,6 @@
 .chloe-assembly-export-heading h2{margin:0}
 .chloe-assembly-export-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .chloe-assembly-export-template{margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
-.chloe-assembly-confirm{display:flex;align-items:center;gap:12px;margin-top:20px}
-.chloe-assembly-confirm-sticky{position:sticky;bottom:0;z-index:1;padding-block:10px;background:white}
-.chloe-assembly-confirm>button:last-child{flex-shrink:0;margin-inline-start:auto}
 
 .chloe-video-assembly{grid-template-columns:minmax(0,3fr) minmax(0,5fr);gap:24px 20px;align-items:start}
 .chloe-video-assembly-choice{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:8px;min-width:0}

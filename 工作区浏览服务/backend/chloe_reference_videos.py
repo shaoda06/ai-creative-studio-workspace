@@ -48,8 +48,8 @@ def listing(request: Request):
         for identity, name, path, doc in asset_documents(space.root, KIND):
             ref = playback_reference(space.root, path, fields(doc, SECTION))
             if ref:
-                cover, _ = video_urls(space.api, identity, ref)
-                cards.append({'id': identity, 'name': name, 'coverUrl': cover, 'status': '可用'})
+                cover, video = video_urls(space.api, identity, ref)
+                cards.append({'id': identity, 'name': name, 'coverUrl': cover, 'videoUrl': video, 'status': '可用'})
     except (ValueError, OSError) as error:
         raise HTTPException(409, str(error)) from error
     return cards

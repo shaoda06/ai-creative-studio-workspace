@@ -19,6 +19,7 @@ import { SyncNotification } from './SyncNotification';
 import { TabNav } from './TabNav';
 import { AssetMedia } from './AssetMedia';
 import { AssetMediaCard } from './AssetMediaCard';
+import { AssetSelectionDialog } from './AssetSelectionDialog';
 import { AssetCandidateMedia } from './AssetCandidateMedia';
 import { ReferenceMediaCard } from './ReferenceMediaCard';
 import { AudioPreviewButton, useAudioPreview } from './AudioPreviewButton';
@@ -60,6 +61,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const entryTitles = ['公共组件示例', '带有较长标题并可以自然换行的公共组件入口卡片示例，供对照同行卡片的底部入口位置'].filter(title => title.includes(search));
   const [selected, setSelected] = useState('one');
   const [selectedImage, setSelectedImage] = useState('');
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState(false);
   const [preview, setPreview] = useState<FileItem | null>(null);
   const [videoOnlyPreview, setVideoOnlyPreview] = useState(false);
@@ -215,14 +217,17 @@ export function ShowcaseExamples({ category }: { category: string }) {
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
-      <ComponentExample title="图片选择卡片" rule="暂选时显示蒙版与对勾。卡面支持缩略图，点击图片打开原图，用标题旁按钮选择。无可用图片时可禁用。" usage="Chloe 装配资产选择">
-        <div className="asset-media-grid">
-          <AssetMediaCard title="单选图片甲" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
-          <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
-          <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,disabled:true,onSelect:()=>{}}} />
-          <AssetMediaCard title="可放大的选项" item={thumbnailRecord} revision={1} entry
-            selection={{selected:selectedImage==='preview',onSelect:()=>setSelectedImage('preview'),onPreview:()=>setFullscreenImage(true)}} />
-        </div>
+      <ComponentExample title="资源选择卡片与弹窗" rule="右上角按钮选择资源，选中后显示对勾；点图片看全屏原图，点视频封面打开全屏播放器。关闭预览回到选择弹窗，确认后应用选择。" usage="Chloe 造型装配与视频装配">
+        <button type="button" onClick={() => { setSelectedImage(''); setAssetPickerOpen(true); }}>打开资源选择示例</button>
+        {assetPickerOpen && <AssetSelectionDialog title="资源选择示例" close={() => setAssetPickerOpen(false)}
+          confirm={() => setAssetPickerOpen(false)} confirmDisabled={!selectedImage} stickyFooter>
+          <div className="asset-media-grid">
+            <AssetMediaCard title="单选图片甲" item={thumbnailRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
+            <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
+            <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,onSelect:()=>{}}} />
+            <AssetMediaCard title="单选视频" item={{media:{...video,thumbnailUrl:image.url}}} revision={1} entry selection={{selected:selectedImage==='video',onSelect:()=>setSelectedImage('video')}} />
+          </div>
+        </AssetSelectionDialog>}
       </ComponentExample>
       <ComponentExample title="紧凑图片卡片" rule="卡片只显示名称、图片预览和资源版本。无图保留紧凑图片区域及提示；提供缩略图地址时卡面使用缩略图，点击查看或下载原图。" usage="Iris 已采用素材、Chloe 参考图及其他版本">
         <AssetMediaCard title="A001 · 已采用示例" item={{ ...thumbnailRecord, version: 'V002' }} revision={1} formal compact />

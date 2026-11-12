@@ -80,6 +80,7 @@ class ChloeReferenceVideoTests(unittest.TestCase):
         self.assertEqual(card['status'], '可用')
         details = self.client.get(self.base_url+'/RV001').json()
         self.assertEqual(details['status'], '可用')
+        self.assertEqual(card['videoUrl'], details['media']['url'])
         self.assertEqual(details['sourceUrl'], 'https://example.test/video/42')
         self.assertEqual(details['duration'], 1)
         self.assertEqual((details['aspectRatio'], details['width'], details['height']), ('16:9', 160, 90))
