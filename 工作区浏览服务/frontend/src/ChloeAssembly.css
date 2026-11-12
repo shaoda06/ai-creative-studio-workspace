@@ -26,7 +26,7 @@
 .chloe-assembly-export-template{margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
 
 .chloe-video-assembly-inputs,.chloe-video-assembly-output{display:grid;gap:8px 20px}
-.chloe-video-assembly-inputs{grid-template-columns:minmax(0,3fr) minmax(0,4fr) minmax(0,3fr);grid-template-rows:auto auto clamp(260px,40vh,420px)}
+.chloe-video-assembly-inputs{grid-template-columns:minmax(0,3fr) minmax(0,4fr) minmax(0,3fr);grid-template-rows:auto auto calc(clamp(260px,40vh,420px) * 4 / 3)}
 .chloe-video-assembly-output{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto auto}
 .chloe-video-assembly-choice,.chloe-video-assembly-output>section{display:grid;grid-row:1 / -1;grid-template-rows:subgrid;min-width:0}
 .chloe-video-assembly h2,.chloe-video-assembly .chloe-assembly-export-heading{margin:0}
