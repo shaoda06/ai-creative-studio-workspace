@@ -62,6 +62,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [selected, setSelected] = useState('one');
   const [selectedImage, setSelectedImage] = useState('');
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const toggleAsset = (id: string) => setSelectedImage(current => current === id ? '' : id);
   const [fullscreenImage, setFullscreenImage] = useState(false);
   const [preview, setPreview] = useState<FileItem | null>(null);
   const [videoOnlyPreview, setVideoOnlyPreview] = useState(false);
@@ -217,15 +218,15 @@ export function ShowcaseExamples({ category }: { category: string }) {
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
-      <ComponentExample title="资源选择卡片与弹窗" rule="右上角按钮选择资源，选中后显示对勾；点图片看全屏原图，点视频封面打开全屏播放器。关闭预览回到选择弹窗，确认后应用选择。" usage="Chloe 造型装配与视频装配">
+      <ComponentExample title="资源选择卡片与弹窗" rule="右上角按钮选择资源，再点对勾可取消。点图片看全屏原图，点视频封面打开全屏播放器。点击视频周围的背景可关闭并停止播放，返回后保留暂选。" usage="Chloe 造型装配与视频装配">
         <button type="button" onClick={() => { setSelectedImage(''); setAssetPickerOpen(true); }}>打开资源选择示例</button>
         {assetPickerOpen && <AssetSelectionDialog title="资源选择示例" close={() => setAssetPickerOpen(false)}
           confirm={() => setAssetPickerOpen(false)} confirmDisabled={!selectedImage} stickyFooter>
           <div className="asset-media-grid">
-            <AssetMediaCard title="单选图片甲" item={thumbnailRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>setSelectedImage('first')}} />
-            <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>setSelectedImage('second')}} />
+            <AssetMediaCard title="单选图片甲" item={thumbnailRecord} revision={1} entry selection={{selected:selectedImage==='first',onSelect:()=>toggleAsset('first')}} />
+            <AssetMediaCard title="单选图片乙" item={imageRecord} revision={1} entry selection={{selected:selectedImage==='second',onSelect:()=>toggleAsset('second')}} />
             <AssetMediaCard title="单选图片未就绪" item={{emptyLabel:'尚未采用图片'}} revision={1} entry selection={{selected:false,onSelect:()=>{}}} />
-            <AssetMediaCard title="单选视频" item={{media:{...video,thumbnailUrl:image.url}}} revision={1} entry selection={{selected:selectedImage==='video',onSelect:()=>setSelectedImage('video')}} />
+            <AssetMediaCard title="单选视频" item={{media:{...video,thumbnailUrl:image.url}}} revision={1} entry selection={{selected:selectedImage==='video',onSelect:()=>toggleAsset('video')}} />
           </div>
         </AssetSelectionDialog>}
       </ComponentExample>

@@ -432,12 +432,23 @@ try {
     const player = fullVideo.locator('video[controls]');
     await player.evaluate(video => video.play());
     await contained(player, `${width}px / 全屏视频播放器`);
-    await fullVideo.getByRole('button',{name:'关闭',exact:true}).click();
+    assert.ok(await player.evaluate(video => {
+      const { x, y, width, height } = video.getBoundingClientRect();
+      return document.elementFromPoint(x+width/2, y+height-16) === video;
+    }));
+    const playingVideo = await player.elementHandle();
+    await page.mouse.click(12, height/2);
     await fullVideo.waitFor({state:'detached'});
+    assert.ok(await playingVideo.evaluate(video => video.paused));
+    await playingVideo.dispose();
     assert.equal(await videoChoice.getAttribute('aria-pressed'), 'false');
     assert.equal(await secondChoice.getAttribute('aria-pressed'), 'true');
     await videoChoice.click();
     assert.equal(await videoChoice.getAttribute('aria-pressed'), 'true');
+    await videoChoice.click();
+    assert.equal(await videoChoice.getAttribute('aria-pressed'), 'false');
+    assert.ok(await confirmAsset.isDisabled());
+    await videoChoice.click();
     await confirmAsset.click();
     await assetDialog.waitFor({state:'detached'});
     const soundCards=showcase.locator('.audio-reference-card');

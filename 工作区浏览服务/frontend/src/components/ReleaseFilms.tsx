@@ -1,5 +1,5 @@
 import { Dialog, FileTree } from '../components';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FileItem } from '../api';
 import { Pagination } from './Pagination';
 import { TabNav } from './TabNav';
@@ -56,6 +56,7 @@ function ReleaseFilmList({ videos, category }: { videos: FileItem[]; category: s
 
 export function FullscreenVideo({ title, item, close }: { title: string; item: FileItem; close: () => void }) {
   return <Dialog size="fullscreen" showHeader={false} title={title} close={close}>
+    <button type="button" className="release-films-fullscreen-backdrop" aria-label="点击背景关闭视频预览" tabIndex={-1} onClick={close} />
     <div className="release-films-fullscreen"><ReleaseFilmPlayer item={item} fullscreen /></div>
   </Dialog>;
 }
@@ -63,8 +64,14 @@ export function FullscreenVideo({ title, item, close }: { title: string; item: F
 export function ReleaseFilmPlayer({ item, fullscreen = false }: { item: FileItem; fullscreen?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const player = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const video = player.current!;
+    return () => video.pause();
+  }, [attempt, fullscreen]);
   return <>
-    <video key={attempt} className={fullscreen ? 'release-films-player release-films-player-fullscreen' : 'release-films-player'} aria-label={item.name} controls preload="metadata" src={item.url} onError={() => setFailed(true)} />
+    <video key={attempt} ref={player} className={fullscreen ? 'release-films-player release-films-player-fullscreen' : 'release-films-player'} aria-label={item.name} controls preload="metadata" src={item.url} onError={() => setFailed(true)} />
     {failed && <FloatingMessage tone="error">{item.name} 无法播放。<button onClick={() => { setFailed(false); setAttempt(value => value + 1); }}>重新加载视频</button></FloatingMessage>}
   </>;
 }

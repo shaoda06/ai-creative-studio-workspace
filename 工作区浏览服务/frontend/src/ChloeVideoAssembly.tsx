@@ -29,7 +29,7 @@ const faceLabel = '造型面部三视图';
 const maskedLabel = '全身定装三视图遮面版';
 
 function VideoAssemblyPicker({ kind, initial, onConfirm, onClose }: {
-  kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection) => void; onClose: () => void;
+  kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection | null) => void; onClose: () => void;
 }) {
   const { api } = useChloeScope();
   const [modelId, setModelId] = useState(initial?.kind === 'look' ? initial.model.id : null);
@@ -66,11 +66,11 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose }: {
   })) : choices.map(choice => {
     const media = choice.kind === 'video' ? { kind: 'video', key: choice.asset.id, url: choice.asset.videoUrl, thumbnailUrl: choice.asset.coverUrl, name: choice.asset.name }
       : choice.asset.media;
-    return card(choice.asset, media, () => setDraftId(choice.asset.id), draft === choice);
+    return card(choice.asset, media, () => setDraftId(id => id === choice.asset.id ? null : choice.asset.id), draft === choice);
   });
 
   return <AssetSelectionDialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose}
-    confirm={selectingModel ? undefined : () => onConfirm(draft!)} confirmDisabled={!draft || !ready}
+    confirm={selectingModel ? undefined : () => onConfirm(draft ?? null)} confirmDisabled={!ready || (!draft && !initial)}
     actions={model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}>
     <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {ready && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
@@ -115,10 +115,10 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
       '按参考视频的镜头顺序、构图、运镜、人物动作和节奏复刻，由所选模特出镜。五官与妆发参考造型面部三视图，身形与穿搭参考全身定装三视图遮面版。已选背景时，按背景图还原场景并匹配镜头透视和光线。',
     ].join('\n'));
   };
-  const confirm = (selection: Selection) => {
-    if (selection.kind === 'video') setVideo(selection);
-    if (selection.kind === 'look') setLook(selection);
-    if (selection.kind === 'scene') setScene(selection);
+  const confirm = (selection: Selection | null) => {
+    if (picker === 'video') setVideo(selection?.kind === 'video' ? selection : null);
+    if (picker === 'look') setLook(selection?.kind === 'look' ? selection : null);
+    if (picker === 'scene') setScene(selection?.kind === 'scene' ? selection : null);
     setHandoff('');
     setPicker(null);
   };
@@ -136,19 +136,20 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
       <section className="chloe-video-assembly-choice" aria-label="参考视频选择">
         <h2>参考视频</h2>
         <button type="button" aria-label="选择参考视频" onClick={() => setPicker('video')}>{video ? assetTitle(video.asset) : '选择参考视频'}</button>
-        <div className="chloe-video-assembly-preview">
+        <figure className="chloe-assembly-preview chloe-video-assembly-preview">
+          <figcaption>参考视频</figcaption>
           {active && reference && !videoQuery.error ? <ReleaseFilmPlayer key={reference.media.url} item={reference.media} /> : video ?
             <Result loading={videoQuery.isPending} error={videoQuery.error} retry={videoQuery.refetch} retrying={videoQuery.isFetching} /> :
             <span className="muted">请选择参考视频</span>}
-        </div>
+        </figure>
       </section>
       <section className="chloe-video-assembly-choice" aria-label="造型图选择">
         <h2>造型图</h2>
         <button type="button" aria-label="选择造型图" onClick={() => setPicker('look')}>{look ? `${assetTitle(look.model)} / ${assetTitle(look.asset)}` : '选择造型图'}</button>
-        {look ? <div className="chloe-video-assembly-look-images">
-          <AssemblyPreview label={faceLabel} media={look.face.media} empty="尚未采用造型面部三视图" onPreview={openImage} />
-          <AssemblyPreview label={maskedLabel} media={look.masked.media} empty="尚未采用全身定装三视图遮面版" onPreview={openImage} />
-        </div> : <AssemblyPreview label="造型参考图" empty="请选择模特和造型" onPreview={openImage} />}
+        <div className="chloe-video-assembly-look-images">
+          <AssemblyPreview label={faceLabel} media={look?.face.media} empty="请选择模特和造型" onPreview={openImage} />
+          <AssemblyPreview label={maskedLabel} media={look?.masked.media} empty="请选择模特和造型" onPreview={openImage} />
+        </div>
       </section>
       <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
         empty={canGenerate ? '点击「生成」，整理当前装配的复刻提示词。' : '选定参考视频和造型图后可生成提示词。'}>

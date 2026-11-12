@@ -429,6 +429,13 @@ try {
     await assemblyNav.getByRole('button',{name:'视频装配'}).click();
     assert.ok(page.url().endsWith('asset=assembly&assemblyTab=video'));
     assert.ok(await generateHandoff.isDisabled());
+    const videoAssembly = page.locator('.chloe-video-assembly');
+    const previewTitles = ['参考视频','造型面部三视图','全身定装三视图遮面版','背景图'];
+    assert.deepEqual(await videoAssembly.locator('figcaption').allTextContents(),previewTitles);
+    const emptyLookFrames = await videoAssembly.locator('.chloe-video-assembly-look-images figure').all();
+    const emptyFrameBounds = await Promise.all(emptyLookFrames.map(frame=>frame.boundingBox()));
+    assert.equal(emptyFrameBounds.length,2);
+    assert.ok(emptyFrameBounds[0].height>0 && emptyFrameBounds[0].y+emptyFrameBounds[0].height<emptyFrameBounds[1].y);
     await choose('选择参考视频').click();
     const videoPicker = page.getByRole('dialog',{name:'选择参考视频',exact:true});
     const videoOption = videoPicker.getByRole('button',{name:'选择RV001 · 参考视频甲',exact:true});
@@ -444,10 +451,25 @@ try {
     assert.equal(await videoOption.getAttribute('aria-pressed'),'false');
     assert.ok(await confirm.isDisabled());
     await videoOption.click();
+    assert.equal(await videoOption.getAttribute('aria-pressed'),'true');
+    await videoOption.click();
+    assert.equal(await videoOption.getAttribute('aria-pressed'),'false');
+    assert.ok(await confirm.isDisabled());
+    await videoOption.click();
     await confirm.click();
     const player = page.locator('video[aria-label="参考视频甲"]');
     await player.waitFor();
     await page.waitForFunction(()=>document.querySelector('video[aria-label="参考视频甲"]')?.readyState>=1);
+    await choose('选择参考视频').click();
+    assert.equal(await videoOption.getAttribute('aria-pressed'),'true');
+    await videoOption.click();
+    assert.ok(await confirm.isEnabled());
+    await confirm.click();
+    await player.waitFor({state:'detached'});
+    await choose('选择参考视频').click();
+    await videoOption.click();
+    await confirm.click();
+    await player.waitFor();
     await choose('选择造型图').click();
     await dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true}).waitFor();
     assert.equal(await dialog.getByText('制作中模特',{exact:false}).count(),0);
@@ -472,6 +494,7 @@ try {
       await page.keyboard.press('Escape');
     }
     assert.equal(await lookPreviews.getByRole('img').count(),2);
+    assert.deepEqual(await videoAssembly.locator('figcaption').allTextContents(),previewTitles);
     assert.ok(previewBounds[0].y+previewBounds[0].height<previewBounds[1].y);
     await generateHandoff.click();
     assert.match(await handoff.textContent(),/背景：沿用参考视频的场景/);
