@@ -175,6 +175,35 @@ try {
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
   await page.goto(origin+'/#/spaces/commercial/projects/隔离多作品');
   const tabs=page.getByRole('navigation',{name:'项目栏目',exact:true});
+  const checkSongssx=async()=>{
+   await page.getByRole('button',{name:'分段制作',exact:true}).click();
+   assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
+   await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
+   const sceneDownload=page.getByRole('link',{name:'下载整场 MP4',exact:true});
+   assert.equal(await sceneDownload.getAttribute('href'),'/component-samples/video.webm?download=1');
+   const single=page.waitForEvent('download');
+   await sceneDownload.click();
+   assert.equal((await single).suggestedFilename(),'video.webm');
+   const references=page.getByRole('region',{name:'参考素材区域'});
+   assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
+   await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();
+   await page.getByRole('button',{name:/^分段 P002/}).click();
+   await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
+   await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
+   assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
+   await page.getByRole('button',{name:'资源下载',exact:true}).click();
+   const scenePack=page.waitForEvent('download');
+   await page.getByRole('button',{name:'剪映草稿下载',exact:true}).click();
+   assert.equal((await scenePack).suggestedFilename(),'scene.jypack');
+  };
+  if(process.env.SONGSSX_ONLY==='1') {
+   songssxDetail=true;
+   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+   await page.locator('[data-episode=F004]').click();
+   await checkSongssx();
+   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[]);
+   await page.close();continue;
+  }
   if(process.env.PRODUCTION_TABS_ONLY==='1') {
    await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
    const workCard=page.locator('[data-episode=F002]');
@@ -496,20 +525,7 @@ try {
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   songssxDetail=true;
   await page.reload();
-  await page.getByRole('button',{name:'分段制作',exact:true}).click();
-  assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
-  await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
-  const references=page.getByRole('region',{name:'参考素材区域'});
-  assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
-  await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();
-  await page.getByRole('button',{name:/^分段 P002/}).click();
-  await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
-  await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
-  assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
-  await page.getByRole('button',{name:'资源下载',exact:true}).click();
-  const scenePack=page.waitForEvent('download');
-  await page.getByRole('button',{name:'剪映草稿下载',exact:true}).click();
-  assert.equal((await scenePack).suggestedFilename(),'scene.jypack');
+  await checkSongssx();
   await location.getByRole('link',{name:'视频制作',exact:true}).click();
   await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
   await tabs.getByRole('button',{name:'项目概况',exact:true}).click();
@@ -528,6 +544,6 @@ try {
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }
- console.log(process.env.PRODUCTION_TABS_ONLY==='1'?'Iris制作页默认标签、分镜正文及修改入口三档检查通过':'Iris完整共用制作页隔离验收通过',out);
+ console.log(process.env.SONGSSX_ONLY==='1'?'Iris Songssx 播放器下载、GEN 切换及剪映草稿三档检查通过':process.env.PRODUCTION_TABS_ONLY==='1'?'Iris制作页默认标签、分镜正文及修改入口三档检查通过':'Iris完整共用制作页隔离验收通过',out);
 } catch(error) {if(activePage&&!activePage.isClosed())await activePage.screenshot({path:out+'/failure.png'});throw error}
 finally {await browser.close();await server.close()}

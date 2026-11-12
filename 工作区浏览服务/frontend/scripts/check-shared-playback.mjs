@@ -45,6 +45,11 @@ export async function checkSharedPlayback(page, width) {
   await sceneToggle.click();
   assert.equal(await demo.locator('.segment-video video').getAttribute('aria-label'), '第3轮 · 后处理');
   await demo.getByText('第3轮 · 后处理', { exact: true }).waitFor();
+  const download = demo.getByRole('link', { name: '下载整场 MP4', exact: true });
+  assert.equal(await download.getAttribute('href'), '/component-samples/video.webm?download=1');
+  const saved = page.waitForEvent('download');
+  await download.click();
+  assert.equal((await saved).suggestedFilename(), 'video.webm');
   for (const [toggleLayout, id, previousId] of [[false, 'P001', 'P002'], [true, 'P002', 'P001']]) {
     if (toggleLayout) await demo.getByRole('button', { name: '宽屏显示', exact: true }).click();
     await demo.getByRole('button', { name: new RegExp('^分段 ' + id) }).click();
@@ -54,11 +59,16 @@ export async function checkSharedPlayback(page, width) {
     assert.equal(await references.getByRole('button', { name: new RegExp(previousId + ' 示例参考图') }).count(), 0);
     const box = await references.boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= width + 1, '参考素材区不越界');
+    assert.equal(await download.getAttribute('href'), '/component-samples/video.webm?download=1', '切换 GEN 保留整场文件');
+    const control = await download.boundingBox();
+    const player = await demo.getByRole('region', { name: '视频区域' }).boundingBox();
+    assert.ok(control.x >= player.x && control.x + control.width <= player.x + player.width + 1);
     await picture.click();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   }
   await sceneToggle.click();
   assert.match(await demo.locator('.segment-video video').getAttribute('aria-label'), /一采 · R001 · 候选一/);
+  assert.equal(await download.count(), 0);
   assert.deepEqual(await headings.allTextContents(), ['公共参考素材', '本组参考素材']);
   console.log(`参考素材检查：${width}px普通／宽屏，Songssx 分段切换、预览和 AiMixer 两栏通过。`);
   const video = business.locator('.segment-video video');

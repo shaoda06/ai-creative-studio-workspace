@@ -22,6 +22,78 @@ PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
 
 
 class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_iris_submission_registers_the_round_and_approved_storyboard(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / 'projects/样本'
+            work = project / '作品/F001-样本'
+            production = work / '06-视频生产'
+            record = production / '执行记录/R001-一采'
+            record.mkdir(parents=True)
+            index = production / '制作轮次.json'
+            script = production / '生产任务-R001-v01.md'
+            script.write_text('# 生产记录\n')
+            board = work / '04-分镜声音/分镜与声音制作稿-v01.md'
+            board.parent.mkdir()
+            template = Path(__file__).resolve().parents[2] / '.agents/skills/studio-storyboard/templates/逐镜正文模板.md'
+            fields = [line.split('：')[0] + '：测试' for line in template.read_text().splitlines() if line.startswith('**')]
+            approved = ('# 分镜\n| 生成段 | 场次 | 请求时长 | 对应镜号 | 段内Shot及时间 |\n'
+                        '| --- | --- | --- | --- | --- |\n'
+                        '| P001 | S001 | 5 秒 | SH001 | Shot 1：0–5秒 |\n\n'
+                        '### 分段 P001\n\n#### SH001｜试镜\n\n' + '\n\n'.join(fields) + '\n')
+            board.write_text('# 摘要\n### 分段 P001\n只有概述\n')
+            (project / 'reference.png').write_bytes(b'fixture')
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': ['http://127.0.0.1:1']}))
+            plan = record / '任务清单.json'
+            key = lambda path: path.relative_to(project).as_posix()
+            task = {'title': 'Iris 场次样本', 'task_type': 'video-scene-generation',
+                    'authorization': '隔离测试', 'record_dir': key(record), 'output': key(production / '候选/S001.mp4'),
+                    'songssx': {'width': 1280, 'height': 736, 'seed': 7, 'remote_prefix': 'video/test/scene',
+                                'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': []},
+                                'segments': [{'p': 'P001', 'duration': 5, 'overlap_frames': 0,
+                                              'images': ['reference.png'], 'prompt': PROMPT}]}}
+            payload = SubmissionPlanInput(project=project.name, plan_file=key(plan), thread_id='test',
+                desktop=dict(node='test', server='test', pipe='test', caller_thread='test'),
+                prepare_only=True, start_paused=True)
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            adapter = {'production_adapter': 'iris-commercial-production'}
+            try:
+                plan.write_text(json.dumps({'tasks': [task]}))
+                with self.assertRaisesRegex(ValueError, '须提供 iris_round'):
+                    await submission_plans.execute(store, payload, **adapter)
+                spec = {'work': 'F001', 'record': key(script), 'storyboard': {'file': key(board), 'version': 'v01'}}
+                plan.write_text(json.dumps({'iris_round': spec, 'tasks': [task]}))
+                with self.assertRaisesRegex(ValueError, 'P 段计划表'):
+                    await submission_plans.execute(store, payload, **adapter)
+                self.assertFalse(index.exists())
+                self.assertFalse(store.rows)
+                board.write_text(approved)
+                prepared = await submission_plans.execute(store, payload, **adapter)
+                self.assertEqual(prepared['production_round'], 1)
+                self.assertFalse(store.rows)
+                before = index.read_text()
+                result, = json.loads(before)['rounds']
+                self.assertEqual(result['storyboard'], spec['storyboard'])
+                self.assertEqual(result['batches'], [key(record / '任务清单-装配结果.json')])
+                self.assertEqual(result['segments'], [{'id': 'P001', 'duration': 5, 'stage': '一采',
+                                                      'run': 'R001', 'file': task['output']}])
+                payload.prepare_only = False
+                board.write_text(approved.replace('**机位/构图**：测试', ''))
+                with self.assertRaisesRegex(ValueError, '逐镜字段'):
+                    await submission_plans.execute(store, payload, **adapter)
+                self.assertFalse(store.rows)
+                board.write_text(approved)
+                with patch.object(store, 'read_session_name', AsyncMock()):
+                    accepted = await submission_plans.execute(store, payload, **adapter)
+                retry = await submission_plans.execute(store, payload, **adapter)
+                self.assertEqual(accepted['production_round'], retry['production_round'])
+                self.assertEqual(accepted['group_id'], retry['group_id'])
+                self.assertTrue(retry['reused'])
+                self.assertEqual(len(store.rows), 1)
+                self.assertEqual(index.read_text(), before)
+            finally:
+                await store.close()
+
     async def test_scene_binds_independent_audio_in_each_gen_order(self):
         with TemporaryDirectory() as directory:
             workspace = Path(directory).resolve()

@@ -385,7 +385,8 @@ async def agent_submit_plan(request: Request, data: SubmissionPlanInput) -> dict
     tasks = agent_request(request)
     from backend.services.submission_plans import execute
     try:
-        return await execute(tasks, data)
+        space = getattr(request.state, 'workspace_space', None)
+        return await execute(tasks, data, production_adapter=space.production_adapter if space else None)
     except (ValueError, OSError, KeyError, TypeError, AssertionError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 

@@ -240,6 +240,8 @@ try {
   await workflow.getByRole('button',{name:'Songssx 制作记录'}).click();
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
+  const sceneDownload=page.getByRole('link',{name:'下载整场 MP4',exact:true});
+  assert.equal(await sceneDownload.getAttribute('href'),'/component-samples/video.webm?download=1');
   assert.equal(await page.getByRole('combobox',{name:'修改轮次'}).getAttribute('data-value'),'2');
   const references=page.getByRole('region',{name:'参考素材区域'});
   assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
