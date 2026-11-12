@@ -86,6 +86,8 @@ def songssx_scene(project, entry, context_for):
         segment['context'] = context
     target, = data['outputs']
     if postprocess := entry.get('songssx_postprocess'):
+        from backend.services.scene_postprocess import output_for_source
+
         source = resolve_file(project, project_file(project, target['path']))
         directory, state, recorded, processed = songssx_task(project, postprocess, 'video-postprocess')
         key = postprocess
@@ -93,12 +95,13 @@ def songssx_scene(project, entry, context_for):
             if recorded:
                 entry['issues'].append('Songssx 后处理执行检查报告缺失')
             return result
-        if (processed.get('task_type') != 'video-postprocess' or processed.get('record_dir') != key
-                or len(processed['outputs']) != 1 or Path(processed['outputs'][0]['path']).suffix.lower() != '.mp4'
-                or {resolve_file(project, project_file(project, upload['file'])) for upload in processed['uploads']} != {source}):
+        try:
+            if processed.get('record_dir') != key:
+                raise ValueError('Songssx 后处理记录目录不符')
+            target = output_for_source(project, processed, source)
+        except ValueError:
             entry['issues'].append('Songssx 后处理须对应本场原视频及一个整场 MP4')
             return result
-        target, = processed['outputs']
     actual = resolve_file(project, project_file(project, target['path']))
     relative = actual.relative_to(project).as_posix()
     stage = entry['segments'][0]['stage']

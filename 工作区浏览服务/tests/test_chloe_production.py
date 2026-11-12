@@ -434,6 +434,31 @@ class ChloeProductionTests(unittest.TestCase):
             self.assertEqual(client.get(self.api+'/production-files/综合资料/账号定位.md').status_code,404)
             self.assertEqual(client.get(self.api+'/production-files/%2e%2e/secret.png').status_code,404)
 
+    def test_whole_postprocess_review_beside_segment_round(self):
+        self.plan()
+        self.candidate('P001','E001')
+        self.candidate('P002','E002')
+        record='执行记录/E003'
+        source='整片原片.mp4'
+        output='整片后处理.mp4'
+        (self.project/source).write_text('原片')
+        (self.project/output).write_text('整片后处理')
+        from execution_records import write_entries
+        write_entries(self.project/record,{
+            '执行检查报告.json':{'prepared_input':{'task_type':'video-postprocess',
+                'record_dir':record,'uploads':[{'file':source}],
+                'outputs':[{'path':output,'response_name':'取回.json'}]}},
+            '后台任务状态.json':{'id':'test','task_type':'video-postprocess','record_dir':record},
+            '取回.json':{},
+        })
+        round_=self.round(1,[('P001','E001'),('P002','E002')])
+        round_['review_outputs']=[{'label':'整片后处理','source':source,'postprocess':record}]
+        self.rounds([round_])
+        detail=browser.detail(self.projects,self.project.name,self.api,'V001')
+        review,=detail['sceneRounds']['whole'][0]['reviewOutputs']
+        self.assertEqual(review['key'],output)
+        self.assertEqual([len(item['videos']) for item in detail['segments']['whole']],[1,1])
+
     def prepare_handoff(self):
         self.plan()
         self.candidate('P001','E001');self.candidate('P002','E002')

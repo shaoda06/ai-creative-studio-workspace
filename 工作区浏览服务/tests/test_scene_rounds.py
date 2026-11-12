@@ -53,6 +53,27 @@ class SceneRoundTests(unittest.TestCase):
         data = build_data(self.project, web_episode_navigation=True, load_scope='09-剧集制作', episode_id='EP001')
         return data['catalogues']['09-剧集制作']['children'][0]
 
+    def test_whole_postprocess_review_beside_segment_round(self):
+        record = self.root + '/其他资料/执行附件/C001-R002'
+        source = self.root + '/其他资料/候选视频/整场原片.mp4'
+        output = self.root + '/其他资料/候选视频/整场后处理.mp4'
+        self.write(source, '整场原片')
+        self.write(output, '整场后处理')
+        write_entries(self.project / record, {
+            '执行检查报告.json': {'prepared_input': {'task_type': 'video-postprocess',
+                'record_dir': record, 'uploads': [{'file': source}],
+                'outputs': [{'path': output, 'response_name': '取回.json'}]}},
+            '后台任务状态.json': {'id': 'test', 'task_type': 'video-postprocess', 'record_dir': record},
+            '取回.json': {},
+        })
+        self.create({**self.plan(), 'review_outputs': [
+            {'label': '整场后处理', 'source': source, 'postprocess': record}]})
+        episode = self.episode()
+        self.assertEqual(episode['productionWorkflows'], ['aimixer'])
+        round_, = episode['sceneRounds']['C001']
+        self.assertEqual(round_['reviewOutputs'][0]['key'], output)
+        self.assertTrue(all(len(segment['videos']) == 1 for segment in episode['segments']['C001']))
+
     def test_songssx_whole_scene_uses_original_round_and_accepted_record(self):
         execution = self.root + '/其他资料/执行附件/C001-R002'
         output = self.root + '/其他资料/候选视频/EP001-C001-R002-场次生成.mp4'

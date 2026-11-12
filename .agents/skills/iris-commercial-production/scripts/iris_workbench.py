@@ -15,6 +15,7 @@ from iris_works import discover_works, work_root, work_status_label
 import iris_browser_production as production
 from production_workflows import recorded_workflows
 from songssx_browser import songssx_scene
+from backend.services.scene_postprocess import review_output
 
 
 SHOT_HEADING = re.compile(r'(?m)^####\s+(SH\d{3,})(?!\d)[^\n]*\n')
@@ -205,14 +206,6 @@ def source(projects, name, api, declaration, issues):
         return None
 
 
-def round_spec(project, work):
-    root = work_root(project, work)
-    path = root / '06-视频生产/制作轮次.json'
-    if not path.resolve().is_relative_to(root):
-        raise ValueError('制作轮次索引必须位于本作品目录内')
-    return json.loads(path.read_text('utf-8-sig'))['rounds'] if path.is_file() else []
-
-
 def current_status_label(status, delivery, archived):
     label = status['label'] if status else ''
     return label or ('' if archived else delivery.get('status')) or '未登记制作状态'
@@ -233,7 +226,7 @@ def validate_notes(project, work, identities, changes, view=None):
     if view == 'archive' or (view is None and production.legacy_sources(project, work)):
         raise ValueError('历史制作归档只读')
     rounds = {item['number']: {(entry['id'], entry['stage'], entry['run']) for entry in item['segments']}
-              for item in round_spec(project, work)}
+              for item in production.round_spec(project, work)}
     if (any(item.number not in rounds for item in changes.rounds)
             or any((note.segment, note.stage, note.run) not in identities
                    or note.roundNumber is not None and (note.segment, note.stage, note.run) not in rounds.get(note.roundNumber, set())
@@ -312,8 +305,9 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
             status['deliverySummary'] = ''
         status['label'] = current_status_label(status, delivery, has_archive)
     scene_executions = {}
+    declared_rounds = production.round_spec(project, work)
     data = production.production_data(project, api, work, legacy_fallback=False, executions=executions,
-                                      scene_executions=scene_executions)
+                                      scene_executions=scene_executions, rounds=declared_rounds)
     segments = data['segments']
     adoption = records.get('视频采用记录')
     if adoption:
@@ -327,7 +321,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
     groups_by_round = {}
     songssx_by_round = {}
     numbers = set()
-    for spec in round_spec(project, work):
+    for spec in declared_rounds:
         number = spec['number']
         if not isinstance(number, int) or number < 1 or number in numbers:
             raise ValueError('整片制作轮次编号须为不重复的正整数')
@@ -428,6 +422,9 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
                 issues.append(scene + ' 的 Songssx 场次与本轮登记不匹配')
         outputs = []
         for output in spec.get('review_outputs', []):
+            if 'postprocess' in output:
+                outputs.append(review_output(project, output, lambda key: production.file_url(api, key)))
+                continue
             try:
                 path = projects.file(name, output['file'])
             except FileNotFoundError:

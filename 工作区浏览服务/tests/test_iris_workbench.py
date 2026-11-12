@@ -31,6 +31,45 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
+    def test_whole_postprocess_keeps_segment_candidates_and_requires_collection(self):
+        first = self.register()
+        root = self.works['F001'] + '/06-视频生产/'
+        source = root + '候选/整场原片.mp4'
+        output = root + '候选/S001-整场后处理.mp4'
+        record = root + '执行记录/R002-后处理'
+        declaration = {'label': '整场 30 fps', 'postprocess': record, 'source': source}
+        task = {'task_type': 'video-postprocess', 'record_dir': record, 'project': str(self.project),
+                'uploads': [{'file': source}], 'outputs': [{'path': output, 'response_name': '取回.json'}]}
+        self.write(source, '整场原片')
+        self.write(record + '/任务清单-装配结果.json', json.dumps({'accepted': [True], 'tasks': [task]}))
+        self.write(record + '/执行检查报告.json', json.dumps({'prepared_input': task}))
+        self.write(record + '/后台任务状态.json', json.dumps({
+            'id': 'whole-task', 'task_type': task['task_type'], 'record_dir': record, 'status': 'local_queued'}))
+        segment_record = root + '执行记录/R003-后处理'
+        segment_output = root + '候选/P001-后处理.mp4'
+        segment_task = {**task, 'record_dir': segment_record, 'uploads': [{'file': first['segments'][0]['file']}],
+                        'outputs': [{'path': segment_output, 'response_name': '取回.json'}]}
+        self.write(segment_output, '分段后处理')
+        self.write(segment_record + '/任务清单-装配结果.json',
+                   json.dumps({'accepted': [True], 'tasks': [segment_task]}))
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, {
+            **first, 'number': 2, 'review_outputs': [declaration]}]}))
+
+        self.write(output, '整场后处理')
+        pending = self.detail()
+        self.assertEqual(pending['sceneRounds']['whole'][1]['reviewOutputs'], [
+            {'kind': 'video', 'name': '整场 30 fps'}])
+        self.write(record + '/取回.json', '{}')
+        ready = self.detail()
+        rounds = ready['sceneRounds']['whole']
+        self.assertEqual(rounds[0]['reviewOutputs'], [])
+        actual, = rounds[1]['reviewOutputs']
+        self.assertEqual(actual['key'], output)
+        self.assertEqual(self.client.get(actual['url']).text, '整场后处理')
+        self.assertEqual(ready['segments'], pending['segments'])
+        self.assertEqual([video['key'] for video in ready['segments']['whole'][0]['videos']],
+                         [first['segments'][0]['file'], segment_output])
+
     def test_director_registration_template_projects_exact_versions_once(self):
         key = self.works['F001'] + '/04-分镜声音/导演表/'
         template = Path(__file__).resolve().parents[2] / '.agents/skills/iris-commercial-storyboard/templates/导演表内容.md'

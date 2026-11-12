@@ -23,6 +23,7 @@ def load_episode_rounds(episode, read):
 def load_scene_rounds(project, episode, scene, read):
     from backend.parsers.project import field, markdown, document_header
     from backend.parsers.generation import segment_body
+    from backend.services.scene_postprocess import review_output
     result = []
     for entry in scene_entries(project, episode, scene, read):
         item = {**entry, 'issues': []}
@@ -45,6 +46,9 @@ def load_scene_rounds(project, episode, scene, read):
         item['segments'] = [{**segment,
             'scriptHtml': markdown(segment_body(documents.get('storyboard', ''), segment['id']), entry['storyboard']['file']),
             'scriptUrl': quote(entry['storyboard']['file'], safe='/-._~')} for segment in entry['segments']]
+        if entry.get('review_outputs'):
+            item['reviewOutputs'] = [review_output(project, output, lambda key: quote(key, safe='/-._~'))
+                                     for output in entry['review_outputs']]
         if item.get('songssx_execution'):
             from drama_browser_generation import storyboard_context
             item['songssx'] = songssx_scene(project, item, lambda segment: (
