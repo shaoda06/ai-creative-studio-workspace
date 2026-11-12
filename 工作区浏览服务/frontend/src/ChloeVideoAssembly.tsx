@@ -103,17 +103,14 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
       `请在「${projectName}」用以下素材复刻参考视频。`,
       '',
       `参考视频：${assetTitle(reference)}`,
-      `视频文件：${reference.media.key}`,
       `出镜模特：${assetTitle(look.model)}`,
       `造型：${assetTitle(look.asset)}`,
-      `${faceLabel}：${look.face.resource}@${look.face.version}`,
-      `${faceLabel}文件：${look.face.media.key}`,
-      `${maskedLabel}：${look.masked.resource}@${look.masked.version}`,
-      `${maskedLabel}文件：${look.masked.media.key}`,
-      ...(scene ? [`背景：${assetTitle(scene.asset)}`, `背景图文件：${scene.asset.media?.key}`] : ['背景：沿用参考视频的场景。']),
+      scene ? `背景：${assetTitle(scene.asset)}` : '背景：沿用参考视频的场景。',
       `额外要求：${requirements.trim() || '无。'}`,
       '',
-      '按参考视频的镜头顺序、构图、运镜、人物动作和节奏复刻，由所选模特出镜。五官与妆发参考造型面部三视图，身形与穿搭参考全身定装三视图遮面版。已选背景时，按背景图还原场景并匹配镜头透视和光线。',
+      `按编号和标题查找参考视频的已登记播放版本，以及该造型正式采用的${faceLabel}和${maskedLabel}。`,
+      `按参考视频的镜头顺序、构图、运镜、人物动作和节奏复刻，由所选模特出镜。五官与妆发参考${faceLabel}，身形与穿搭参考${maskedLabel}。`,
+      ...(scene ? ['按编号和标题查找该背景正式采用的场景展示图，还原场景并匹配镜头透视和光线。'] : []),
     ].join('\n'));
   };
   const confirm = (selection: Selection | null) => {

@@ -73,7 +73,8 @@ try {
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
       if (path.startsWith('/api/assembly-fixture/')) {
         const width = path.endsWith('-front') ? 90 : 120;
-        const height = /\/(O001|C003)$/.test(path) ? 240 : /-(front|body)$/.test(path) ? 120 : 100;
+        const height = /\/(O001|C003)$/.test(path) ? 240 : /-(front|body)$/.test(path) ? 120
+          : path.endsWith('/O006') ? 150 : /\/O00[3-8]$/.test(path) ? 90 : 100;
         return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#edf5ef"/></svg>`});
       }
       if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
@@ -227,6 +228,8 @@ try {
     await garmentCount(0).waitFor();
     assert.ok(await outfitGenerate.isDisabled());
     assert.equal(await outfitInfo.locator('dd').textContent(),'未选择');
+    const emptyExportHeight = (await outfitHandoff.boundingBox()).height;
+    assert.equal(emptyExportHeight,520);
     const addGarment = choose('添加单件');
     assert.equal(await addGarment.textContent(),'+添加单件');
     const emptyAdd = await addGarment.boundingBox();
@@ -249,11 +252,20 @@ try {
     await confirm.click();
     await garmentCount(1).waitFor();
     assert.equal(await outfitInfo.locator('dd').textContent(),'O003 · 单件样例1（组合）');
+    const firstGarmentImage = page.locator('.chloe-assembly-garments img').first();
+    await firstGarmentImage.evaluate(image => { image.loading = 'eager'; return image.decode(); });
+    const firstImage = await firstGarmentImage.boundingBox();
+    const firstCover = await page.locator('.chloe-assembly-garments .cover').first().boundingBox();
+    assert.ok(Math.abs(firstImage.width - firstCover.width) <= 1 && Math.abs(firstImage.width / firstImage.height - 4/3) < 0.01);
     const nextAdd = await addGarment.boundingBox();
-    assert.ok(nextAdd.x > emptyAdd.x && Math.abs(nextAdd.y-emptyAdd.y) <= 1);
+    assert.ok(nextAdd.x > emptyAdd.x && Math.abs(nextAdd.height-emptyAdd.height) <= 2);
+    const firstCard = await page.locator('.chloe-assembly-garments .asset-media-card').first().boundingBox();
+    assert.ok(Math.abs(firstCard.height-emptyAdd.height) <= 2);
     await outfitGenerate.click();
-    assert.match(await outfitHandoff.textContent(),/O003 · 单件样例1（组合） · IMG-O003@V002 · O003/);
-    assert.match(await outfitHandoff.textContent(),/生成前先逐张打开并查看/);
+    assert.match(await outfitHandoff.textContent(),/^1\. O003 · 单件样例1$/m);
+    assert.match(await outfitHandoff.textContent(),/按编号和标题找到各单件正式采用的服装展示图。生成前先逐张打开并查看/);
+    assert.doesNotMatch(await outfitHandoff.textContent(),/IMG-|@V\d+|（组合）/);
+    assert.equal((await outfitHandoff.boundingBox()).height,emptyExportHeight);
     await addGarment.click();
     await garmentOptions[0].waitFor();
     for (const option of garmentOptions.slice(1,5)) await option.click();
@@ -270,17 +282,25 @@ try {
     assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
     await outfitGenerate.click();
     assert.match(await outfitHandoff.textContent(),/5\. O007/);
+    assert.equal((await outfitHandoff.boundingBox()).height,emptyExportHeight);
+    await page.locator('.chloe-assembly-garments img').evaluateAll(images=>Promise.all(images.map(image=>{
+      image.loading='eager';
+      return image.decode();
+    })));
     const editGarments = choose('编辑单件');
     const [cards, edit, info, exported] = await Promise.all([
       page.locator('.chloe-assembly-garments .asset-media-card').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().toJSON())),
       editGarments.boundingBox(), outfitInfo.boundingBox(), outfitExport.boundingBox(),
     ]);
     assert.equal(cards.length,5);
-    assert.ok(cards.every(card=>Math.abs(card.y-cards[0].y)<=1 && Math.abs(card.width-edit.width)<=1));
-    assert.ok(Math.abs(edit.x-cards[0].x)<=1 && edit.y>cards[0].bottom);
+    assert.ok(cards.slice(0,3).every(card=>Math.abs(card.y-cards[0].y)<=1 && Math.abs(card.width-edit.width)<=1));
+    assert.ok(cards.slice(3).every(card=>Math.abs(card.y-edit.y)<=1));
+    assert.ok(Math.abs(edit.x-cards[2].x)<=1 && edit.y>cards[0].bottom);
+    assert.ok(cards[3].height>cards[0].height);
     assert.equal(info.y,exported.y);
     assert.ok(info.x+info.width<exported.x && info.y>edit.y+edit.height);
-    assert.ok(Math.abs(info.width/(info.width+exported.width)-0.3)<0.002);
+    assert.ok(Math.abs(info.width-exported.width)<=1);
+    assert.equal(exported.x-info.x-info.width,32);
     await editGarments.click();
     await garmentOptions[0].waitFor();
     await pickerCount('单件',5,5).waitFor();
@@ -311,6 +331,7 @@ try {
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
     assert.equal(await reset.count(),0);
     await handoff.waitFor();
+    assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
     assert.ok(await generateHandoff.isDisabled());
     assert.ok(await copyHandoff.isDisabled());
     const previews = page.locator('.chloe-assembly-main figure, .chloe-assembly-hair');
@@ -424,6 +445,7 @@ try {
     await confirm.click();
     await generateHandoff.click();
     assert.doesNotMatch(await handoff.textContent(), /^(发型|配饰)：/m);
+    assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
     await choose('选择发型').click();
     const hairChoice = dialog.getByRole('button',{name:'选择H001 · 发型甲',exact:true});
     await hairChoice.click();
@@ -522,7 +544,8 @@ try {
       height:element.getBoundingClientRect().height, border:getComputedStyle(element).borderTopWidth,
       fits:element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth,
     }));
-    assert.ok(textBox.height > emptyHandoffHeight && textBox.fits);
+    assert.equal(textBox.height,emptyHandoffHeight);
+    assert.ok(textBox.fits);
     assert.equal(textBox.border,'1px');
     await copyHandoff.click();
     await page.waitForFunction(async expected => await navigator.clipboard.readText() === expected,text);
@@ -558,6 +581,7 @@ try {
     await assemblyNav.getByRole('button',{name:'视频装配'}).click();
     assert.ok(page.url().endsWith('asset=assembly&assemblyTab=video'));
     assert.ok(await generateHandoff.isDisabled());
+    assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
     const videoAssembly = page.locator('.chloe-video-assembly');
     const previewTitles = ['参考视频','造型面部三视图','全身定装三视图遮面版','背景图'];
     assert.deepEqual(await videoAssembly.locator('figcaption').allTextContents(),previewTitles);
@@ -645,14 +669,19 @@ try {
     await pickerCount('背景',1).waitFor();
     await confirm.click();
     await page.getByRole('heading',{name:'背景 1/1 可选',exact:true}).waitFor();
-    await page.getByRole('textbox',{name:'额外要求（可选）'}).fill('保留开场动作。\n镜头稍慢。');
+    const requirements = page.getByRole('textbox',{name:'额外要求（可选）'});
+    await requirements.fill('保持开场构图和节奏。\n'.repeat(60));
+    await generateHandoff.click();
+    assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
+    assert.ok(await handoff.evaluate(text=>text.scrollHeight>text.clientHeight));
+    await requirements.fill('保留开场动作。\n镜头稍慢。');
     assert.ok(await copyHandoff.isDisabled());
     await generateHandoff.click();
     const videoPrompt = await handoff.textContent();
-    for (const text of ['RV001 · 参考视频甲','资源/参考视频原件.webm','M002 · 模特乙','L001 · 造型甲','IMG-look-face@V002','L001-face','IMG-look-masked@V003','L001-masked','S001 · 背景甲','保留开场动作。\n镜头稍慢。']) {
+    for (const text of ['RV001 · 参考视频甲','M002 · 模特乙','L001 · 造型甲','S001 · 背景甲','保留开场动作。\n镜头稍慢。','已登记播放版本','正式采用的造型面部三视图和全身定装三视图遮面版','正式采用的场景展示图']) {
       assert.ok(videoPrompt.includes(text), text);
     }
-    assert.doesNotMatch(videoPrompt,/IMG-look@|L001-adopted|L001-face-candidate/);
+    assert.doesNotMatch(videoPrompt,/IMG-|L001-(adopted|face|masked)|\.webm|文件：/);
     await copyHandoff.click();
     assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),videoPrompt);
     const [videoBox, lookBox, sceneBox, requirementsBox, promptBox] = await Promise.all([
@@ -670,7 +699,8 @@ try {
     assert.equal(requirementsBox.y,promptBox.y);
     assert.equal(requirementsBox.width,promptBox.width);
     assert.equal(requirementsBox.x,videoBox.x);
-    assert.ok(requirementsBox.x+requirementsBox.width<promptBox.x && sceneBox.y+sceneBox.height<promptBox.y);
+    assert.equal(promptBox.x-requirementsBox.x-requirementsBox.width,32);
+    assert.ok(sceneBox.y+sceneBox.height<promptBox.y);
     assert.ok(sceneBox.x+sceneBox.width<=width+1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await assemblyNav.getByRole('button',{name:'造型装配'}).click();

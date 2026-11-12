@@ -134,9 +134,9 @@ function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
   const generate = () => setHandoff([
     `请为「${projectName}」用以下单件合成一张套装展示图，套装仅包含服装。`,
     '',
-    ...garments.map((asset, index) => `${index + 1}. ${garmentTitle(asset)} · ${clothingReference(asset)}`),
+    ...garments.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`),
     '',
-    '生成前先逐张打开并查看以上准确版本，核对部位重复、叠穿顺序、缺少的衣物及看不清的结构，给出具体搭配建议。若需要更换单件或调整保留范围，先确认方案再生成。',
+    '按编号和标题找到各单件正式采用的服装展示图。生成前先逐张打开并查看，核对部位重复、叠穿顺序、缺少的衣物及看不清的结构，给出具体搭配建议。若需要更换单件或调整保留范围，先确认方案再生成。',
     '按 Chloe 服装展示图流程制作与送审。登记时将服装形态填为套装，套装来源填为合成，记录各单件的准确输入版本、实际组成和穿法。',
   ].join('\n'));
 
@@ -147,13 +147,13 @@ function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
         <h2>单件选择 {garments.length}/{garmentLimit}</h2>
         <div className="chloe-assembly-accessories chloe-assembly-garments">
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
-            {garments.map(asset => <AssetMediaCard key={asset.id} title={garmentTitle(asset)} formal entry aspectRatio={1} revision={0}
+            {garments.map(asset => <AssetMediaCard key={asset.id} title={garmentTitle(asset)} formal entry aspectRatio="natural" revision={0}
               item={{media: asset.media}} />)}
           </PreviewContext.Provider>
           <AddAssetCard label={garments.length === garmentLimit ? '编辑单件' : '添加单件'} onClick={() => setPicking(true)} />
         </div>
       </section>
-      <div className="chloe-assembly-summary">
+      <div className="chloe-assembly-summary chloe-assembly-summary-equal">
         <section aria-label="导出信息">
           <h2>导出信息</h2>
           <dl className="chloe-overview-fields" aria-live="polite">

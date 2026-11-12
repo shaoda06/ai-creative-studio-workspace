@@ -24,6 +24,6 @@ export function AssemblyExport({ label = '导出', canGenerate, generate, handof
         {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
       </div>
     </div>
-    <p className="chloe-assembly-export-template">{handoff || <span className="muted">{empty}</span>}</p>
+    <p className="chloe-assembly-export-template" tabIndex={handoff ? 0 : undefined}>{handoff || <span className="muted">{empty}</span>}</p>
   </section>;
 }
