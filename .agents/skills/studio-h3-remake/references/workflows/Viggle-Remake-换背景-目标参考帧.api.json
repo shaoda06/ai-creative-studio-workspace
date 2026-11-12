@@ -113,8 +113,8 @@
         0
       ],
       "audio": [
-        "63",
-        1
+        "72",
+        0
       ]
     },
     "_meta": {
@@ -309,6 +309,19 @@
     },
     "_meta": {
       "title": "17N+5"
+    }
+  },
+  "72": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": true,
+      "on_true": [
+        "63",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "是否参考原背景音（可能会影响这个人物的口型）"
     }
   }
 }

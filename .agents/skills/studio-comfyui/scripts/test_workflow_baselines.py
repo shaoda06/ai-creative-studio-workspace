@@ -234,6 +234,9 @@ class BaselineTests(unittest.TestCase):
                 self.assertEqual(api['19']['inputs']['fps'], 24)
                 self.assertEqual(api['42']['inputs']['frames'], ['67', 1])
                 self.assertEqual(api['42']['inputs']['ref_1'], ['9', 0])
+                self.assertEqual(api['42']['inputs']['audio'], ['72', 0])
+                self.assertEqual(api['72']['class_type'], 'ComfySwitchNode')
+                self.assertEqual(api['72']['inputs'], {'switch': True, 'on_true': ['63', 1]})
                 self.assertTrue(api['1']['inputs']['unet_name'].endswith(
                     f'viggle_remake_{mode}_pruned_int8_convrot.safetensors'))
                 self.assertEqual(api['16']['inputs']['sigmas'], [sigma_id, 0])

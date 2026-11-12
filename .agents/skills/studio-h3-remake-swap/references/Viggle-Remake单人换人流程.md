@@ -12,6 +12,7 @@
   - 面部三视图排第一，接 `ref_1`，正文使用 `<Picture 1>`。
   - 全身三视图排第二，接 `ref_2`，正文使用 `<Picture 2>`。
 - 用户或业务明确指定其他顺序时，按指定顺序接线并同步正文标签。此顺序是默认编排约定，效果以实际样片为准。双三视图作普通参考时 `pins` 留空。
+- 按[原声是否参与生成](../../studio-h3-remake/SKILL.md#原声是否参与生成)确认本轮选择。
 
 ### 提示词编写与核对
 
@@ -42,6 +43,7 @@
 | `#34` | `value` | 当前段的完整六段英文提示词 |
 | `#66` | `value` | 当前段拟保留的时长，单位为秒 |
 | `#54` | `value` | 视频画布及普通参考图的短边设定 |
+| `#72` | `switch` | 本轮确认的原声选择，`true` 为参考原声，`false` 为只在成片保留原声 |
 | `#12` | `seed` | 本段实际使用的种子，API 模板给出固定数值 |
 | `#65` | `filename_prefix` | 本段的输出前缀，按实际段号区分 |
 
@@ -54,12 +56,14 @@ tool=".agents/skills/studio-h3-remake/scripts/long_swap.py"
 python3 "$tool" prepare source_24fps.mp4 run --cut 240
 python3 "$tool" graph run 2 --source remote/segment-002.mp4 \
   --face remote/face.png --full-body remote/body.png --prompt prompt.txt \
+  --audio-conditioning silent \
   --output-prefix viggle_remake/long_swap --output run/segment-002.api.json
 python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 ```
 
 - `prepare` 写出 `run/segments.json` 和 `run/sources/segment-NNN.mp4`。使用新的工作目录，段号从 1 开始。
 - `graph` 读取 UTF-8 正文，以计划的生成帧数直接填 `#42.frames`。面部图默认第一。全身图需排第一时加 `--reference-order full-body-first`，并同步调整正文的 Picture 编号。续接段加 `--previous` 和上一段原始输出上传后返回的服务器输入名，工具装配 `RemakePrefix`。
+- 按[已确认的原声选择](../../studio-h3-remake/SKILL.md#原声是否参与生成)传 `--audio-conditioning`。命令行省略时沿用模板的 `source`。
 - `--short-edge` 可选 480 或 736 像素，省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
 - 三个命令均只操作本地文件，成功时写出指定产物，输入或帧数不合要求时退出报错。API JSON 和合片路径须使用尚未存在的文件名。
 

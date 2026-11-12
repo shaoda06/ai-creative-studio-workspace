@@ -139,6 +139,7 @@ def load_task(template, args, segment):
     nodes = json.loads(template.read_text(encoding="utf-8"))
     del nodes["66"], nodes["67"]
     nodes["42"]["inputs"]["frames"] = segment.generation
+    nodes["72"]["inputs"]["switch"] = args.audio_conditioning == "source"
     nodes["62"]["inputs"]["file"] = args.source
     nodes["34"]["inputs"]["value"] = args.prompt.read_text(encoding="utf-8")
     nodes["65"]["inputs"]["filename_prefix"] = f"{args.output_prefix}/segment-{segment.index:03d}"
@@ -216,6 +217,8 @@ def add_graph_arguments(command):
     command.add_argument("segment", type=int, help="segments.json 中从 1 起算的段号")
     command.add_argument("--source", required=True, help="本段源视频上传后返回的服务器输入名")
     command.add_argument("--prompt", required=True, type=Path, help="本段六段式英文正文文件，UTF-8")
+    command.add_argument("--audio-conditioning", choices=("source", "silent"), default="source",
+                         help="source 参考原声（默认，可能影响口型）；silent 生成时静音，join 时封回原声")
     command.add_argument("--short-edge", type=int, choices=(480, 736), help="短边像素，省略沿用模板 480")
     command.add_argument("--seed", type=int, help="采样种子，省略沿用模板固定值")
     command.add_argument("--output-prefix", required=True, help="服务器输出目录前缀，工具附加段号")
