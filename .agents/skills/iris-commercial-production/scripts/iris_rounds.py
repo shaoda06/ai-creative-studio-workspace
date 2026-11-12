@@ -10,6 +10,7 @@ from iris_works import work_root
 from iris_workbench import SHOT_HEADING, apply_plan_timing, scene_segments, segment_rows, segment_text
 from iris_browser_production import SONGSSX_TASK, STAGES, VIDEO_EXTENSIONS, local_key
 from backend.services.scene_postprocess import output_for_source
+from songssx_browser import playback_video, scene_playbacks
 from songssx_workflow import PLANNER, shot_blocks
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-storyboard/scripts'))
@@ -110,6 +111,8 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
     previous = existing if existing and not rebuild else base
     selected = {item['id']: item for item in previous.get('segments', [])}
     review_outputs = list(existing.get('review_outputs', [])) if existing and not rebuild else []
+    playback_sources = {playback_video(project, output)['key']
+                        for output in scene_playbacks(previous.get('review_outputs', [])).values()}
     changes = {}
     for task in tasks:
         directory = work_file(project, batch.parent, task['record_dir'])
@@ -153,12 +156,13 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
                         raise ValueError('逐段输出须以 P 段号开头：' + path.name)
                     upload, = task['uploads']
                     source_path = project_file(project, upload['file']).relative_to(project).as_posix()
-                    if source_path not in {local_key(project, item['file']) for item in selected.values()}:
+                    if (source_path not in playback_sources
+                            and source_path not in {local_key(project, item['file']) for item in selected.values()}):
                         raise ValueError('整场后处理须引用本轮沿用的原视频')
                     output_for_source(project, task, source_path)
                     item = {'label': f'{run[1]} 整场后处理', 'postprocess': directory.relative_to(project).as_posix(),
                             'source': source_path}
-                    if item not in review_outputs:
+                    if not any(output.get('postprocess') == item['postprocess'] for output in review_outputs):
                         review_outputs.append(item)
                     continue
                 pairs.append((match[1], output))

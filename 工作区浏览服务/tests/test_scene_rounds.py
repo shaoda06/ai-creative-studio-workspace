@@ -157,6 +157,22 @@ class SceneRoundTests(unittest.TestCase):
         self.assertEqual(after['songssx']['video']['key'], processed)
         self.assertEqual(after['songssx']['video']['stage'], '后处理')
         self.assertEqual(after['songssx']['segments'], before['songssx']['segments'])
+        derived = self.root + '/其他资料/候选视频/EP001-C001-R004-整场返修.mp4'
+        self.write(derived, 'derived fixture')
+        self.create({**planned, 'songssx_postprocess': None, 'review_outputs': [
+            {'label': '整场返修', 'file': derived,
+             'playback': {'scene': 'C001', 'run': 'R004', 'stage': '场次生成'}},
+        ]})
+        selected = self.episode()['sceneRounds']['C001'][-1]
+        actual = selected['songssx']['video']
+        self.assertEqual(actual['key'], derived)
+        self.assertEqual(selected['reviewOutputs'], [])
+        self.assertEqual([item['start'] for item in selected['songssx']['segments']], [0, 124 / 24, 254 / 24])
+        revised_note = value.model_copy(update={'roundNumber': selected['number'], 'run': 'R004',
+                                                'fileRevision': actual['fileRevision']})
+        notes.save_note(self.project, 'EP001', 'C001', revised_note)
+        with self.assertRaisesRegex(ValueError, '与本轮不符'):
+            notes.save_note(self.project, 'EP001', 'C001', revised_note.model_copy(update={'fileRevision': 'old'}))
         self.write('项目进度.md', '| 阶段名称 | 对应会话入口 | 当前状态 | 成果入口 | 待决事项 | 下一步 |\n'
                    '| --- | --- | --- | --- | --- | --- |\n| EP001制作 | — | 已完成 | — | — | — |\n')
         self.write(self.root + '/其他资料/工作稿/EP001-生成说明-工作稿.md',

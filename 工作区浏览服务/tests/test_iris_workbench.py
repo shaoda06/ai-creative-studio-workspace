@@ -161,6 +161,50 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertEqual(self.client.put(api + '/production-notes?view=current', json=note).status_code, 200)
         self.assertEqual(self.detail('F002')['productionWorkflows'], ['aimixer'])
 
+        repaired = root + '候选/R003-返修整场.mp4'
+        processed = root + '候选/R004-后处理整场.mp4'
+        process_record = root + '执行记录/R004-后处理'
+        process_task = {'task_type': 'video-postprocess', 'record_dir': process_record, 'project': str(self.project),
+                        'uploads': [{'file': repaired}], 'outputs': [{'path': processed, 'response_name': '取回.json'}]}
+        self.write(repaired, '返修整场')
+        self.write(processed, '补帧整场')
+        self.write(process_record + '/任务清单-装配结果.json',
+                   json.dumps({'accepted': [True], 'tasks': [process_task]}))
+        self.write(process_record + '/执行检查报告.json', json.dumps({'prepared_input': process_task}))
+        self.write(process_record + '/后台任务状态.json', json.dumps({
+            'id': 'process-task', 'task_type': 'video-postprocess', 'record_dir': process_record}))
+        third = {**second, 'number': 3, 'review_outputs': [
+            {'label': '返修', 'file': repaired, 'playback': {'scene': 'S001', 'run': 'R003', 'stage': '场次生成'}},
+            {'label': '整场对照', 'file': output},
+        ]}
+        fourth = {**second, 'number': 4, 'review_outputs': [
+            {'label': '补帧', 'postprocess': process_record, 'source': repaired,
+             'playback': {'scene': 'S001', 'run': 'R004', 'stage': '后处理'}},
+        ]}
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, second, third, fourth]}))
+        rounds = self.detail()['sceneRounds']['S001']
+        self.assertEqual([round_['songssx']['video']['key'] for round_ in rounds], [output, repaired, ''])
+        self.assertEqual([item['name'] for item in rounds[1]['reviewOutputs']], ['整场对照'])
+        self.assertEqual(rounds[2]['reviewOutputs'], [])
+        self.write(process_record + '/取回.json', '{}')
+        rounds = self.detail()['sceneRounds']['S001']
+        for round_, path in zip(rounds[1:], (repaired, processed), strict=True):
+            player = round_['songssx']
+            self.assertEqual(player['video']['key'], path)
+            self.assertEqual([(part['start'], part['end']) for part in player['segments']],
+                             [(0, 124 / 24), (124 / 24, 248 / 24)])
+            self.assertEqual(self.client.get(player['video']['url']).content, (self.project / path).read_bytes())
+            response = self.client.get(api + f"/production-detail/rounds/{round_['number']}/download?view=current")
+            with ZipFile(BytesIO(response.content)) as bundle:
+                member, = bundle.namelist()
+                self.assertEqual(bundle.read(member), (self.project / path).read_bytes())
+            video = player['video']
+            change = {**note, 'roundNumber': round_['number'], 'stage': video['stage'],
+                      'run': video['run'], 'fileRevision': video['fileRevision']}
+            self.assertEqual(self.client.put(api + '/production-notes?view=current', json=change).status_code, 200)
+            self.assertEqual(self.client.put(api + '/production-notes?view=current',
+                                             json={**change, 'roundNumber': 2}).status_code, 409)
+
     def test_missing_candidate_retains_round_and_recovery_uses_same_path(self):
         spec = self.register()
         path = self.project / spec['segments'][0]['file']
