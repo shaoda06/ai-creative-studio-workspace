@@ -14,6 +14,7 @@ description: 连续短剧图片业务阶段，规定人物、服装、场景、�
 | 任务 | 规则 |
 | --- | --- |
 | 图片制作范围与阶段依赖 | [核心参考图](references/核心参考图制作规范.md) |
+| 排多张参考图的制作批次 | [共用制作顺序](../studio-creative-techniques/references/图片参考与修订方法.md#多张参考图的制作顺序) |
 | 人物、服装及穿衣角色图片 | [人物图片](references/人物参考图制作与记录规范.md) |
 | 场景与机位、道具与虚拟界面 | [场景业务](references/场景图片制作规范.md)、[道具业务](references/道具图片制作规范.md) |
 | 首帧与逐集专用图 | [首帧需求](../nora-drama-storyboard/references/首帧参考图规范.md)、[专用素材](references/逐集专用素材规范.md) |
