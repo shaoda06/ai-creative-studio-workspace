@@ -202,8 +202,8 @@ html:has(dialog.dialog-lock-scroll[open]){overflow:hidden}
 dialog.dialog-lock-scroll{overscroll-behavior:contain}
 .dialog-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .dialog-header-actions>button{white-space:nowrap}
-dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;row-gap:12px}
-.dialog-header-toolbar{grid-column:1 / -1;min-width:0}
+dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;row-gap:6px}
+.dialog-header-toolbar{grid-column:1 / -1;min-width:0;margin-inline:-24px;padding:5px 24px 0;border-top:1px solid var(--line)}
 
 .asset-media-card-entry>h3{height:1.7em;white-space:nowrap;display:block;text-overflow:ellipsis}.asset-media-card-entry .asset-media-item>.cover{margin-bottom:0}
 .asset-media-card-selectable .asset-media-card-title-actions{margin-inline-start:auto}
