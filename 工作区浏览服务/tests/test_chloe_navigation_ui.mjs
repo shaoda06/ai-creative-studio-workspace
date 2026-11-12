@@ -434,10 +434,17 @@ try {
     const videoAssembly = page.locator('.chloe-video-assembly');
     const previewTitles = ['参考视频','造型面部三视图','全身定装三视图遮面版','背景图'];
     assert.deepEqual(await videoAssembly.locator('figcaption').allTextContents(),previewTitles);
-    const emptyLookFrames = await videoAssembly.locator('.chloe-video-assembly-look-images figure').all();
-    const emptyFrameBounds = await Promise.all(emptyLookFrames.map(frame=>frame.boundingBox()));
+    const emptyLookFrames = videoAssembly.locator('.chloe-video-assembly-look-images figure');
+    await emptyLookFrames.first().waitFor({state:'visible'});
+    await emptyLookFrames.nth(1).waitFor({state:'visible'});
+    const emptyFrameBounds = await emptyLookFrames.evaluateAll(frames =>
+      frames.map(frame => {
+        const {top,bottom,height} = frame.getBoundingClientRect();
+        return {top,bottom,height};
+      }));
     assert.equal(emptyFrameBounds.length,2);
-    assert.ok(emptyFrameBounds[0].height>0 && emptyFrameBounds[0].y+emptyFrameBounds[0].height<emptyFrameBounds[1].y);
+    assert.ok(emptyFrameBounds.every(frame=>frame.height>0));
+    assert.ok(emptyFrameBounds[0].bottom<emptyFrameBounds[1].top);
     await choose('选择参考视频').click();
     const videoPicker = page.getByRole('dialog',{name:'选择参考视频',exact:true});
     const videoOption = videoPicker.getByRole('button',{name:'选择RV001 · 参考视频甲',exact:true});
