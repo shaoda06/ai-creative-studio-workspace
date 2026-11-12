@@ -47,10 +47,12 @@ try {
     const page = await browser.newPage({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
     const errors = [], unexpected = [];
     let showAssemblyFixtures = false;
+    const refreshedAssets = new Map();
     page.on('pageerror', error => errors.push(String(error)));
-    await page.route('**/api/**', route => {
+    await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname;
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
+      if (refreshedAssets.has(path)) return route.fulfill({json:await refreshedAssets.get(path)});
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
@@ -157,6 +159,23 @@ try {
     const choose = name => page.getByRole('button',{name,exact:true});
     const dialog = page.getByRole('dialog');
     const confirm = dialog.getByRole('button',{name:'确认选择',exact:true});
+    const checkRefreshedPicker = async (endpoint, button, name, emptyText, assets) => {
+      const path = `/api/workspaces/account-demo/${endpoint}`;
+      const refresh = Promise.withResolvers();
+      refreshedAssets.set(path, refresh.promise);
+      const request = page.waitForRequest(value=>new URL(value.url()).pathname===path);
+      try {
+        await choose(button).click();
+        await dialog.waitFor();
+        await request;
+        assert.equal(await dialog.getByText(name,{exact:true}).count(),0);
+        assert.ok(await confirm.isDisabled());
+      } finally {
+        refresh.resolve(assets.map(asset=>({...asset,status:'制作中'})));
+      }
+      await dialog.getByText(emptyText,{exact:true}).waitFor();
+      await page.keyboard.press('Escape');
+    };
     const reset = assetNav.getByRole('button',{name:'重置',exact:true});
     await summary.waitFor();
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
@@ -396,6 +415,7 @@ try {
     assert.deepEqual(await accessories.getByRole('button').allTextContents(),['+添加配饰']);
     assert.equal(await reset.count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
+    await checkRefreshedPicker('shared-clothing','选择服装','O001 · 服装甲','暂无可用服装。',fixtureClothing);
 
     const assemblyNav = page.getByRole('navigation',{name:'装配分类',exact:true});
     assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['造型装配','视频装配']);
@@ -467,6 +487,7 @@ try {
     await reset.click();
     assert.ok(await generateHandoff.isDisabled());
     assert.equal(await page.getByRole('textbox',{name:'额外要求（可选）'}).inputValue(),'');
+    await checkRefreshedPicker('shared-scenes','选择背景','S001 · 背景甲','暂无可选背景。',fixtureScenes);
     await page.reload();
     await assemblyNav.getByRole('button',{name:'视频装配'}).waitFor();
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'视频装配');

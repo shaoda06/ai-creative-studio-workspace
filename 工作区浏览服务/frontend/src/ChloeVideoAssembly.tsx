@@ -31,17 +31,18 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const [modelId, setModelId] = useState(initial?.kind === 'look' ? initial.model.id : null);
   const [draftId, setDraftId] = useState(initial?.asset.id ?? null);
   const videos = useQuery({ queryKey: ['chloe-reference-videos', api],
-    queryFn: () => get<ReferenceVideoCard[]>(`${api}/shared-reference-videos`), enabled: kind === 'video' });
+    queryFn: () => get<ReferenceVideoCard[]>(`${api}/shared-reference-videos`), enabled: kind === 'video', staleTime: 0 });
   const scenes = useQuery({ queryKey: ['chloe-reference-assets', 'scenes', api],
-    queryFn: () => get<ImageAsset[]>(`${api}/shared-scenes`), enabled: kind === 'scene' });
+    queryFn: () => get<ImageAsset[]>(`${api}/shared-scenes`), enabled: kind === 'scene', staleTime: 0 });
   const models = useQuery({ queryKey: ['chloe-models', api],
-    queryFn: () => get<ImageAsset[]>(`${api}/shared-models`), enabled: kind === 'look' });
-  const availableModels = (models.data ?? []).filter(asset => asset.status === '可用');
-  const model = models.error ? undefined : availableModels.find(asset => asset.id === modelId);
+    queryFn: () => get<ImageAsset[]>(`${api}/shared-models`), enabled: kind === 'look', staleTime: 0 });
+  const availableModels = models.isFetching || models.error ? [] : (models.data ?? []).filter(asset => asset.status === '可用');
+  const model = availableModels.find(asset => asset.id === modelId);
   const looks = useQuery({ queryKey: ['chloe-model', api, model?.id],
-    queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(model!.id)}`), enabled: kind === 'look' && !!model });
+    queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(model!.id)}`), enabled: kind === 'look' && !!model, staleTime: 0 });
   const selectingModel = kind === 'look' && !model;
   const query = kind === 'video' ? videos : kind === 'scene' ? scenes : selectingModel ? models : looks;
+  const ready = !!query.data && !query.isFetching && !query.error;
   const label = selectingModel ? '模特' : labels[kind];
 
   const card = (asset: NamedAsset, media: FileItem | null, onSelect: () => void, selected = false, previewImage = false) => {
@@ -68,11 +69,11 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   });
 
   return <Dialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose} lockPageScroll>
-    <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
+    <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    {ready && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
     {!selectingModel && <div className="chloe-assembly-confirm">
       {model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}
-      <button type="button" disabled={!draft || !query.data || !!query.error} onClick={() => onConfirm(draft!)}>确认选择</button>
+      <button type="button" disabled={!draft || !ready} onClick={() => onConfirm(draft!)}>确认选择</button>
     </div>}
   </Dialog>;
 }

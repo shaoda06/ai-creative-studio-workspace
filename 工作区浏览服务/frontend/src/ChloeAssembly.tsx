@@ -35,8 +35,9 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const query = useQuery({
     queryKey: isModel ? ['chloe-models', api] : ['chloe-reference-assets', kind, api],
     queryFn: () => get<AssemblyAsset[]>(`${api}/${endpoint}`),
+    staleTime: 0,
   });
-  const available = query.data?.filter(asset => asset.status === '可用');
+  const available = query.isFetching || query.error ? undefined : query.data?.filter(asset => asset.status === '可用');
   const { visibleCards, ...filter } = useChloeAccessoryFilter(multi ? available ?? [] : []);
   const selected = draftIds.flatMap(id => {
     const asset = available?.find(item => item.id === id && item.media?.url);
@@ -44,7 +45,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   });
   const atLimit = multi && selected.length >= accessoryLimit;
   const title = multi ? `选择配饰 ${selected.length}/${accessoryLimit}` : `选择${label}`;
-  const canConfirm = !!query.data && !query.error && (selected.length > 0 || initial.length > 0);
+  const canConfirm = !!available && (selected.length > 0 || initial.length > 0);
   const cards = (multi ? visibleCards : available ?? []).map(asset => {
     const checked = selected.some(item => item.id === asset.id);
     const src = asset.media?.url;
@@ -62,7 +63,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   });
 
   return <Dialog title={title} close={onClose} lockPageScroll>
-    <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {available && (cards.length ? multi
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className="asset-media-grid">{cards}</div>
