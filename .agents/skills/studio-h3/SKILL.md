@@ -1,6 +1,6 @@
 ---
 name: studio-h3
-description: 在规划 MiniMax H3 生成模式，或编写、修订与核对 H3 提示词时使用。维护正文格式、参考语义和时长规则，按实际工作流进入专项。
+description: 在规划 MiniMax H3 生成或原片编辑，或编写、修订与核对 H3 提示词时使用。维护正文格式、参考语义和时长规则，按实际工作流进入专项。
 ---
 
 # Studio H3 共用规则
@@ -9,7 +9,7 @@ description: 在规划 MiniMax H3 生成模式，或编写、修订与核对 H3 
 
 - [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)负责运行组和缓存一采、二采。
 - [Songssx 导演台](../studio-h3-songssx/SKILL.md)负责 GEN 时间线和 SelfLift。
-- 已有原片并明确使用 Viggle Remake Swap 换人时，进入 [Remake 单人换人](../studio-h3-remake/SKILL.md)。
+- 已有原片并使用 Viggle Remake 换人、换背景或连续完成两项时，进入 [Viggle Remake 视频编辑](../studio-h3-remake/SKILL.md)。
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
 

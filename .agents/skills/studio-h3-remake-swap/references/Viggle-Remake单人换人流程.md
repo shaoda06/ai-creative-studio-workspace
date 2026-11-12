@@ -2,7 +2,7 @@
 
 用于把已有视频中的一名表演者换成目标角色，按原片保留动作、镜头、背景和声音。每次 Remake 请求处理一个片段，多个片段由调用方负责切分、提交和合片。
 
-- [画布](workflows/Viggle-Remake-单人换人-双参考图.workflow.json)与[API 模板](workflows/Viggle-Remake-单人换人-双参考图.api.json)使用同一组节点编号。当前 Swap 采样使用 `#15`，备用 Edit Sigma `#33` 保留在画布上。Edit 模式使用对应的 Edit 权重与 Sigma。
+- 使用已登记的 [Swap 画布](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.workflow.json)和 [Swap API](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.api.json)。Swap 采样使用 `#15`。画布上的备用 `#33` 供 [Edit 换背景流程](../../studio-h3-remake-edit/references/Viggle-Remake换背景流程.md#3-装配-edit-请求)使用。
 - 基准使用 Swap INT8、Euler 六步、24 fps、短边 480、Mystic 去油 LoRA 0.35。工作流内的预设值仅作为本模板起点。[Viggle 官方 ComfyUI 说明](https://huggingface.co/Viggle/Viggle-Remake/blob/main/COMFYUI.md)
 
 ## 1. 确定换人目标和参考图
@@ -15,16 +15,14 @@
 
 ### 提示词编写与核对
 
-1. **用 H3 六段格式。** Remake 读取 MiniMax H3 的六段正文。编写、修订或核对时，读取 [h3-prompt-writing](../../h3-prompt-writing/SKILL.md) 的 Full-Reference Mode 和 [Ref2VA 指南](../../h3-prompt-writing/references/ref-en.txt)，按其字段名、顺序、参考标签、保留关系和时码写英文正文。原台词、歌词和画面文字按实际保留要求沿用原语。
-2. **按 Viggle 的换人写法落笔。** 同时读取 [Viggle 本地提示词指南](upstream/PROMPTING.md)，本地原文缺失时读取[官方原文](https://huggingface.co/Viggle/Viggle-Remake/raw/7e5be143702dd53b9154482de673b8519ed2d4d6/PROMPTING.md)。正文描述换人后的成片，`retention_analysis` 写清换掉的特征、各图提供的属性和原片保留项。参考编号对应工作流的实际参考端口。时码以本次送入 Remake 的片段为准，核对预卷、实际切点和生成帧数。
-3. **按素材和业务要求写具体内容。** 逐张落实参考图的实际分工，结合原片和调用方要求确定主体外观、服装、配饰、动作、背景、运镜与声音。使用面部三视图和全身遮面图且要求露脸时，按实际绑定让面部图提供可见五官、妆容及经确认的头部造型，让全身图提供经确认的体型、服装和配饰。遮面处理留在素材说明，模型正文描述各景别和角度下实际可见的脸。各段复用身份和造型定义，镜头内容或时间变化时调整对应段落。
-4. **提交前核对实际请求。** 对照 `#34` 的六段正文与 `#42` 的参考图端口，核对标签、逐图职责、要改和要保留的内容及段内时码。正文中的要求应有本次参考、原片或已明确的业务依据。
+- 按 [Viggle 共用提示词规范](../../studio-h3-remake/references/Viggle-Remake提示词规范.md)读取两份指南，结合原片和调用方要求描述换人后的主体外观、服装、配饰以及要保留的动作、背景、运镜与声音。正文要求对应本次参考、原片或已明确的业务依据。
+- 使用面部三视图和全身遮面图且要求露脸时，按实际绑定让面部图提供可见五官、妆容及经确认的头部造型，让全身图提供经确认的体型、服装和配饰。遮面处理留在素材说明，模型正文描述各景别和角度下实际可见的脸。
 
 ## 2. 规范源片和确定分段
 
 1. 将视频转换为恒定 24 fps，再以帧记录保留区间和顺序。先用原片切点划分镜头，切点两边独立生成。只有单个连续镜头超过 345 帧（约 14.38 秒）时，才在镜头内部拆段并续接。
 2. 单段手动画布用 `#66` 填写预计保留帧数除以 24 得到的秒数。`#67` 按 `17N+5` 向上取整、封顶 345 帧，输入范围按 4–15 秒计算。短于 4 秒的片段填 4 秒，补齐到 107 帧，最后按实际保留帧数裁回。
-3. 长视频用[分段工具](../scripts/long_swap.py)生成逐段源片和 `segments.json`。所有区间以 24 fps 记录，左闭右开。`start`、`end` 是原片正文区间，`head` 是预卷帧数，`generation` 是送入 `#42` 的实际帧数。段尾复制最后一帧补到 `17N+5`，最少 107 帧，最多 345 帧。合片裁去全部预卷和补帧，原片各区间完整保留。[Viggle 节点源码](https://huggingface.co/Viggle/Viggle-Remake/blob/main/comfyui/ComfyUI-Viggle-Remake/nodes.py)
+3. 长视频用[分段工具](../../studio-h3-remake/scripts/long_swap.py)生成逐段源片和 `segments.json`。所有区间以 24 fps 记录，左闭右开。`start`、`end` 是原片正文区间，`head` 是预卷帧数，`generation` 是送入 `#42` 的实际帧数。段尾复制最后一帧补到 `17N+5`，最少 107 帧，最多 345 帧。合片裁去全部预卷和补帧，原片各区间完整保留。[Viggle 节点源码](https://huggingface.co/Viggle/Viggle-Remake/blob/main/comfyui/ComfyUI-Viggle-Remake/nodes.py)
 
 ### 连续镜头内续接
 
