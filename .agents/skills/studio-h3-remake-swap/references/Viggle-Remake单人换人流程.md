@@ -1,0 +1,74 @@
+# Viggle Remake 单人换人流程
+
+用于把已有视频中的一名表演者换成目标角色，按原片保留动作、镜头、背景和声音。每次 Remake 请求处理一个片段，多个片段由调用方负责切分、提交和合片。
+
+- 使用已登记的 [Swap 画布](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.workflow.json)和 [Swap API](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.api.json)。Swap 采样器 `#16` 的 Sigma 来自 `#15`。
+- 基准使用 Swap INT8、Euler 六步、24 fps、短边 480、Mystic 去油 LoRA 0.35。工作流内的预设值仅作为本模板起点。[Viggle 官方 ComfyUI 说明](https://huggingface.co/Viggle/Viggle-Remake/blob/main/COMFYUI.md)
+
+## 1. 确定换人目标和参考图
+
+- 从原片及用户说明确定要换的表演者。同框有其他人时，在提示词写清原片里可辨认的目标，以及其他人物的保留要求。
+- 调用业务提供同一角色的两张参考图及各自分工。按本次换人最需要匹配的属性排参考图。单人露脸换人默认把面部身份放在首位，两张图共同定义一个 `<Subject 1>`。
+  - 面部三视图排第一，接 `ref_1`，正文使用 `<Picture 1>`。
+  - 全身三视图排第二，接 `ref_2`，正文使用 `<Picture 2>`。
+- 用户或业务明确指定其他顺序时，按指定顺序接线并同步正文标签。此顺序是默认编排约定，效果以实际样片为准。双三视图作普通参考时 `pins` 留空。
+- 按[原声是否参与生成](../../studio-h3-remake/SKILL.md#原声是否参与生成)确认本轮选择。
+
+### 提示词编写与核对
+
+- 按 [Viggle 共用提示词规范](../../studio-h3-remake/references/Viggle-Remake提示词规范.md)读取两份指南，结合原片和调用方要求描述换人后的主体外观、服装、配饰以及要保留的动作、背景、运镜与声音。正文要求对应本次参考、原片或已明确的业务依据。
+- 使用面部三视图和全身遮面图且要求露脸时，面部图是唯一的面部身份参考，提供可见五官、妆容及经确认的头部造型。全身图提供经确认的体型、头身比例、服装、鞋履和穿搭配饰，也可按业务分工补充发尾与穿搭的关系。遮面处理留在素材说明，模型正文描述各景别和角度下实际可见的脸。
+
+## 2. 规范源片和确定分段
+
+1. 将视频转换为恒定 24 fps，再以帧记录保留区间和顺序。先用原片切点划分镜头，切点两边独立生成。只有单个连续镜头超过 345 帧（约 14.38 秒）时，才在镜头内部拆段并续接。
+2. 单段手动画布用 `#66` 填写预计保留帧数除以 24 得到的秒数。`#67` 按 `17N+5` 向上取整、封顶 345 帧，输入范围按 4–15 秒计算。短于 4 秒的片段填 4 秒，补齐到 107 帧，最后按实际保留帧数裁回。
+3. 长视频用[分段工具](../../studio-h3-remake/scripts/long_swap.py)生成逐段源片和 `segments.json`。所有区间以 24 fps 记录，左闭右开。`start`、`end` 是原片正文区间，`head` 是预卷帧数，`generation` 是送入 `#42` 的实际帧数。段尾复制最后一帧补到 `17N+5`，最少 107 帧，最多 345 帧。合片裁去全部预卷和补帧，原片各区间完整保留。[Viggle 节点源码](https://huggingface.co/Viggle/Viggle-Remake/blob/main/comfyui/ComfyUI-Viggle-Remake/nodes.py)
+
+### 连续镜头内续接
+
+- 首段从原片区间起点取帧。后续段的原片输入前移 17 帧，把上一段正文末尾同一时间的画面带进本段。17 帧预卷占用生成额度，因此后续段正文最多 328 帧，约 13.67 秒。
+- 用 Viggle 原生 `RemakePrefix` 把上一段**原始生成结果的正文末尾 17 帧**编码为本段采样的固定前缀。它接在 `#42` 的 latent 输出与 `#16` 的采样输入之间。使用 `previous_prefix_at` 从上一段原始生成文件取帧，跳过上一段生成时的尾部补帧。连续镜头内沿用相同分辨率、造型参考和提示词里的身份定义。两张造型图仍接 `#42` 的两个普通参考口。
+- 每条续接链最多三段。从同一镜头的第 4、7 段起独立采样，仍保留 17 帧原片预卷并在输出裁掉。此后的段继续从新链的上一段结果续接。跨原片切点时重开首段。
+- 示例为 384 帧连续镜头，正文区间为 `[0, 192)` 和 `[192, 384)`。首段生成 192 帧。次段原片从第 175 帧读起，接入首段结果的第 175–191 帧，生成 209 帧并裁头 17 帧。最后拼回 384 帧。
+
+## 3. 逐段装配和提交
+
+从 API 模板为每段准备任务副本。用服务器实际上传名填文件字段，原始素材及其版本按调用业务记录。
+
+| 节点 | API 输入字段 | 填写内容 |
+| --- | --- | --- |
+| `#62` | `file` | 当前段的 24 fps 源片 |
+| `#9`、`#64` | `image` | 按实际顺序绑定 `<Picture 1>`、`<Picture 2>` |
+| `#34` | `value` | 当前段的完整六段英文提示词 |
+| `#66` | `value` | 当前段拟保留的时长，单位为秒 |
+| `#54` | `value` | 视频画布及普通参考图的短边设定 |
+| `#72` | `switch` | 本轮确认的选项，`true` 为「参考」，`false` 为「不参考」 |
+| `#12` | `seed` | 本段实际使用的种子，API 模板给出固定数值 |
+| `#65` | `filename_prefix` | 本段的输出前缀，按实际段号区分 |
+
+经生成授权后，通过[工作区共用 ComfyUI 提交入口](../../studio-comfyui/references/ComfyUI工具调用规范.md)上传、逐段提交和取回 `#65` 的 MP4。独立段在输入齐备后即可提交。续接段须先取回计划指定的上一段原始输出，再上传为本段前缀输入。记录两段实际使用的文件版本与任务 ID。
+
+从工作区根目录运行以下命令。需要 Python 3.10+、FFmpeg 和 ffprobe。相对本地路径以当前目录为准。Swap 是 `prepare` 的默认模式。原片切点用 `--cut` 提供，可重复。连续镜头可省略切点，由脚本拆分超过 345 帧的镜头。命令中的文件名按实际任务替换。
+
+```sh
+tool=".agents/skills/studio-h3-remake/scripts/long_swap.py"
+python3 "$tool" prepare source_24fps.mp4 run --cut 240
+python3 "$tool" graph run 2 --source remote/segment-002.mp4 \
+  --face remote/face.png --full-body remote/body.png --prompt prompt.txt \
+  --audio-conditioning silent \
+  --output-prefix viggle_remake/long_swap --output run/segment-002.api.json
+python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
+```
+
+- `prepare` 写出 `run/segments.json` 和 `run/sources/segment-NNN.mp4`。使用新的工作目录，段号从 1 开始。
+- `graph` 读取 UTF-8 正文，以计划的生成帧数直接填 `#42.frames`。面部图默认第一。全身图需排第一时加 `--reference-order full-body-first`，并同步调整正文的 Picture 编号。续接段加 `--previous` 和上一段原始输出上传后返回的服务器输入名，工具装配 `RemakePrefix`。
+- 按[已确认的原声选择](../../studio-h3-remake/SKILL.md#原声是否参与生成)传 `--audio-conditioning`。命令行省略时沿用模板的 `source`。
+- `--short-edge` 可选 480 或 736 像素，省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
+- 三个命令均只操作本地文件，成功时写出指定产物，输入或帧数不合要求时退出报错。API JSON 和合片路径须使用尚未存在的文件名。
+
+## 4. 取回、合片和返修
+
+1. 先检查每段是否可解码，核对帧率、帧数、尺寸及对应段号。将原始生成结果保存为 `raw_results/segment-NNN.mp4`，供合片、续接和复核。
+2. `join` 按原片顺序拼接每段裁头、裁尾后的正文，重新封装整条 24 fps 规范源片的音轨。核对总帧数、片段顺序、切点、音轨起止和音画同步。
+3. 按调用业务及实际查看授权审阅单段与接缝。重点核对脸和妆容、发型、穿搭鞋履、动作跟随、构图和背景。若续接链中的一段改用新版本，从该段开始重做依赖其尾部的后续段，直到下一个独立段。结果取回、内容审阅和采用按调用业务记录。

@@ -1,6 +1,6 @@
 ---
 name: studio-imagegen
-description: 共用内置Imagegen生成与编辑工具，说明Agent实际调用、参考输入、原生结果保存和异常恢复；不规定业务图片类型、布局、正式规格或采用流程。
+description: 在本次选用内置 Imagegen 创建或编辑图片、保存原生结果或恢复该次调用时使用。按实际参考顺序、目标比例与授权执行。
 ---
 
 # Studio Imagegen图片生成与编辑
@@ -9,7 +9,7 @@ description: 共用内置Imagegen生成与编辑工具，说明Agent实际调用
 
 由Agent调用当前可用的内置imagegen工具，使用实际工具说明和imagegen技能。调用方提供完整内容、参考图顺序、目标比例及有效授权；本工具不规定角色视图或业务目录。本地生图指会话内置能力，不表示本机GPU生成。
 
-返修默认沿用原模式和本制作步骤的原始参考，调整提示词重新生成；未获用户明确指示，不以最近候选继续编辑。
+图片返修进入[返修时的模式与输入](references/Imagegen工具调用规范.md#返修时的模式与输入)，在准备正文前处理画面反馈。
 
 实际调用、执行代理、原生结果和恢复要求见[工具调用](references/Imagegen工具调用规范.md)。scripts/imagegen_tool.py只生成已备调用正文及原字节保存结果，不通过CLI执行生图，不创建ComfyUI任务。提示词的内容及模型语义适配由Agent负责。
 

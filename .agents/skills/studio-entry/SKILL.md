@@ -1,6 +1,6 @@
 ---
 name: studio-entry
-description: AI创作与制作统一入口，识别业务和项目，路由共用视频制作核心、Nora／Iris／Chloe 业务及社媒运营等共用附加能力。
+description: 在启动或接续 Studio 创作、制作、运营或维护任务时使用。识别所属业务与环节，指向公共制作核心、业务阶段或对应工具。
 ---
 
 # Studio 创作与制作总入口
@@ -31,7 +31,9 @@ description: AI创作与制作统一入口，识别业务和项目，路由共�
 | 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 外部浏览器任务、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
 | 从用户指定的作品链接取得视频文件 | [视频下载](../studio-video-download/SKILL.md) |
-| 视频读取、提示词库和风格库 | [视频读取](../studio-video-study/SKILL.md)、[提示词管理](../studio-prompt-library/SKILL.md)、[风格库](../studio-krea2-style-library/SKILL.md) |
+| 指定视频的字幕、转写或画面分析 | [视频读取](../studio-video-study/SKILL.md) |
+| 共用提示词的收录、检索和整理 | [提示词管理](../studio-prompt-library/SKILL.md) |
+| 按名称或视觉要求检索、预览、复制风格，或维护风格库 | [Krea2 风格库](../studio-krea2-style-library/SKILL.md) |
 
 所有业务与公共技能统一在总目录.agents/skills中维护。Nora资料在workspaces/Nora Workspace，Iris资料在workspaces/Iris Workspace，Chloe资料在workspaces/Chloe Workspace；先明确真实项目，读取所属资料区README、项目README和唯一进度或状态文件，再按同库入口接续。用户只需从总工作区新建对话，不要求切换到子目录发现技能。
 
@@ -54,7 +56,7 @@ description: AI创作与制作统一入口，识别业务和项目，路由共�
 
 ## 维护入口
 
-维护时使用skill-creator，按所改业务或工具的维护入口执行。跨体系结构及唯一真源要求见[结构维护](维护规范.md#规则真源与引用)。队列、项目浏览及后台开发使用[浏览服务与任务后台](../studio-workspace-browser/SKILL.md)。
+技能维护、查找能力或工程辅助按[工作区与技能维护入口](references/工作区与技能维护入口规范.md)分流。跨体系结构及唯一真源要求见[结构维护](维护规范.md#规则真源与引用)。队列、项目浏览及后台开发使用[浏览服务与任务后台](../studio-workspace-browser/SKILL.md)。
 
 
 ## 工作区说明与项目建档

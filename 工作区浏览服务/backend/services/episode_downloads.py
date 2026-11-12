@@ -9,7 +9,7 @@ import sys
 
 _SKILL = Path(__file__).resolve().parents[3] / ".agents/skills/nora-drama-handoff/scripts"
 sys.path.insert(0, str(_SKILL))
-from drama_delivery import (STAGES, KINDS, VideoFiles, video_archive_name, video_member_name, indexed_episode, append_revision, completed_episode_videos, songssx_round_videos, resources)
+from drama_delivery import (STAGES, KINDS, VideoFiles, video_archive_name, video_member_name, indexed_episode, append_revision, completed_episode_videos, resources)
 sys.path.insert(0, str(_SKILL.parents[1] / 'studio-jianying/scripts'))
 import jianying_export
 
@@ -34,6 +34,26 @@ def clear_downloads():
     for path in DOWNLOAD_DIRECTORY.glob('director-*'):
         import shutil
         shutil.rmtree(path)
+
+
+def songssx_round_videos(store, name, selected, number):
+    composition = next((item for item in selected.get('episodeRounds', []) if item['number'] == number), None)
+    if not composition:
+        raise FileNotFoundError('当前制作对象没有这个制作轮次')
+    files = []
+    for scene in composition['scenes']:
+        round_ = next((item for item in selected['sceneRounds'].get(scene, []) if item['number'] == number), {})
+        video = round_.get('songssx', {}).get('video')
+        if not video or not video['url']:
+            continue
+        path = store.file(name, video['key'])
+        stat = path.stat()
+        if video['fileRevision'] != f'{stat.st_mtime_ns}-{stat.st_size}':
+            raise ValueError('本轮视频文件已变化，请刷新制作页后重新下载')
+        files.append((path, f'{scene}-{video["stage"]}-{video["run"]}{path.suffix}'))
+    if not files:
+        raise FileNotFoundError('本轮暂无可下载的场次视频')
+    return files
 
 
 def zip_response(files, filename, archive_format='zip', *, timeline_members=None, videos_only=False):

@@ -1,17 +1,17 @@
 ---
 name: studio-video-production
-description: Nora、Iris、Chloe 共用的视频制作核心，从已确认的脚本接续分镜、导演分镜表选择、逐段资产核对、提示词、生成与候选结果交回，并按业务决定调用后续执行工具。
+description: 在确认脚本后进入分镜、生成资产、提示词、视频生成或候选交回时使用。按当前制作环节调用共用方法和执行工具。
 ---
 
 # Studio 共用视频制作流程
 
 ## 制作入口
 
-调用业务提供已确认的剧本或脚本版本、本次制作范围、画幅、目标时长、声音方案、可用资产、交付要求及执行授权。剧本来源、改写目标和内容确认由业务负责，正文和声源写法调用核心的[共用剧本](../studio-screenplay/SKILL.md)与[对白和表演方法](../studio-creative-techniques/SKILL.md#剧本与对白)。已有工作从实际环节接续，复用有效决定与成果。
+调用业务提供已确认的剧本或脚本版本、本次制作范围、画幅、目标时长、声音方案、可用资产、交付要求及执行授权。剧本来源、改写目标和内容确认由业务负责。单独写作或返回上游修改剧本时，先走[共用剧本](../studio-screenplay/SKILL.md)和[对白与表演](../studio-creative-techniques/SKILL.md#剧本与对白)，再用确认稿接续制作。已有工作从实际环节接续，复用有效决定与成果。
 
 ## 场次分镜与生成分段
 
-根据本版脚本，按[共用分镜](../studio-storyboard/SKILL.md)落实逐镜画面、动作、声音和时码。划分生成段时，根据所选模型及工作流的段长、参考输入条件和段间接续，检查各段是否可执行。使用 Songssx 时，按[导演台读取入口](../studio-h3-songssx/SKILL.md)核对上游的分段、接缝和输入规则。把镜头对应、计划时长、参考用途和跨段依赖写在现有分镜或分段计划中，编号与文件组织由业务确定。
+根据本版脚本，按[共用分镜](../studio-storyboard/SKILL.md)落实逐镜画面、动作、声音和时码。进入生成分段与正式提示词前，明确本次实际模型、工作流和模式，已有有效选择直接沿用。按所选方案的段长、参考输入条件和段间接续核对可执行性。使用 Songssx 时，按[导演台读取入口](../studio-h3-songssx/SKILL.md)核对上游的分段、接缝和输入规则。把镜头对应、计划时长、参考用途和跨段依赖写在现有分镜或分段计划中，编号与文件组织由业务确定。
 
 镜头和动作设计按需要调用[创作技法](../studio-creative-techniques/SKILL.md#镜头表达)及[打戏方法](../studio-combat-methods/SKILL.md)，将选用的拍法和动作落实到本版分镜。打戏入口按具体题材分流到玄幻或写实专项。
 
@@ -23,7 +23,7 @@ description: Nora、Iris、Chloe 共用的视频制作核心，从已确认的�
 
 写某段正式生成提示词前，按[镜头状态与参考差异](../studio-storyboard/references/分镜写作规范.md#镜头状态的变化延续与参考差异)及[实际参考核对](../studio-video-prompts/references/视频提示词制作规范.md#内容依据与实际参考)核对该段实际需要的参考图、首帧、参考视频、音色或音频样本。已有资产引用准确版本，缺项交相应资产阶段准备。后段需要把已生成的末帧或音视频作为独立输入时，先记明依赖，来源可用后再完成该段资产核对及正式提示词。依照业务规定的执行批次和送审条件接续已就绪的范围。
 
-业务确定资产设计、资格和采用。制作用于本段的参考图时，先按[共用参考图用途与取景](../studio-creative-techniques/references/图片参考与修订方法.md#参考图用途与取景)明确画面目标。当前段需要制图、尺寸处理或音频裁切时，按明确输入和授权调用[Imagegen](../studio-imagegen/SKILL.md)、[Qwen 图像工具](../studio-qwen-image/SKILL.md)、[图片处理](../studio-image-processing/SKILL.md)或[音频处理](../studio-audio-processing/SKILL.md)，再核对实际返回的参考文件。
+业务确定资产设计、资格和采用。排参考图制作批次时，按[多张参考图的制作顺序](../studio-creative-techniques/references/图片参考与修订方法.md#多张参考图的制作顺序)落实依赖和可并行范围。制作用于本段的参考图时，按[共用参考图用途与取景](../studio-creative-techniques/references/图片参考与修订方法.md#参考图用途与取景)明确画面目标。当前段需要制图、尺寸处理或音频裁切时，按明确输入和授权调用[Imagegen](../studio-imagegen/SKILL.md)、[Qwen 图像工具](../studio-qwen-image/SKILL.md)、[图片处理](../studio-image-processing/SKILL.md)或[音频处理](../studio-audio-processing/SKILL.md)，再核对实际返回的参考文件。
 
 资产齐备后，按[共用视频提示词](../studio-video-prompts/SKILL.md)转写本版分镜、对照实际参考并完成同版中文参考。按需将[创作技法](../studio-creative-techniques/SKILL.md#提示词转写)落实到本段模型正文。正文格式、标签与输入语义执行所用模型及模式的规则。使用 H3 时由[Studio H3](../studio-h3/SKILL.md)接入实际模式和导演台。
 

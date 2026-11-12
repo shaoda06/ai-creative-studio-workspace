@@ -1,19 +1,24 @@
 // Complete public workbench on Chloe's real document adapter; all writes are isolated.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
+const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const tool=fileURLToPath(new URL('../',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
-const fixture=JSON.parse(execFileSync(tool+'.venv/bin/python',['-c',`
+const python = join(tool, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
+const fixture=JSON.parse(execFileSync(python,['-c',`
 import json
+import tempfile
+from pathlib import Path
 from tests.test_chloe_production import ChloeProductionTests, browser
+tempfile.tempdir = str(Path.cwd())
 x=ChloeProductionTests();x.setUp()
 try:
  x.test_shared_request_context_refers_to_original()
@@ -110,6 +115,7 @@ try {
   }
   await card.click();
   await page.locator('.episode-detail').waitFor();
+  assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
   assert.ok(page.url().includes('video='));
   const tabs=page.getByRole('navigation',{name:'作品制作内容'});
   await tabs.waitFor();
@@ -215,6 +221,33 @@ try {
   assert.ok(await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1}));
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(),0);
+  // A work detail with two formal workflows uses the same selector as an episode.
+  const scene = fixture.detail.sceneRounds.whole.at(-1);
+  const sceneVideo = fixture.detail.segments.whole[0].videos.at(-1);
+  const songssxRound = {...scene, songssx:{recorded:true,
+   video:{...sceneVideo,stage:'场次生成',url:'/component-samples/video.webm'},
+   segments:scene.segments.map((entry,i)=>({id:entry.id,gen:i+1,start:i,end:i+1,
+    context:{...sceneVideo.context,references:{common:[],
+     segment:[{kind:'image',name:entry.id+' 隔离参考图',label:'<Picture 1>',url:'/component-samples/image.svg'}]}}}))}};
+  scopedDetail={...fixture.detail,productionWorkflows:['aimixer','songssx'],
+   sceneRounds:{whole:[fixture.detail.sceneRounds.whole[0],songssxRound]}};
+  taskMode=false;
+  await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=production&video='+encodeURIComponent('V001-隔离演示'));
+  await page.reload();
+  const workflow=page.getByRole('region',{name:'选择制作记录'});
+  await workflow.waitFor();
+  assert.ok(await workflow.evaluate(el=>el.getBoundingClientRect().right<=innerWidth+1));
+  await workflow.getByRole('button',{name:'Songssx 制作记录'}).click();
+  await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('combobox',{name:'修改轮次'}).getAttribute('data-value'),'2');
+  const references=page.getByRole('region',{name:'参考素材区域'});
+  assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
+  await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();
+  await page.getByRole('button',{name:/^分段 P002/}).click();
+  await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
+  await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
+  assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

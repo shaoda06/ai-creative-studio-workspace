@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 视频处理"
-  short_description: "共用视频技术处理，按明确源文件、尺寸、帧率和裁切要求装配RIFE/RTX工作流并读取客观媒体信息；不决定业务来源采用、目标规格或"
+  short_description: "按目标规格装配视频插帧、缩放和裁切处理，读取实际媒体信息"
   default_prompt: "使用$studio-video-processing处理当前任务，先确定输入、授权和实际范围。"

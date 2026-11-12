@@ -1,6 +1,6 @@
 ---
 name: studio-operations-setup
-description: 通用社交媒体运营二级阶段，配置发布意向、账号和连接，核对实际身份及权限；不替代发布授权。
+description: 在启用社媒运营、配置发布意向或核对平台账号和连接时使用。登记账号配置与实际访问状态。
 ---
 
 # Studio 运营启用与账号连接

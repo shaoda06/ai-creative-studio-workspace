@@ -1,0 +1,420 @@
+{
+  "34": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "subject_definitions:\n<Video 1> is the source video and provides the original performance, setting, camera work, and soundtrack.\n<Picture 1> is the three-view face reference for <Subject 1>. It is the sole reference for facial identity, face shape, facial features, and makeup. It also shows the hairstyle and the details of visible head accessories.\n<Picture 2> is the three-view full-body reference for the same <Subject 1> in the same styling. It defines the body shape, head-to-body proportions, clothing, footwear, and accessories.\n<Subject 1> is the single character who takes the place of the original main performer in <Video 1>.\n\nsummary:\n[video editing + character replacement] <Subject 1> performs the original actions with the same timing as the main performer in <Video 1>. The setting, background, framing, camera movement, and soundtrack follow the source.\n\nretention_analysis:\n<Video 1> (source video editing): fully_preserved - the original performance, poses, movement path, timing, setting, props, lighting, camera work, and soundtrack. The main performer’s appearance is replaced by <Subject 1>.\n<Picture 1>: reference - facial identity, face shape, facial features, makeup, hairstyle, and visible head accessory details.\n<Picture 2>: reference - body shape, head-to-body proportions, clothing, footwear, and the placement of outfit accessories.\n<Subject 1>: fully_preserved - one consistent identity and styling throughout the clip, with an uncovered face matching <Picture 1>.\n\ndetailed_description:\n[Shot 1] From 00:00.000 through the end of the clip, <Subject 1> follows the original performer’s poses, gestures, movement path, and timing. Whenever the face comes into view, it is uncovered and matches the identity, features, and makeup in <Picture 1>. The hairstyle and head accessories match <Picture 1>. <Picture 2> also shows how the hair falls over the outfit. The body proportions, outfit, shoes, and outfit accessories match <Picture 2> as they come into view. The background, props, framing, and camera movement follow <Video 1>.\n\noverall_soundscape:\nThe original soundtrack from <Video 1> plays throughout in sync with the action.\n\nnon_diegetic_music:\nNo additional music. Any music in the source soundtrack is retained."
+    },
+    "_meta": {
+      "title": "手填提示词｜Viggle Remake 六段正文"
+    }
+  },
+  "66": {
+    "class_type": "FloatConstant",
+    "inputs": {
+      "value": 5.17
+    },
+    "_meta": {
+      "title": "源片时长（秒）｜4–15"
+    }
+  },
+  "67": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "min(345, 17 * ceil((24 * min(15, max(4, a)) - 5) / 17) + 5)",
+      "values.a": [
+        "66",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "17N+5"
+    }
+  },
+  "54": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 480
+    },
+    "_meta": {
+      "title": "视频与参考图短边"
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "CLIP Qwen3VL nvfp4 | 文本编码器"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "Video VAE | 视频VAE"
+    }
+  },
+  "6": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {
+      "title": "Audio VAE | 音频VAE"
+    }
+  },
+  "62": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "source_24fps.mp4"
+    },
+    "_meta": {
+      "title": "源视频｜24 fps"
+    }
+  },
+  "63": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "62",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "分离源视频画面与音频"
+    }
+  },
+  "9": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "picture_1_face.png"
+    },
+    "_meta": {
+      "title": "图 1｜造型面部三视图"
+    }
+  },
+  "64": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "picture_2_full_body.png"
+    },
+    "_meta": {
+      "title": "图 2｜全身定装三视图遮面版"
+    }
+  },
+  "42": {
+    "class_type": "RemakeConditioning",
+    "inputs": {
+      "prompt": [
+        "34",
+        0
+      ],
+      "pins": "",
+      "frames": [
+        "67",
+        1
+      ],
+      "short_edge": [
+        "54",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ],
+      "audio_vae": [
+        "6",
+        0
+      ],
+      "source": [
+        "63",
+        0
+      ],
+      "ref_1": [
+        "9",
+        0
+      ],
+      "audio": [
+        "72",
+        0
+      ],
+      "ref_2": [
+        "64",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Conditioning | Remake条件"
+    }
+  },
+  "12": {
+    "class_type": "RemakeNoise",
+    "inputs": {
+      "seed": 608739106861467,
+      "positive": [
+        "42",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Noise | Remake噪声"
+    }
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "viggle_remake\\viggle_remake_swap_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "UNET Remake INT8 | Remake底模 INT8"
+    }
+  },
+  "68": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "MysticXXX_MMH3-V1.safetensors",
+      "strength_model": 0.35,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Mystic 去油 LoRA"
+    }
+  },
+  "21": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "shift_video": 12,
+      "shift_audio": 2,
+      "model": [
+        "68",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SigmaShift Video12/Audio2 | SigmaShift 视频12/音频2"
+    }
+  },
+  "22": {
+    "class_type": "ModelAttentionBackend",
+    "inputs": {
+      "attention": "comfy kitchen attention",
+      "model": [
+        "21",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Attention Backend | 注意力后端"
+    }
+  },
+  "23": {
+    "class_type": "ModelPreviewOverrideKJ",
+    "inputs": {
+      "max_resolution": 1024,
+      "jpeg_quality": 80,
+      "suppress_default_preview": true,
+      "preview_frames": 1024,
+      "preview_fps": 12,
+      "tiny_vae": "taeh3.safetensors",
+      "model": [
+        "22",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Live Preview (KJ) | 实时预览 (KJ)"
+    }
+  },
+  "24": {
+    "class_type": "BlockSparseAttention",
+    "inputs": {
+      "selection": "sol-attn",
+      "selection.tau": 1.1,
+      "start_percent": 0.2,
+      "end_percent": 1,
+      "dense_blocks": "",
+      "min_tokens": 12288,
+      "extra_tokens": 256,
+      "sink_conditioning": "exact_kv_and_rows",
+      "verbose": false,
+      "model": [
+        "23",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Block Sparse Attention | 块稀疏注意力"
+    }
+  },
+  "3": {
+    "class_type": "RemakeKeyframeUntil",
+    "inputs": {
+      "keyframe_until": 0.9,
+      "model": [
+        "24",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Keyframe Until | Remake关键帧截止"
+    }
+  },
+  "13": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "conditioning": [
+        "42",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "BasicGuider"
+    }
+  },
+  "14": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "15": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.990476, 0.965243, 0.923077, 0.8, 0.631579, 0.0"
+    },
+    "_meta": {
+      "title": "ManualSigmas (Remake)（swap）"
+    }
+  },
+  "16": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "12",
+        0
+      ],
+      "guider": [
+        "13",
+        0
+      ],
+      "sampler": [
+        "14",
+        0
+      ],
+      "sigmas": [
+        "15",
+        0
+      ],
+      "latent_image": [
+        "42",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "17": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "18": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecodeAudio"
+    }
+  },
+  "19": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 24,
+      "bit_depth": "auto",
+      "color_space": "sRGB",
+      "chroma_subsampling": "auto",
+      "codec": "none",
+      "images": [
+        "17",
+        0
+      ],
+      "audio": [
+        "18",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "CreateVideo"
+    }
+  },
+  "65": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "viggle_remake/single_swap",
+      "format": "mp4",
+      "format.codec": "auto",
+      "codec": "h264",
+      "codec.encoding": "auto",
+      "video": [
+        "19",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "保存换人成片｜MP4"
+    }
+  },
+  "72": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": true,
+      "on_true": [
+        "63",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "生成时是否参考原视频的声音？"
+    }
+  }
+}

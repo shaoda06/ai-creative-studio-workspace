@@ -1,9 +1,9 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { GenerationContext, SegmentVideo as VideoItem } from '../api';
 import { get, projectUrl } from '../api';
-import { FileActions, Original, PreviewContext, Rich } from '../components';
+import { Original, Rich } from '../components';
 import { MessagePanel } from './MessagePanel';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
@@ -18,24 +18,9 @@ import { RevisionNoteEditor } from './RevisionNotes';
 import type { NoteScope, NoteShotTimeline } from './RevisionNotes';
 import { useRefreshState } from '../refreshPosition';
 import { SegmentLayout } from './SegmentLayout';
+import { SegmentReferences } from './SegmentReferences';
 import { useProductionAccess } from './ProductionAccess';
 import './LatestSelection.css';
-
-function SegmentReferences({ context }: { context?: GenerationContext }) {
-  const preview = useContext(PreviewContext);
-  return <section className="segment-references" aria-label="参考素材区域">
-    {context ? (['common', 'segment'] as const).map(group => <div className={`segment-reference-group is-${group}`} key={group}>
-      <h3>{group === 'common' ? '公共参考素材' : '本组参考素材'}</h3>
-      <div className="segment-reference-images">{context.references[group].map((material, index) => <figure key={index}>
-        <figcaption>{material.label}</figcaption>
-        {material.url ? <button className="reference-preview" onClick={() => preview({ kind: material.kind, name: material.name, url: material.url })} aria-label={`查看 ${material.label} ${material.name}`}>
-          {material.kind === 'image' ? <img src={material.url} alt={material.name} loading="lazy" /> : material.kind === 'video' ? <><video src={material.url} muted preload="metadata" /><span className="reference-media-label">视频 ▶</span></> : <span className="reference-audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2" fill="none" stroke="currentColor" strokeWidth="2" /><circle cx="6" cy="18" r="3" fill="currentColor" /><circle cx="18" cy="16" r="3" fill="currentColor" /></svg><span>音频</span></span>}
-        </button> : <p className="muted">原素材缺失</p>}
-        {material.kind === 'video' && <FileActions url={material.url} downloadOnly />}
-      </figure>)}{!context.references[group].length && <p className="muted">{context.issues.length ? '该次参考素材关联尚未完整记录。' : '该次未使用此类参考素材。'}</p>}</div>
-    </div>) : <span className="placeholder-label">参考素材区域</span>}
-  </section>;
-}
 
 export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false, scenePlayback }: {
   readOnly?: boolean;
@@ -75,7 +60,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     queryFn: () => get<GenerationContext>(current?.contextUrl || `${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
     placeholderData: (previous, query) => query?.queryKey[1] === (scope.notesUrl || scope.project) && query.queryKey[2] === identity ? previous : undefined,
     enabled: !scenePlayback && !!current && !current.context });
-  const context = current?.context || (current ? detail.data : undefined);
+  const context = current?.context || (!scenePlayback && current ? detail.data : undefined);
   const language = preferredLanguage || (context?.prompts.english && !context.prompts.chinese ? 'en' : 'zh');
   const awaitingGeneration = current && !current.url && !missingVideoState(current).unavailable
     && context?.issues.includes('该次生成的资料关联尚未记录。');
@@ -161,7 +146,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       setPlayback({ key: current!.key, time });
       scenePlayback?.onTimeChange(time);
     }} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>
-      <SegmentReferences context={context} />
+      <SegmentReferences context={context} segmentOnly={!!scenePlayback} />
       <section className="segment-script" aria-label="分镜脚本、提示词与修改意见区域">
         <div className="segment-script-header">
           <UnderlineTabs label="分段文字内容" items={[{ value: 'script', label: '分镜脚本' }, { value: 'prompt', label: '提示词' }, ...(!readOnly ? [{ value: 'notes', label: '修改意见' }] : [])]} selected={tab} onChange={onTabChange} disabled={!current && !plannedScript?.html} />

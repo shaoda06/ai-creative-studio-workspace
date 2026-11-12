@@ -145,6 +145,8 @@ try {
     await page.getByRole('region',{name:'当前选择',exact:true}).waitFor();
     await page.goBack();
     await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='参考视频');
+    await page.getByText('暂无参考视频。', {exact:true}).waitFor();
+    assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'参考视频');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();

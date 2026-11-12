@@ -21,6 +21,7 @@ from chloe_documents import check_workspace
 
 class ChloeClothingTests(unittest.TestCase):
     kind = CLOTHING
+    default_description = '无'
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -59,7 +60,7 @@ class ChloeClothingTests(unittest.TestCase):
         card = self.cards(self.root,self.api)[0]
         self.assertEqual(card['media']['key'],Path(first['absolute_file']).relative_to(self.root).as_posix())
         self.assertEqual(self.file(self.root,self.identity,card['media']['key']),Path(first['absolute_file']))
-        self.assertEqual(detail['description'],'无')
+        self.assertEqual(detail['description'], self.default_description)
         self.assertEqual([s['heading'] for s in detail['sections']][:1],[self.kind.label+'信息'])
         self.assertEqual(len(detail['images']),2)
         self.assertEqual(sum(image['adopted'] for image in detail['images']),1)
@@ -147,6 +148,7 @@ class ChloeClothingTests(unittest.TestCase):
 
 class ChloeHairTests(ChloeClothingTests):
     kind = HAIR
+    default_description = '待确定'
 
     def test_existing_project_without_hair_directory_can_be_read_and_initialized(self):
         self.path.unlink()

@@ -5,12 +5,12 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const { chromium } = require('playwright');
-const { createServer } = await import(require.resolve('vite'));
-const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
+const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
+const react = (await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const output = await mkdtemp(join(tmpdir(), 'nora-songssx-'));
 const clip = join(output, 'scene.mp4');
 execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x263a42:s=384x216:r=24',
@@ -56,7 +56,7 @@ const round = (number, songssx, run, stage = songssx ? '场次生成' : '一采'
       context: { scriptHtml: '<p>' + id + ' 隔离分镜</p>', issues: [], shotTimingSource: 'plan',
         shots: [{ id: 'SH00' + (i + 1), duration: 10, html: '<p>' + id + ' 当前镜头</p>' }],
         prompts: { english: 'GEN ' + (i + 1) + ' isolated prompt.', chinese: id + ' 中文提示词示例。' },
-        references: { common: [], segment: [{ name: id + ' 参考图', label: '<Picture 1>', kind: 'image',
+        references: { common: [], segment: id === 'P002' ? [] : [{ name: id + ' 参考图', label: '<Picture 1>', kind: 'image',
           url: '/component-samples/image.svg?segment=' + id }] },
       } })) } } : {}),
 });
@@ -163,11 +163,15 @@ if (process.argv.includes('--preview')) {
       const selector = page.getByRole('combobox', { name: '修改轮次' });
       const chooser = page.getByRole('region', { name: '选择制作记录' });
       const player = page.locator('.segment-video video');
+      const references = page.getByRole('region', { name: '参考素材区域' });
+      const referenceHeadings = references.getByRole('heading');
       await go('EP001');
       await player.waitFor();
       assert.equal(await player.getAttribute('aria-label'), '一采 · R001 · 候选一');
       await page.getByRole('button', { name: /^分段 P001，计划时长 10秒/ }).waitFor();
       assert.equal(await chooser.count(), 0);
+      await references.getByRole('heading', { name: '本组参考素材' }).waitFor();
+      assert.deepEqual(await referenceHeadings.allTextContents(), ['公共参考素材', '本组参考素材']);
       const firstClip = await player.getAttribute('src');
       await page.getByRole('button', { name: /^分段 P002/ }).click();
       assert.equal(await page.getByRole('combobox', { name: '版本切换' }).getAttribute('data-value'), 'P002-R001');
@@ -184,8 +188,8 @@ if (process.argv.includes('--preview')) {
       assert.equal(await player.getAttribute('aria-label'), '第3轮 · 后处理');
       await page.getByText('第3轮 · 后处理', { exact: true }).waitFor();
       const src = await player.getAttribute('src');
-      const references = page.getByRole('region', { name: '参考素材区域' });
       await references.getByRole('button', { name: /P001 参考图/ }).waitFor();
+      assert.deepEqual(await referenceHeadings.allTextContents(), ['本段参考素材']);
       await page.getByRole('button', { name: /^分段 P003/ }).click();
       await page.waitForFunction(() => {
         const video = document.querySelector('.segment-video video');
@@ -194,6 +198,8 @@ if (process.argv.includes('--preview')) {
       assert.equal(await player.getAttribute('src'), src);
       assert.equal(await page.getByText('GEN 3 · 22.375–32.292 秒').count(), 1);
       await references.getByRole('button', { name: /P003 参考图/ }).waitFor();
+      assert.equal(await references.getByRole('button', { name: /P001 参考图/ }).count(), 0);
+      assert.deepEqual(await referenceHeadings.allTextContents(), ['本段参考素材']);
       await page.getByRole('button', { name: '提示词', exact: true }).click();
       await page.locator('.segment-prompt-text').filter({ hasText: 'P003 中文提示词示例。' }).waitFor();
       await page.getByRole('button', { name: '英文', exact: true }).click();
@@ -209,6 +215,9 @@ if (process.argv.includes('--preview')) {
       await page.getByRole('button', { name: '宽屏显示' }).click();
       assert.ok((await durationButton('P002', '8').innerText()).includes('8秒'));
       await durationButton('P002', '8').click();
+      await references.getByText('本段未使用参考素材。', { exact: true }).waitFor();
+      assert.deepEqual(await referenceHeadings.allTextContents(), ['本段参考素材']);
+      assert.equal(await references.getByRole('button', { name: /P003 参考图/ }).count(), 0);
       await page.waitForFunction(() => {
         const video = document.querySelector('.segment-video video');
         return video && !video.paused && video.currentTime >= 14.3 && video.currentTime < 16;

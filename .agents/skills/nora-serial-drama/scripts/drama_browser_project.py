@@ -12,6 +12,7 @@ from datetime import datetime
 from urllib.parse import quote, unquote, urlsplit
 from backend.parsers.video_products import load_products
 import project_resources as resources
+from production_workflows import recorded_workflows
 
 from backend.parsers.documents import (plain_text_preview, status_markup, field_markup, safe_link, inline, cells, phase_list, slug, STATUS_COLORS, STATUS_FIELDS, TEXT_PREVIEW_LIMIT, INLINE_PATTERN)
 from backend.parsers.documents import markdown as render_markdown
@@ -1505,15 +1506,12 @@ def build_data(project, *, web_episode_navigation=False, load_scope=None, episod
                 except ValueError as error:
                     if episode_node['productionComplete'] or 'deliveryRecords' not in episode_node:
                         issues.append({'key': summary_key, 'message': str(error)})
-                workflows = []
-                if any(video['url'] or (video['taskStateUrl'] and exists(project / unquote(urlsplit(video['taskStateUrl']).path)))
+                aimixer_recorded = any(video['url'] or (video['taskStateUrl'] and exists(project / unquote(urlsplit(video['taskStateUrl']).path)))
                        or video['taskStatus'].split('；')[0] in ('已提交', '成功', '正在生成', '取回中')
                        for segments in episode_node['segments'].values() for segment in segments for video in segment['videos']
-                       if video['stage'] in ('一采', '二采')):
-                    workflows.append('aimixer')
+                       if video['stage'] in ('一采', '二采'))
+                workflows = recorded_workflows(episode_node['sceneRounds'], aimixer_recorded=aimixer_recorded)
                 rounds = [round_ for entries in episode_node['sceneRounds'].values() for round_ in entries]
-                if any(round_.get('songssx', {}).get('recorded') for round_ in rounds):
-                    workflows.append('songssx')
                 episode_node['productionWorkflows'] = workflows
                 if not workflows and (any(round_.get('songssx_execution') for round_ in rounds)
                                       or (number.startswith('EP') and not rounds)):

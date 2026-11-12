@@ -28,6 +28,7 @@ import { EpisodeButton } from './EpisodeButton';
 import { SegmentStageStrip } from './SegmentStageStrip';
 import { SegmentVideo } from './SegmentVideo';
 import { SegmentLayout } from './SegmentLayout';
+import { SegmentReferences } from './SegmentReferences';
 import type { SegmentVideoHandle } from './SegmentVideo';
 import { PromptSections } from './PromptSections';
 import { TaskCard } from './TaskCard';
@@ -84,6 +85,8 @@ export function ShowcaseExamples({ category }: { category: string }) {
   const [started] = useState(() => new Date().toISOString());
   const playerRef = useRef<SegmentVideoHandle>(null);
   const sound = useAudioPreview(category === 'media', null, 1);
+  const playbackNavigation = <SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical={wide} showStages={!scenePlayback}
+    newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />;
   return <PreviewContext.Provider value={setPreview}>
     {category === 'controls' && <ComponentExample title="下划线链接按钮" rule="LinkButton统一13px字号、下划线、无边框与无悬停底色，保留按钮键盘及禁用行为；此处只更新示例文字。" usage="任务组详情、本镜通过、插入时间及清空"><LinkButton onClick={() => setText('链接示例已点击')}>链接操作示例</LinkButton><LinkButton disabled>禁用链接示例</LinkButton><p role="status">{text}</p></ComponentExample>}
     {category === 'layout' && <>
@@ -251,13 +254,18 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AudioReferenceCard name="AUD-SAMPLE@V001" duration={4} playing={sound.playingId==='reference'} progress={sound.currentId==='reference' ? sound.progress : 0} onPlay={()=>sound.toggle('reference',audio.url!)} />
         <AudioReferenceCard name="长声音标题用于检查容器边界LongAudioReferenceLongAudioReference@V002" duration={null} playing={sound.playingId==='long-reference'} progress={sound.currentId==='long-reference' ? sound.progress : 0} onPlay={()=>sound.toggle('long-reference',audio.url!)} />
       </ComponentExample>
-      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。宽屏时显示右侧分段导航。整场视频示例在播放器下方显示轮次和阶段。视频文件从资源下载获取。" usage="Nora 剧集制作（含 Songssx 整场播放）、Iris 视频制作、Chloe 视频制作">
-        <SegmentLayout wide={wide} navigation={<SegmentStageStrip segments={segments} selected={segment} onSelect={setSegment} vertical newVideoSegments={new Set(['P001'])} previousEnding={null} previousSelected={false} onPreviousSelect={() => {}} />} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} videoDescription={scenePlayback ? '第3轮 · 后处理' : undefined} />}>
+      <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。宽屏时显示右侧分段导航。切换整场示例可查看 Songssx 的轮次标注和本段参考素材。用分段按钮切换示例参考图。AiMixer 显示公共参考素材和本组参考素材。视频文件从资源下载获取。" usage="Nora、Iris、Chloe 的视频制作">
+        {!wide && playbackNavigation}
+        <SegmentLayout wide={wide} navigation={playbackNavigation} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} videoDescription={scenePlayback ? '第3轮 · 后处理' : undefined} />}>
+          <SegmentReferences segmentOnly={scenePlayback} context={{ issues: [], references: {
+            common: [],
+            segment: [{ kind: 'image', name: segment + ' 示例参考图', label: '<Picture 1>', url: image.url }],
+          } }} />
           <section className="segment-script"><Rich html="<h3>示例分镜</h3><p>切换宽屏可查看播放器与分段导航的共同布局。</p>" /></section>
         </SegmentLayout>
         <p>示例播放位置：{time.toFixed(1)}秒</p><button onClick={() => playerRef.current!.seekTo(1)}>跳到1秒</button>
         <button onClick={() => playerRef.current!.seekTo(1, true)}>从1秒开始播放</button>
-        <button aria-pressed={scenePlayback} onClick={() => setScenePlayback(!scenePlayback)}>显示整场视频标注</button>
+        <button aria-pressed={scenePlayback} onClick={() => setScenePlayback(!scenePlayback)}>切换 Songssx 整场示例</button>
       </ComponentExample>
     </>}
     {category === 'production' && <>

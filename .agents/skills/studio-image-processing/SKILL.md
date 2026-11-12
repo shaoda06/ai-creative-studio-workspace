@@ -1,6 +1,6 @@
 ---
 name: studio-image-processing
-description: 共用图片技术处理工具，按明确输入和尺寸执行原图保存、本地等比适配、遮罩填充或RTX放大，并核对PNG和执行凭据；不管理业务批准和正式资产采用。
+description: 在已有源图，需要保留原图、本地等比适配、遮罩填充或 RTX 放大时使用。按目标规格处理，并核对 PNG 与执行凭据。
 ---
 
 # Studio 图片处理

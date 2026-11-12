@@ -212,13 +212,45 @@ class BaselineTests(unittest.TestCase):
             Path(tmp, f'{stem}.api.json').write_text(json.dumps(api), encoding='utf-8')
             self.assertEqual(len(wb.verify(tmp)), 1)
 
-    def test_all_pairs_and_reference_branches(self):
+    def test_all_bundled_apis_and_reference_branches(self):
         results = wb.verify(BASELINES)
-        self.assertEqual(len(results), 6)
+        self.assertEqual(len(results), 8)
         for folder, group in workflow_directories(BASELINES):
             self.assertEqual(len(wb.verify(folder)), len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]
         self.assertEqual(h3, [])
+
+    def test_viggle_remake_apis_use_mode_specific_sampling(self):
+        for stem, mode, sigma_id, sigmas in (
+            ('Viggle-Remake-单人换人-双参考图', 'swap', '15',
+             '1.0, 0.990476, 0.965243, 0.923077, 0.8, 0.631579, 0.0'),
+            ('Viggle-Remake-换背景-目标参考帧', 'edit', '33',
+             '1.0, 0.983607, 0.96, 0.923077, 0.857143, 0.705882, 0.0'),
+        ):
+            with self.subTest(mode=mode):
+                api = json.loads(workflow_file(stem, 'api').read_text(encoding='utf-8'))
+                self.assertEqual(api['65']['class_type'], 'SaveVideo')
+                self.assertEqual(api['65']['inputs']['video'], ['19', 0])
+                self.assertEqual(api['19']['inputs']['fps'], 24)
+                self.assertEqual(api['42']['inputs']['frames'], ['67', 1])
+                self.assertEqual(api['42']['inputs']['ref_1'], ['9', 0])
+                self.assertEqual(api['42']['inputs']['audio'], ['72', 0])
+                self.assertEqual(api['72']['class_type'], 'ComfySwitchNode')
+                self.assertEqual(api['72']['inputs'], {'switch': True, 'on_true': ['63', 1]})
+                self.assertTrue(api['1']['inputs']['unet_name'].endswith(
+                    f'viggle_remake_{mode}_pruned_int8_convrot.safetensors'))
+                self.assertEqual(api['16']['inputs']['sigmas'], [sigma_id, 0])
+                self.assertEqual(api[sigma_id]['inputs']['sigmas'], sigmas)
+                if mode == 'swap':
+                    self.assertEqual(api['42']['inputs']['ref_2'], ['64', 0])
+                    self.assertEqual(api['68']['inputs']['strength_model'], 0.35)
+                    self.assertNotIn('33', api)
+                else:
+                    self.assertEqual(api['3']['inputs']['model'], ['1', 0])
+                    self.assertEqual(api['3']['inputs']['keyframe_until'], 0.9)
+                    self.assertNotIn('ref_2', api['42']['inputs'])
+                    self.assertNotIn('15', api)
+                    self.assertNotIn('68', api)
 
     def test_standard_default_lora_chain(self):
         standard = json.loads(workflow_file('Minimax-H3-导演台-视频生成-标准版', 'api').read_text(encoding='utf-8'))

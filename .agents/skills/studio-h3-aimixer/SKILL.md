@@ -1,6 +1,6 @@
 ---
 name: studio-h3-aimixer
-description: 装配和接续 AiMixer 导演台视频任务，维护选组、素材槽位、缓存一采二采、逐段取回和历史请求读取。
+description: 在已选择 AiMixer 导演台，需要配置、装配、核对或接续原任务时使用。处理运行组、素材槽位、缓存一采二采与逐段取回。
 ---
 
 # AiMixer 导演台

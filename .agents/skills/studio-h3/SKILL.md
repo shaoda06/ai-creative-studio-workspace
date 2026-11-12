@@ -1,11 +1,15 @@
 ---
 name: studio-h3
-description: MiniMax H3 共用提示词模式、正文格式、参考素材语义和导演台选择入口。
+description: 在规划 MiniMax H3 生成或原片编辑，或编写、修订与核对 H3 提示词时使用。维护正文格式、参考语义和时长规则，按实际工作流进入专项。
 ---
 
 # Studio H3 共用规则
 
-调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对提示词前，按当前任务读取所用的 [AiMixer 导演台](../studio-h3-aimixer/SKILL.md) 或 [Songssx 导演台](../studio-h3-songssx/SKILL.md)；按实际模式阅读[官方提示词技能](../h3-prompt-writing/SKILL.md)及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+
+- [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)负责运行组和缓存一采、二采。
+- [Songssx 导演台](../studio-h3-songssx/SKILL.md)负责 GEN 时间线和 SelfLift。
+- 已有原片并使用 Viggle Remake 换人、换背景或连续完成两项时，进入 [Viggle Remake 视频编辑](../studio-h3-remake/SKILL.md)。
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
 
@@ -15,6 +19,12 @@ MiniMax H3 官方输出规格为 24 fps、单次 4–15 秒。分镜规划采用
 
 - [Songssx 标准版 Ref2VA](../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#单段时长与帧数校验)按 GEN 核对计划新增时长，以及包含入段重叠和帧格对齐的采样窗口。
 - [AiMixer](../studio-h3-aimixer/references/ComfyUI-AiMixer导演台节点使用规范.md#5-时长帧数与编辑状态同步)按本次实际画布逐组核对请求时长及帧数。
+
+## 导演台询问的推荐项
+
+Agent 为 AiMixer 或 Songssx 的视频生成配置发起有选项的询问时，根据本次镜头内容、交付规格和制作要求选出一项推荐，在该选项完整文案末尾追加独立的 `（推荐）`。保留选项原有的编号、顺序和括号内容。弹窗和聊天都使用同一标记。
+
+例如原选项是「高清 4 步（文戏默认，总 10 步）」，本次推荐时显示「高清 4 步（文戏默认，总 10 步）（推荐）」。实际装配采用用户确认的选项。
 
 ## 动作速度询问
 

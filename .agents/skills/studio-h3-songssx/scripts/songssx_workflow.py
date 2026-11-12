@@ -8,12 +8,13 @@ import subprocess
 import sys
 
 SKILLS = Path(__file__).resolve().parents[2]
-for skill in ('studio-comfyui', 'studio-h3'):
+for skill in ('studio-comfyui', 'studio-h3', 'studio-video-processing'):
     sys.path.insert(0, str(SKILLS / skill / 'scripts'))
 from project_paths import input_file, project_file
 from workflow_graph import Canvas
 from workflow_paths import workflow_file
 from h3_prompt_format import PROMPT_CHARACTER_LIMIT, format_findings, shot_blocks
+from video_metadata import probe
 
 WORKFLOW = 'songssx-selflift'
 TASK_TYPE = 'video-scene-generation'
@@ -142,6 +143,17 @@ def validate_shots(prompt, gen, frames, overlap):
         previous_ms = cut_ms
 
 
+def gap_boundaries(before_frame, generated_frames):
+    # The first GEN must start at zero. Put the two visual samples just
+    # outside that window so the planner uses its native gap guides.
+    return [
+        dict(id='gap-before', start=-1 / FPS, duration=1 / FPS,
+             trimStart=before_frame / FPS, hasAudio=False),
+        dict(id='gap-after', start=generated_frames / FPS, duration=1 / FPS,
+             trimStart=0, hasAudio=False),
+    ]
+
+
 def validate(workflow, video_plan, outputs, uploads):
     planner, sampler, save = (workflow[key] for key in (PLANNER, SAMPLER, SAVE))
     if ([node['class_type'] for node in (planner, sampler, save)] !=
@@ -149,10 +161,10 @@ def validate(workflow, video_plan, outputs, uploads):
             or sampler['inputs']['finite_plan'] != [PLANNER, 2]
             or save['inputs']['video'] != [SAMPLER, 1] or save['inputs']['format'] != 'mp4'
             or any(name in planner['inputs'] for name in ('import_preset', 'prompt_index'))):
-        raise ValueError('Songssx 须连接完整时间线并保存一个场次 MP4')
+        raise ValueError('Songssx 须连接完整的生成计划并保存一个 MP4')
     if (len(outputs) != 1 or (outputs[0].node_id, outputs[0].output_key, outputs[0].index) != (SAVE, OUTPUT_KEY, 0)
             or Path(outputs[0].path).suffix.lower() != '.mp4'):
-        raise ValueError('Songssx 须登记 SaveVideo 的一个整场 MP4 取回目标')
+        raise ValueError('Songssx 须登记 SaveVideo 的一个 MP4 取回目标')
     inputs = planner['inputs']
     validate_dimensions(inputs['width'], inputs['height'])
     timeline = json.loads(inputs['timeline_data'])
@@ -161,15 +173,37 @@ def validate(workflow, video_plan, outputs, uploads):
     if (timeline['fps'] != FPS or not 1 <= len(segments) <= 64 or config['mode'] != 'timeline'
             or config['count'] != len(segments) or len(mapping) != len(segments)):
         raise ValueError('Songssx 的 GEN 数量或帧率不符合装配记录')
-    if timeline['videoClips'] or any(item.get('audioMode') != 'reference' for item in timeline['audios']):
-        raise ValueError('当前 Songssx 装配只支持独立参考图和音色，不能指定视频参考或锁定原音轨')
+    gap = 'gap_repair' in video_plan
+    clips = timeline['videoClips']
+    if not gap and clips:
+        raise ValueError('Songssx 仅在 gap_repair 任务中接收两段边界视频')
+    if gap and timeline['audios']:
+        raise ValueError('Songssx 双边界补生成只接收边界画面及独立参考图')
+    if any(item.get('audioMode') != 'reference' for item in timeline['audios']):
+        raise ValueError('Songssx 独立参考音频须使用参考音色模式')
     asset_ids = {kind: {item['id'] for item in timeline[kind]} for kind in REFERENCE_EXTENSIONS}
-    paths = {(item['node'], item['input'], tuple(item.get('json-path', ()))) for item in uploads}
     expected_paths = {(PLANNER, 'timeline_data', (kind, index, 'file'))
-                      for kind, ids in asset_ids.items() for index in range(len(ids))}
+                      for kind in asset_ids for index in range(len(timeline[kind]))}
+    if gap:
+        expected_paths.update((PLANNER, 'timeline_data', ('videoClips', i, 'file')) for i in range(2))
+    paths = {(item['node'], item['input'], tuple(item.get('json-path', ()))) for item in uploads}
     if (any(len(ids) != len(timeline[kind]) for kind, ids in asset_ids.items())
             or len(uploads) != len(expected_paths) or paths != expected_paths):
         raise ValueError('Songssx 参考素材须逐一绑定实际上传目标')
+    if gap:
+        repair = video_plan['gap_repair']
+        if (not isinstance(repair, dict) or len(segments) != 1 or len(clips) != 2
+                or timeline.get('videoAudioEnabled') is not True
+                or type(repair.get('before_source_frame')) is not int or repair['before_source_frame'] < 0
+                or type(repair.get('replacement_frames')) is not int
+                or repair['replacement_frames'] != mapping[0]['planned_seconds'] * FPS):
+            raise ValueError('Songssx 局部返修须有一个补生成 GEN、两个画面边界和准确的替换帧数')
+        boundaries = gap_boundaries(repair['before_source_frame'], segments[0]['endFrame'])
+        if any(not clip.get('file') or clip.get('hasAudio') is not False
+               or any(clip.get(key) != value for key, value in expected.items())
+               for clip, expected in zip(clips, boundaries, strict=True)):
+            raise ValueError('Songssx 局部返修的视频边界须紧贴补生成区间，且仅提供画面')
+    minimum_images = 0 if gap else 1
     previous, previous_length = 0, 0
     identities = set()
     for index, (item, row) in enumerate(zip(segments, mapping, strict=True), 1):
@@ -189,7 +223,7 @@ def validate(workflow, video_plan, outputs, uploads):
             raise ValueError(f'GEN {index} 的提示词格式错误：{findings[0]["detail"]}')
         if len(prompt) > PROMPT_CHARACTER_LIMIT:
             raise ValueError(f'GEN {index} 的提示词有 {len(prompt)} 字符，超过 {PROMPT_CHARACTER_LIMIT}')
-        for kind, label, minimum, maximum in (('images', 'Picture', 1, 9), ('audios', 'Audio', 0, 3)):
+        for kind, label, minimum, maximum in (('images', 'Picture', minimum_images, 9), ('audios', 'Audio', 0, 3)):
             refs = item[kind]
             if not minimum <= len(refs) <= maximum or len(set(refs)) != len(refs) or not set(refs) <= asset_ids[kind]:
                 raise ValueError(f'GEN {index} 的 {label} 参考素材分配无效')
@@ -239,7 +273,7 @@ def prepare(root, spec, documents):
     if not isinstance(options, dict):
         raise ValueError('songssx 须为任务配置对象')
     legacy_fields = {'reference_image_center_crop', 'lowres_scale'}
-    unknown = options.keys() - {'width', 'height', 'seed', 'remote_prefix', 'segments', 'configuration'} - legacy_fields
+    unknown = options.keys() - {'width', 'height', 'seed', 'remote_prefix', 'segments', 'configuration', 'gap_repair'} - legacy_fields
     if unknown:
         raise ValueError('未知 Songssx 配置字段：' + '、'.join(sorted(unknown)))
     if 'configuration' not in options and not legacy_fields <= options.keys():
@@ -312,6 +346,27 @@ def prepare(root, spec, documents):
         end = stop
     timeline['segmentConfig'] = dict(count=len(segments), activeIndex=0, mode='timeline', segments=segments)
     timeline['selection'] = dict(start=0, duration=end / FPS)
+    plan = {'adapter': 'technical', 'metadata': 'receipt', 'workflow_id': WORKFLOW, 'segments': rows}
+    if 'gap_repair' in options:
+        gap = options['gap_repair']
+        if not isinstance(gap, dict) or gap.keys() != {'before', 'after'} or len(rows) != 1:
+            raise ValueError('Songssx gap_repair 须提供 before、after 两个本地截好的视频和一个补生成 GEN')
+        replacement_frames = rows[0]['planned_seconds'] * FPS
+        if replacement_frames != int(replacement_frames):
+            raise ValueError('Songssx 局部返修请求时长须对应 24 fps 的整数帧')
+        paths = [input_file(root, gap[side]) for side in ('before', 'after')]
+        facts = [probe(path) for path in paths]
+        if any(fact['frame_rate'] != FPS or not fact['frames'] for fact in facts):
+            raise ValueError('Songssx 返修边界须是可读取帧数的 24 fps 视频')
+        before_frame = int(facts[0]['frames']) - 1
+        plan['gap_repair'] = dict(before_source_frame=before_frame, replacement_frames=int(replacement_frames))
+        clips = gap_boundaries(before_frame, end)
+        for index, (clip, path) in enumerate(zip(clips, paths, strict=True)):
+            clip.update(file=f'待上传/{clip["id"]}{path.suffix.lower()}', name=path.name)
+            uploads.append({'file': str(path), 'node': PLANNER, 'input': 'timeline_data',
+                            'subfolder': record.name, 'response-name': f'上传响应-{clip["id"]}.json',
+                            'json-path': ['videoClips', index, 'file']})
+        timeline.update(videoClips=clips, videoAudioEnabled=True)
     planner.update(width=width, height=height, generation_seconds=end / FPS,
                    timeline_data=json.dumps(timeline, ensure_ascii=False, allow_nan=False))
     api[SAMPLER]['inputs']['seed'] = seed
@@ -322,7 +377,6 @@ def prepare(root, spec, documents):
     nodes[SAVE]['widgets_values'][0] = prefix
     documents.new_json(record / '任务.workflow.json', canvas)
     documents.new_json(record / '任务.api.json', api)
-    plan = {'adapter': 'technical', 'metadata': 'receipt', 'workflow_id': WORKFLOW, 'segments': rows}
     return dict(project=str(root), task_type=TASK_TYPE, title=spec['title'], workflow=api,
                 record_dir=str(record), video_plan=plan, submission_plan=spec.get('submission_plan'),
                 uploads=uploads, outputs=[dict(node_id=SAVE, output_key=OUTPUT_KEY, index=0,

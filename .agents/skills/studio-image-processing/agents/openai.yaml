@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 图片处理"
-  short_description: "共用图片技术处理工具，按明确输入和尺寸执行原图保存、本地等比适配或RTX放大，并核对PNG和执行凭据；不管理业务批准和正式资产采"
+  short_description: "按源图与目标规格保存、等比适配、遮罩填充或 RTX 放大，并核对输出"
   default_prompt: "使用$studio-image-processing处理当前任务，先确定输入、授权和实际范围。"

@@ -1,6 +1,6 @@
 ---
 name: studio-operations-review
-description: 通用社交媒体运营二级阶段，按实际后台证据采集、核对和分析作品，形成报告及待验证建议。
+description: 在复盘已发布作品、采集运营数据或分析内容表现时使用。核对实际成片及后台证据，整理结论和待验证建议。
 ---
 
 # Studio 作品复盘与管理

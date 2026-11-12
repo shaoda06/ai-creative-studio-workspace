@@ -1,0 +1,327 @@
+{
+  "34": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "subject_definitions:\n<Video 1> is the source clip and supplies the performer, action, camera work, and soundtrack.\n<Picture 1> shows the target scene from the source shot's viewpoint, including the floor plane and the performer's position relative to the scene.\n<Subject 1> is the original performer in <Video 1>.\n\nsummary:\n[video editing + background replacement] <Subject 1> performs the original action in the scene shown in <Picture 1>, with the original framing, camera movement, and timing.\n\nretention_analysis:\n<Video 1> (source video editing): fully_preserved - the performer's identity, face, hair, clothing, gestures, movement path, shot timing, framing, camera movement, and soundtrack.\n<Picture 1>: reference - the replacement background, floor perspective, scene layout, and direction of light.\nThe source background is replaced by the scene in <Picture 1>.\n\ndetailed_description:\n[Shot 1] From 00:00.000 through the end of the clip, <Subject 1> follows the source action in the new scene. The scene maintains coherent perspective through the original camera movement. When the feet are visible, each supporting sole meets the floor at its original step timing. Lifted feet clear the floor, and contact shadows follow the direction of light in the target scene. The performer's scale and occlusion follow the shot's position and movement.\n\noverall_soundscape:\nThe source soundtrack plays in sync with the original action.\n\nnon_diegetic_music:\nRetain any music in the source soundtrack."
+    },
+    "_meta": {
+      "title": "手填提示词｜Viggle Remake 六段正文"
+    }
+  },
+  "54": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 480
+    },
+    "_meta": {
+      "title": "视频与参考图短边"
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "CLIP Qwen3VL nvfp4 | 文本编码器"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "Video VAE | 视频VAE"
+    }
+  },
+  "6": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {
+      "title": "Audio VAE | 音频VAE"
+    }
+  },
+  "62": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "source_24fps.mp4"
+    },
+    "_meta": {
+      "title": "源视频｜24 fps"
+    }
+  },
+  "63": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "62",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "分离源视频画面与音频"
+    }
+  },
+  "9": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "target_background_frame.png"
+    },
+    "_meta": {
+      "title": "图 1｜新背景目标参考帧"
+    }
+  },
+  "42": {
+    "class_type": "RemakeConditioning",
+    "inputs": {
+      "prompt": [
+        "34",
+        0
+      ],
+      "pins": "",
+      "frames": [
+        "67",
+        1
+      ],
+      "short_edge": [
+        "54",
+        0
+      ],
+      "clip": [
+        "4",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ],
+      "audio_vae": [
+        "6",
+        0
+      ],
+      "source": [
+        "63",
+        0
+      ],
+      "ref_1": [
+        "9",
+        0
+      ],
+      "audio": [
+        "72",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Conditioning | Remake条件"
+    }
+  },
+  "12": {
+    "class_type": "RemakeNoise",
+    "inputs": {
+      "seed": 608739106861467,
+      "positive": [
+        "42",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Noise | Remake噪声"
+    }
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "viggle_remake\\viggle_remake_edit_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Edit INT8｜换背景模型"
+    }
+  },
+  "3": {
+    "class_type": "RemakeKeyframeUntil",
+    "inputs": {
+      "keyframe_until": 0.9,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Viggle Remake Keyframe Until | Remake关键帧截止"
+    }
+  },
+  "13": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "conditioning": [
+        "42",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "BasicGuider"
+    }
+  },
+  "14": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "16": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "12",
+        0
+      ],
+      "guider": [
+        "13",
+        0
+      ],
+      "sampler": [
+        "14",
+        0
+      ],
+      "sigmas": [
+        "33",
+        0
+      ],
+      "latent_image": [
+        "42",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "17": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "18": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecodeAudio"
+    }
+  },
+  "19": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 24,
+      "bit_depth": "auto",
+      "color_space": "sRGB",
+      "chroma_subsampling": "auto",
+      "codec": "none",
+      "images": [
+        "17",
+        0
+      ],
+      "audio": [
+        "18",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "CreateVideo"
+    }
+  },
+  "65": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "viggle_remake/background_edit",
+      "format": "mp4",
+      "format.codec": "auto",
+      "codec": "h264",
+      "codec.encoding": "auto",
+      "video": [
+        "19",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "保存换背景成片｜MP4"
+    }
+  },
+  "33": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.983607, 0.96, 0.923077, 0.857143, 0.705882, 0.0"
+    },
+    "_meta": {
+      "title": "ManualSigmas｜Edit"
+    }
+  },
+  "66": {
+    "class_type": "FloatConstant",
+    "inputs": {
+      "value": 5.17
+    },
+    "_meta": {
+      "title": "源片时长（秒）｜3.75–15"
+    }
+  },
+  "67": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "min(345, 17 * ceil((24 * min(15, max(3.75, a)) - 5) / 17) + 5)",
+      "values.a": [
+        "66",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "17N+5"
+    }
+  },
+  "72": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": true,
+      "on_true": [
+        "63",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "生成时是否参考原视频的声音？"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: studio-h3-songssx
-description: 按场次装配 Songssx 低内存 SelfLift 导演台，准备多 GEN 时间线、绑定素材并按一个 MP4 取回。
+description: 在已选择 Songssx SelfLift，需要规划 GEN、装配、核对或接续场次任务时使用。处理时间线、参考绑定、整场 MP4 和局部返修。
 ---
 
 # Songssx 导演台

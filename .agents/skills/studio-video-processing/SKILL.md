@@ -1,6 +1,6 @@
 ---
 name: studio-video-processing
-description: 共用视频技术处理，按明确源文件、尺寸、帧率和裁切要求装配RIFE/RTX工作流并读取客观媒体信息；不决定业务来源采用、目标规格或下一阶段。
+description: 在已有视频需要核对媒体规格、插帧、缩放、裁切或 RTX 后处理时使用。按明确源片、目标帧率和画幅装配并核对技术结果。
 ---
 
 # Studio 视频处理
