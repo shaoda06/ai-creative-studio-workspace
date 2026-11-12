@@ -130,6 +130,7 @@ class ChloeModelsTests(unittest.TestCase):
         detail = model_detail(self.root, 'M001', self.api)
         self.assertEqual([x['id'] for x in detail['looks']], ['L001'])
         look = detail['looks'][0]
+        self.assertEqual(look['status'], '制作中')
         self.assertEqual(len(look['images']), 3)
         face_image = next(image for image in look['images'] if image['purpose'] == '造型面部三视图')
         self.assertTrue(face_image['adopted'])

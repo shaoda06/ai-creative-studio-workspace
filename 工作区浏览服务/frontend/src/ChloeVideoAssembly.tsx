@@ -15,7 +15,7 @@ import { AssemblyExport, AssemblyPreview, assetTitle } from './ChloeAssemblyPart
 import type { OpenImage } from './ChloeAssemblyParts';
 
 type NamedAsset = { id: string; name: string };
-type ImageAsset = NamedAsset & { media: FileItem | null };
+type ImageAsset = NamedAsset & { status: '制作中' | '可用'; media: FileItem | null };
 type LookImage = ModelDetail['looks'][number]['images'][number];
 type Selection =
   | { kind: 'video'; asset: ReferenceVideoCard }
@@ -28,14 +28,16 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection) => void; onClose: () => void; onPreview: OpenImage;
 }) {
   const { api } = useChloeScope();
-  const [model, setModel] = useState<NamedAsset | null>(initial?.kind === 'look' ? initial.model : null);
-  const [draft, setDraft] = useState(initial);
+  const [modelId, setModelId] = useState(initial?.kind === 'look' ? initial.model.id : null);
+  const [draftId, setDraftId] = useState(initial?.asset.id ?? null);
   const videos = useQuery({ queryKey: ['chloe-reference-videos', api],
     queryFn: () => get<ReferenceVideoCard[]>(`${api}/shared-reference-videos`), enabled: kind === 'video' });
   const scenes = useQuery({ queryKey: ['chloe-reference-assets', 'scenes', api],
     queryFn: () => get<ImageAsset[]>(`${api}/shared-scenes`), enabled: kind === 'scene' });
   const models = useQuery({ queryKey: ['chloe-models', api],
-    queryFn: () => get<ImageAsset[]>(`${api}/shared-models`), enabled: kind === 'look' && !model });
+    queryFn: () => get<ImageAsset[]>(`${api}/shared-models`), enabled: kind === 'look' });
+  const availableModels = (models.data ?? []).filter(asset => asset.status === '可用');
+  const model = models.error ? undefined : availableModels.find(asset => asset.id === modelId);
   const looks = useQuery({ queryKey: ['chloe-model', api, model?.id],
     queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(model!.id)}`), enabled: kind === 'look' && !!model });
   const selectingModel = kind === 'look' && !model;
@@ -49,21 +51,27 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
       item={{ media, emptyLabel: '尚未采用正面面部图' }} selection={{ selected, onSelect,
         onPreview: previewImage && url ? () => onPreview(title, url) : undefined }} />;
   };
-  const cards = kind === 'video' ? (videos.data ?? []).map(asset => card(asset,
-    { kind: 'image', key: asset.id, url: asset.coverUrl, name: `${asset.name}的首帧` },
-    () => setDraft({ kind: 'video', asset }), draft?.asset.id === asset.id))
-    : kind === 'scene' ? (scenes.data ?? []).filter(asset => asset.media?.url).map(asset => card(asset, asset.media,
-      () => setDraft({ kind: 'scene', asset }), draft?.asset.id === asset.id, true))
-    : model ? (looks.data?.looks ?? []).flatMap(asset => {
+  const choices: Selection[] = kind === 'video' ? (videos.data ?? []).filter(asset => asset.status === '可用').map(asset => ({ kind: 'video', asset }))
+    : kind === 'scene' ? (scenes.data ?? []).filter(asset => asset.status === '可用' && asset.media?.url).map(asset => ({ kind: 'scene', asset }))
+    : model ? (looks.data?.looks ?? []).filter(asset => asset.status === '可用').flatMap(asset => {
       const image = asset.images.find(item => item.adopted && item.purpose === '全身三视图原图' && item.media.url);
-      return image ? [card(asset, image.media, () => setDraft({ kind: 'look', model, asset, image }), draft?.asset.id === asset.id, true)] : [];
-    }) : (models.data ?? []).map(asset => card(asset, asset.media, () => { setModel(asset); setDraft(null); }));
+      return image ? [{ kind: 'look', model, asset, image }] : [];
+    }) : [];
+  const draft = choices.find(choice => choice.asset.id === draftId);
+  const cards = selectingModel ? availableModels.map(asset => card(asset, asset.media, () => {
+    setDraftId(initial?.kind === 'look' && initial.model.id === asset.id ? initial.asset.id : null);
+    setModelId(asset.id);
+  })) : choices.map(choice => {
+    const media = choice.kind === 'video' ? { kind: 'image', key: choice.asset.id, url: choice.asset.coverUrl, name: `${choice.asset.name}的首帧` }
+      : choice.kind === 'look' ? choice.image.media : choice.asset.media;
+    return card(choice.asset, media, () => setDraftId(choice.asset.id), draft === choice, choice.kind !== 'video');
+  });
 
   return <Dialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose} lockPageScroll>
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
     {!selectingModel && <div className="chloe-assembly-confirm">
-      {model && <LinkButton onClick={() => { setModel(null); setDraft(null); }}>返回模特列表</LinkButton>}
+      {model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}
       <button type="button" disabled={!draft || !query.data || !!query.error} onClick={() => onConfirm(draft!)}>确认选择</button>
     </div>}
   </Dialog>;
@@ -86,7 +94,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
     queryFn: () => get<ReferenceVideoDetail>(`${api}/shared-reference-videos/${encodeURIComponent(videoId!)}`),
     enabled: active && !!videoId });
   const reference = videoQuery.data;
-  const canGenerate = !!(reference && look && !videoQuery.error);
+  const canGenerate = !!(reference?.status === '可用' && look && !videoQuery.error);
 
   const generate = () => {
     if (!reference || !look) return;

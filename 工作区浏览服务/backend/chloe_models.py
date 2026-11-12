@@ -227,7 +227,7 @@ def model_detail(root, identity, api):
             if row['执行编号'] not in clothing[reference]['executions']:
                 clothing[reference]['executions'].append(row['执行编号'])
         key = look_path.relative_to(root).as_posix()
-        looks.append({'id': look_id, 'name': look_name, 'media': media,
+        looks.append({'id': look_id, 'name': look_name, 'media': media, 'status': asset_status(look_path, look_doc)['status'],
                       'description': fields(look_doc, '造型信息')['造型说明'],
                       'clothing': list(clothing.values()),
                       **asset_content(root, look_path, look_doc, allowed, base),

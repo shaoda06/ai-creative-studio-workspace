@@ -49,7 +49,7 @@ def listing(request: Request):
             ref = playback_reference(space.root, path, fields(doc, SECTION))
             if ref:
                 cover, _ = video_urls(space.api, identity, ref)
-                cards.append({'id': identity, 'name': name, 'coverUrl': cover})
+                cards.append({'id': identity, 'name': name, 'coverUrl': cover, 'status': '可用'})
     except (ValueError, OSError) as error:
         raise HTTPException(409, str(error)) from error
     return cards
@@ -66,7 +66,7 @@ def detail(identity: str, request: Request):
             facts = resources.facts(path)
         _, url = video_urls(space.api, identity, ref)
         source = info['来源']
-        return {'id': identity, 'name': name, 'source': source,
+        return {'id': identity, 'name': name, 'status': '可用', 'source': source,
                 'sourceUrl': source.partition('－')[2] or None, 'description': info['内容简介'],
                 'duration': facts['duration_seconds'], 'width': facts['display_width'], 'height': facts['display_height'],
                 'aspectRatio': facts['display_aspect_ratio'],

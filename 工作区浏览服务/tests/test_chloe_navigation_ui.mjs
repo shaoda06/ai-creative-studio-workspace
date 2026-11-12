@@ -26,14 +26,17 @@ const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixture
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
-const fixtureScenes = [fixtureAsset('S001','背景甲'),{id:'S002',name:'未采用背景图',media:null}];
-const fixtureVideo = {id:'RV001',name:'参考视频甲',coverUrl:fixtureImage('RV001').url};
+const fixtureScenes = [fixtureAsset('S001','背景甲'),fixtureAsset('S002','制作中背景','制作中')];
+const fixtureVideo = {id:'RV001',name:'参考视频甲',status:'可用',coverUrl:fixtureImage('RV001').url};
+const draftVideo = {id:'RV002',name:'待登记参考视频',status:'制作中',coverUrl:fixtureImage('RV002').url};
 const fixtureLooks = [
-  {id:'L001',name:'造型甲',images:[
+  {id:'L001',name:'造型甲',status:'可用',images:[
     {purpose:'全身三视图原图',adopted:false,resource:'IMG-look',version:'V004',media:fixtureImage('L001-candidate')},
     {purpose:'全身三视图原图',adopted:true,resource:'IMG-look',version:'V002',media:fixtureImage('L001-adopted')},
   ]},
-  {id:'L002',name:'待采用造型',images:[]},
+  {id:'L002',name:'制作中造型',status:'制作中',images:[
+    {purpose:'全身三视图原图',adopted:true,resource:'IMG-look-draft',version:'V001',media:fixtureImage('L002-adopted')},
+  ]},
 ];
 const fixtureAccessories = Array.from({length:6},(_,i)=>({
   ...fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`), type:i%2 === 0 ? '帽饰' : '包袋',
@@ -62,7 +65,7 @@ try {
         {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
         {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
       ],looks:fixtureLooks}});
-      if (path === '/api/workspaces/account-demo/shared-reference-videos') return route.fulfill({json:showAssemblyFixtures ? [fixtureVideo] : []});
+      if (path === '/api/workspaces/account-demo/shared-reference-videos') return route.fulfill({json:showAssemblyFixtures ? [fixtureVideo,draftVideo] : []});
       if (path === '/api/workspaces/account-demo/shared-reference-videos/RV001') return route.fulfill({json:{
         ...fixtureVideo,media:{kind:'video',name:fixtureVideo.name,key:'资源/参考视频原件.webm',url:'/component-samples/video.webm'},
       }});
@@ -403,15 +406,19 @@ try {
     assert.ok(page.url().endsWith('asset=assembly&assemblyTab=video'));
     assert.ok(await generateHandoff.isDisabled());
     await choose('选择参考视频').click();
+    await dialog.getByRole('button',{name:'RV001 · 参考视频甲',exact:true}).waitFor();
+    assert.equal(await dialog.getByText('待登记参考视频',{exact:false}).count(),0);
     await dialog.getByRole('button',{name:'RV001 · 参考视频甲',exact:true}).click();
     await confirm.click();
     const player = page.locator('video[aria-label="参考视频甲"]');
     await player.waitFor();
     await page.waitForFunction(()=>document.querySelector('video[aria-label="参考视频甲"]')?.readyState>=1);
     await choose('选择造型图').click();
+    await dialog.getByRole('button',{name:'M002 · 模特乙',exact:true}).waitFor();
+    assert.equal(await dialog.getByText('制作中模特',{exact:false}).count(),0);
     await dialog.getByRole('button',{name:'M002 · 模特乙',exact:true}).click();
     await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).waitFor();
-    assert.equal(await dialog.getByText('待采用造型',{exact:false}).count(),0);
+    assert.equal(await dialog.getByText('制作中造型',{exact:false}).count(),0);
     await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).click();
     await page.keyboard.press('Escape');
     assert.ok(await generateHandoff.isDisabled());
@@ -424,7 +431,7 @@ try {
     assert.match(await handoff.textContent(),/背景：沿用参考视频的场景/);
     await choose('选择背景').click();
     await dialog.getByRole('button',{name:'选择S001 · 背景甲',exact:true}).waitFor();
-    assert.equal(await dialog.getByText('未采用背景图',{exact:false}).count(),0);
+    assert.equal(await dialog.getByText('制作中背景',{exact:false}).count(),0);
     await dialog.getByRole('button',{name:'选择S001 · 背景甲',exact:true}).click();
     await confirm.click();
     await page.getByRole('textbox',{name:'额外要求（可选）'}).fill('保留开场动作。\n镜头稍慢。');

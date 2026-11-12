@@ -9,10 +9,11 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { formatProductionDuration } from './components/useEpisodeDurations';
 
-export type ReferenceVideoCard = { id: string; name: string; coverUrl: string };
+export type ReferenceVideoCard = { id: string; name: string; coverUrl: string; status: '制作中' | '可用' };
 export type ReferenceVideoDetail = {
   id: string;
   name: string;
+  status: ReferenceVideoCard['status'];
   source: string;
   sourceUrl: string | null;
   description: string;
@@ -57,6 +58,7 @@ export function ChloeReferenceVideoDetail({ query, workspaceQuery }: {
         <h2>参考视频信息</h2>
         <dl className="chloe-overview-fields">
           <div><dt>标题</dt><dd>{video.name}</dd></div>
+          <div><dt>状态</dt><dd>{video.status}</dd></div>
           <div><dt>来源</dt><dd>{video.sourceUrl ? <a href={video.sourceUrl} target="_blank" rel="noreferrer">{video.source.split('－', 1)[0]}</a> : video.source}</dd></div>
           <div><dt>时长</dt><dd>{formatProductionDuration({ seconds: video.duration, estimated: false })}</dd></div>
           <div><dt>比例</dt><dd>{video.aspectRatio}</dd></div>

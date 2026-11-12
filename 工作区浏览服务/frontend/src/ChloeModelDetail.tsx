@@ -20,7 +20,7 @@ export interface AssetDetail {
   sections: {heading: string; html: string; empty: boolean}[];
 }
 export interface ModelDetail extends AssetDetail {
-  looks: (AssetDetail & {media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
+  looks: (AssetDetail & {status: '制作中' | '可用'; media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
 const originalPurpose = '全身三视图原图';
