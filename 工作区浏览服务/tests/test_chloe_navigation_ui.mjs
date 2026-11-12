@@ -513,15 +513,22 @@ try {
     assert.doesNotMatch(videoPrompt,/IMG-look@|L001-adopted|L001-face-candidate/);
     await copyHandoff.click();
     assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),videoPrompt);
-    const [videoBox, lookBox, promptBox, sceneBox] = await Promise.all([
+    const [videoBox, lookBox, sceneBox, requirementsBox, promptBox] = await Promise.all([
       page.getByRole('region',{name:'参考视频选择'}).boundingBox(),page.getByRole('region',{name:'造型图选择'}).boundingBox(),
-      exportArea.boundingBox(),page.getByRole('region',{name:'背景选择'}).boundingBox(),
+      page.getByRole('region',{name:'背景选择'}).boundingBox(),page.getByRole('region',{name:'额外要求',exact:true}).boundingBox(),
+      exportArea.boundingBox(),
     ]);
     assert.equal(videoBox.y,lookBox.y);
-    assert.equal(promptBox.y,sceneBox.y);
-    assert.equal(videoBox.x,promptBox.x);
-    assert.equal(lookBox.x,sceneBox.x);
-    assert.ok(videoBox.x+videoBox.width<lookBox.x && videoBox.y+videoBox.height<promptBox.y);
+    assert.equal(videoBox.y,sceneBox.y);
+    assert.equal(videoBox.height,lookBox.height);
+    assert.equal(videoBox.height,sceneBox.height);
+    assert.ok(videoBox.x+videoBox.width<lookBox.x && lookBox.x+lookBox.width<sceneBox.x);
+    const columnUnit = (videoBox.width+lookBox.width+sceneBox.width)/10;
+    assert.ok(Math.abs(videoBox.width-3*columnUnit)<1 && Math.abs(lookBox.width-4*columnUnit)<1 && Math.abs(sceneBox.width-3*columnUnit)<1);
+    assert.equal(requirementsBox.y,promptBox.y);
+    assert.equal(requirementsBox.width,promptBox.width);
+    assert.equal(requirementsBox.x,videoBox.x);
+    assert.ok(requirementsBox.x+requirementsBox.width<promptBox.x && sceneBox.y+sceneBox.height<promptBox.y);
     assert.ok(sceneBox.x+sceneBox.width<=width+1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await assemblyNav.getByRole('button',{name:'造型装配'}).click();

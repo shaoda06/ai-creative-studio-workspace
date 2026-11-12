@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
@@ -85,6 +85,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
   const [look, setLook] = useState<Extract<Selection, { kind: 'look' }> | null>(null);
   const [scene, setScene] = useState<Extract<Selection, { kind: 'scene' }> | null>(null);
   const [requirements, setRequirements] = useState('');
+  const requirementsId = useId();
   const [handoff, setHandoff] = useState('');
   const [picker, setPicker] = useState<PickerKind | null>(null);
   const [preview, setPreview] = useState<{ title: string; src: string } | null>(null);
@@ -133,38 +134,42 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
   return <>
     {renderNavigation(video || look || scene || requirements ? reset : undefined)}
     <div className="chloe-assets-content chloe-assembly chloe-video-assembly">
-      <section className="chloe-video-assembly-choice" aria-label="参考视频选择">
-        <h2>参考视频</h2>
-        <button type="button" aria-label="选择参考视频" onClick={() => setPicker('video')}>{video ? assetTitle(video.asset) : '选择参考视频'}</button>
-        <figure className="chloe-assembly-preview chloe-video-assembly-preview">
-          <figcaption>参考视频</figcaption>
-          {active && reference && !videoQuery.error ? <ReleaseFilmPlayer key={reference.media.url} item={reference.media} /> : video ?
-            <Result loading={videoQuery.isPending} error={videoQuery.error} retry={videoQuery.refetch} retrying={videoQuery.isFetching} /> :
-            <span className="muted">请选择参考视频</span>}
-        </figure>
-      </section>
-      <section className="chloe-video-assembly-choice" aria-label="造型图选择">
-        <h2>造型图</h2>
-        <button type="button" aria-label="选择造型图" onClick={() => setPicker('look')}>{look ? `${assetTitle(look.model)} / ${assetTitle(look.asset)}` : '选择造型图'}</button>
-        <div className="chloe-video-assembly-look-images">
-          <AssemblyPreview label={faceLabel} media={look?.face.media} empty="请选择模特和造型" onPreview={openImage} />
-          <AssemblyPreview label={maskedLabel} media={look?.masked.media} empty="请选择模特和造型" onPreview={openImage} />
-        </div>
-      </section>
-      <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
-        empty={canGenerate ? '点击「生成」，整理当前装配的复刻提示词。' : '选定参考视频和造型图后可生成提示词。'}>
-        <label className="chloe-video-assembly-requirements">额外要求（可选）
-          <textarea rows={3} value={requirements} onChange={event => { setRequirements(event.target.value); setHandoff(''); }} />
-        </label>
-      </AssemblyExport>
-      <section className="chloe-video-assembly-choice" aria-label="背景选择">
-        <div className="chloe-assembly-export-heading">
-          <h2>背景 <small>可选</small></h2>
-          {scene && <LinkButton onClick={() => { setScene(null); setHandoff(''); }}>清除背景</LinkButton>}
-        </div>
-        <button type="button" aria-label="选择背景" onClick={() => setPicker('scene')}>{scene ? assetTitle(scene.asset) : '选择背景'}</button>
-        <AssemblyPreview label="背景图" media={scene?.asset.media} empty="沿用参考视频的场景" onPreview={openImage} />
-      </section>
+      <div className="chloe-video-assembly-inputs">
+        <section className="chloe-video-assembly-choice" aria-label="参考视频选择">
+          <h2>参考视频</h2>
+          <button type="button" aria-label="选择参考视频" onClick={() => setPicker('video')}>{video ? assetTitle(video.asset) : '选择参考视频'}</button>
+          <figure className="chloe-assembly-preview chloe-video-assembly-preview">
+            <figcaption>参考视频</figcaption>
+            {active && reference && !videoQuery.error ? <ReleaseFilmPlayer key={reference.media.url} item={reference.media} /> : video ?
+              <Result loading={videoQuery.isPending} error={videoQuery.error} retry={videoQuery.refetch} retrying={videoQuery.isFetching} /> :
+              <span className="muted">请选择参考视频</span>}
+          </figure>
+        </section>
+        <section className="chloe-video-assembly-choice" aria-label="造型图选择">
+          <h2>造型图</h2>
+          <button type="button" aria-label="选择造型图" onClick={() => setPicker('look')}>{look ? `${assetTitle(look.model)} / ${assetTitle(look.asset)}` : '选择造型图'}</button>
+          <div className="chloe-video-assembly-look-images">
+            <AssemblyPreview label={faceLabel} media={look?.face.media} empty="请选择模特和造型" onPreview={openImage} />
+            <AssemblyPreview label={maskedLabel} media={look?.masked.media} empty="请选择模特和造型" onPreview={openImage} />
+          </div>
+        </section>
+        <section className="chloe-video-assembly-choice" aria-label="背景选择">
+          <div className="chloe-assembly-export-heading">
+            <h2>背景 <small>可选</small></h2>
+            {scene && <LinkButton onClick={() => { setScene(null); setHandoff(''); }}>清除背景</LinkButton>}
+          </div>
+          <button type="button" aria-label="选择背景" onClick={() => setPicker('scene')}>{scene ? assetTitle(scene.asset) : '选择背景'}</button>
+          <AssemblyPreview label="背景图" media={scene?.asset.media} empty="沿用参考视频的场景" onPreview={openImage} />
+        </section>
+      </div>
+      <div className="chloe-video-assembly-output">
+        <section aria-label="额外要求">
+          <h2><label htmlFor={requirementsId}>额外要求（可选）</label></h2>
+          <textarea id={requirementsId} rows={3} value={requirements} onChange={event => { setRequirements(event.target.value); setHandoff(''); }} />
+        </section>
+        <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
+          empty={canGenerate ? '点击「生成」，整理当前装配的复刻提示词。' : '选定参考视频和造型图后可生成提示词。'} />
+      </div>
       {picker && <VideoAssemblyPicker kind={picker} initial={picker === 'video' ? video : picker === 'look' ? look : scene}
         onConfirm={confirm} onClose={() => setPicker(null)} />}
       {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { FileItem } from './api';
 import { CopyButton } from './components/CopyButton';
 
@@ -14,8 +13,8 @@ export function AssemblyPreview({ label, media, empty, onPreview }: { label: str
   </figure>;
 }
 
-export function AssemblyExport({ canGenerate, generate, handoff, empty, children }: {
-  canGenerate: boolean; generate: () => void; handoff: string; empty: string; children?: ReactNode;
+export function AssemblyExport({ canGenerate, generate, handoff, empty }: {
+  canGenerate: boolean; generate: () => void; handoff: string; empty: string;
 }) {
   return <section aria-label="导出">
     <div className="chloe-assembly-export-heading">
@@ -25,7 +24,6 @@ export function AssemblyExport({ canGenerate, generate, handoff, empty, children
         {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
       </div>
     </div>
-    {children}
     <p className="chloe-assembly-export-template">{handoff || <span className="muted">{empty}</span>}</p>
   </section>;
 }
