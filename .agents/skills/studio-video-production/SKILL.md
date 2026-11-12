@@ -35,6 +35,8 @@ description: 在确认脚本后进入分镜、生成资产、提示词、视频�
 
 按所用工作流的取回规则核对候选和技术结果，复用已有凭据与报告。需要核对媒体规格时使用[视频技术处理工具](../studio-video-processing/SKILL.md)。Songssx 按[场次取回规则](../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#取回恢复与返修边界)处理，局部段取回后用[共用脚本接回并登记整场](../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#本地接回与轮次登记)。通过原执行及关联记录交回候选文件与版本、对应场次或分段、实际脚本／分镜版本、提示词与素材输入、原请求、任务标识及技术结果。业务按自己的审阅范围组织送审，审阅和采用决定写原业务记录。
 
+候选审阅或剪辑交接需要核对指定声音的落点或响度时，按实际片段调用[音频分析](../studio-audio-analysis/SKILL.md)，把测量和待试听时码交回原业务记录。
+
 任务中断、取回或登记失败时，按[后台异常与恢复](../studio-workspace-browser/references/进度查询与结果处理规范.md#异常与恢复)或实际执行工具的恢复入口接续原任务。收到内容反馈时，业务按[视频候选的返修接续](../studio-creative-techniques/references/审查与返修方法.md#视频候选的返修接续)确定返回的阶段与范围。
 
 ## 按业务决定调用执行工具

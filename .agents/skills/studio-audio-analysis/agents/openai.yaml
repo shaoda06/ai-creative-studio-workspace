@@ -1,0 +1,3 @@
+interface:
+  display_name: "Studio 音频分析"
+  short_description: "在剪辑和成片审阅中核对音效落点、测量响度并筛选素材"
