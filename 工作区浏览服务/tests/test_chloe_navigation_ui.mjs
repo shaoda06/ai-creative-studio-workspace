@@ -30,12 +30,16 @@ const fixtureScenes = [fixtureAsset('S001','背景甲'),fixtureAsset('S002','制
 const fixtureVideo = {id:'RV001',name:'参考视频甲',status:'可用',coverUrl:fixtureImage('RV001').url};
 const draftVideo = {id:'RV002',name:'待登记参考视频',status:'制作中',coverUrl:fixtureImage('RV002').url};
 const fixtureLooks = [
-  {id:'L001',name:'造型甲',status:'可用',images:[
+  {id:'L001',name:'造型甲',status:'可用',media:fixtureImage('L001-adopted'),images:[
     {purpose:'全身三视图原图',adopted:false,resource:'IMG-look',version:'V004',media:fixtureImage('L001-candidate')},
     {purpose:'全身三视图原图',adopted:true,resource:'IMG-look',version:'V002',media:fixtureImage('L001-adopted')},
+    {purpose:'造型面部三视图',adopted:false,resource:'IMG-look-face',version:'V004',media:fixtureImage('L001-face-candidate')},
+    {purpose:'造型面部三视图',adopted:true,resource:'IMG-look-face',version:'V002',media:fixtureImage('L001-face')},
+    {purpose:'全身三视图遮面版',adopted:true,resource:'IMG-look-masked',version:'V003',media:fixtureImage('L001-masked')},
   ]},
-  {id:'L002',name:'制作中造型',status:'制作中',images:[
-    {purpose:'全身三视图原图',adopted:true,resource:'IMG-look-draft',version:'V001',media:fixtureImage('L002-adopted')},
+  {id:'L002',name:'制作中造型',status:'制作中',media:fixtureImage('L002-adopted'),images:[
+    {purpose:'造型面部三视图',adopted:true,resource:'IMG-look-draft-face',version:'V001',media:fixtureImage('L002-face')},
+    {purpose:'全身三视图遮面版',adopted:true,resource:'IMG-look-draft-masked',version:'V001',media:fixtureImage('L002-masked')},
   ]},
 ];
 const fixtureAccessories = Array.from({length:6},(_,i)=>({
@@ -446,7 +450,18 @@ try {
     await dialog.getByRole('button',{name:'M002 · 模特乙',exact:true}).click();
     await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).click();
     await confirm.click();
-    assert.equal(await page.getByRole('img',{name:'全身定装三视图原图',exact:true}).getAttribute('src'),fixtureImage('L001-adopted').url);
+    const lookPreviews = page.getByRole('region',{name:'造型图选择'});
+    const previewBounds = [];
+    for (const [label,src] of [['造型面部三视图','L001-face'],['全身定装三视图遮面版','L001-masked']]) {
+      const image = lookPreviews.getByRole('img',{name:label,exact:true});
+      assert.equal(await image.getAttribute('src'),fixtureImage(src).url);
+      previewBounds.push(await image.boundingBox());
+      await lookPreviews.getByRole('button',{name:`查看${label}大图`,exact:true}).click();
+      assert.equal(await dialog.getByRole('img',{name:label,exact:true}).getAttribute('src'),fixtureImage(src).url);
+      await page.keyboard.press('Escape');
+    }
+    assert.equal(await lookPreviews.getByRole('img').count(),2);
+    assert.ok(previewBounds[0].y+previewBounds[0].height<previewBounds[1].y);
     await generateHandoff.click();
     assert.match(await handoff.textContent(),/背景：沿用参考视频的场景/);
     await choose('选择背景').click();
@@ -458,9 +473,10 @@ try {
     assert.ok(await copyHandoff.isDisabled());
     await generateHandoff.click();
     const videoPrompt = await handoff.textContent();
-    for (const text of ['RV001 · 参考视频甲','资源/参考视频原件.webm','M002 · 模特乙','L001 · 造型甲','IMG-look@V002','S001 · 背景甲','保留开场动作。\n镜头稍慢。']) {
+    for (const text of ['RV001 · 参考视频甲','资源/参考视频原件.webm','M002 · 模特乙','L001 · 造型甲','IMG-look-face@V002','L001-face','IMG-look-masked@V003','L001-masked','S001 · 背景甲','保留开场动作。\n镜头稍慢。']) {
       assert.ok(videoPrompt.includes(text), text);
     }
+    assert.doesNotMatch(videoPrompt,/IMG-look@|L001-adopted|L001-face-candidate/);
     await copyHandoff.click();
     assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),videoPrompt);
     const [videoBox, lookBox, promptBox, sceneBox] = await Promise.all([

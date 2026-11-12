@@ -16,13 +16,16 @@ import type { OpenImage } from './ChloeAssemblyParts';
 
 type NamedAsset = { id: string; name: string };
 type ImageAsset = NamedAsset & { status: '制作中' | '可用'; media: FileItem | null };
-type LookImage = ModelDetail['looks'][number]['images'][number];
+type LookAsset = ModelDetail['looks'][number];
+type LookImage = LookAsset['images'][number];
 type Selection =
   | { kind: 'video'; asset: ReferenceVideoCard }
-  | { kind: 'look'; asset: NamedAsset; model: NamedAsset; image: LookImage }
+  | { kind: 'look'; asset: Pick<LookAsset, 'id' | 'name' | 'media'>; model: NamedAsset; face: LookImage; masked: LookImage }
   | { kind: 'scene'; asset: ImageAsset };
 type PickerKind = Selection['kind'];
 const labels = { video: '参考视频', look: '造型图', scene: '背景' };
+const faceLabel = '造型面部三视图';
+const maskedLabel = '全身定装三视图遮面版';
 
 function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection) => void; onClose: () => void; onPreview: OpenImage;
@@ -55,8 +58,9 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   const choices: Selection[] = kind === 'video' ? (videos.data ?? []).filter(asset => asset.status === '可用').map(asset => ({ kind: 'video', asset }))
     : kind === 'scene' ? (scenes.data ?? []).filter(asset => asset.status === '可用' && asset.media?.url).map(asset => ({ kind: 'scene', asset }))
     : model ? (looks.data?.looks ?? []).filter(asset => asset.status === '可用').flatMap(asset => {
-      const image = asset.images.find(item => item.adopted && item.purpose === '全身三视图原图' && item.media.url);
-      return image ? [{ kind: 'look', model, asset, image }] : [];
+      const face = asset.images.find(item => item.adopted && item.purpose === faceLabel && item.media.url);
+      const masked = asset.images.find(item => item.adopted && item.purpose === '全身三视图遮面版' && item.media.url);
+      return face && masked ? [{ kind: 'look', model, asset, face, masked }] : [];
     }) : [];
   const draft = choices.find(choice => choice.asset.id === draftId);
   const cards = selectingModel ? availableModels.map(asset => card(asset, asset.media, () => {
@@ -64,7 +68,7 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
     setModelId(asset.id);
   })) : choices.map(choice => {
     const media = choice.kind === 'video' ? { kind: 'image', key: choice.asset.id, url: choice.asset.coverUrl, name: `${choice.asset.name}的首帧` }
-      : choice.kind === 'look' ? choice.image.media : choice.asset.media;
+      : choice.asset.media;
     return card(choice.asset, media, () => setDraftId(choice.asset.id), draft === choice, choice.kind !== 'video');
   });
 
@@ -106,12 +110,14 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
       `视频文件：${reference.media.key}`,
       `出镜模特：${assetTitle(look.model)}`,
       `造型：${assetTitle(look.asset)}`,
-      `造型图：全身定装三视图原图（${look.image.resource}@${look.image.version}）`,
-      `造型图文件：${look.image.media.key}`,
+      `${faceLabel}：${look.face.resource}@${look.face.version}`,
+      `${faceLabel}文件：${look.face.media.key}`,
+      `${maskedLabel}：${look.masked.resource}@${look.masked.version}`,
+      `${maskedLabel}文件：${look.masked.media.key}`,
       ...(scene ? [`背景：${assetTitle(scene.asset)}`, `背景图文件：${scene.asset.media?.key}`] : ['背景：沿用参考视频的场景。']),
       `额外要求：${requirements.trim() || '无。'}`,
       '',
-      '按参考视频的镜头顺序、构图、运镜、人物动作和节奏复刻，由所选模特出镜，保持造型图中的妆发与穿搭一致。已选背景时，按背景图还原场景并匹配镜头透视和光线。',
+      '按参考视频的镜头顺序、构图、运镜、人物动作和节奏复刻，由所选模特出镜。五官与妆发参考造型面部三视图，身形与穿搭参考全身定装三视图遮面版。已选背景时，按背景图还原场景并匹配镜头透视和光线。',
     ].join('\n'));
   };
   const confirm = (selection: Selection) => {
@@ -144,7 +150,10 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
       <section className="chloe-video-assembly-choice" aria-label="造型图选择">
         <h2>造型图</h2>
         <button type="button" aria-label="选择造型图" onClick={() => setPicker('look')}>{look ? `${assetTitle(look.model)} / ${assetTitle(look.asset)}` : '选择造型图'}</button>
-        <AssemblyPreview label="全身定装三视图原图" media={look?.image.media} empty="请选择模特和造型" onPreview={openImage} />
+        {look ? <div className="chloe-video-assembly-look-images">
+          <AssemblyPreview label={faceLabel} media={look.face.media} empty="尚未采用造型面部三视图" onPreview={openImage} />
+          <AssemblyPreview label={maskedLabel} media={look.masked.media} empty="尚未采用全身定装三视图遮面版" onPreview={openImage} />
+        </div> : <AssemblyPreview label="造型参考图" empty="请选择模特和造型" onPreview={openImage} />}
       </section>
       <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
         empty={canGenerate ? '点击「生成」，整理当前装配的复刻提示词。' : '选定参考视频和造型图后可生成提示词。'}>
