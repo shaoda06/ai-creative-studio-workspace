@@ -62,7 +62,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
   });
 
   return <AssetSelectionDialog title={title} close={onClose} confirm={() => onConfirm(selected)} confirmDisabled={!canConfirm}
-    stickyFooter={multi} actions={filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}>
+    toolbar={filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}>
     <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {available && (cards.length ? multi
       ? <ChloeAccessoryColumns cards={cards} />

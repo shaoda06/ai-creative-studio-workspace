@@ -326,28 +326,28 @@ try {
       dialog.locator('article').filter({has:page.getByRole('img',{name:id,exact:true})}).boundingBox()));
     assert.ok(shortCard.height < tallCard.height && followingCard.y < tallCard.y + tallCard.height);
     const filters = dialog.getByRole('group',{name:'按类型筛选'});
-    const [filterBox, confirmBox] = await Promise.all([filters.boundingBox(),confirm.boundingBox()]);
-    assert.ok(filterBox.x + filterBox.width <= confirmBox.x &&
-      Math.abs(filterBox.y + filterBox.height / 2 - confirmBox.y - confirmBox.height / 2) <= 1);
+    const [filterBox, confirmBox, closeBox] = await Promise.all([
+      filters.boundingBox(),confirm.boundingBox(),dialog.getByRole('button',{name:'关闭',exact:true}).boundingBox(),
+    ]);
+    assert.ok(confirmBox.x+confirmBox.width<closeBox.x && closeBox.y+closeBox.height<filterBox.y);
+    assert.ok(filterBox.y+filterBox.height<shortCard.y);
     assert.equal(await dialog.getByRole('button',{name:'筛选',exact:true}).count(),0);
     if (height === 640) {
-      const footerVisibility = await dialog.evaluate(element => {
+      const scroll = await dialog.evaluate(element => {
         const filterBox = element.querySelector('fieldset');
-        const visible = () => {
-          const dialogBox = element.getBoundingClientRect();
-          const bounds = filterBox.getBoundingClientRect();
-          return bounds.top >= dialogBox.top && bounds.bottom <= dialogBox.bottom;
-        };
+        const card = element.querySelector('article');
         element.scrollTop = 0;
-        const before = visible();
+        const filterTop = filterBox.getBoundingClientRect().top;
+        const cardTop = card.getBoundingClientRect().top;
         element.scrollTop = 90;
-        return {before, after:visible(), scrollTop:element.scrollTop};
+        return {filterShift:filterBox.getBoundingClientRect().top-filterTop, cardShift:card.getBoundingClientRect().top-cardTop};
       });
-      assert.ok(footerVisibility.scrollTop > 0 && footerVisibility.before && footerVisibility.after);
+      assert.ok(Math.abs(scroll.filterShift)<1 && scroll.cardShift<0);
     }
     await accessoryChoice(0).click();
     const bagFilter = filters.getByRole('checkbox',{name:'包袋',exact:true});
     const hatFilter = filters.getByRole('checkbox',{name:'帽饰',exact:true});
+    assert.equal(await dialog.locator('header').getByRole('group',{name:'按类型筛选',exact:true}).count(),1);
     assert.equal(await filters.getByRole('checkbox',{name:'首饰',exact:true}).count(),0);
     await bagFilter.check();
     assert.equal(await accessoryChoice(0).count(),0);
@@ -440,6 +440,9 @@ try {
     const videoPicker = page.getByRole('dialog',{name:'选择参考视频',exact:true});
     const videoOption = videoPicker.getByRole('button',{name:'选择RV001 · 参考视频甲',exact:true});
     await videoOption.waitFor();
+    const header = videoPicker.locator('header');
+    assert.deepEqual(await header.getByRole('button').allTextContents(),['确认选择','关闭 ×']);
+    assert.equal(await header.getByRole('group',{name:'按类型筛选',exact:true}).count(),0);
     assert.equal(await dialog.getByText('待登记参考视频',{exact:false}).count(),0);
     await videoPicker.getByRole('button',{name:'全屏播放RV001 · 参考视频甲',exact:true}).click();
     const fullVideo = page.getByRole('dialog',{name:'RV001 · 参考视频甲',exact:true});

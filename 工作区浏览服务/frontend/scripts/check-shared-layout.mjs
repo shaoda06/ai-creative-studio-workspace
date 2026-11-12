@@ -387,6 +387,8 @@ try {
     await showcase.getByRole('button', { name: '打开资源选择示例', exact: true }).click();
     const assetDialog = page.getByRole('dialog', { name: '资源选择示例', exact: true });
     const confirmAsset = assetDialog.getByRole('button', { name: '确认选择', exact: true });
+    const closeAsset = assetDialog.getByRole('button', { name: '关闭', exact: true });
+    const assetFilter = assetDialog.getByRole('switch', { name: '只看图片', exact: true });
     const firstChoice = assetDialog.getByRole('button', { name: '选择单选图片甲', exact: true });
     const secondChoice = assetDialog.getByRole('button', { name: '选择单选图片乙', exact: true });
     const unavailableChoice = assetDialog.getByRole('button', { name: '选择单选图片未就绪', exact: true });
@@ -395,6 +397,26 @@ try {
     await contained(videoChoice, `${width}px / 单选视频卡片`);
     assert.ok(await unavailableChoice.isDisabled());
     assert.ok(await confirmAsset.isDisabled());
+    const [confirmBounds, closeBounds, filterBounds] = await Promise.all([
+      confirmAsset.boundingBox(), closeAsset.boundingBox(), assetFilter.boundingBox(),
+    ]);
+    assert.ok(confirmBounds.x+confirmBounds.width<closeBounds.x && closeBounds.y+closeBounds.height<filterBounds.y);
+    const scroll = await assetDialog.evaluate(dialog => {
+      dialog.style.maxHeight = '360px';
+      const header = dialog.querySelector('header');
+      const card = dialog.querySelector('.asset-media-card');
+      const headerTop = header.getBoundingClientRect().top;
+      const cardTop = card.getBoundingClientRect().top;
+      dialog.scrollTop = 120;
+      const result = { offset: dialog.scrollTop, header: header.getBoundingClientRect().top-headerTop, card: card.getBoundingClientRect().top-cardTop };
+      dialog.scrollTop = 0;
+      dialog.style.removeProperty('max-height');
+      return result;
+    });
+    assert.ok(scroll.offset>0 && Math.abs(scroll.header)<1 && scroll.card<0);
+    await assetFilter.click();
+    assert.equal(await videoChoice.count(),0);
+    await assetFilter.click();
     const [imageButton, videoButton] = await Promise.all([firstChoice.boundingBox(), videoChoice.boundingBox()]);
     assert.equal(imageButton.width, videoButton.width);
     assert.equal(imageButton.height, videoButton.height);

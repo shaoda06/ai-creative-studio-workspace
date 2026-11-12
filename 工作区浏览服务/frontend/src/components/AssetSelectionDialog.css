@@ -1,3 +1,0 @@
-.asset-selection-footer{display:flex;align-items:center;gap:12px;margin-top:20px}
-.asset-selection-footer-sticky{position:sticky;bottom:0;z-index:1;padding-block:10px;background:white}
-.asset-selection-footer>button:last-child{flex-shrink:0;margin-inline-start:auto}
