@@ -93,7 +93,7 @@ try {
       if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
       if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
-        id:'O001',name:'套装甲',description:'隔离测试套装',images:[],
+        id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',composition:'开衫叠穿上衣',images:[],
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
       }});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
@@ -195,6 +195,9 @@ try {
     assert.equal(await clothingLinks.count(),2);
     await page.getByRole('link',{name:'O001 · 套装甲',exact:true}).click();
     await page.getByText('隔离测试套装',{exact:true}).waitFor();
+    const clothingInfo = page.getByRole('region',{name:'服装信息',exact:true});
+    assert.deepEqual(await clothingInfo.locator('dt').allTextContents(),['服装名称','服装形态','套装来源','服装说明','组成与穿法']);
+    assert.deepEqual(await clothingInfo.locator('dd').allTextContents(),['套装甲','套装','合成','隔离测试套装','开衫叠穿上衣']);
     await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
     assert.ok(page.url().endsWith('asset=clothing&clothingTab=outfits'));
     await outfitTab.waitFor();

@@ -14,11 +14,16 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
 
-interface ReferenceAssetCard {
-  id: string; name: string; media: FileItem | null; type?: string | null;
+interface ClothingClassification {
   clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
+  outfitSource?: '提取' | '合成' | null;
 }
-export interface ReferenceAssetDetail extends AssetDetail { description: string; type?: string }
+export interface ReferenceAssetCard extends ClothingClassification {
+  id: string; name: string; media: FileItem | null; type?: string | null;
+}
+export interface ReferenceAssetDetail extends AssetDetail, ClothingClassification {
+  description: string; type?: string; composition?: string;
+}
 export const referenceAssetKinds = {
   hair: {label:'发型', parameter:'hair', endpoint:'shared-hair', ratio:'16:9'},
   clothing: {label:'服装', parameter:'clothing', endpoint:'shared-clothing', ratio:'4:3'},
@@ -27,6 +32,12 @@ export const referenceAssetKinds = {
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
 const clothingTabs = [{ value: 'outfits', label: '套装' }, { value: 'garments', label: '单件' }];
+
+export function referenceAssetListParams(kind: ReferenceAssetKind, clothingTab: string | null) {
+  const params = new URLSearchParams({ section: 'assets', asset: kind });
+  if (kind === 'clothing' && clothingTab === 'outfits') params.set('clothingTab', clothingTab);
+  return params;
+}
 
 export function useChloeAssetTypeFilter<T>(cards: T[], getType: (card: T) => string | null | undefined) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -68,7 +79,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const filterByType = isAccessory || (isClothing && !isOutfit);
   const { visibleCards, ...filter } = useChloeAssetTypeFilter(filterByType ? cards : [], item => isAccessory ? item.type : item.bodyArea);
   const visible = filterByType ? visibleCards : cards;
-  const listParams = `section=assets&asset=${kind}${isOutfit ? '&clothingTab=outfits' : ''}`;
+  const listParams = referenceAssetListParams(kind, clothingTab);
   const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
     to={`${page}?${listParams}&${parameter}=${encodeURIComponent(item.id)}`}
     item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
@@ -76,9 +87,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
     <PageCheckStatus queries={[workspaceQuery,query]} />
     {isClothing && <div className="chloe-clothing-tabs">
       <UnderlineTabs label="服装分类" items={clothingTabs} selected={clothingTab} onChange={value => {
-        if (value !== clothingTab) setParams(value === 'outfits'
-          ? { section: 'assets', asset: 'clothing', clothingTab: value }
-          : { section: 'assets', asset: 'clothing' });
+        if (value !== clothingTab) setParams(referenceAssetListParams(kind, value));
       }} />
     </div>}
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
@@ -93,7 +102,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
 export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kind: ReferenceAssetKind; query: UseQueryResult<ReferenceAssetDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, endpoint, ratio} = referenceAssetKinds[kind];
   const purposes = [label+'展示图'];
-  const { api, page } = useChloeScope();
+  const { api } = useChloeScope();
   const [params,setParams] = useSearchParams();
   const [document,setDocument] = useState<FileItem | null>(null);
   const data = query.data;
@@ -118,7 +127,15 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
       <div className="chloe-model-detail">
         <div className="chloe-look-detail">
           <section className="panel chloe-look-info" aria-label={label+'信息'}><h2>{label}信息</h2>
-            <dl className="chloe-overview-fields"><div><dt>{label}名称</dt><dd>{data.name}</dd></div>{kind === 'accessories' && <div><dt>配饰类型</dt><dd>{data.type}</dd></div>}<div><dt>{label}说明</dt><dd>{data.description}</dd></div></dl>
+            <dl className="chloe-overview-fields">
+              <div><dt>{label}名称</dt><dd>{data.name}</dd></div>
+              {kind === 'accessories' && <div><dt>配饰类型</dt><dd>{data.type}</dd></div>}
+              {data.clothingForm && <div><dt>服装形态</dt><dd>{data.clothingForm}</dd></div>}
+              {data.bodyArea && <div><dt>部位</dt><dd>{data.bodyArea}</dd></div>}
+              {data.outfitSource && <div><dt>套装来源</dt><dd>{data.outfitSource}</dd></div>}
+              <div><dt>{label}说明</dt><dd>{data.description}</dd></div>
+              {data.composition && <div><dt>组成与穿法</dt><dd>{data.composition}</dd></div>}
+            </dl>
             <section className="chloe-assets-content chloe-look-references" aria-label={label+'参考图'}><h3>参考图</h3>
               {!references.length ? <p>无</p> : <div className="chloe-look-reference-list" tabIndex={0} aria-label={label+'参考图列表'}>
                 {references.map((image,index)=><AssetMediaCard key={`${image.resource}@${image.version}`} title={`参考图 ${index+1} · ${image.resource}@${image.version}`}

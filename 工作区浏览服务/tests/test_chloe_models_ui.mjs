@@ -439,7 +439,7 @@ try {
   fail=false;long=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   const assetTabs = page.getByRole('navigation',{name:'共用资产分类',exact:true});
-  assert.deepEqual(await assetTabs.getByRole('button').allTextContents(),['AI 模特','发型','服装','配饰','场景','声音']);
+  assert.deepEqual(await assetTabs.getByRole('button').allTextContents(),['AI 模特','发型','服装','配饰','场景','声音','参考视频','装配']);
   for (const [kind,label,prefix,title,ratio,details] of [['hair','发型','H','示例盘发','16:9',sample.hair],['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院',null,sample.scenes]]) {
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:label,exact:true}).click();
   await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);

@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
-import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
 import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds, useChloeAssetTypeFilter } from './ChloeReferenceAssets';
+import type { ReferenceAssetCard } from './ChloeReferenceAssets';
 import { PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { AssetSelectionDialog } from './components/AssetSelectionDialog';
@@ -18,11 +18,7 @@ import type { OpenImage } from './ChloeAssemblyParts';
 import { ChloeVideoAssembly } from './ChloeVideoAssembly';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = {
-  id: string; name: string; status: '制作中' | '可用'; media: FileItem | null; type?: string | null;
-  clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
-  reference?: { resource: string; version: string } | null;
-};
+type AssemblyAsset = ReferenceAssetCard & { status: '制作中' | '可用' };
 type PickerKind = 'models' | 'garments' | 'outfits' | 'hair' | 'accessories';
 const accessoryLimit = 5;
 const garmentLimit = 5;
@@ -58,7 +54,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
     staleTime: 0,
   });
   const available = query.isFetching || query.error ? undefined : query.data?.filter(asset =>
-    asset.status === '可用' && (!form || (asset.clothingForm === form && asset.reference)));
+    asset.status === '可用' && (!form || (asset.clothingForm === form && asset.media?.url)));
   const filterByType = isAccessory || isGarment;
   const { visibleCards, ...filter } = useChloeAssetTypeFilter(filterByType ? available ?? [] : [],
     asset => isAccessory ? asset.type : asset.bodyArea);

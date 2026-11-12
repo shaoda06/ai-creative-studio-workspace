@@ -76,6 +76,39 @@ class ChloeDocumentsTest(unittest.TestCase):
         p.write_text(original)
         self.assertFalse(self.check()['errors'])
 
+    def test_outfit_availability_validates_the_adopted_generation_inputs(self):
+        path = self.assets['服装']/'服装说明.md'
+        path.write_text(path.read_text('utf-8').replace('| 服装形态 | 待确定 |', '| 服装形态 | 套装 |')
+                        .replace('| 套装来源 | 不适用 |', '| 套装来源 | 合成 |')
+                        .replace('| 组成与穿法 | 不适用 |', '| 组成与穿法 | 上衣叠穿外套 |'), encoding='utf-8')
+        links = []
+        for index in range(7):
+            file = self.base/f'outfit-{index}.png'
+            Image.new('RGB', (40, 60), (index*20, 0, 0)).save(file)
+            ref = import_media(self.root, file, f'outfit-{index}')
+            links.append(f'[共用:{ref["resource_id"]}@{ref["version"]}](<{os.path.relpath(ref["absolute_file"], path.parent)}>)')
+        time = '2026-11-13T12:00:00+08:00'
+        for number, kind, upstream in [('E001', '图片生成', '不适用'), ('E002', '图片处理', 'E001')]:
+            self.append(path, '执行记录', [number, kind, upstream, '隔离工具', '不适用', '不适用', '隔离授权',
+                                            '不适用', time, time, '已完成', '隔离结果'])
+        self.append(path, '参考版本', ['服装展示图', links[0], '隔离来源', 'E002'])
+        self.append(path, '当前采用', ['服装展示图', links[0], '隔离采用', time])
+        self.append(path, '输入记录', ['E002', '超分输入', '不适用', links[1]])
+        before = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, '1–5 项准确图片输入'):
+            register_available(self.root, path, '隔离批准')
+        self.assertEqual(path.read_bytes(), before)
+        self.append(path, '输入记录', ['E001', '图1', '不适用', links[1]])
+        self.assertEqual(register_available(self.root, path, '隔离批准')['status'], '可用')
+        self.assertEqual(docs.check_workspace(self.root, path)['errors'], [])
+        for index in range(2, 7):
+            self.append(path, '输入记录', ['E001', f'图{index}', '不适用', links[index]])
+        self.assertIn('1–5 项准确图片输入', str(docs.check_workspace(self.root, path)['errors']))
+        path.write_text(path.read_text('utf-8').replace('| 套装来源 | 合成 |', '| 套装来源 | 提取 |'), encoding='utf-8')
+        self.assertIn('须记录原服装参考图', str(docs.check_workspace(self.root, path)['errors']))
+        self.append(path, '参考版本', ['服装参考图', links[1], '隔离来源', '不适用'])
+        self.assertEqual(docs.check_workspace(self.root, path)['errors'], [])
+
     def test_model_identity_is_minimal_and_old_fields_are_rejected(self):
         path = self.assets['模特']/'模特说明.md'
         original = path.read_text()

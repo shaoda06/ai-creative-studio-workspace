@@ -14,6 +14,7 @@ sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
 from storyboard_fields import read_shots
 
 MISSING = {'待确定', '待核实', '未取得', '不适用', '无'}
+DISPLAY_IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp'}
 LINK = re.compile(r'\[([^\]\n]+)\]\(<([^>\n]+)>\)')
 MEDIA = re.compile(r'\[(共用|本视频):((?:IMG|VID|AUD)-[a-zA-Z0-9-]+)@(V[0-9]{3,})\]\(<([^>\n]+)>\)')
 PREFIXES = {'事项编号': 'I', '记录编号': 'B', '事实编号': 'F', '条件编号': 'C', '卖点编号': 'S',
@@ -312,6 +313,34 @@ def linked_object(root, path, identity, value, prefix):
     return kind
 
 
+def check_outfit_sources(root, path, doc, source):
+    if source == '提取':
+        if not any(row['用途'] == '服装参考图' for row in records(doc, '参考版本')):
+            raise ValueError('提取套装登记为可用前须记录原服装参考图')
+        return
+
+    adopted = media_reference(root, path, records(doc, '当前采用')[0]['资源引用'])
+    display = next((row for row in records(doc, '参考版本')
+                    if row['用途'] == '服装展示图' and media_reference(root, path, row['资源引用']) == adopted), None)
+    executions = {row['执行编号']: row for row in records(doc, '执行记录')}
+    number = display['执行编号'] if display else None
+    visited = set()
+    while number in executions and number not in visited:
+        visited.add(number)
+        execution = executions[number]
+        if execution['执行状态'] != '已完成':
+            break
+        if execution['执行类型'] == '图片生成':
+            inputs = [media_reference(root, path, row['资源引用']) for row in records(doc, '输入记录')
+                      if row['执行编号'] == number and row['资源引用'] not in MISSING]
+            versions = {(ref['resource_id'], ref['version']) for ref in inputs}
+            if 1 <= len(versions) <= 5 and all(Path(ref['file']).suffix.lower() in DISPLAY_IMAGE_SUFFIXES for ref in inputs):
+                return
+            break
+        number = execution['上游执行']
+    raise ValueError('合成套装登记为可用前须关联正式图的已完成生图执行，并记录 1–5 项准确图片输入')
+
+
 def check_relations(root, path, doc):
     if path.name == '服装说明.md':
         info = {row['字段']: row['内容'] for row in records(doc, '服装信息')}
@@ -347,11 +376,11 @@ def check_relations(root, path, doc):
         for row in records(doc, '当前采用'):
             if row['用途'] != label+'展示图':
                 raise ValueError(label+'当前采用只登记'+label+'展示图')
-    if path.name in {'发型说明.md', '配饰说明.md', '场景说明.md'}:
+    if path.name in {'发型说明.md', '服装说明.md', '配饰说明.md', '场景说明.md'}:
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
                 ref = media_reference(root, path, row['资源引用'])
-                if Path(ref['file']).suffix.lower() not in {'.png', '.jpg', '.jpeg', '.webp'}:
+                if Path(ref['file']).suffix.lower() not in DISPLAY_IMAGE_SUFFIXES:
                     raise ValueError(path.stem+'：'+heading+'须引用PNG、JPEG或WebP图片')
     if path.name == '声音说明.md':
         for heading in ('参考版本', '当前采用'):
@@ -405,6 +434,8 @@ def check_relations(root, path, doc):
             decisions[-1][field] in MISSING for field in ('依据', '记录时间')
         ):
             raise ValueError('资产登记为可用须记录用户明确批准的依据和时间')
+        if path.name == '服装说明.md' and form == '套装':
+            check_outfit_sources(root, path, doc, info['套装来源'])
     script = {r['字段']:r['内容'] for r in records(doc,'脚本信息')}
     if script and script['脚本状态'] == '已确认' and any(script[k] in MISSING for k in ('确认依据','确认时间')):
         raise ValueError('已确认脚本缺少确认依据或时间')

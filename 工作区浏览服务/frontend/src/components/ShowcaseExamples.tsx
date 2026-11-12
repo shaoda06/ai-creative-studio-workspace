@@ -223,7 +223,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
       </ComponentExample>
-      <ComponentExample title="资源选择卡片与弹窗" rule="弹窗顶部可确认、关闭和筛选，列表滚动时顶部保持可见。卡片右上角可选择或取消，点击媒体区打开全屏预览。" usage="Chloe 造型装配与视频装配">
+      <ComponentExample title="资源选择卡片与弹窗" rule="弹窗顶部可确认、关闭和筛选，列表滚动时顶部保持可见。卡片右上角可选择或取消，点击媒体区打开全屏预览。" usage="Chloe 套装装配、造型装配与视频装配">
         <button type="button" onClick={() => { setSelectedImage(''); setOnlyImages(false); setAssetPickerOpen(true); }}>打开资源选择示例</button>
         {assetPickerOpen && <AssetSelectionDialog title="资源选择示例" close={() => setAssetPickerOpen(false)}
           confirm={() => setAssetPickerOpen(false)} confirmDisabled={!selectedImage}

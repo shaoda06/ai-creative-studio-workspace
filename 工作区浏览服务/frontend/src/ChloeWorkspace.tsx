@@ -16,7 +16,7 @@ import { UnderlineTabs } from './components/UnderlineTabs';
 import { LinkButton } from './components/LinkButton';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
-import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
+import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds, referenceAssetListParams } from './ChloeReferenceAssets';
 import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceAssets';
 import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
 import { ChloeReferenceVideos, ChloeReferenceVideoDetail } from './ChloeReferenceVideos';
@@ -91,7 +91,9 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     refetchInterval: 5000,
   });
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
-  const assetList = `${page}?section=assets&asset=${assetCategory.value}${referenceKind === 'clothing' && params.get('clothingTab') === 'outfits' ? '&clothingTab=outfits' : ''}`;
+  const assetListParams = referenceKind ? referenceAssetListParams(referenceKind, params.get('clothingTab'))
+    : new URLSearchParams({ section: 'assets', asset: assetCategory.value });
+  const assetList = `${page}?${assetListParams}`;
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const assetNavigation = (reset?: () => void) => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
     endAction={reset && <LinkButton onClick={reset}>重置</LinkButton>}

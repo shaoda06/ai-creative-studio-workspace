@@ -79,6 +79,9 @@ class ChloeClothingTests(unittest.TestCase):
                 self.path.write_text(original.replace(fields, metadata), encoding='utf-8')
                 updated = self.cards(self.root, self.api)[0]
                 self.assertEqual(tuple(updated[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
+                updated_detail = self.detail(self.root, self.identity, self.api)
+                self.assertEqual(tuple(updated_detail[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
+                self.assertEqual(updated_detail.get('composition'), '开衫叠穿上衣' if expected[0] == '套装' else None)
                 self.assertEqual(updated['reference'], card['reference'])
                 self.assertEqual(updated['media'], card['media'])
             self.path.write_text(original.replace('待确定 |\n| 部位', '单件 |\n| 部位'), encoding='utf-8')
