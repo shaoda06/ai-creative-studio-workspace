@@ -179,11 +179,8 @@ try {
    await page.getByRole('button',{name:'分段制作',exact:true}).click();
    assert.equal(await page.getByRole('region',{name:'选择制作记录'}).count(),0);
    await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
-   const sceneDownload=page.getByRole('link',{name:'下载整场 MP4',exact:true});
-   assert.equal(await sceneDownload.getAttribute('href'),'/component-samples/video.webm?download=1');
-   const single=page.waitForEvent('download');
-   await sceneDownload.click();
-   assert.equal((await single).suggestedFilename(),'video.webm');
+   assert.equal(await page.locator('.segment-video video').getAttribute('controlslist'),null);
+   assert.equal(await page.getByText('下载整场 MP4',{exact:true}).count(),0);
    const references=page.getByRole('region',{name:'参考素材区域'});
    assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
    await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();

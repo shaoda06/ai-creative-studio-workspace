@@ -224,11 +224,8 @@ if (process.argv.includes('--preview')) {
       });
       await page.getByRole('button', { name: '恢复布局' }).click();
       await page.getByText('第3轮整场视频已准备 1／1').waitFor();
-      const sceneDownload = page.getByRole('link', { name: '下载整场 MP4', exact: true });
-      assert.equal(await sceneDownload.getAttribute('href'), '/sample/整场-R003.mp4?download=1');
-      const single = page.waitForEvent('download');
-      await sceneDownload.click();
-      assert.equal((await single).suggestedFilename(), '整场-R003.mp4');
+      assert.equal(await player.getAttribute('controlslist'), null);
+      assert.equal(await page.getByText('下载整场 MP4', { exact: true }).count(), 0);
       assert.equal(await page.getByRole('combobox', { name: '版本切换' }).count(), 0);
       const downloads = page.getByRole('button', { name: '资源下载', exact: true });
       const segmentsTab = page.getByRole('button', { name: '分段制作', exact: true });
@@ -260,7 +257,7 @@ if (process.argv.includes('--preview')) {
       await selector.click();
       await page.getByRole('option', { name: /^第2轮/ }).click();
       await page.waitForFunction(() => document.querySelector('.segment-video video')?.getAttribute('aria-label') === '第2轮 · 场次生成');
-      assert.equal(await sceneDownload.getAttribute('href'), '/sample/整场-R002.mp4?download=1');
+      assert.equal(await player.getAttribute('controlslist'), null);
       await downloads.click();
       await downloadFile('本轮打包下载', 'round-2-1.zip');
       await downloadFile('剪映草稿下载', 'round-2-1.jypack');
@@ -303,8 +300,7 @@ if (process.argv.includes('--preview')) {
       await page.getByText('C002 本轮整场视频暂不可播。连续播放已停止。').waitFor();
       assert.equal(await page.getByRole('checkbox', { name: '连续播放' }).isChecked(), false);
       await page.getByRole('button', { name: /^场次 C002/ }).click();
-      assert.equal(await page.getByRole('button', { name: '下载整场 MP4', exact: true }).isDisabled(), true);
-      assert.equal(await sceneDownload.count(), 0);
+      assert.equal(await player.count(), 0);
       assert.ok((await page.getByRole('button', { name: /^分段 P001，计划时长 10秒/ }).innerText()).includes('计划 10秒'));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(errors, []);
