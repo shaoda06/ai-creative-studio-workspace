@@ -212,14 +212,14 @@ def join(args):
         ffmpeg("-i", merged, "-map", "0", "-c", "copy", "-movflags", "+faststart", args.output)
 
 
-def add_graph_arguments(command):
+def add_graph_arguments(command, short_edges):
     command.add_argument("work", type=Path, help="prepare 写入分段计划的本地目录")
     command.add_argument("segment", type=int, help="segments.json 中从 1 起算的段号")
     command.add_argument("--source", required=True, help="本段源视频上传后返回的服务器输入名")
     command.add_argument("--prompt", required=True, type=Path, help="本段六段式英文正文文件，UTF-8")
     command.add_argument("--audio-conditioning", choices=("source", "silent"), default="source",
                          help="source 参考（默认），silent 不参考，join 时封回原声")
-    command.add_argument("--short-edge", type=int, choices=(480, 736), help="短边像素，省略沿用模板 480")
+    command.add_argument("--short-edge", type=int, choices=short_edges, help="本轮确认的短边像素，省略沿用模板 480")
     command.add_argument("--seed", type=int, help="采样种子，省略沿用模板固定值")
     command.add_argument("--output-prefix", required=True, help="服务器输出目录前缀，工具附加段号")
     command.add_argument("--output", required=True, type=Path, help="要写入的本地 API JSON，不能已存在")
@@ -237,7 +237,7 @@ def main():
                          help="默认 swap，超长镜头自动切分并规划续接；edit 按给定切点独立分段")
     command.set_defaults(run=prepare)
     command = commands.add_parser("graph", help="按实际上传名装配一个 Swap 分段请求")
-    add_graph_arguments(command)
+    add_graph_arguments(command, (480, 736, 1088))
     command.add_argument("--face", required=True, help="面部参考图的服务器输入名")
     command.add_argument("--full-body", required=True, help="全身参考图的服务器输入名")
     command.add_argument("--reference-order", choices=("face-first", "full-body-first"), default="face-first",
@@ -245,7 +245,7 @@ def main():
     command.add_argument("--previous", help="续接段上一段原始结果的服务器输入名")
     command.set_defaults(run=graph)
     command = commands.add_parser("edit-graph", help="按实际上传名装配一个 Edit 分段请求")
-    add_graph_arguments(command)
+    add_graph_arguments(command, (480, 736))
     command.add_argument("--reference", required=True, help="目标参考帧图像的服务器输入名")
     command.add_argument("--pin", type=int, help="参考帧在段内从 0 起算的帧号，省略时作普通参考")
     command.set_defaults(run=edit_graph)

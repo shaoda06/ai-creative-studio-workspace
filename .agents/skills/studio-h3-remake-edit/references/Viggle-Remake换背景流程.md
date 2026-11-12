@@ -18,6 +18,8 @@
 
 ## 3. 装配 Edit 请求
 
+装配前按[生成分辨率询问](../../studio-h3-remake/SKILL.md#生成分辨率询问)确认本轮尺寸。
+
 手动画布或直接填写 API 副本时，`#66` 填本段计划保留帧数除以 24 得到的秒数。短于 90 帧时填 3.75 秒。`#67` 向上对齐生成帧数，最多 345 帧。保留区间以实际帧数为准。
 
 | 节点 | 填写内容或基准配置 |
@@ -38,7 +40,7 @@ tool=".agents/skills/studio-h3-remake/scripts/long_swap.py"
 python3 "$tool" prepare source_24fps.mp4 run --mode edit --cut 144
 python3 "$tool" edit-graph run 1 --source remote/segment-001.mp4 \
   --reference remote/target_background_frame.png --pin 23 --prompt prompt.txt \
-  --audio-conditioning silent \
+  --audio-conditioning silent --short-edge 736 \
   --output-prefix viggle_remake/background_edit --output run/segment-001.api.json
 python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 ```
@@ -46,7 +48,7 @@ python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 - `prepare --mode edit` 按 `--cut` 的 24 fps 原片帧号独立分段，切点可重复传入。单段正文超过 345 帧时补充切点后重试。使用新的工作目录，输出 `run/segments.json` 和 `run/sources/segment-NNN.mp4`。计划中的 `start`、`end` 是原片左闭右开的正文帧区间，`generation` 是生成帧数，Edit 的 `head` 为 0。
 - `edit-graph` 每段绑定一张目标参考帧，读取 UTF-8 正文，以计划帧数填写 `#42.frames`。段号从 1 开始。`--source` 和 `--reference` 使用实际服务器输入名。省略 `--pin` 时作为普通参考，`--pin 0` 绑定段内第一帧。
 - 按[已确认的原声选择](../../studio-h3-remake/SKILL.md#原声是否参与生成)传 `--audio-conditioning`。命令行省略时沿用模板的 `source`。
-- `--short-edge` 可选 480 或 736 像素，省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
+- `--short-edge` 填本轮已确认的短边像素，单独调用命令行时省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
 - 经生成授权后，用[共用 ComfyUI 提交入口](../../studio-comfyui/references/ComfyUI工具调用规范.md)逐段提交并取回 `#65`，按段号保存为 `raw_results/segment-NNN.mp4`。核对各段实际生成帧数。`join` 裁回正文，按原顺序合片并封回本轮规范源片音轨。
 - 三个命令均只操作本地文件，成功时写出指定产物，输入或帧数不合要求时退出报错。API JSON 和合片路径须使用尚未存在的文件名。
 
