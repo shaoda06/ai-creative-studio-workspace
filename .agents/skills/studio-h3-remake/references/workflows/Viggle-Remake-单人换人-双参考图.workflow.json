@@ -1,6 +1,6 @@
 {
   "id": "aa21c5c5-91c1-473f-95b7-85fc9f9d1ee6",
-  "revision": 7,
+  "revision": 8,
   "last_node_id": 72,
   "last_link_id": 131,
   "nodes": [
@@ -1719,11 +1719,11 @@
       "id": 72,
       "type": "ComfySwitchNode",
       "pos": [
-        475,
+        440,
         285
       ],
       "size": [
-        380,
+        470,
         85
       ],
       "flags": {},
@@ -1735,14 +1735,16 @@
           "localized_name": "on_false",
           "type": "AUDIO",
           "link": null,
-          "shape": 7
+          "shape": 7,
+          "label": "不参考（原视频只有背景音乐，或希望减少原声对人物口型的影响）"
         },
         {
           "name": "on_true",
           "localized_name": "on_true",
           "type": "AUDIO",
           "link": 123,
-          "shape": 7
+          "shape": 7,
+          "label": "参考（原视频中的人物有说话、唱歌等发声动作，需要口型跟随声音）"
         }
       ],
       "outputs": [
@@ -1755,7 +1757,7 @@
           ]
         }
       ],
-      "title": "是否参考原背景音（可能会影响这个人物的口型）",
+      "title": "生成时是否参考原视频的声音？",
       "properties": {
         "Node name for S&R": "ComfySwitchNode",
         "cnr_id": "comfy-core",
@@ -2050,7 +2052,7 @@
       "bounding": [
         0,
         0,
-        900,
+        930,
         1540
       ],
       "color": "#3f789e",
