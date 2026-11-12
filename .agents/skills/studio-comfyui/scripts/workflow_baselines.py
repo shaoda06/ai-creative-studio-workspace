@@ -56,7 +56,7 @@ def validate_rtx_inputs(api):
    raise ValueError(f'RTXVideoSuperResolution {key} image_encoding is unsupported')
 
 def output_for(name):
- if name=='Viggle-Remake-单人换人-双参考图':return 65
+ if name in ('Viggle-Remake-单人换人-双参考图', 'Viggle-Remake-换背景-目标参考帧'):return 65
  return 404 if name=='MiniMax-H3-Songssx导演台-Selflift-标准版' else [403,504,506] if name=='Minimax-H3-导演台-视频生成-标准版' else 3 if name=='RTX-图片2倍超分' else 508 if name=='Qwen2.1-文生图-普通版' else 487 if name=='Qwen2.1-图生图-普通版' else 461 if name.startswith('Qwen') else 16
 
 def director_editor_state(block, common=False):

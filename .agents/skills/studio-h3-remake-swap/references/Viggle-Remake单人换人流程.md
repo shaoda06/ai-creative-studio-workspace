@@ -1,8 +1,8 @@
-# Viggle Remake 单人换人流程（试行稿）
+# Viggle Remake 单人换人流程
 
 用于把已有视频中的一名表演者换成目标角色，按原片保留动作、镜头、背景和声音。每次 Remake 请求处理一个片段，多个片段由调用方负责切分、提交和合片。
 
-- 使用已登记的 [Swap 画布](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.workflow.json)和 [Swap API](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.api.json)。Swap 采样使用 `#15`。画布上的备用 `#33` 供 [Edit 换背景流程](../../studio-h3-remake-edit/references/Viggle-Remake换背景流程.md#3-装配-edit-请求)使用。
+- 使用已登记的 [Swap 画布](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.workflow.json)和 [Swap API](../../studio-h3-remake/references/workflows/Viggle-Remake-单人换人-双参考图.api.json)。Swap 采样器 `#16` 的 Sigma 来自 `#15`。
 - 基准使用 Swap INT8、Euler 六步、24 fps、短边 480、Mystic 去油 LoRA 0.35。工作流内的预设值仅作为本模板起点。[Viggle 官方 ComfyUI 说明](https://huggingface.co/Viggle/Viggle-Remake/blob/main/COMFYUI.md)
 
 ## 1. 确定换人目标和参考图
@@ -16,7 +16,7 @@
 ### 提示词编写与核对
 
 - 按 [Viggle 共用提示词规范](../../studio-h3-remake/references/Viggle-Remake提示词规范.md)读取两份指南，结合原片和调用方要求描述换人后的主体外观、服装、配饰以及要保留的动作、背景、运镜与声音。正文要求对应本次参考、原片或已明确的业务依据。
-- 使用面部三视图和全身遮面图且要求露脸时，按实际绑定让面部图提供可见五官、妆容及经确认的头部造型，让全身图提供经确认的体型、服装和配饰。遮面处理留在素材说明，模型正文描述各景别和角度下实际可见的脸。
+- 使用面部三视图和全身遮面图且要求露脸时，面部图是唯一的面部身份参考，提供可见五官、妆容及经确认的头部造型。全身图提供经确认的体型、头身比例、服装、鞋履和穿搭配饰，也可按业务分工补充发尾与穿搭的关系。遮面处理留在素材说明，模型正文描述各景别和角度下实际可见的脸。
 
 ## 2. 规范源片和确定分段
 
@@ -47,7 +47,7 @@
 
 经生成授权后，通过[工作区共用 ComfyUI 提交入口](../../studio-comfyui/references/ComfyUI工具调用规范.md)上传、逐段提交和取回 `#65` 的 MP4。独立段在输入齐备后即可提交。续接段须先取回计划指定的上一段原始输出，再上传为本段前缀输入。记录两段实际使用的文件版本与任务 ID。
 
-长片使用以下三个命令。原片切点由调用方提供，`--cut` 可重复；确认是一个连续镜头时省略。命令中的文件名按实际任务替换。
+从工作区根目录运行以下命令。需要 Python 3.10+、FFmpeg 和 ffprobe。相对本地路径以当前目录为准。Swap 是 `prepare` 的默认模式。原片切点用 `--cut` 提供，可重复。连续镜头可省略切点，由脚本拆分超过 345 帧的镜头。命令中的文件名按实际任务替换。
 
 ```sh
 tool=".agents/skills/studio-h3-remake/scripts/long_swap.py"
@@ -58,7 +58,10 @@ python3 "$tool" graph run 2 --source remote/segment-002.mp4 \
 python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 ```
 
-`graph` 以生成帧数直接填 `#42.frames`，沿用原画布的采样和输出设置。续接段再加 `--previous` 和上一段原始输出上传后返回的服务器输入名，由工具装配 `RemakePrefix`。段号与入参按 `segments.json` 选择。
+- `prepare` 写出 `run/segments.json` 和 `run/sources/segment-NNN.mp4`。使用新的工作目录，段号从 1 开始。
+- `graph` 读取 UTF-8 正文，以计划的生成帧数直接填 `#42.frames`。面部图默认第一。全身图需排第一时加 `--reference-order full-body-first`，并同步调整正文的 Picture 编号。续接段加 `--previous` 和上一段原始输出上传后返回的服务器输入名，工具装配 `RemakePrefix`。
+- `--short-edge` 可选 480 或 736 像素，省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
+- 三个命令均只操作本地文件，成功时写出指定产物，输入或帧数不合要求时退出报错。API JSON 和合片路径须使用尚未存在的文件名。
 
 ## 4. 取回、合片和返修
 
