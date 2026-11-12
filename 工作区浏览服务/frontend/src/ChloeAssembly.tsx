@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { Activity, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import type { FileItem } from './api';
 import { useChloeScope } from './chloeScope';
@@ -8,17 +9,19 @@ import type { ModelDetail } from './ChloeModelDetail';
 import { ChloeAccessoryColumns, ChloeAccessoryTypes, referenceAssetKinds, useChloeAccessoryFilter } from './ChloeReferenceAssets';
 import { Dialog, PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
-import { CopyButton } from './components/CopyButton';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
+import { UnderlineTabs } from './components/UnderlineTabs';
+import { AssemblyExport, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
+import type { OpenImage } from './ChloeAssemblyParts';
+import { ChloeVideoAssembly } from './ChloeVideoAssembly';
 import './ChloeAssembly.css';
 
 type AssemblyAsset = { id: string; name: string; status: '制作中' | '可用'; media: FileItem | null; type?: string | null };
 type PickerKind = 'models' | 'clothing' | 'hair' | 'accessories';
-type OpenImage = (title: string, src: string) => void;
-
 const accessoryLimit = 5;
-const assetTitle = (asset: AssemblyAsset) => `${asset.id} · ${asset.name}`;
+const assemblyTabs = [{ value: 'look', label: '造型装配' }, { value: 'video', label: '视频装配' }];
+type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
 
 function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void; onPreview: OpenImage;
@@ -71,16 +74,29 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose, onPreview }: {
   </Dialog>;
 }
 
-function AssemblyPreview({ label, media, empty, onPreview }: { label: string; media?: FileItem | null; empty: string; onPreview: OpenImage }) {
-  return <figure className="chloe-assembly-preview">
-    <figcaption>{label}</figcaption>
-    {media?.url ? <button type="button" aria-label={`查看${label}大图`} onClick={() => onPreview(label, media.url!)}>
-      <img src={media.thumbnailUrl || media.url} alt={label} loading="lazy" />
-    </button> : <span className="muted">{empty}</span>}
-  </figure>;
+export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) {
+  const [params, setParams] = useSearchParams();
+  const isVideo = params.get('assemblyTab') === 'video';
+  const navigation = (reset?: () => void) => <>
+    {renderNavigation(reset)}
+    <div className="chloe-assets-content">
+      <UnderlineTabs label="装配分类" items={assemblyTabs} selected={isVideo ? 'video' : 'look'} onChange={value => {
+        if (value === (isVideo ? 'video' : 'look')) return;
+        setParams(value === 'video' ? { section: 'assets', asset: 'assembly', assemblyTab: 'video' } : { section: 'assets', asset: 'assembly' });
+      }} />
+    </div>
+  </>;
+  return <>
+    <Activity mode={isVideo ? 'hidden' : 'visible'}>
+      <LookAssembly projectName={projectName} renderNavigation={navigation} />
+    </Activity>
+    <Activity mode={isVideo ? 'visible' : 'hidden'}>
+      <ChloeVideoAssembly projectName={projectName} renderNavigation={navigation} active={isVideo} />
+    </Activity>
+  </>;
 }
 
-export function ChloeAssembly({ projectName, renderNavigation }: { projectName: string; renderNavigation: (reset?: () => void) => ReactNode }) {
+function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
   const { api } = useChloeScope();
   const [model, setModel] = useState<AssemblyAsset | null>(null);
   const [clothing, setClothing] = useState<AssemblyAsset | null>(null);
@@ -189,18 +205,8 @@ export function ChloeAssembly({ projectName, renderNavigation }: { projectName: 
             <div><dt>配饰</dt><dd>未选择</dd></div>}
         </dl>
       </section>
-      <section aria-label="导出">
-        <div className="chloe-assembly-export-heading">
-          <h2>导出</h2>
-          <div className="chloe-assembly-export-actions">
-            <button type="button" disabled={!canGenerate} onClick={generate}>生成</button>
-            {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
-          </div>
-        </div>
-        <p className="chloe-assembly-export-template">{handoff || <span className="muted">
-          {canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，发型和配饰可选。'}
-        </span>}</p>
-      </section>
+      <AssemblyExport canGenerate={canGenerate} generate={generate} handoff={handoff}
+        empty={canGenerate ? '点击「生成」，整理当前选择的造型制作交接词。' : '选定模特和服装后可生成交接词，发型和配饰可选。'} />
     </div>
     {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} onPreview={openImage} />}
     {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}

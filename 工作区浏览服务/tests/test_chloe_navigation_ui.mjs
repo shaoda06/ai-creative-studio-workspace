@@ -20,12 +20,21 @@ const server = await createServer({configFile:false,root:frontend,plugins:[react
 await server.listen();
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
-const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','装配'];
+const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','参考视频','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
 const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothing = [fixtureAsset('O001','服装甲'),fixtureAsset('O002','制作中服装','制作中')];
 const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
+const fixtureScenes = [fixtureAsset('S001','背景甲'),{id:'S002',name:'未采用背景图',media:null}];
+const fixtureVideo = {id:'RV001',name:'参考视频甲',coverUrl:fixtureImage('RV001').url};
+const fixtureLooks = [
+  {id:'L001',name:'造型甲',images:[
+    {purpose:'全身三视图原图',adopted:false,resource:'IMG-look',version:'V004',media:fixtureImage('L001-candidate')},
+    {purpose:'全身三视图原图',adopted:true,resource:'IMG-look',version:'V002',media:fixtureImage('L001-adopted')},
+  ]},
+  {id:'L002',name:'待采用造型',images:[]},
+];
 const fixtureAccessories = Array.from({length:6},(_,i)=>({
   ...fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`), type:i%2 === 0 ? '帽饰' : '包袋',
 }));
@@ -52,8 +61,13 @@ try {
         {purpose:'正面面部',adopted:true,resource:'IMG-M002-face',version:'V003',media:fixtureImage('M002-front')},
         {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
         {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
-      ]}});
-      if (['/api/workspaces/account-demo/shared-voices','/api/workspaces/account-demo/shared-scenes'].includes(path)) return route.fulfill({json:[]});
+      ],looks:fixtureLooks}});
+      if (path === '/api/workspaces/account-demo/shared-reference-videos') return route.fulfill({json:showAssemblyFixtures ? [fixtureVideo] : []});
+      if (path === '/api/workspaces/account-demo/shared-reference-videos/RV001') return route.fulfill({json:{
+        ...fixtureVideo,media:{kind:'video',name:fixtureVideo.name,key:'资源/参考视频原件.webm',url:'/component-samples/video.webm'},
+      }});
+      if (path === '/api/workspaces/account-demo/shared-scenes') return route.fulfill({json:showAssemblyFixtures ? fixtureScenes : []});
+      if (path === '/api/workspaces/account-demo/shared-voices') return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/shared-hair') return route.fulfill({json:showAssemblyFixtures ? fixtureHair : []});
       if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
@@ -121,7 +135,7 @@ try {
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'装配');
     await page.getByRole('region',{name:'当前选择',exact:true}).waitFor();
     await page.goBack();
-    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='声音');
+    await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='参考视频');
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
@@ -379,6 +393,77 @@ try {
     assert.deepEqual(await accessories.getByRole('button').allTextContents(),['+添加配饰']);
     assert.equal(await reset.count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
+
+    const assemblyNav = page.getByRole('navigation',{name:'装配分类',exact:true});
+    assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['造型装配','视频装配']);
+    await choose('选择模特').click();
+    await dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true}).click();
+    await confirm.click();
+    await assemblyNav.getByRole('button',{name:'视频装配'}).click();
+    assert.ok(page.url().endsWith('asset=assembly&assemblyTab=video'));
+    assert.ok(await generateHandoff.isDisabled());
+    await choose('选择参考视频').click();
+    await dialog.getByRole('button',{name:'RV001 · 参考视频甲',exact:true}).click();
+    await confirm.click();
+    const player = page.locator('video[aria-label="参考视频甲"]');
+    await player.waitFor();
+    await page.waitForFunction(()=>document.querySelector('video[aria-label="参考视频甲"]')?.readyState>=1);
+    await choose('选择造型图').click();
+    await dialog.getByRole('button',{name:'M002 · 模特乙',exact:true}).click();
+    await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).waitFor();
+    assert.equal(await dialog.getByText('待采用造型',{exact:false}).count(),0);
+    await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).click();
+    await page.keyboard.press('Escape');
+    assert.ok(await generateHandoff.isDisabled());
+    await choose('选择造型图').click();
+    await dialog.getByRole('button',{name:'M002 · 模特乙',exact:true}).click();
+    await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).click();
+    await confirm.click();
+    assert.equal(await page.getByRole('img',{name:'全身定装三视图原图',exact:true}).getAttribute('src'),fixtureImage('L001-adopted').url);
+    await generateHandoff.click();
+    assert.match(await handoff.textContent(),/背景：沿用参考视频的场景/);
+    await choose('选择背景').click();
+    await dialog.getByRole('button',{name:'选择S001 · 背景甲',exact:true}).waitFor();
+    assert.equal(await dialog.getByText('未采用背景图',{exact:false}).count(),0);
+    await dialog.getByRole('button',{name:'选择S001 · 背景甲',exact:true}).click();
+    await confirm.click();
+    await page.getByRole('textbox',{name:'额外要求（可选）'}).fill('保留开场动作。\n镜头稍慢。');
+    assert.ok(await copyHandoff.isDisabled());
+    await generateHandoff.click();
+    const videoPrompt = await handoff.textContent();
+    for (const text of ['RV001 · 参考视频甲','资源/参考视频原件.webm','M002 · 模特乙','L001 · 造型甲','IMG-look@V002','S001 · 背景甲','保留开场动作。\n镜头稍慢。']) {
+      assert.ok(videoPrompt.includes(text), text);
+    }
+    await copyHandoff.click();
+    assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),videoPrompt);
+    const [videoBox, lookBox, promptBox, sceneBox] = await Promise.all([
+      page.getByRole('region',{name:'参考视频选择'}).boundingBox(),page.getByRole('region',{name:'造型图选择'}).boundingBox(),
+      exportArea.boundingBox(),page.getByRole('region',{name:'背景选择'}).boundingBox(),
+    ]);
+    assert.equal(videoBox.y,lookBox.y);
+    assert.equal(promptBox.y,sceneBox.y);
+    assert.equal(videoBox.x,promptBox.x);
+    assert.equal(lookBox.x,sceneBox.x);
+    assert.ok(videoBox.x+videoBox.width<lookBox.x && videoBox.y+videoBox.height<promptBox.y);
+    assert.ok(sceneBox.x+sceneBox.width<=width+1);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
+    await assemblyNav.getByRole('button',{name:'造型装配'}).click();
+    await player.waitFor({state:'detached'});
+    assert.equal(await summary.locator('dd').first().textContent(),'M002 · 模特乙');
+    await page.goBack();
+    await player.waitFor();
+    assert.equal(await handoff.textContent(),videoPrompt);
+    await choose('清除背景').click();
+    assert.ok(await copyHandoff.isDisabled());
+    await generateHandoff.click();
+    assert.match(await handoff.textContent(),/背景：沿用参考视频的场景/);
+    await reset.click();
+    assert.ok(await generateHandoff.isDisabled());
+    assert.equal(await page.getByRole('textbox',{name:'额外要求（可选）'}).inputValue(),'');
+    await page.reload();
+    await assemblyNav.getByRole('button',{name:'视频装配'}).waitFor();
+    assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'视频装配');
+
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
     await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
     assert.deepEqual(await page.locator('.chloe-overview h2').allTextContents(),['制作概况','账号方向','待处理事项','作品进度']);

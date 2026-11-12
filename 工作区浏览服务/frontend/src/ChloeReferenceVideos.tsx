@@ -9,7 +9,7 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { formatProductionDuration } from './components/useEpisodeDurations';
 
-type ReferenceVideoCard = { id: string; name: string; coverUrl: string };
+export type ReferenceVideoCard = { id: string; name: string; coverUrl: string };
 export type ReferenceVideoDetail = {
   id: string;
   name: string;
