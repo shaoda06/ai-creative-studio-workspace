@@ -69,7 +69,7 @@ function VideoAssemblyPicker({ kind, initial, onConfirm, onClose }: {
     return card(choice.asset, media, () => setDraftId(id => id === choice.asset.id ? null : choice.asset.id), draft === choice);
   });
 
-  return <AssetSelectionDialog title={model ? `选择造型图 · ${assetTitle(model)}` : `选择${label}`} close={onClose}
+  return <AssetSelectionDialog title={`选择${label} ${ready && draft ? 1 : 0}/1${model ? ` · ${assetTitle(model)}` : ''}`} close={onClose}
     confirm={selectingModel ? undefined : () => onConfirm(draft ?? null)} confirmDisabled={!ready || (!draft && !initial)}
     actions={model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}>
     <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
@@ -136,7 +136,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
     <div className="chloe-assets-content chloe-assembly chloe-video-assembly">
       <div className="chloe-video-assembly-inputs">
         <section className="chloe-video-assembly-choice" aria-label="参考视频选择">
-          <h2>参考视频</h2>
+          <h2>参考视频 {video ? 1 : 0}/1</h2>
           <button type="button" aria-label="选择参考视频" onClick={() => setPicker('video')}>{video ? assetTitle(video.asset) : '选择参考视频'}</button>
           <figure className="chloe-assembly-preview chloe-video-assembly-preview">
             <figcaption>参考视频</figcaption>
@@ -146,7 +146,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
           </figure>
         </section>
         <section className="chloe-video-assembly-choice" aria-label="造型图选择">
-          <h2>造型图</h2>
+          <h2>造型图 {look ? 1 : 0}/1</h2>
           <button type="button" aria-label="选择造型图" onClick={() => setPicker('look')}>{look ? `${assetTitle(look.model)} / ${assetTitle(look.asset)}` : '选择造型图'}</button>
           <div className="chloe-video-assembly-look-images">
             <AssemblyPreview label={faceLabel} media={look?.face.media} empty="请选择模特和造型" onPreview={openImage} />
@@ -155,7 +155,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
         </section>
         <section className="chloe-video-assembly-choice" aria-label="背景选择">
           <div className="chloe-assembly-export-heading">
-            <h2>背景 <small>可选</small></h2>
+            <h2>背景 {scene ? 1 : 0}/1 <small>可选</small></h2>
             {scene && <LinkButton onClick={() => { setScene(null); setHandoff(''); }}>清除背景</LinkButton>}
           </div>
           <button type="button" aria-label="选择背景" onClick={() => setPicker('scene')}>{scene ? assetTitle(scene.asset) : '选择背景'}</button>

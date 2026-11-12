@@ -84,6 +84,12 @@ def asset_cards(root, api, kind):
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None
+        if kind == CLOTHING:
+            info = fields(doc, '服装信息')
+            card['clothingForm'] = info.get('服装形态') if info.get('服装形态') not in MISSING else None
+            card['bodyArea'] = info['部位'] if card['clothingForm'] == '单件' else None
+            card['outfitSource'] = info['套装来源'] if card['clothingForm'] == '套装' else None
+            card['reference'] = {'resource': current['resource'], 'version': current['version']} if current else None
         if kind == VOICES:
             card['models'] = [row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特']
             card['description'] = fields(doc, '声音信息')['声音说明']
