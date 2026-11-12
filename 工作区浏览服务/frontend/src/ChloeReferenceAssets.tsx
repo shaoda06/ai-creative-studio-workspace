@@ -14,7 +14,10 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
 
-interface ReferenceAssetCard { id: string; name: string; media: FileItem | null; type?: string | null }
+interface ReferenceAssetCard {
+  id: string; name: string; media: FileItem | null; type?: string | null;
+  clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
+}
 export interface ReferenceAssetDetail extends AssetDetail { description: string; type?: string }
 export const referenceAssetKinds = {
   hair: {label:'发型', parameter:'hair', endpoint:'shared-hair', ratio:'16:9'},
@@ -23,24 +26,25 @@ export const referenceAssetKinds = {
   scenes: {label:'场景', parameter:'scene', endpoint:'shared-scenes', ratio:null},
 };
 export type ReferenceAssetKind = keyof typeof referenceAssetKinds;
+const clothingTabs = [{ value: 'outfits', label: '套装' }, { value: 'garments', label: '单件' }];
 
-export function useChloeAccessoryFilter<T extends { type?: string | null }>(cards: T[]) {
+export function useChloeAssetTypeFilter<T>(cards: T[], getType: (card: T) => string | null | undefined) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const types = Array.from(new Set(cards.flatMap(card => card.type ? [card.type] : [])))
+  const types = Array.from(new Set(cards.map(getType).filter((type): type is string => !!type)))
     .sort((a, b) => a.localeCompare(b, 'zh-CN'));
   const activeTypes = types.filter(type => selectedTypes.includes(type));
-  const visibleCards = activeTypes.length ? cards.filter(card => card.type && activeTypes.includes(card.type)) : cards;
+  const visibleCards = activeTypes.length ? cards.filter(card => activeTypes.includes(getType(card) ?? '')) : cards;
   const setTypeChecked = (type: string, checked: boolean) => {
     setSelectedTypes(previous => checked ? [...previous, type] : previous.filter(value => value !== type));
   };
   return { types, activeTypes, visibleCards, setTypeChecked };
 }
 
-export function ChloeAccessoryTypes({ types, activeTypes, setTypeChecked }: {
-  types: string[]; activeTypes: string[];
+export function ChloeAssetTypes({ types, activeTypes, setTypeChecked, label = '按类型筛选' }: {
+  types: string[]; activeTypes: string[]; label?: string;
   setTypeChecked: (type: string, checked: boolean) => void;
 }) {
-  return <fieldset className="chloe-accessory-types"><legend>按类型筛选</legend>
+  return <fieldset className="chloe-asset-types"><legend>{label}</legend>
     {types.map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
       onChange={event => setTypeChecked(type, event.target.checked)} />{type}</label>)}
   </fieldset>;
@@ -54,20 +58,35 @@ export function ChloeAccessoryColumns({ cards }: { cards: ReactNode[] }) {
 export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: ReferenceAssetKind; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
   const { api, page } = useChloeScope();
+  const [params, setParams] = useSearchParams();
+  const isClothing = kind === 'clothing';
+  const isOutfit = isClothing && params.get('clothingTab') === 'outfits';
+  const clothingTab = isOutfit ? 'outfits' : 'garments';
+  const isAccessory = kind === 'accessories';
   const query = useQuery({queryKey:['chloe-reference-assets',kind,api],queryFn:()=>get<ReferenceAssetCard[]>(`${api}/${endpoint}`),refetchInterval:5000});
-  const cards = query.data || [];
-  const { visibleCards, ...filter } = useChloeAccessoryFilter(kind === 'accessories' ? cards : []);
+  const cards = (query.data ?? []).filter(item => !isClothing || (item.clothingForm === '套装') === isOutfit);
+  const filterByType = isAccessory || (isClothing && !isOutfit);
+  const { visibleCards, ...filter } = useChloeAssetTypeFilter(filterByType ? cards : [], item => isAccessory ? item.type : item.bodyArea);
+  const visible = filterByType ? visibleCards : cards;
+  const listParams = `section=assets&asset=${kind}${isOutfit ? '&clothingTab=outfits' : ''}`;
   const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
-    to={`${page}?section=assets&asset=${kind}&${parameter}=${encodeURIComponent(item.id)}`}
+    to={`${page}?${listParams}&${parameter}=${encodeURIComponent(item.id)}`}
     item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
+    {isClothing && <div className="chloe-clothing-tabs">
+      <UnderlineTabs label="服装分类" items={clothingTabs} selected={clothingTab} onChange={value => {
+        if (value !== clothingTab) setParams(value === 'outfits'
+          ? { section: 'assets', asset: 'clothing', clothingTab: value }
+          : { section: 'assets', asset: 'clothing' });
+      }} />
+    </div>}
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {filter.types.length > 0 && <ChloeAccessoryTypes {...filter} />}
-    {query.data && (cards.length ? kind === 'accessories'
-      ? <ChloeAccessoryColumns cards={visibleCards.map(renderCard)} />
-      : <div className="asset-media-grid">{cards.map(renderCard)}</div>
-      : <p className="muted">暂无{label}资料。</p>)}
+    {filter.types.length > 0 && <ChloeAssetTypes {...filter} label={isClothing ? '按部位筛选' : undefined} />}
+    {query.data && (visible.length ? isAccessory
+      ? <ChloeAccessoryColumns cards={visible.map(renderCard)} />
+      : <div className="asset-media-grid">{visible.map(renderCard)}</div>
+      : <p className="muted">暂无{isClothing ? (isOutfit ? '套装' : '单件') : label}资料。</p>)}
   </>;
 }
 

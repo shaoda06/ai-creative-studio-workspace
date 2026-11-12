@@ -91,6 +91,10 @@ try {
       if (path === '/api/workspaces/account-demo/shared-hair') return route.fulfill({json:showAssemblyFixtures ? fixtureHair : []});
       if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
       if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
+      if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
+        id:'O001',name:'套装甲',description:'隔离测试套装',images:[],
+        sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
+      }});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
       if (path === '/api/service') return route.fulfill({json:{version,ready:true}});
       if (path === '/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
@@ -170,6 +174,36 @@ try {
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
     assert.equal(await page.locator('.asset-media-card').count(),0);
     showAssemblyFixtures = true;
+    await assetNav.getByRole('button',{name:'服装',exact:true}).click();
+    const clothingNav = page.getByRole('navigation',{name:'服装分类',exact:true});
+    const outfitTab = clothingNav.getByRole('button',{name:'套装',exact:true});
+    const garmentsTab = clothingNav.getByRole('button',{name:'单件',exact:true});
+    const libraryFilter = page.getByRole('group',{name:'按部位筛选',exact:true});
+    const clothingLinks = page.locator('a.asset-media-card-link');
+    await libraryFilter.waitFor();
+    assert.deepEqual(await clothingNav.getByRole('button').allTextContents(),['套装','单件']);
+    assert.equal(await garmentsTab.getAttribute('aria-current'),'page');
+    assert.equal(await clothingLinks.count(),8);
+    assert.equal(await clothingLinks.getByText('O010 · 旧服装',{exact:true}).count(),1);
+    await libraryFilter.getByRole('checkbox',{name:'组合',exact:true}).check();
+    assert.deepEqual(await clothingLinks.getAttribute('aria-label'),'O003 · 单件样例1');
+    await libraryFilter.getByRole('checkbox',{name:'裤装',exact:true}).check();
+    assert.equal(await clothingLinks.count(),2);
+    await outfitTab.click();
+    assert.equal(await libraryFilter.count(),0);
+    assert.equal(await clothingLinks.count(),2);
+    await page.getByRole('link',{name:'O001 · 套装甲',exact:true}).click();
+    await page.getByText('隔离测试套装',{exact:true}).waitFor();
+    await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
+    assert.ok(page.url().endsWith('asset=clothing&clothingTab=outfits'));
+    await outfitTab.waitFor();
+    assert.equal(await outfitTab.getAttribute('aria-current'),'page');
+    await page.reload();
+    await outfitTab.waitFor();
+    assert.equal(await outfitTab.getAttribute('aria-current'),'page');
+    await garmentsTab.click();
+    await libraryFilter.waitFor();
+    assert.equal(await clothingLinks.count(),8);
     await page.goto(server.resolvedUrls.local[0]+'#/spaces/account-demo?section=assets&asset=assembly');
     await page.reload();
     const summary = page.getByRole('region',{name:'当前选择',exact:true});
@@ -181,14 +215,22 @@ try {
     const generateHandoff = exportArea.getByRole('button',{name:'生成',exact:true});
     const copyHandoff = exportArea.getByRole('button',{name:'复制',exact:true});
     const handoff = exportArea.locator('.chloe-assembly-export-template');
+    const outfitInfo = page.getByRole('region',{name:'导出信息',exact:true});
+    const outfitExport = page.getByRole('region',{name:'导出文字',exact:true});
+    const outfitGenerate = outfitExport.getByRole('button',{name:'生成',exact:true});
+    const outfitHandoff = outfitExport.locator('.chloe-assembly-export-template');
     await assemblyNav.waitFor();
     assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['套装装配','造型装配','视频装配']);
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'套装装配');
     const garmentCount = count => page.getByRole('heading',{name:`单件选择 ${count}/5`,exact:true});
     const pickerCount = (label,count,limit=1) => page.getByRole('dialog',{name:`选择${label} ${count}/${limit}`,exact:true});
     await garmentCount(0).waitFor();
-    assert.ok(await generateHandoff.isDisabled());
-    await choose('选择单件').click();
+    assert.ok(await outfitGenerate.isDisabled());
+    assert.equal(await outfitInfo.locator('dd').textContent(),'未选择');
+    const addGarment = choose('添加单件');
+    assert.equal(await addGarment.textContent(),'+添加单件');
+    const emptyAdd = await addGarment.boundingBox();
+    await addGarment.click();
     const garmentOptions = fixtureGarments.map(asset =>
       dialog.getByRole('button',{name:`选择${asset.id} · ${asset.name}（${asset.bodyArea}）`,exact:true}));
     await garmentOptions[0].waitFor();
@@ -198,12 +240,21 @@ try {
     }
     await garmentOptions[0].click();
     await pickerCount('单件',1,5).waitFor();
+    const garmentFilter = dialog.locator('header').getByRole('group',{name:'按部位筛选',exact:true});
+    const trousers = garmentFilter.getByRole('checkbox',{name:'裤装',exact:true});
+    await trousers.check();
+    assert.equal(await garmentOptions[0].count(),0);
+    await garmentOptions[1].waitFor();
+    await pickerCount('单件',1,5).waitFor();
     await confirm.click();
     await garmentCount(1).waitFor();
-    await generateHandoff.click();
-    assert.match(await handoff.textContent(),/O003 · 单件样例1（组合） · IMG-O003@V002 · O003/);
-    assert.match(await handoff.textContent(),/生成前先逐张打开并查看/);
-    await choose('编辑单件').click();
+    assert.equal(await outfitInfo.locator('dd').textContent(),'O003 · 单件样例1（组合）');
+    const nextAdd = await addGarment.boundingBox();
+    assert.ok(nextAdd.x > emptyAdd.x && Math.abs(nextAdd.y-emptyAdd.y) <= 1);
+    await outfitGenerate.click();
+    assert.match(await outfitHandoff.textContent(),/O003 · 单件样例1（组合） · IMG-O003@V002 · O003/);
+    assert.match(await outfitHandoff.textContent(),/生成前先逐张打开并查看/);
+    await addGarment.click();
     await garmentOptions[0].waitFor();
     for (const option of garmentOptions.slice(1,5)) await option.click();
     await pickerCount('单件',5,5).waitFor();
@@ -212,13 +263,29 @@ try {
     await garmentOptions[5].click();
     await page.keyboard.press('Escape');
     await garmentCount(1).waitFor();
-    await choose('编辑单件').click();
+    await addGarment.click();
     for (const option of garmentOptions.slice(1,5)) await option.click();
     await confirm.click();
     await garmentCount(5).waitFor();
-    assert.ok(await copyHandoff.isDisabled());
-    await generateHandoff.click();
-    assert.match(await handoff.textContent(),/5\. O007/);
+    assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
+    await outfitGenerate.click();
+    assert.match(await outfitHandoff.textContent(),/5\. O007/);
+    const editGarments = choose('编辑单件');
+    const [cards, edit, info, exported] = await Promise.all([
+      page.locator('.chloe-assembly-garments .asset-media-card').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().toJSON())),
+      editGarments.boundingBox(), outfitInfo.boundingBox(), outfitExport.boundingBox(),
+    ]);
+    assert.equal(cards.length,5);
+    assert.ok(cards.every(card=>Math.abs(card.y-cards[0].y)<=1 && Math.abs(card.width-edit.width)<=1));
+    assert.ok(Math.abs(edit.x-cards[0].x)<=1 && edit.y>cards[0].bottom);
+    assert.equal(info.y,exported.y);
+    assert.ok(info.x+info.width<exported.x && info.y>edit.y+edit.height);
+    assert.ok(Math.abs(info.width/(info.width+exported.width)-0.3)<0.002);
+    await editGarments.click();
+    await garmentOptions[0].waitFor();
+    await pickerCount('单件',5,5).waitFor();
+    assert.ok(await garmentOptions[5].isDisabled());
+    await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await page.screenshot({path:output+`/${width}-outfit.png`,fullPage:true});
     await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
