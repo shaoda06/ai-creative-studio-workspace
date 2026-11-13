@@ -20,7 +20,6 @@ def review_output(project, declaration, file_url):
     if set(declaration) != {'label', 'postprocess', 'source'}:
         raise ValueError('整场后处理审阅须登记 label、postprocess 和 source')
     directory = project_file(project, declaration['postprocess'])
-    key = directory.relative_to(project).as_posix()
     result = {'kind': 'video', 'name': declaration['label']}
     check = directory / '执行检查报告.json'
     if not records.exists(check):
@@ -33,7 +32,7 @@ def review_output(project, declaration, file_url):
     state_file = directory / '后台任务状态.json'
     state = records.read(state_file) if records.exists(state_file) else {}
     if (state.get('id') and state.get('task_type') == 'video-postprocess'
-            and state.get('record_dir') == key
+            and state.get('record_dir') and project_file(project, state['record_dir'], recorded=True) == directory
             and records.exists(directory / target['response_name']) and path.is_file()):
         relative = path.relative_to(project).as_posix()
         result.update(key=relative, url=file_url(relative))

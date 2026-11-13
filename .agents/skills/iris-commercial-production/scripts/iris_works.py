@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import re
+from project_resources import resolve_file
 
 
 def work_status_label(lines):
@@ -25,7 +26,7 @@ def project_works(projects, name):
 
 
 def discover_works(project):
-    directory = project / '作品'
+    directory = project / ('03-作品' if (project / '03-作品').exists() else '作品')
     if directory.is_symlink():
         raise ValueError('作品目录不能指向项目外部或其他目录')
     if not directory.is_dir():
@@ -60,7 +61,7 @@ def historical_sources(project, work, kind):
     paths = []
     for value in declaration.get(kind, []):
         relative = Path(value)
-        target = (project / relative).resolve()
+        target = resolve_file(project, relative)
         if (relative.is_absolute() or not relative.parts
                 or any(part.startswith('.') for part in relative.parts)
                 or not target.is_relative_to(project.resolve()) or not target.is_dir()):

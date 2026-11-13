@@ -23,8 +23,14 @@ def now():
     return datetime.now().astimezone().isoformat(timespec='seconds')
 
 
+def resource_directory(project):
+    project = Path(project).resolve()
+    numbered = project / '02-资源'
+    return numbered if numbered.is_dir() else project / '资源'
+
+
 def index_path(project):
-    return Path(project).resolve() / '资源/资源索引.json'
+    return resource_directory(project) / '资源索引.json'
 
 
 def enabled(project):
@@ -129,8 +135,20 @@ def media_kind(value):
 def resolve_file(project, value):
     path = local(project, value)
     data = read_index(project)
-    alias = data['aliases'].get(relative(project, path)) if data else None
-    return local(project, alias) if alias else path
+    if data is None:
+        return path
+    aliases = data['aliases']
+    key = path.relative_to(Path(project).resolve())
+    alias = aliases.get(key.as_posix())
+    if alias:
+        return local(project, alias)
+    for parent in key.parents:
+        alias = aliases.get(parent.as_posix())
+        if alias:
+            directory = local(project, alias)
+            if directory.is_dir():
+                return local(project, directory / key.relative_to(parent))
+    return path
 
 
 def reference(project, value):
@@ -183,7 +201,7 @@ def _reserve(project, data, output, *, key, family=None, resource_id=None, origi
         raise ValueError('不支持的媒体格式：' + str(output))
     parent_ref = None
     if parent:
-        parent_path = local(project, data['aliases'].get(relative(project, parent), relative(project, parent)))
+        parent_path = resolve_file(project, parent)
         parent_ref = data['files'].get(relative(project, parent_path))
         if parent_ref is None:
             raise ValueError('实际来源须先登记为固定资源版本：' + str(parent))
@@ -197,7 +215,7 @@ def _reserve(project, data, output, *, key, family=None, resource_id=None, origi
         if entry is None:
             resource_id = PREFIX[kind] + '-' + uuid4().hex[:12]
             entry = data['families'][family] = {'resource_id': resource_id, 'kind': kind, 'family_key': family}
-            write_json(Path(project) / '资源' / kind / resource_id / '资源信息.json',
+            write_json(resource_directory(project) / kind / resource_id / '资源信息.json',
                        {**entry, 'name': name or Path(output).stem, 'created_at': now()})
     if entry['kind'] != kind:
         raise ValueError('不同媒体类型使用独立资源，来源在记录中关联')
@@ -205,13 +223,13 @@ def _reserve(project, data, output, *, key, family=None, resource_id=None, origi
     number = data['next_versions'].get(resource_id, 1)
     data['next_versions'][resource_id] = number + 1
     version = f'V{number:03d}'
-    destination = Path(project) / '资源' / kind / resource_id / version / Path(output).name
+    destination = resource_directory(project) / kind / resource_id / version / Path(output).name
     ref = {'resource_id': resource_id, 'version': version, 'file': relative(project, destination),
            'family_key': entry['family_key'], 'kind': kind, 'origin': origin, 'producer': producer,
            'parent': {field: parent_ref[field] for field in ('resource_id', 'version', 'file', 'kind')} if parent_ref else None}
     data['outputs'][key] = ref['file']
     data['files'][ref['file']] = ref
-    if alias and not old.startswith('资源/'):
+    if alias and not local(project, output).is_relative_to(resource_directory(project)):
         data['aliases'][old] = ref['file']
     return ref
 
@@ -311,7 +329,7 @@ def catalog(project, resource_id=None):
     data = read_index(project)
     if data is None:
         return []
-    families = {item['resource_id']: {**json.loads((Path(project) / '资源' / item['kind'] / item['resource_id'] / '资源信息.json').read_text('utf-8')),
+    families = {item['resource_id']: {**json.loads((resource_directory(project) / item['kind'] / item['resource_id'] / '资源信息.json').read_text('utf-8')),
                                      'versions': []} for item in data['families'].values() if resource_id is None or item['resource_id'] == resource_id}
     for ref in data['files'].values():
         if ref['resource_id'] not in families:

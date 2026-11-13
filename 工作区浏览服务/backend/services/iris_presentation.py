@@ -18,6 +18,7 @@ MAIN_NAMES = {
     '05-资产': r'资产清单(?:与制作说明)?',
     '06-视频生产': r'生产任务(?:-.+)?',
     '07-返修交接': r'返修与剪辑交接(?:记录)?|剪映草稿交付(?:-.+)?|交接说明',
+    '04-完单复盘': r'项目复盘|复盘',
     '08-完单复盘': r'项目复盘|复盘',
 }
 LINK = re.compile(r'\[([^\]]+)\]\((?:<([^>]+)>|([^)]+))\)')
@@ -26,7 +27,9 @@ CUSTOMER_FOLDER = '01-客户资料'
 BRIEF_FOLDER = '02-参考分析'
 ASSET_FOLDER = '05-资产'
 PROCESS_FOLDERS = {'其他资料', '历史版本', '工作稿', '执行记录'}
-FILM_EXPORT_FOLDER = '07-返修交接/成片'
+FILM_EXPORT_FOLDER = '08-成片'
+LEGACY_FILM_EXPORT_FOLDER = '07-返修交接/成片'
+REVIEW_FOLDERS = ('04-完单复盘', '08-完单复盘')
 STAGE_ARCHIVE_FOLDERS = {
     '03-创意脚本': {'03-创意脚本', '03-创意与脚本', '02-剧集剧本'},
     '04-分镜声音': {'04-分镜声音', '04-分镜与视觉方案', '03-分镜脚本'},
@@ -114,7 +117,7 @@ def archived_documents(files, folders, name_pattern=None):
                 results.append(item)
         return results
 
-    archived = [entry for group in files if group['kind'] == 'group' and group['name'] in {'归档', '历史制作资料'}
+    archived = [entry for group in files if group['kind'] == 'group' and group['name'] in {'98-归档', '归档', '历史制作资料'}
                 for entry in collect(group['children'])]
     return sorted(archived, key=lambda item: item['kind'] == 'group')
 
@@ -264,19 +267,20 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
         ]
     delivery = delivery_overview(projects, project, api, root, status_text)
     if work_directory:
-        delivery['exportFolder'] = FILM_EXPORT_FOLDER
-        handoff_name, exports_name = FILM_EXPORT_FOLDER.split('/')
-        handoff = next((group for group in files if group['name'] == handoff_name and group['kind'] == 'group'), None)
-        if handoff:
-            exports = next((group['children'] for group in handoff['children']
-                            if group['name'] == exports_name and group['kind'] == 'group'), [])
-            registered = {item['file']['key'] for item in delivery['items']}
-            delivery['items'][:0] = [
-                {'title': Path(file['name']).stem, 'type': '剪辑导出', 'version': '', 'purpose': '',
-                 'file': {**file, 'kind': 'video'}}
-                for file in exports if file['kind'] == 'file' and resources.media_kind(file['name']) == '视频'
-                and file['key'] not in registered
-            ]
+        numbered = work_directory.parent.name == '03-作品'
+        export_folder = FILM_EXPORT_FOLDER if numbered else LEGACY_FILM_EXPORT_FOLDER
+        delivery['exportFolder'] = export_folder
+        exports = files
+        for part in export_folder.split('/'):
+            exports = next((group['children'] for group in exports
+                            if group['name'] == part and group['kind'] == 'group'), [])
+        registered = {item['file']['key'] for item in delivery['items']}
+        delivery['items'][:0] = [
+            {'title': Path(file['name']).stem, 'type': '剪辑导出', 'version': '', 'purpose': '',
+             'file': {**file, 'kind': 'video'}}
+            for file in exports if file['kind'] == 'file' and resources.media_kind(file['name']) == '视频'
+            and file['key'] not in registered
+        ]
     return {
         'overviewHiddenSections': overview_hidden_sections(projects, project) if work_directory is None else {},
         'primary': primary,
@@ -294,12 +298,12 @@ def work_view(projects, project, api, work, business, *, include_archives=True):
     directory = work_root(root, work)
     value = project_tree(projects, project, api, directory)
     shared = []
-    for name in ('01-客户资料', '08-完单复盘'):
+    for name in (CUSTOMER_FOLDER, *REVIEW_FOLDERS):
         path = root / name
         if path.is_dir() and not path.is_symlink():
             shared.append({'kind': 'group', 'name': name, 'key': name,
                            'children': project_tree(projects, project, api, path)['files']})
-    value['files'].extend(item for item in shared if item['name'] == '08-完单复盘')
+    value['files'].extend(item for item in shared if item['name'] in REVIEW_FOLDERS)
     archives = [{'kind': 'group', 'name': '归档', 'key': source.relative_to(root).as_posix(),
                  'children': project_tree(projects, project, api, source)['files']}
                 for source in historical_sources(root, work, 'archives')] if include_archives else []

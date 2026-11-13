@@ -184,7 +184,7 @@ async def execute(store, payload, *, production_adapter=None):
         if len(journal.get('accepted', [])) == len(journal['tasks']):
             return submission_response(store, journal, reused=True)
     else:
-        if (production_adapter == 'iris-commercial-production' and (root / '作品').is_dir()
+        if (production_adapter == 'iris-commercial-production' and ((root / '03-作品').is_dir() or (root / '作品').is_dir())
                 and any(entry['task_type'].startswith('video-') for entry in source['tasks']) and round_spec is None):
             raise ValueError('Iris 作品视频任务须提供 iris_round，由脚本登记轮次和分镜')
         documents = documents or Documents(root)

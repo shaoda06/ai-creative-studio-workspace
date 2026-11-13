@@ -93,7 +93,9 @@ def songssx_task(project, key, task_type):
     report = directory / '执行检查报告.json'
     state_file = directory / '后台任务状态.json'
     state = read(state_file) if exists(state_file) else {}
-    recorded = state.get('task_type') == task_type and state.get('record_dir') == key and bool(state.get('id'))
+    state_directory = state.get('record_dir')
+    recorded = (state.get('task_type') == task_type and bool(state.get('id')) and bool(state_directory)
+                and project_file(project, state_directory, recorded=True) == directory)
     return directory, state, recorded, read(report)['prepared_input'] if exists(report) else None
 
 
@@ -117,7 +119,7 @@ def songssx_scene(project, entry, context_for):
         return result
     segments = plan.get('segments', [])
     if (data.get('task_type') != TASK_TYPE or plan.get('workflow_id') != WORKFLOW
-            or data.get('record_dir') != key
+            or not data.get('record_dir') or project_file(project, data['record_dir'], recorded=True) != directory
             or [(row['p'], row['planned_seconds']) for row in segments]
             != [(segment['id'], segment['duration']) for segment in entry['segments']]):
         entry['issues'].append('Songssx 执行记录与本轮场次或分段不匹配')
@@ -142,7 +144,7 @@ def songssx_scene(project, entry, context_for):
                 entry['issues'].append('Songssx 后处理执行检查报告缺失')
             return result
         try:
-            if processed.get('record_dir') != key:
+            if not processed.get('record_dir') or project_file(project, processed['record_dir'], recorded=True) != directory:
                 raise ValueError('Songssx 后处理记录目录不符')
             target = output_for_source(project, processed, source)
         except ValueError:

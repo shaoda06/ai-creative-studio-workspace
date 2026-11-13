@@ -1,4 +1,4 @@
-"""Move a flat Iris project into one explicitly named work, preserving task evidence.
+"""Recover a pre-work Iris project into the legacy work layout before migrate_layout.py.
 
 Dry-run is the default. The caller supplies the work identity and scope; this
 script does not infer works, adoption, generation authorization or delivery.
@@ -47,7 +47,7 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
     project = Path(project).resolve()
     if not re.fullmatch(r'F\d{3,}-.+', folder):
         raise ValueError('作品目录须为 F编号-名称')
-    if (project / '作品').exists():
+    if (project / '作品').exists() or (project / '03-作品').exists():
         raise FileExistsError('项目已有作品目录，不能重复执行迁移')
     prefix = '作品/' + folder
     mapping = migration_files(project, prefix)

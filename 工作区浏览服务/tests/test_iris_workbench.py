@@ -187,6 +187,17 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertEqual([item['name'] for item in rounds[1]['reviewOutputs']], ['整场对照'])
         self.assertEqual(rounds[2]['reviewOutputs'], [])
         self.write(process_record + '/取回.json', '{}')
+        # Migration preserves submitted task evidence and resolves its old directory on read.
+        import project_resources as resources
+        with resources.edit_index(self.project) as index:
+            index['aliases']['旧执行记录'] = root + '执行记录'
+        for current, original_task in ((record, task), (process_record, process_task)):
+            historical = '旧执行记录/' + Path(current).name
+            self.write(current + '/执行检查报告.json', json.dumps({
+                'prepared_input': {**original_task, 'record_dir': historical}}))
+            self.write(current + '/后台任务状态.json', json.dumps({
+                'id': 'test-task', 'task_type': original_task['task_type'],
+                'record_dir': historical, 'status': 'completed'}))
         rounds = self.detail()['sceneRounds']['S001']
         for round_, path in zip(rounds[1:], (repaired, processed), strict=True):
             player = round_['songssx']

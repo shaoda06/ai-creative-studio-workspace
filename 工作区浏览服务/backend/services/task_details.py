@@ -67,8 +67,7 @@ def file_info(project, value, archive=None):
     file = (root / relative).resolve()
     if not file.is_relative_to(root):
         return unavailable
-    if resourceio.media_kind(file):
-        file = resourceio.resolve_file(root, file)
+    file = resourceio.resolve_file(root, file)
     if (any(part.startswith('.') for part in file.relative_to(root).parts) or not recordio.exists(file)
             or not recordio.backing_file(file).resolve().is_relative_to(root)):
         return unavailable
@@ -87,9 +86,11 @@ def task_files(data, state, events, archive=None):
             mapping = (archive[0] / mapping.relative_to(project)).resolve()
             if not mapping.is_relative_to(archive[0]):
                 raise ValueError('输入映射越出历史任务归档')
+        else:
+            mapping = resourceio.resolve_file(project, mapping)
         if mapping.is_file():
             from backend.services.comfy_segments import targets as segment_targets
-            mapped = json.loads(mapping.read_text('utf-8-sig')) if archive else None
+            mapped = json.loads(mapping.read_text('utf-8-sig'))
             targets += [{'path': str(item['candidate']), 'identity': item['identity']} for item in segment_targets(data, mapped)]
         else:
             targets += [{'path': item.path, 'identity': state.get('segments', {}).get(str(item.index), {}).get('identity')}

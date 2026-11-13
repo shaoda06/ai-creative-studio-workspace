@@ -159,6 +159,29 @@ class IrisWorksTests(HttpTestCase):
         items = self.client.get(endpoint).json()['irisPresentation']['delivery']['items']
         self.assertEqual([item['type'] for item in items], ['剪映草稿', '成片'])
 
+    def test_numbered_layout_keeps_old_export_links_and_shows_current_recap(self):
+        import project_resources as resources
+        legacy = self.works['F001']
+        clip = legacy + '/07-返修交接/成片/完成.mp4'
+        self.write(clip, 'isolated export')
+        (self.project / '作品').rename(self.project / '03-作品')
+        (self.project / '资源').rename(self.project / '02-资源')
+        (self.project / '08-完单复盘').rename(self.project / '04-完单复盘')
+        work = '03-' + legacy
+        folder = self.project / work / '07-返修交接/成片'
+        folder.rename(self.project / work / '08-成片')
+        with resources.edit_index(self.project) as data:
+            data['aliases'].update({'作品': '03-作品', '资源': '02-资源',
+                                    clip.rsplit('/', 1)[0]: work + '/08-成片'})
+        self.assertEqual(resources.index_path(self.project).parent.name, '02-资源')
+        self.assertEqual(self.client.get(self.api + '/files/' + quote(clip)).content, b'isolated export')
+        project = self.client.get(self.api).json()
+        self.assertEqual(project['works'][0]['key'], work)
+        view = self.client.get(self.api + '/works/F001').json()['irisPresentation']
+        self.assertEqual(view['primary']['04-完单复盘'], ['04-完单复盘/项目复盘.md'])
+        self.assertEqual(view['delivery']['exportFolder'], '08-成片')
+        self.assertEqual(view['delivery']['items'][0]['file']['key'], work + '/08-成片/完成.mp4')
+
     def test_only_user_download_calls_package_script_with_project_scoped_media(self):
         with patch.object(episode_downloads.jianying_export, 'export_archive') as export:
             for identity in self.works:
