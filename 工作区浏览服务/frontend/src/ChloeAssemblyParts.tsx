@@ -13,17 +13,17 @@ export function AssemblyPreview({ label, media, empty, onPreview }: { label: str
   </figure>;
 }
 
-export function AssemblyExport({ canGenerate, generate, handoff, empty }: {
-  canGenerate: boolean; generate: () => void; handoff: string; empty: string;
+export function AssemblyExport({ label = '导出', canGenerate, generate, handoff, empty }: {
+  label?: string; canGenerate: boolean; generate: () => void; handoff: string; empty: string;
 }) {
-  return <section aria-label="导出">
+  return <section aria-label={label}>
     <div className="chloe-assembly-export-heading">
-      <h2>导出</h2>
+      <h2>{label}</h2>
       <div className="chloe-assembly-export-actions">
         <button type="button" disabled={!canGenerate} onClick={generate}>生成</button>
         {handoff ? <CopyButton label="复制" text={handoff} /> : <button type="button" disabled>复制</button>}
       </div>
     </div>
-    <p className="chloe-assembly-export-template">{handoff || <span className="muted">{empty}</span>}</p>
+    <p className="chloe-assembly-export-template" tabIndex={handoff ? 0 : undefined}>{handoff || <span className="muted">{empty}</span>}</p>
   </section>;
 }

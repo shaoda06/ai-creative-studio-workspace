@@ -17,17 +17,21 @@
 .chloe-assembly-model-images .chloe-assembly-preview>.muted{display:grid;align-items:center;min-height:190px}
 .chloe-assembly-accessory-heading{display:flex;align-items:baseline;gap:12px}
 .chloe-assembly-accessories{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch}
+.chloe-assembly-garments{--garment-gap:12px;container-type:inline-size;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--garment-gap)}
 .chloe-assembly-add{display:grid;justify-items:center;align-content:center;gap:4px;min-height:140px;border-style:dashed}
+/* Match the expected height of a 4:3 image card, including its title and padding. */
+.chloe-assembly-garments>.chloe-assembly-add{min-height:calc((100cqw - 2 * var(--garment-gap)) / 4 + 55px)}
 .chloe-assembly-add>span{font-size:28px;line-height:1}
 .chloe-assembly-summary{padding-top:16px;border-top:1px solid var(--line)}
 .chloe-assembly-export-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .chloe-assembly-export-heading h2{margin:0}
 .chloe-assembly-export-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-.chloe-assembly-export-template{margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
+.chloe-assembly-export-template{height:520px;overflow:auto;margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
 
 .chloe-video-assembly-inputs,.chloe-video-assembly-output{display:grid;gap:8px 20px}
 .chloe-video-assembly-inputs{grid-template-columns:minmax(0,3fr) minmax(0,4fr) minmax(0,3fr);grid-template-rows:auto auto calc(clamp(260px,40vh,420px) * 4 / 3)}
-.chloe-video-assembly-output{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto auto}
+.chloe-assembly-summary-equal,.chloe-video-assembly-output{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px}
+.chloe-video-assembly-output{grid-template-rows:auto auto}
 .chloe-video-assembly-choice,.chloe-video-assembly-output>section{display:grid;grid-row:1 / -1;grid-template-rows:subgrid;min-width:0}
 .chloe-video-assembly h2,.chloe-video-assembly .chloe-assembly-export-heading{margin:0}
 .chloe-video-assembly-choice h2 small{display:inline;margin-left:4px;font-weight:400}

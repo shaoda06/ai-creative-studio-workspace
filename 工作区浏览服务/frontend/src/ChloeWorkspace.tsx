@@ -16,7 +16,7 @@ import { UnderlineTabs } from './components/UnderlineTabs';
 import { LinkButton } from './components/LinkButton';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
-import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
+import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds, referenceAssetListParams } from './ChloeReferenceAssets';
 import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceAssets';
 import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
 import { ChloeReferenceVideos, ChloeReferenceVideoDetail } from './ChloeReferenceVideos';
@@ -91,6 +91,9 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     refetchInterval: 5000,
   });
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
+  const assetListParams = referenceKind ? referenceAssetListParams(referenceKind, params.get('clothingTab'))
+    : new URLSearchParams({ section: 'assets', asset: assetCategory.value });
+  const assetList = `${page}?${assetListParams}`;
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const assetNavigation = (reset?: () => void) => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
     endAction={reset && <LinkButton onClick={reset}>重置</LinkButton>}
@@ -99,7 +102,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked actions={<Link to={workspacePage}>返回项目列表</Link>}>
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#${page}?section=assets` },
-        { label: assetCategory.label, href: assetDetail ? `#${page}?section=assets&asset=${assetCategory.value}` : undefined },
+        { label: assetCategory.label, href: assetDetail ? `#${assetList}` : undefined },
         ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#${page}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
         ...(referenceId ? [{label:referenceQuery.data ? `${referenceId} · ${referenceQuery.data.name}` : referenceId}] : []),
         ...(voiceId ? [{label:voiceQuery.data ? `${voiceId} · ${voiceQuery.data.name}` : voiceId}] : []),
@@ -111,7 +114,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     {breadcrumbActions && (referenceVideoId || referenceId || currentLook || voiceId) && createPortal(
       referenceVideoId ? <Link to={`${page}?section=assets&asset=reference-videos`}>返回参考视频列表</Link> :
       voiceId ? <Link to={`${page}?section=assets&asset=voices`}>返回声音列表</Link> :
-      referenceId ? <Link to={`${page}?section=assets&asset=${referenceKind}`}>返回{referenceConfig!.label}列表</Link> :
+      referenceId ? <Link to={assetList}>返回{referenceConfig!.label}列表</Link> :
         <Link to={`${page}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}

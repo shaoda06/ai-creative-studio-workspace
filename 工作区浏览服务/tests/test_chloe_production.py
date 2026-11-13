@@ -407,6 +407,7 @@ class ChloeProductionTests(unittest.TestCase):
         context=browser.context_for(data,self.api,candidate)
         self.assertTrue(context['references']['common'][0]['missing'])
         self.assertTrue(any('执行后变化' in issue for issue in context['issues']))
+        shared.chmod(info.st_mode | 0o200)
         shared.unlink()
         with self.assertRaisesRegex(ValueError,'共用输入尚未完整保存'):
             browser.context_for(data,self.api,candidate)

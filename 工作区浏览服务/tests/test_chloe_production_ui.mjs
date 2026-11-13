@@ -13,7 +13,7 @@ const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const tool=fileURLToPath(new URL('../',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
 const python = join(tool, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
-const fixture=JSON.parse(execFileSync(python,['-c',`
+const fixture=JSON.parse(execFileSync(python,['-X','utf8','-c',`
 import json
 import tempfile
 from pathlib import Path

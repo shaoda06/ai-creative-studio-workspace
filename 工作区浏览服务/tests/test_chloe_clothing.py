@@ -65,6 +65,28 @@ class ChloeClothingTests(unittest.TestCase):
         self.assertEqual(len(detail['images']),2)
         self.assertEqual(sum(image['adopted'] for image in detail['images']),1)
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+        if self.kind == CLOTHING:
+            self.assertIsNone(card['clothingForm'])
+            self.assertEqual(card['reference'], {'resource': first['resource_id'], 'version': first['version']})
+            original = self.path.read_text('utf-8')
+            fields = '| 服装形态 | 待确定 |\n| 部位 | 不适用 |\n| 套装来源 | 不适用 |\n| 组成与穿法 | 不适用 |\n'
+            for metadata, expected in (
+                ('', (None, None, None)),
+                (fields.replace('待确定', '单件').replace('| 部位 | 不适用 |', '| 部位 | 组合 |'), ('单件', '组合', None)),
+                (fields.replace('待确定', '套装').replace('| 套装来源 | 不适用 |', '| 套装来源 | 合成 |')
+                 .replace('| 组成与穿法 | 不适用 |', '| 组成与穿法 | 开衫叠穿上衣 |'), ('套装', None, '合成')),
+            ):
+                self.path.write_text(original.replace(fields, metadata), encoding='utf-8')
+                updated = self.cards(self.root, self.api)[0]
+                self.assertEqual(tuple(updated[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
+                updated_detail = self.detail(self.root, self.identity, self.api)
+                self.assertEqual(tuple(updated_detail[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
+                self.assertEqual(updated_detail.get('composition'), '开衫叠穿上衣' if expected[0] == '套装' else None)
+                self.assertEqual(updated['reference'], card['reference'])
+                self.assertEqual(updated['media'], card['media'])
+            self.path.write_text(original.replace('待确定 |\n| 部位', '单件 |\n| 部位'), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, '单件须填写部位'):
+                self.cards(self.root, self.api)
 
     def test_thumbnail_uses_exact_version_and_original_download(self):
         first, label = self.image('red', 'large', size=(1200, 1800))

@@ -50,6 +50,15 @@ def asset_context(root, identity, kind):
     raise FileNotFoundError(kind.label+'资料不存在：' + identity)
 
 
+def clothing_classification(info):
+    form = info.get('服装形态')
+    return {
+        'clothingForm': form if form not in MISSING else None,
+        'bodyArea': info['部位'] if form == '单件' else None,
+        'outfitSource': info['套装来源'] if form == '套装' else None,
+    }
+
+
 def asset_detail(root, identity, api, kind):
     _, name, path, doc = asset_context(root, identity, kind)
     base = f'{api}/{kind.endpoint}/{quote(identity)}'
@@ -65,6 +74,10 @@ def asset_detail(root, identity, api, kind):
     info = fields(doc, kind.label+'信息')
     if kind == ACCESSORIES:
         content['type'] = info['配饰类型']
+    if kind == CLOTHING:
+        content.update(clothing_classification(info))
+        if content['clothingForm'] == '套装':
+            content['composition'] = info['组成与穿法']
     return {'id': identity, 'name': name, 'description': info[kind.label+'说明'],
             **content, 'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
@@ -84,6 +97,9 @@ def asset_cards(root, api, kind):
         if kind == ACCESSORIES:
             asset_type = fields(doc, '配饰信息')['配饰类型']
             card['type'] = asset_type if asset_type and asset_type not in MISSING else None
+        if kind == CLOTHING:
+            card.update(clothing_classification(fields(doc, '服装信息')))
+            card['reference'] = {'resource': current['resource'], 'version': current['version']} if current else None
         if kind == VOICES:
             card['models'] = [row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特']
             card['description'] = fields(doc, '声音信息')['声音说明']
