@@ -28,7 +28,7 @@ try {
   const fontSession = await page.context().newCDPSession(page);
   await fontSession.send('DOM.enable');
   await fontSession.send('CSS.enable');
-  const result = {parts:[], watermarks:{}, images};
+  const result = {parts:[], images};
   for (const [index, segment] of job.segments.entries()) {
     const dims = cfg.pages[segment.orientation];
     const [top, right, bottom, left] = dims.margin_mm;
@@ -51,18 +51,6 @@ try {
     const pdf = path.join(job.work, `part-${index}.pdf`);
     await page.pdf({path:pdf, preferCSSPageSize:true, printBackground:true, displayHeaderFooter:false});
     result.parts.push({file:pdf, orientation:segment.orientation, text, images:loaded, fonts});
-  }
-  for (const orientation of new Set(job.segments.map(s => s.orientation))) {
-    const dims = cfg.pages[orientation], wm = cfg.watermark;
-    const css = `@page{size:${dims.width_mm}mm ${dims.height_mm}mm;margin:0}html,body{margin:0;background:transparent;font-family:${JSON.stringify(cfg.font_family)},sans-serif}.wm{position:absolute;transform:translate(-50%,-50%) rotate(-${wm.angle_degrees}deg);font-size:${wm.font_pt}pt;font-weight:${wm.font_weight};white-space:nowrap;line-height:1;color:${wm.color};opacity:${wm.opacity}}`;
-    const body = wm.positions_mm[orientation].map(([x,y]) => `<div class="wm" style="left:${x}mm;top:${y}mm">${escape(wm.text)}</div>`).join('');
-    const htmlFile = path.join(job.work, `watermark-${orientation}.html`);
-    fs.writeFileSync(htmlFile, `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>${css}</style><body>${body}</body></html>`);
-    await page.goto(pathToFileURL(htmlFile).href);
-    await page.evaluate(() => document.fonts.ready);
-    const pdf = path.join(job.work, `watermark-${orientation}.pdf`);
-    await page.pdf({path:pdf, preferCSSPageSize:true, printBackground:true, displayHeaderFooter:false});
-    result.watermarks[orientation] = pdf;
   }
   fs.writeFileSync(job.result, JSON.stringify(result, null, 2));
 } finally {

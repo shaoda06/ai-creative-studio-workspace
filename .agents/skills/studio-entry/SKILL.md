@@ -27,7 +27,7 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 | 各业务账号及独立项目的社交媒体运营与发布 | [Studio运营一级业务](../studio-social-operations/SKILL.md) |
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../studio-jianying/SKILL.md) |
 | 实拍剪辑、口播包装与配音解说动画 | [按需剪辑与动效工具](#按需剪辑与动效工具) |
-| Markdown与实际配图的带水印PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
+| Markdown与实际配图的PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
 | 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 外部浏览器任务、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
 | 从用户指定的作品链接取得视频文件 | [视频下载](../studio-video-download/SKILL.md) |
