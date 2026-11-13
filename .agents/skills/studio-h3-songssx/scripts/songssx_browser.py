@@ -1,7 +1,53 @@
 """Project a recorded Songssx scene into the shared production workbench."""
 import json
 from pathlib import Path
+import re
 from urllib.parse import quote
+
+
+def scene_playbacks(outputs):
+    """A round may select one reviewed, timeline-aligned file per scene."""
+    selected = {}
+    for output in outputs:
+        if 'playback' not in output:
+            continue
+        item = output['playback']
+        if (not isinstance(item, dict) or set(item) != {'scene', 'run', 'stage'}
+                or not isinstance(item['scene'], str) or not item['scene']
+                or not isinstance(item['run'], str) or not re.fullmatch(r'R[0-9]{3,}', item['run'])
+                or item['stage'] not in ('场次生成', '后处理')
+                or item['scene'] in selected):
+            raise ValueError('整场主播放须为场次登记唯一且有效的批次与阶段')
+        selected[item['scene']] = output
+    return selected
+
+
+def playback_video(project, output):
+    from backend.services.scene_postprocess import review_output
+    from project_paths import project_file
+
+    item = {key: value for key, value in output.items() if key != 'playback'}
+    if 'postprocess' in item:
+        key = review_output(project, item, lambda key: key).get('key')
+    else:
+        path = project_file(project, item['file'])
+        if path.suffix.lower() != '.mp4':
+            raise ValueError('整场主播放须引用完整 MP4')
+        key = path.relative_to(project).as_posix() if path.is_file() else None
+    stamp = (project / key).stat() if key else None
+    revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
+    run, stage = output['playback']['run'], output['playback']['stage']
+    return {'key': key or '', 'url': quote(key, safe='/-._~') + '?v=' + revision if key else '',
+            'run': run, 'stage': stage, 'approved': False, 'candidateNumber': int(run[1:]),
+            'fileRevision': revision, 'deliveryStatus': '已取回' if key else '未取回'}
+
+
+def set_scene_playback(project, scene, output):
+    if not scene.get('recorded') or not scene.get('segments'):
+        raise ValueError('整场主播放须关联已登记的 Songssx 时间轴')
+    scene['video'] = playback_video(project, output)
+    for segment in scene['segments']:
+        segment['context']['source'] = '原 Songssx 分段生成记录'
 
 
 def songssx_contexts(project, data, workflow, segments, context_for):
@@ -86,6 +132,8 @@ def songssx_scene(project, entry, context_for):
         segment['context'] = context
     target, = data['outputs']
     if postprocess := entry.get('songssx_postprocess'):
+        from backend.services.scene_postprocess import output_for_source
+
         source = resolve_file(project, project_file(project, target['path']))
         directory, state, recorded, processed = songssx_task(project, postprocess, 'video-postprocess')
         key = postprocess
@@ -93,12 +141,13 @@ def songssx_scene(project, entry, context_for):
             if recorded:
                 entry['issues'].append('Songssx 后处理执行检查报告缺失')
             return result
-        if (processed.get('task_type') != 'video-postprocess' or processed.get('record_dir') != key
-                or len(processed['outputs']) != 1 or Path(processed['outputs'][0]['path']).suffix.lower() != '.mp4'
-                or {resolve_file(project, project_file(project, upload['file'])) for upload in processed['uploads']} != {source}):
+        try:
+            if processed.get('record_dir') != key:
+                raise ValueError('Songssx 后处理记录目录不符')
+            target = output_for_source(project, processed, source)
+        except ValueError:
             entry['issues'].append('Songssx 后处理须对应本场原视频及一个整场 MP4')
             return result
-        target, = processed['outputs']
     actual = resolve_file(project, project_file(project, target['path']))
     relative = actual.relative_to(project).as_posix()
     stage = entry['segments'][0]['stage']

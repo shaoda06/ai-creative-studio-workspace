@@ -61,10 +61,11 @@ def submission_response(store, journal, *, reused=False):
     group = store.group_status(group_id) if group_id else None
     return dict(status=('completed' if group and group['status'] == 'completed' or not group and all(item['status'] == 'completed' for item in accepted) else 'enqueued'),
                 tasks=accepted, reused=reused, next_action='end-turn',
+                **({'production_round': journal['production_round']} if 'production_round' in journal else {}),
                 **({'group_id': group_id, 'group': group} if group else {}))
 
 
-async def execute(store, payload):
+async def execute(store, payload, *, production_adapter=None):
     from backend.services.comfy_tasks import TaskInput, SKILL
     root = scope_root(store.workspace, payload.project)
     plan_file = project_file(root, payload.plan_file)
@@ -99,6 +100,14 @@ async def execute(store, payload):
     journal = None
     documents = None
     preparation_history = []
+    round_spec = source.get('iris_round')
+    if 'iris_round' in source and (production_adapter != 'iris-commercial-production' or not isinstance(round_spec, dict)):
+        raise ValueError('iris_round 须通过 Iris 商业生产空间提交')
+    if round_spec is not None:
+        if not all(entry['task_type'].startswith('video-') for entry in source['tasks']):
+            raise ValueError('Iris 轮次清单须全部为视频任务')
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/iris-commercial-production/scripts'))
+        from iris_rounds import register as register_iris_round
     if journal_file.exists():
         journal = read_journal(journal_file)
         if journal['thread_id'] != payload.thread_id:
@@ -175,6 +184,9 @@ async def execute(store, payload):
         if len(journal.get('accepted', [])) == len(journal['tasks']):
             return submission_response(store, journal, reused=True)
     else:
+        if (production_adapter == 'iris-commercial-production' and (root / '作品').is_dir()
+                and any(entry['task_type'].startswith('video-') for entry in source['tasks']) and round_spec is None):
+            raise ValueError('Iris 作品视频任务须提供 iris_round，由脚本登记轮次和分镜')
         documents = documents or Documents(root)
         tasks = []
         for entry in source['tasks']:
@@ -183,6 +195,9 @@ async def execute(store, payload):
             spec = {**entry, 'authorization': entry.get('authorization', '仅准备，尚未执行授权'), 'submission_plan': str(plan_file)}
             task = build_image(root, SKILL, spec, documents, store.client.now()) if spec['task_type'].startswith('image') else build_video(root, spec, documents)
             tasks.append(task)
+        if round_spec is not None:
+            register_iris_round(root, round_spec, tasks, journal_file, store.client.now(), write=False,
+                                reprepare=payload.reprepare)
         journal = dict(source=source, thread_id=payload.thread_id, tasks=tasks, writes=documents.writes(),
                        record_format='compact', journal_encoding='shared-writes-v1', preparation_history=preparation_history)
         write_journal(journal_file, journal)
@@ -227,8 +242,15 @@ async def execute(store, payload):
             report = await store.prepare_only(data)
         prepared.append(dict(title=data.title, report=report['report']))
         inputs.append(data)
+    if round_spec is not None:
+        number = register_iris_round(root, round_spec, journal['tasks'], journal_file, store.client.now(),
+                                     write=True, reprepare=payload.reprepare)
+        if journal.get('production_round') != number:
+            journal['production_round'] = number
+            write_journal(journal_file, journal)
     if payload.prepare_only or payload.start_paused and any(data.image_plan and data.image_plan.get('local_processing') for data in inputs):
-        return dict(status='prepared', tasks=prepared, next_action='continue-caller-workflow')
+        return dict(status='prepared', tasks=prepared, next_action='continue-caller-workflow',
+                    **({'production_round': journal['production_round']} if round_spec is not None else {}))
     if inputs and not accepted and not any(local_flags):
         result = await store.enqueue_group(inputs, source.get('group_title') or plan_file.stem)
         journal['group_id'] = result['group_id']

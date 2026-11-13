@@ -34,6 +34,8 @@
 
 ## 3. 逐段装配和提交
 
+装配前按[生成分辨率询问](../../studio-h3-remake/SKILL.md#生成分辨率询问)确认本轮尺寸。
+
 从 API 模板为每段准备任务副本。用服务器实际上传名填文件字段，原始素材及其版本按调用业务记录。
 
 | 节点 | API 输入字段 | 填写内容 |
@@ -56,7 +58,7 @@ tool=".agents/skills/studio-h3-remake/scripts/long_swap.py"
 python3 "$tool" prepare source_24fps.mp4 run --cut 240
 python3 "$tool" graph run 2 --source remote/segment-002.mp4 \
   --face remote/face.png --full-body remote/body.png --prompt prompt.txt \
-  --audio-conditioning silent \
+  --audio-conditioning silent --short-edge 736 \
   --output-prefix viggle_remake/long_swap --output run/segment-002.api.json
 python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 ```
@@ -64,7 +66,7 @@ python3 "$tool" join source_24fps.mp4 run raw_results final.mp4
 - `prepare` 写出 `run/segments.json` 和 `run/sources/segment-NNN.mp4`。使用新的工作目录，段号从 1 开始。
 - `graph` 读取 UTF-8 正文，以计划的生成帧数直接填 `#42.frames`。面部图默认第一。全身图需排第一时加 `--reference-order full-body-first`，并同步调整正文的 Picture 编号。续接段加 `--previous` 和上一段原始输出上传后返回的服务器输入名，工具装配 `RemakePrefix`。
 - 按[已确认的原声选择](../../studio-h3-remake/SKILL.md#原声是否参与生成)传 `--audio-conditioning`。命令行省略时沿用模板的 `source`。
-- `--short-edge` 可选 480 或 736 像素，省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
+- `--short-edge` 填本轮已确认的短边像素，单独调用命令行时省略沿用模板 480。`--seed` 可填 0 到 2⁶⁴−1 的整数，省略沿用模板种子。`--output-prefix` 是服务器输出前缀，工具在后面添加 `/segment-NNN`。`--output` 是本地 API 文件路径。
 - 三个命令均只操作本地文件，成功时写出指定产物，输入或帧数不合要求时退出报错。API JSON 和合片路径须使用尚未存在的文件名。
 
 ## 4. 取回、合片和返修

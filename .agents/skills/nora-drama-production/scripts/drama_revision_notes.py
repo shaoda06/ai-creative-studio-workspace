@@ -18,12 +18,25 @@ from backend.services.review_notes import (NoteInput, RevisionNote, OverallNote,
 
 
 def validate_note_round(project, episode, scene, note):
-    from backend.parsers.scene_rounds import rounds
+    from backend.parsers.scene_rounds import rounds, scene_entries
     if note.roundNumber is None:
         if note.stage == rounds.SCENE_GENERATION:
             raise ValueError('Songssx 修改意见须关联已登记的制作轮次')
         return
-    selected = rounds.referenced_round(project, f'{episode}-{scene}', note.roundNumber)
+    selected = next((item for item in scene_entries(project, episode, scene)
+                     if item['number'] == note.roundNumber), None)
+    if selected is None:
+        raise ValueError('输入映射引用的场次修改轮次不存在')
+    if selected.get('songssx_execution') and selected.get('review_outputs'):
+        from songssx_browser import playback_video, scene_playbacks
+        playback = scene_playbacks(selected['review_outputs']).get(scene)
+        if playback:
+            video = playback_video(project, playback)
+            if (not video['url'] or (video['stage'], video['run'], video['fileRevision'])
+                    != (note.stage, note.run, note.fileRevision)
+                    or not any(item['id'] == note.segment for item in selected['segments'])):
+                raise ValueError('Songssx 修改意见的分段或候选与本轮不符')
+            return
     if (note.stage == rounds.SCENE_GENERATION or selected.get('songssx_execution')) and not any(
             item['id'] == note.segment and item['run'] == note.run and item['stage'] == note.stage
             for item in selected['segments']):

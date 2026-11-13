@@ -133,7 +133,7 @@ export function watchVideoPlayback(element: HTMLVideoElement, recover: (reason: 
 export interface SegmentVideoHandle { seekTo: (time: number, play?: boolean) => void }
 export interface RepeatPlaybackControl { checked: boolean; onChange: (checked: boolean) => void }
 
-export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, downloadFromPlayer = true, videoDescription }: {
+export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, videoDescription }: {
   current?: VideoItem; onTimeChange: (time: number) => void; autoPlay?: boolean;
   onEnded?: () => void; onError?: () => void;
   onFileRevision?: (revision: string) => void;
@@ -141,7 +141,6 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
   repeatControl?: RepeatPlaybackControl;
   retainSource: (source: string) => () => void;
   playerRef: Ref<SegmentVideoHandle>;
-  downloadFromPlayer?: boolean;
   videoDescription?: string;
 }) {
   const [error, setError] = useState(false);
@@ -220,7 +219,7 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
   }, [autoPlay]);
   const description = current && (videoDescription ?? `${current.stage} · ${current.run} · ${candidateLabel(current.candidateNumber, current.approved)}`);
   return <section className="segment-video" aria-label="视频区域">
-    {loaded?.url ? <video ref={video} key={`${loaded.fileRevision}:${reloadCount}`} controls controlsList={downloadFromPlayer ? undefined : 'nodownload'} loop={repeat && !continuous} autoPlay={playOnLoad} preload="metadata" src={source} aria-label={description}
+    {loaded?.url ? <video ref={video} key={`${loaded.fileRevision}:${reloadCount}`} controls loop={repeat && !continuous} autoPlay={playOnLoad} preload="metadata" src={source} aria-label={description}
       onLoadedMetadata={event => { if (restore.current) { Object.assign(event.currentTarget, restore.current); restore.current = null; } if (pendingSeek.current !== null) seekTo(pendingSeek.current); else onTimeChange(event.currentTarget.currentTime); onFileRevision?.(loaded.reviewFileRevision || loaded.fileRevision); }}
       onLoadedData={() => setRecovering(false)}
       onTimeUpdate={event => onTimeChange(event.currentTarget.currentTime)}

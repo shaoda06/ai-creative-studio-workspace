@@ -109,6 +109,10 @@ def append_round(project, episode, plan, target):
         value = {**(base or {}), **change}
         if 'songssx_execution' in change and 'songssx_postprocess' not in change and change['songssx_execution'] != (base or {}).get('songssx_execution'):
             value.pop('songssx_postprocess', None)
+        if ('review_outputs' not in change and value.get('review_outputs')
+                and any(value.get(key) != (base or {}).get(key)
+                        for key in ('songssx_execution', 'songssx_postprocess'))):
+            value['review_outputs'] = [output for output in value['review_outputs'] if 'playback' not in output]
         if 'segment_changes' in change:
             if value.get('songssx_execution'):
                 raise ValueError('Songssx 场次使用完整 segments 和整场执行附件')

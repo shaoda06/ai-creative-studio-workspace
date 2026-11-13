@@ -53,6 +53,27 @@ class SceneRoundTests(unittest.TestCase):
         data = build_data(self.project, web_episode_navigation=True, load_scope='09-剧集制作', episode_id='EP001')
         return data['catalogues']['09-剧集制作']['children'][0]
 
+    def test_whole_postprocess_review_beside_segment_round(self):
+        record = self.root + '/其他资料/执行附件/C001-R002'
+        source = self.root + '/其他资料/候选视频/整场原片.mp4'
+        output = self.root + '/其他资料/候选视频/整场后处理.mp4'
+        self.write(source, '整场原片')
+        self.write(output, '整场后处理')
+        write_entries(self.project / record, {
+            '执行检查报告.json': {'prepared_input': {'task_type': 'video-postprocess',
+                'record_dir': record, 'uploads': [{'file': source}],
+                'outputs': [{'path': output, 'response_name': '取回.json'}]}},
+            '后台任务状态.json': {'id': 'test', 'task_type': 'video-postprocess', 'record_dir': record},
+            '取回.json': {},
+        })
+        self.create({**self.plan(), 'review_outputs': [
+            {'label': '整场后处理', 'source': source, 'postprocess': record}]})
+        episode = self.episode()
+        self.assertEqual(episode['productionWorkflows'], ['aimixer'])
+        round_, = episode['sceneRounds']['C001']
+        self.assertEqual(round_['reviewOutputs'][0]['key'], output)
+        self.assertTrue(all(len(segment['videos']) == 1 for segment in episode['segments']['C001']))
+
     def test_songssx_whole_scene_uses_original_round_and_accepted_record(self):
         execution = self.root + '/其他资料/执行附件/C001-R002'
         output = self.root + '/其他资料/候选视频/EP001-C001-R002-场次生成.mp4'
@@ -136,6 +157,22 @@ class SceneRoundTests(unittest.TestCase):
         self.assertEqual(after['songssx']['video']['key'], processed)
         self.assertEqual(after['songssx']['video']['stage'], '后处理')
         self.assertEqual(after['songssx']['segments'], before['songssx']['segments'])
+        derived = self.root + '/其他资料/候选视频/EP001-C001-R004-整场返修.mp4'
+        self.write(derived, 'derived fixture')
+        self.create({**planned, 'songssx_postprocess': None, 'review_outputs': [
+            {'label': '整场返修', 'file': derived,
+             'playback': {'scene': 'C001', 'run': 'R004', 'stage': '场次生成'}},
+        ]})
+        selected = self.episode()['sceneRounds']['C001'][-1]
+        actual = selected['songssx']['video']
+        self.assertEqual(actual['key'], derived)
+        self.assertEqual(selected['reviewOutputs'], [])
+        self.assertEqual([item['start'] for item in selected['songssx']['segments']], [0, 124 / 24, 254 / 24])
+        revised_note = value.model_copy(update={'roundNumber': selected['number'], 'run': 'R004',
+                                                'fileRevision': actual['fileRevision']})
+        notes.save_note(self.project, 'EP001', 'C001', revised_note)
+        with self.assertRaisesRegex(ValueError, '与本轮不符'):
+            notes.save_note(self.project, 'EP001', 'C001', revised_note.model_copy(update={'fileRevision': 'old'}))
         self.write('项目进度.md', '| 阶段名称 | 对应会话入口 | 当前状态 | 成果入口 | 待决事项 | 下一步 |\n'
                    '| --- | --- | --- | --- | --- | --- |\n| EP001制作 | — | 已完成 | — | — | — |\n')
         self.write(self.root + '/其他资料/工作稿/EP001-生成说明-工作稿.md',

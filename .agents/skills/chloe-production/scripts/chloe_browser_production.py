@@ -9,6 +9,7 @@ from chloe_production import state, local, link_path, fields, document, plan, di
 from chloe_documents import records, media_reference, MISSING
 from backend.parsers import documents
 from backend.services.workspaces import jianying_links
+from backend.services.scene_postprocess import review_output
 import execution_records as recordio
 from project_paths import input_file, input_key
 from h3_browser_context import request_context, empty_context
@@ -249,6 +250,9 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                             context['dialogues'].append({'shot':identity,'index':len(context['dialogues']),'speaker':speaker.strip(),'original':original.strip()})
         review_outputs=[]
         for output in item.get('review_outputs',[]):
+            if 'postprocess' in output:
+                review_outputs.append(review_output(project, output, lambda key: file_url(api, key)))
+                continue
             reference=media_reference(data['root'],project/'制作记录.md',output['resource'])
             review_outputs.append({'kind':'video','name':output['label'],'url':resource_file(data,api,reference)})
         rounds.append({'number':item['number'],'created_at':item['created_at'],'note':item['note'],

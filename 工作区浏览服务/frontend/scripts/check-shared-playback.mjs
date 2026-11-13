@@ -45,6 +45,10 @@ export async function checkSharedPlayback(page, width) {
   await sceneToggle.click();
   assert.equal(await demo.locator('.segment-video video').getAttribute('aria-label'), '第3轮 · 后处理');
   await demo.getByText('第3轮 · 后处理', { exact: true }).waitFor();
+  const scenePlayer = demo.locator('.segment-video video');
+  const source = await scenePlayer.getAttribute('src');
+  assert.equal(await scenePlayer.getAttribute('controlslist'), null, '原生控件保留下载');
+  assert.equal(await demo.getByText('下载整场 MP4', { exact: true }).count(), 0);
   for (const [toggleLayout, id, previousId] of [[false, 'P001', 'P002'], [true, 'P002', 'P001']]) {
     if (toggleLayout) await demo.getByRole('button', { name: '宽屏显示', exact: true }).click();
     await demo.getByRole('button', { name: new RegExp('^分段 ' + id) }).click();
@@ -54,6 +58,7 @@ export async function checkSharedPlayback(page, width) {
     assert.equal(await references.getByRole('button', { name: new RegExp(previousId + ' 示例参考图') }).count(), 0);
     const box = await references.boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= width + 1, '参考素材区不越界');
+    assert.equal(await scenePlayer.getAttribute('src'), source, '切换 GEN 保留整场文件');
     await picture.click();
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
   }

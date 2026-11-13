@@ -219,7 +219,7 @@ def add_graph_arguments(command):
     command.add_argument("--prompt", required=True, type=Path, help="本段六段式英文正文文件，UTF-8")
     command.add_argument("--audio-conditioning", choices=("source", "silent"), default="source",
                          help="source 参考（默认），silent 不参考，join 时封回原声")
-    command.add_argument("--short-edge", type=int, choices=(480, 736), help="短边像素，省略沿用模板 480")
+    command.add_argument("--short-edge", type=int, choices=(480, 736, 1088), help="本轮确认的短边像素，省略沿用模板 480")
     command.add_argument("--seed", type=int, help="采样种子，省略沿用模板固定值")
     command.add_argument("--output-prefix", required=True, help="服务器输出目录前缀，工具附加段号")
     command.add_argument("--output", required=True, type=Path, help="要写入的本地 API JSON，不能已存在")

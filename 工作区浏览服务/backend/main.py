@@ -385,7 +385,8 @@ async def agent_submit_plan(request: Request, data: SubmissionPlanInput) -> dict
     tasks = agent_request(request)
     from backend.services.submission_plans import execute
     try:
-        return await execute(tasks, data)
+        space = getattr(request.state, 'workspace_space', None)
+        return await execute(tasks, data, production_adapter=space.production_adapter if space else None)
     except (ValueError, OSError, KeyError, TypeError, AssertionError, comfy_client.ClientError) as error:
         raise HTTPException(409, str(error)) from error
 
@@ -1114,8 +1115,9 @@ def update_production_notes(name, request, changes, work=None, view=None):
                             video = songssx.get('video', {})
                             if (round_['number'] == note.roundNumber and songssx.get('recorded')
                                     and (video.get('stage'), video.get('run')) == (note.stage, note.run)
+                                    and video.get('fileRevision') == note.fileRevision
                                     and any(segment['id'] == note.segment for segment in round_['segments'])):
-                                identities.add((note.segment, note.stage, note.run))
+                                identities.add((note.roundNumber, note.segment, note.stage, note.run))
             workbench.validate_notes(project, work, identities, changes, view)
         elif changes.rounds or any(note.roundNumber is not None or (note.segment, note.stage, note.run) not in identities for note in changes.notes):
             raise ValueError('意见必须对应项目中已有的分段与候选版本')

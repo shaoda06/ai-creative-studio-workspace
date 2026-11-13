@@ -144,6 +144,10 @@ def state(project):
         elif 'changed_segments' in item:
             raise ValueError('changed_segments 必须有 base_round')
         for output in item.get('review_outputs', []):
+            if set(output) == {'label', 'postprocess', 'source'}:
+                local(project, output['postprocess'])
+                local(project, output['source'])
+                continue
             if set(output) != {'label','resource'}:
                 raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
             media_reference(root, project/'制作记录.md', output['resource'])

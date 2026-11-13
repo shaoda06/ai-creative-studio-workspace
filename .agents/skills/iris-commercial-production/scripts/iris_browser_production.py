@@ -11,6 +11,7 @@ import project_resources as resources
 from prepared_documents import read_journal
 from h3_browser_context import empty_context, request_context
 from iris_works import work_root, historical_sources
+from backend.services.scene_postprocess import output_for_source
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
 from postprocess_products import product_rows
@@ -40,6 +41,14 @@ def file_url(api, key):
     return api + '/files/' + quote(key, safe='/')
 
 
+def round_spec(project, work):
+    root = work_root(project, work)
+    path = root / '06-视频生产/制作轮次.json'
+    if not path.resolve().is_relative_to(root):
+        raise ValueError('制作轮次索引必须位于本作品目录内')
+    return json.loads(path.read_text('utf-8-sig'))['rounds'] if path.is_file() else []
+
+
 def video_products(project, api, declared):
     products = []
     for row in product_rows(declared):
@@ -54,7 +63,8 @@ def video_products(project, api, declared):
     return products
 
 
-def production_data(project, api, work=None, *, legacy_fallback=True, executions=None, scene_executions=None):
+def production_data(project, api, work=None, *, legacy_fallback=True, executions=None,
+                    scene_executions=None, rounds=None):
     section = production_section(project, work)
     segments, batches, contexts, bindings = {}, [], {}, {}
     if not section:
@@ -62,6 +72,12 @@ def production_data(project, api, work=None, *, legacy_fallback=True, executions
     directories = [project / section / '执行记录']
     if work is not None:
         directories.extend(historical_sources(project, work, 'records'))
+    declared_rounds = round_spec(project, work) if rounds is None else rounds
+    whole_postprocess = {
+        local_key(project, output['postprocess']): output['source']
+        for item in declared_rounds for output in item.get('review_outputs', [])
+        if 'postprocess' in output
+    }
     journals = sorted({path for directory in directories for path in directory.rglob('*-装配结果.json')})
     for journal_path in journals:
         local_key(project, journal_path)
@@ -86,7 +102,11 @@ def production_data(project, api, work=None, *, legacy_fallback=True, executions
             stage = STAGES.get(task['task_type'])
             if not stage:
                 continue
-            record = project / local_key(project, task['record_dir'], task['project'])
+            record_key = local_key(project, task['record_dir'], task['project'])
+            if stage == '后处理' and record_key in whole_postprocess:
+                output_for_source(project, task, whole_postprocess[record_key])
+                continue
+            record = project / record_key
             request_path = record / task.get('request_name', '请求.json')
             request = records.read(request_path) if records.exists(request_path) else None
             state_path = record / '后台任务状态.json'

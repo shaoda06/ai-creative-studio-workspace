@@ -13,7 +13,7 @@ const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const tool=fileURLToPath(new URL('../',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
 const python = join(tool, '.venv', ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
-const fixture=JSON.parse(execFileSync(python,['-c',`
+const fixture=JSON.parse(execFileSync(python,['-X','utf8','-c',`
 import json
 import tempfile
 from pathlib import Path
@@ -240,7 +240,8 @@ try {
   await workflow.getByRole('button',{name:'Songssx 制作记录'}).click();
   await page.getByRole('button',{name:'分段制作',exact:true}).click();
   await page.getByText('GEN 1 · 0–1 秒',{exact:true}).waitFor();
-  assert.equal(await page.getByRole('combobox',{name:'修改轮次'}).getAttribute('data-value'),'2');
+  assert.equal(await page.locator('.segment-video video').getAttribute('controlslist'),null);
+  assert.equal(await page.getByText('下载整场 MP4',{exact:true}).count(),0);
   const references=page.getByRole('region',{name:'参考素材区域'});
   assert.deepEqual(await references.getByRole('heading').allTextContents(),['本段参考素材']);
   await references.getByRole('button',{name:/P001 隔离参考图/}).waitFor();

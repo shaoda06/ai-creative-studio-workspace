@@ -10,7 +10,7 @@ import scene_rounds as rounds
 from episode_rounds import episode_manifest_key, scene_entries, validate_episode_manifest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-h3-songssx/scripts'))
-from songssx_browser import songssx_scene
+from songssx_browser import scene_playbacks, set_scene_playback, songssx_scene
 
 
 def load_episode_rounds(episode, read):
@@ -23,6 +23,7 @@ def load_episode_rounds(episode, read):
 def load_scene_rounds(project, episode, scene, read):
     from backend.parsers.project import field, markdown, document_header
     from backend.parsers.generation import segment_body
+    from backend.services.scene_postprocess import review_output
     result = []
     for entry in scene_entries(project, episode, scene, read):
         item = {**entry, 'issues': []}
@@ -45,10 +46,19 @@ def load_scene_rounds(project, episode, scene, read):
         item['segments'] = [{**segment,
             'scriptHtml': markdown(segment_body(documents.get('storyboard', ''), segment['id']), entry['storyboard']['file']),
             'scriptUrl': quote(entry['storyboard']['file'], safe='/-._~')} for segment in entry['segments']]
+        outputs = entry.get('review_outputs', [])
+        playbacks = scene_playbacks(outputs)
+        if outputs:
+            item['reviewOutputs'] = [review_output(project, output, lambda key: quote(key, safe='/-._~'))
+                                     for output in outputs if 'playback' not in output]
         if item.get('songssx_execution'):
             from drama_browser_generation import storyboard_context
             item['songssx'] = songssx_scene(project, item, lambda segment: (
                 storyboard_context(documents['storyboard'], segment, entry['storyboard']['file']) if 'storyboard' in documents
                 else {'scriptHtml': '', 'shots': [], 'dialogues': [], 'issues': []}))
+            if scene in playbacks:
+                set_scene_playback(project, item['songssx'], playbacks.pop(scene))
+        if playbacks:
+            item['issues'].append('整场主播放缺少对应的 Songssx 时间轴：' + '、'.join(playbacks))
         result.append(item)
     return result

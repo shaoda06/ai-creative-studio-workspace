@@ -31,6 +31,45 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
+    def test_whole_postprocess_keeps_segment_candidates_and_requires_collection(self):
+        first = self.register()
+        root = self.works['F001'] + '/06-视频生产/'
+        source = root + '候选/整场原片.mp4'
+        output = root + '候选/S001-整场后处理.mp4'
+        record = root + '执行记录/R002-后处理'
+        declaration = {'label': '整场 30 fps', 'postprocess': record, 'source': source}
+        task = {'task_type': 'video-postprocess', 'record_dir': record, 'project': str(self.project),
+                'uploads': [{'file': source}], 'outputs': [{'path': output, 'response_name': '取回.json'}]}
+        self.write(source, '整场原片')
+        self.write(record + '/任务清单-装配结果.json', json.dumps({'accepted': [True], 'tasks': [task]}))
+        self.write(record + '/执行检查报告.json', json.dumps({'prepared_input': task}))
+        self.write(record + '/后台任务状态.json', json.dumps({
+            'id': 'whole-task', 'task_type': task['task_type'], 'record_dir': record, 'status': 'local_queued'}))
+        segment_record = root + '执行记录/R003-后处理'
+        segment_output = root + '候选/P001-后处理.mp4'
+        segment_task = {**task, 'record_dir': segment_record, 'uploads': [{'file': first['segments'][0]['file']}],
+                        'outputs': [{'path': segment_output, 'response_name': '取回.json'}]}
+        self.write(segment_output, '分段后处理')
+        self.write(segment_record + '/任务清单-装配结果.json',
+                   json.dumps({'accepted': [True], 'tasks': [segment_task]}))
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, {
+            **first, 'number': 2, 'review_outputs': [declaration]}]}))
+
+        self.write(output, '整场后处理')
+        pending = self.detail()
+        self.assertEqual(pending['sceneRounds']['whole'][1]['reviewOutputs'], [
+            {'kind': 'video', 'name': '整场 30 fps'}])
+        self.write(record + '/取回.json', '{}')
+        ready = self.detail()
+        rounds = ready['sceneRounds']['whole']
+        self.assertEqual(rounds[0]['reviewOutputs'], [])
+        actual, = rounds[1]['reviewOutputs']
+        self.assertEqual(actual['key'], output)
+        self.assertEqual(self.client.get(actual['url']).text, '整场后处理')
+        self.assertEqual(ready['segments'], pending['segments'])
+        self.assertEqual([video['key'] for video in ready['segments']['whole'][0]['videos']],
+                         [first['segments'][0]['file'], segment_output])
+
     def test_director_registration_template_projects_exact_versions_once(self):
         key = self.works['F001'] + '/04-分镜声音/导演表/'
         template = Path(__file__).resolve().parents[2] / '.agents/skills/iris-commercial-storyboard/templates/导演表内容.md'
@@ -121,6 +160,50 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
                 'text': '第二段意见', 'fileRevision': scene['video']['fileRevision'], 'expectedText': ''}
         self.assertEqual(self.client.put(api + '/production-notes?view=current', json=note).status_code, 200)
         self.assertEqual(self.detail('F002')['productionWorkflows'], ['aimixer'])
+
+        repaired = root + '候选/R003-返修整场.mp4'
+        processed = root + '候选/R004-后处理整场.mp4'
+        process_record = root + '执行记录/R004-后处理'
+        process_task = {'task_type': 'video-postprocess', 'record_dir': process_record, 'project': str(self.project),
+                        'uploads': [{'file': repaired}], 'outputs': [{'path': processed, 'response_name': '取回.json'}]}
+        self.write(repaired, '返修整场')
+        self.write(processed, '补帧整场')
+        self.write(process_record + '/任务清单-装配结果.json',
+                   json.dumps({'accepted': [True], 'tasks': [process_task]}))
+        self.write(process_record + '/执行检查报告.json', json.dumps({'prepared_input': process_task}))
+        self.write(process_record + '/后台任务状态.json', json.dumps({
+            'id': 'process-task', 'task_type': 'video-postprocess', 'record_dir': process_record}))
+        third = {**second, 'number': 3, 'review_outputs': [
+            {'label': '返修', 'file': repaired, 'playback': {'scene': 'S001', 'run': 'R003', 'stage': '场次生成'}},
+            {'label': '整场对照', 'file': output},
+        ]}
+        fourth = {**second, 'number': 4, 'review_outputs': [
+            {'label': '补帧', 'postprocess': process_record, 'source': repaired,
+             'playback': {'scene': 'S001', 'run': 'R004', 'stage': '后处理'}},
+        ]}
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, second, third, fourth]}))
+        rounds = self.detail()['sceneRounds']['S001']
+        self.assertEqual([round_['songssx']['video']['key'] for round_ in rounds], [output, repaired, ''])
+        self.assertEqual([item['name'] for item in rounds[1]['reviewOutputs']], ['整场对照'])
+        self.assertEqual(rounds[2]['reviewOutputs'], [])
+        self.write(process_record + '/取回.json', '{}')
+        rounds = self.detail()['sceneRounds']['S001']
+        for round_, path in zip(rounds[1:], (repaired, processed), strict=True):
+            player = round_['songssx']
+            self.assertEqual(player['video']['key'], path)
+            self.assertEqual([(part['start'], part['end']) for part in player['segments']],
+                             [(0, 124 / 24), (124 / 24, 248 / 24)])
+            self.assertEqual(self.client.get(player['video']['url']).content, (self.project / path).read_bytes())
+            response = self.client.get(api + f"/production-detail/rounds/{round_['number']}/download?view=current")
+            with ZipFile(BytesIO(response.content)) as bundle:
+                member, = bundle.namelist()
+                self.assertEqual(bundle.read(member), (self.project / path).read_bytes())
+            video = player['video']
+            change = {**note, 'roundNumber': round_['number'], 'stage': video['stage'],
+                      'run': video['run'], 'fileRevision': video['fileRevision']}
+            self.assertEqual(self.client.put(api + '/production-notes?view=current', json=change).status_code, 200)
+            self.assertEqual(self.client.put(api + '/production-notes?view=current',
+                                             json={**change, 'roundNumber': 2}).status_code, 409)
 
     def test_missing_candidate_retains_round_and_recovery_uses_same_path(self):
         spec = self.register()
