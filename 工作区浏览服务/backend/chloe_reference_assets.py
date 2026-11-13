@@ -67,7 +67,7 @@ def asset_detail(root, identity, api, kind):
     if kind == VOICES:
         content['versions'] = content.pop('images')
         for item in content['versions']:
-            info = json.loads((resources.local(root, item['media']['key']).parent/'版本信息.json').read_text())
+            info = json.loads((resources.local(root, item['media']['key']).parent/'版本信息.json').read_text('utf-8'))
             item['duration'] = info['facts'].get('duration_seconds')
         content['models'] = [{'id': row['对象编号'], 'name': row['对象编号']+' · '+model_context(root, row['对象编号'])[0]}
                              for row in records(doc, '关联资料') if row['关系'] == '模特']
@@ -105,7 +105,7 @@ def asset_cards(root, api, kind):
             card['description'] = fields(doc, '声音信息')['声音说明']
             card['reference'] = None
             if current:
-                info = json.loads((resources.local(root, current['media']['key']).parent/'版本信息.json').read_text())
+                info = json.loads((resources.local(root, current['media']['key']).parent/'版本信息.json').read_text('utf-8'))
                 card['reference'] = {'resource': current['resource'], 'version': current['version'],
                                      'duration': info['facts'].get('duration_seconds')}
         cards.append(card)

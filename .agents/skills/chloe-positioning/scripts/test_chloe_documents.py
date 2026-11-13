@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from PIL import Image
 
 from chloe_init import initialize_workspace, initialize_project, initialize_video, initialize_asset, ASSETS, SKILLS
@@ -199,7 +200,13 @@ class ChloeDocumentsTest(unittest.TestCase):
         self.append(p,'执行记录',['E001','素材导入','不适用','本地导入','不适用','不适用','隔离测试','不适用','2026-11-07T09:00:00+08:00','2026-11-07T09:01:00+08:00','已完成','导入完成'])
         self.append(p,'输入记录',['E001','reference','E001/reference',common_link])
         self.append(p,'输出记录',['E001','output',own_link])
-        self.assertEqual(self.check()['errors'],[])
+        read_text = Path.read_text
+
+        def windows_default(path, encoding=None, errors=None):
+            return read_text(path, encoding or 'gbk', errors)
+
+        with patch.object(Path, 'read_text', windows_default):
+            self.assertEqual(self.check()['errors'], [])
         good=p.read_text()
         p.write_text(good.replace('E001/reference','E002/reference'))
         self.assertTrue(any('共用输入' in e['error'] for e in self.check()['errors']))
