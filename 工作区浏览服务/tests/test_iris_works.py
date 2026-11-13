@@ -159,6 +159,45 @@ class IrisWorksTests(HttpTestCase):
         items = self.client.get(endpoint).json()['irisPresentation']['delivery']['items']
         self.assertEqual([item['type'] for item in items], ['剪映草稿', '成片'])
 
+    def test_moved_document_resolves_body_links_from_its_current_directory(self):
+        import project_resources as resources
+
+        work = self.works['F001']
+        original = work + '/03-创意脚本/旧稿.md'
+        current = work + '/03-创意脚本/其他资料/历史版本/旧稿.md'
+        state = work + '/作品状态.md'
+        self.write(current, '# 旧稿\n[作品状态](../../../作品状态.md#制作状态)\n')
+        with resources.edit_index(self.project) as data:
+            data['aliases'][original] = current
+
+        old_response = self.client.get(self.api + '/document', params={'path': original})
+        current_response = self.client.get(self.api + '/document', params={'path': current})
+        self.assertEqual(old_response.status_code, 200)
+        self.assertEqual(old_response.json(), current_response.json())
+        self.assertIn('data-doc="' + state + '"', old_response.json()['html'])
+        state_url = self.api + '/files/' + quote(state)
+        self.assertIn(state_url.replace('C001-隔离项目', quote('C001-隔离项目'))
+                      + '#' + quote('制作状态'), old_response.json()['html'])
+        self.assertEqual(self.client.get(state_url).status_code, 200)
+
+    def test_delivery_links_work_in_document_and_delivery_tab(self):
+        work = self.works['F001']
+        self.write('08-完单复盘/历史说明.md', '# 历史说明')
+        self.write(work + '/07-返修交接/成片.mp4', 'current')
+        state = work + '/作品状态.md'
+        self.write(state, '| 交付状态 | 交付说明 | 归档交接记录 |\n| --- | --- | --- |\n'
+                   '| 已交接 | 交接说明 | [历史](../../08-完单复盘/历史说明.md) |\n\n'
+                   '| 交付成果 | 类型 | 项目文件 | 版本 | 用途 |\n| --- | --- | --- | --- | --- |\n'
+                   '| 成片 | 成片 | [成片](./07-返修交接/成片.mp4) | v01 | 交接 |\n'
+                   '| 旧记录 | 成片 | [越界](../../../外部.mp4) | v01 | 交接 |\n')
+        preview = self.client.get(self.api + '/document', params={'path': state}).json()
+        for key in ('08-完单复盘/历史说明.md', work + '/07-返修交接/成片.mp4'):
+            self.assertIn('data-doc="' + key + '"', preview['html'])
+            self.assertEqual(self.client.get(self.api + '/files/' + quote(key)).status_code, 200)
+        delivery = self.client.get(self.api + '/works/F001').json()['irisPresentation']['delivery']
+        self.assertEqual(delivery['archivedHandoff'], '08-完单复盘/历史说明.md')
+        self.assertEqual([item['file']['key'] for item in delivery['items']], [work + '/07-返修交接/成片.mp4'])
+
     def test_numbered_layout_keeps_old_export_links_and_shows_current_recap(self):
         import project_resources as resources
         legacy = self.works['F001']

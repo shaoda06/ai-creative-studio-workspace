@@ -1,5 +1,6 @@
 """Select the current Iris documents and adopted media for the project page."""
 import json
+from posixpath import normpath
 from pathlib import Path
 import re
 from urllib.parse import quote, unquote, urlsplit
@@ -172,18 +173,22 @@ def asset_review(projects, project, api, listing):
     return items
 
 
-def delivery_overview(projects, project, api, root, status_text):
+def delivery_overview(projects, project, api, root, status, status_text):
     def linked_file(value):
         link = LINK.fullmatch(value)
         if not link:
             return None
         _, angle, bare = link.groups()
         href = urlsplit(angle or bare)
-        key = Path(unquote(href.path))
-        if href.scheme or href.netloc or key.is_absolute() or '..' in key.parts:
+        path = unquote(href.path)
+        if href.scheme or href.netloc or not path or Path(path).is_absolute():
+            return None
+        if path.startswith(('./', '../')):
+            path = normpath((status.parent.relative_to(root) / path).as_posix())
+        if '..' in Path(path).parts:
             return None
         try:
-            return projects.file(project, key.as_posix())
+            return projects.file(project, path)
         except FileNotFoundError:
             return None
 
@@ -265,7 +270,7 @@ def presentation(projects, project, api, files, work_directory=None, shared_file
             for item in group['children']
             if item['kind'] == 'file' and re.fullmatch(rf'{asset_name}(?:-v\d+(?:\.\d+)*)?\.md', item['name'], re.IGNORECASE)
         ]
-    delivery = delivery_overview(projects, project, api, root, status_text)
+    delivery = delivery_overview(projects, project, api, root, status, status_text)
     if work_directory:
         numbered = work_directory.parent.name == '03-作品'
         export_folder = FILM_EXPORT_FOLDER if numbered else LEGACY_FILM_EXPORT_FOLDER

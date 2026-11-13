@@ -680,7 +680,8 @@ def document(name: str, path: Annotated[str, Query()]) -> dict[str, Any]:
     try:
         target = store.file(name, path)
         if target.suffix.lower() == '.md':
-            return view(parser.document_preview(target.read_text('utf-8-sig'), path), name)
+            source = target.relative_to(store.project(name)).as_posix()
+            return view(parser.document_preview(target.read_text('utf-8-sig'), source), name)
         if target.suffix.lower() in ('.json', '.txt', '.log'):
             return parser.plain_text_preview(target)[0]
     except FileNotFoundError as error:
@@ -1153,8 +1154,9 @@ def workspace_document(name: str, path: str, request: Request):
         raise HTTPException(404, str(error)) from error
     if target.suffix.lower() == '.md':
         text = target.read_text('utf-8-sig')
+        source = target.relative_to(space.projects.project(name)).as_posix()
         value = {'title': next((line[2:].strip() for line in text.splitlines() if line.startswith('# ')), target.stem),
-                 'html': documents.markdown(text, path), 'url': quote(path, safe='/')}
+                 'html': documents.markdown(text, source), 'url': quote(source, safe='/')}
         return scope_links(view(value, name), space.api)
     if target.suffix.lower() in ('.json', '.txt', '.log'):
         return documents.plain_text_preview(target)[0]

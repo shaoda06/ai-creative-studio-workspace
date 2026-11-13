@@ -78,7 +78,7 @@ def work_status(projects, name, space_api, project, root):
     api = space_api + '/projects/' + quote(name, safe='')
     ref = document_ref(project, api, path)
     text = path.read_text('utf-8-sig')
-    delivery = delivery_overview(projects, name, space_api, project, text)
+    delivery = delivery_overview(projects, name, space_api, project, path, text)
     summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
     records = {row['对象']: row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')}
     return {'label': work_status_label(text.splitlines()), 'summaryHtml': production.legacy_links(
