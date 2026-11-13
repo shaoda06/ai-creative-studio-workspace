@@ -123,7 +123,7 @@ class ResultCompletionTests(unittest.TestCase):
         before=(f.project/'README.md').read_bytes()
         self.video_finish(*plans[-1],actual)
         self.assertEqual(before,(f.project/'README.md').read_bytes())
-        self.assertEqual(len(records.rows(before.decode(),'剪映交接')),1)
+        self.assertEqual(len(records.rows((f.project/'README.md').read_text('utf-8'),'剪映交接')),1)
         self.assertEqual(len(json.loads(Path(result['handoff']).read_text())['media']),2)
         self.assertEqual(len(list((f.project/'资源/视频').rglob('*.mp4'))),6)
         # Late historical completion cannot turn the latest progress back to review.

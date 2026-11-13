@@ -347,6 +347,8 @@ def prepare(root, spec, documents):
     timeline['segmentConfig'] = dict(count=len(segments), activeIndex=0, mode='timeline', segments=segments)
     timeline['selection'] = dict(start=0, duration=end / FPS)
     plan = {'adapter': 'technical', 'metadata': 'receipt', 'workflow_id': WORKFLOW, 'segments': rows}
+    if 'business_result' in spec.get('video_plan', {}):
+        plan['business_result'] = spec['video_plan']['business_result']
     if 'gap_repair' in options:
         gap = options['gap_repair']
         if not isinstance(gap, dict) or gap.keys() != {'before', 'after'} or len(rows) != 1:

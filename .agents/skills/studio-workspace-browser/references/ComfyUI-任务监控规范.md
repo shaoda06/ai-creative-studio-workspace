@@ -182,6 +182,6 @@ Agent按[报告读取与业务交回](#报告读取与业务交回)把实际输�
 
 ## 显式业务结果接续
 
-技术适配的 `image_plan` 或 `video_plan` 可携带 `business_result`，只能选择后台已登记的业务适配器。公共后台先保存技术事实，再调用业务脚本；业务字段与批准条件由该适配维护。未携带该字段的任务保持原行为，不按目录猜测业务。Chloe 接入见[图片登记](../../chloe-assets/references/结果自动登记.md)与[视频登记](../../chloe-production/references/结果自动登记.md)。
+技术适配的 `image_plan` 或 `video_plan` 可携带 `business_result`，只能选择后台已登记的业务适配器。公共后台先保存技术事实，再调用业务脚本；业务字段与批准条件由该适配维护。未携带该字段的任务保持原行为，不按目录猜测业务。Chloe 接入见[图片登记](../../chloe-assets/references/结果自动登记.md)与[视频登记](业务接入规范.md#chloe-视频结果登记接入)。
 
 通知的 `business_sync` 及 `delivery.tasks[].business_sync` 直接复用本次收尾结果。`updated` 表示业务脚本已回写并完成对应检查，Agent只处理 `next_action`；不再次导入、登记或重复媒体检查。业务未完成或检查失败继续原任务收尾恢复，不重新生成。重复通知复用原成功报告，不再次改写采用或进度。

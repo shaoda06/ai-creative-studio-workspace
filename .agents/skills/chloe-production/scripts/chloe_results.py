@@ -34,8 +34,9 @@ def validate(owner, plan, count):
             raise ValueError('后处理须关联准确的已批准轮次')
         for v in current['values']:
             if v['execution']==plan['execution'] and not any(
-                    a['id']==v['id'] and a['execution']==execution['上游执行'] and a['stage']=='二采' for a in approved['values']):
-                raise ValueError('后处理上游不在批准的二采组合内')
+                    a['id']==v['id'] and a['execution']==execution['上游执行'] and a['ref']
+                    and (not current['scene_source'] or a['duration']==v['duration']) for a in approved['values']):
+                raise ValueError('后处理上游不在批准的轮次组合内')
         for output in plan['outputs']:
             expected=output['expected']
             if not isinstance(output['previous'],str):
@@ -46,8 +47,42 @@ def validate(owner, plan, count):
             if type(expected['audio_tracks']) is not int or expected['audio_tracks']<0:
                 raise ValueError('音轨数须为非负整数')
     elif plan.get('adopt'):
-        raise ValueError('一采和二采返回后仅登记待审，不自动采用')
+        raise ValueError('生成结果返回后仅登记待审，不自动采用')
     return document,body,execution,value,stage
+
+
+def validate_task(data, plan, checked):
+    from project_paths import input_file
+    from backend.services.scene_postprocess import output_for_source
+
+    stages = {'video-first-pass': '一采', 'video-second-pass': '二采',
+              'video-scene-generation': '场次生成', 'video-postprocess': '后处理'}
+    _, _, execution, value, stage = checked
+    if stages.get(data.task_type) != stage:
+        raise ValueError('任务类型与原分段阶段不一致')
+    owner = value['project']
+    if Path(data.record_dir).resolve() != owner / '执行记录' / plan['execution']:
+        raise ValueError('任务目录与原执行不一致')
+    round_row = value['rounds'][plan['round']]
+    if stage == '场次生成':
+        timeline = data.video_plan
+        if ('gap_repair' in timeline or
+                [(row['p'], row['planned_seconds']) for row in timeline['segments']]
+                != [(item['id'], item['duration']) for item in round_row['values']]):
+            raise ValueError('整场生成须匹配完整轮次及分段时长')
+    elif stage == '后处理':
+        sources = [production.upstream_candidate(value['candidates'], item) for item in round_row['values']
+                   if item['execution'] == execution['执行编号']]
+        expected = {value['root'] / item['ref']['file'] for item in sources}
+        if round_row['scene_source']:
+            source, = expected
+            output_for_source(owner, data.model_dump(), source)
+            duration = production.video_version(value['root'], sources[0]['ref'])['facts']['duration_seconds']
+            target = plan['outputs'][0]['expected']
+            if abs(duration-target['duration']) > 1/target['frame_rate']+0.001:
+                raise ValueError('整场后处理须保留原片时长及分段时间轴')
+        elif not expected <= {input_file(owner, item['file']) for item in data.uploads}:
+            raise ValueError('后处理任务须使用已批准的准确源片')
 
 
 def technical(item, expected):
@@ -72,8 +107,9 @@ def handoff(owner, value, round_row, body, time):
     number=round_row['number']
     path=owner/'剪辑交接'/f'第{number}轮.jianying.json'
     spec={'name':owner.name+f'-第{number}轮','media':[{'file':str((value['root']/v['ref']['file']).relative_to(owner)),
-        'member':v['id']+'.mp4','timeline':True} for v in selected]}
-    if path.exists() and json.loads(path.read_text())!=spec:
+        'member':('整片' if round_row['scene_source'] else v['id'])+'.mp4','timeline':True}
+        for v in production.timeline_values(round_row)]}
+    if path.exists() and json.loads(path.read_text('utf-8'))!=spec:
         raise ValueError('既有交接组合不同，不覆盖历史清单')
     if not path.exists():
         resources.write_json(path,spec)
@@ -106,10 +142,12 @@ def finish(owner, plan, report, report_path):
         adopted=False; manifest=None
         time=records.now()
         if stage=='后处理' and latest:
-            for spec,item in zip(plan['outputs'],report['items'],strict=True):
-                v=next(v for v in round_row['values'] if v['execution']==plan['execution'] and v['slot']==spec['slot'])
-                progress=records.adopt(progress,v['id']+'/'+v['stage'],records.resource(owner,readme,item['path']),
-                    records.link(readme,document,plan['adopt']['review'])+'；'+records.report_link(readme,report_path,'技术核对'),time,expected=spec['previous'])
+            results = {spec['slot']: (spec, item) for spec, item in zip(plan['outputs'],report['items'],strict=True)}
+            for v in round_row['values']:
+                if v['execution'] == plan['execution']:
+                    spec,item = results[v['slot']]
+                    progress=records.adopt(progress,v['id']+'/'+v['stage'],records.resource(owner,readme,item['path']),
+                        records.link(readme,document,plan['adopt']['review'])+'；'+records.report_link(readme,report_path,'技术核对'),time,expected=spec['previous'])
             adopted=True
         ready=all(v['ref'] and v['record']['执行状态']=='已完成' for v in round_row['values'])
         next_action='等待本轮其余分段' if not ready else '整片审阅'

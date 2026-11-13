@@ -33,9 +33,7 @@ def validate(data):
         targets = data.segment_plan.targets if data.segment_plan else data.outputs
         checked = module.validate(Path(data.project),plan,len(targets))
         if plan['adapter']=='chloe-video':
-            stages={'video-first-pass':'一采','video-second-pass':'二采','video-postprocess':'后处理'}
-            if checked[4]!=stages[data.task_type]:
-                raise ValueError('任务类型与原分段阶段不一致')
+            module.validate_task(data, plan, checked)
 
 
 def finish(data, report, report_path, state=None):

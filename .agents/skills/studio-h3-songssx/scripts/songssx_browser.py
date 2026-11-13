@@ -50,7 +50,7 @@ def set_scene_playback(project, scene, output):
         segment['context']['source'] = '原 Songssx 分段生成记录'
 
 
-def songssx_contexts(project, data, workflow, segments, context_for):
+def songssx_contexts(project, data, workflow, segments, context_for, media_url=None):
     from project_paths import project_file, scope_workspace, SHARED_DIRECTORY
     from project_resources import resolve_file
     from songssx_workflow import PLANNER
@@ -77,8 +77,11 @@ def songssx_contexts(project, data, workflow, segments, context_for):
                 source = resolve_file(root, project_file(root, key, recorded=True))
                 item = {'name': source.name, 'label': f'<{label} {index}>', 'kind': kind}
                 if source.is_file():
-                    url = quote(source.relative_to(root).as_posix(), safe='/-._~')
-                    item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+                    if media_url:
+                        item['url'] = media_url(source)
+                    else:
+                        url = quote(source.relative_to(root).as_posix(), safe='/-._~')
+                        item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
                 else:
                     item['missing'] = True
                     context['issues'].append('该次输入原素材缺失：' + source.name)
@@ -97,7 +100,7 @@ def songssx_task(project, key, task_type):
     return directory, state, recorded, read(report)['prepared_input'] if exists(report) else None
 
 
-def songssx_scene(project, entry, context_for):
+def songssx_scene(project, entry, context_for, *, media_url=None):
     from execution_records import exists, read
     from project_paths import project_file
     from project_resources import resolve_file
@@ -128,13 +131,13 @@ def songssx_scene(project, entry, context_for):
     request = directory / data.get('request_name', '请求.json')
     workflow = read(request)['prompt'] if exists(request) else data['workflow']
     for segment, context in zip(result['segments'], songssx_contexts(
-            project, data, workflow, segments, context_for), strict=True):
+            project, data, workflow, segments, context_for, media_url), strict=True):
         segment['context'] = context
     target, = data['outputs']
     if postprocess := entry.get('songssx_postprocess'):
         from backend.services.scene_postprocess import output_for_source
 
-        source = resolve_file(project, project_file(project, target['path']))
+        source = resolve_file(project, project_file(project, entry.get('postprocess_source', target['path'])))
         directory, state, recorded, processed = songssx_task(project, postprocess, 'video-postprocess')
         key = postprocess
         if processed is None:
