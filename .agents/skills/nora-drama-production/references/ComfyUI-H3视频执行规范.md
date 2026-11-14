@@ -6,12 +6,12 @@
 
 ## 0. 制作策略与工作流配置
 
-Nora 新制作默认使用 Songssx 导演台，输入模式默认 Ref2VA。用户可为新任务指定 AiMixer。已有任务及依赖原工作流的接续先读取原请求、画布、阶段和来源，按原工作流恢复、取回、二采或返修。项目中原有的 AiMixer 技术预设在使用 AiMixer 时继续适用。
+Nora 按[共用 H3 工作流选择](../../studio-h3/SKILL.md#h3-工作流选择)确定本次导演台，新制作默认使用 Songssx，输入模式默认 Ref2VA。已有任务及依赖原工作流的接续先读取原请求、画布、阶段和来源，按原工作流恢复、取回、二采或返修。项目中原有的 AiMixer 技术预设在使用 AiMixer 时继续适用。
 
 | 工作流 | 当前用途 |
 | --- | --- |
 | [Songssx SelfLift 标准版](../../studio-h3-songssx/SKILL.md) | 按场次装配，交付一条整场候选。流程见[场次制作循环](视频阶段与返修执行规范.md#场次制作循环)。 |
-| [AiMixer 导演台标准版](../../studio-h3-aimixer/SKILL.md) | 兼容选项。使用原有一采、二采和逐段审核。装配前读取[配置选择与询问](../../studio-h3-aimixer/references/参数与基准规范.md#标准版配置选择与装配前询问)。 |
+| [AiMixer 导演台标准版](../../studio-h3-aimixer/SKILL.md) | 兼容接续，使用原有一采、二采和逐段审核。装配前读取[配置选择与询问](../../studio-h3-aimixer/references/参数与基准规范.md#标准版配置选择与装配前询问)。 |
 | [共用视频后处理工作流](../../studio-video-processing/references/视频技术处理规范.md#实际装配) | 输入当前工作流已获批的具体源片，按[后处理交付规格](#后处理交付规格)和实际目标装配。 |
 
 Songssx 按[装配前六步询问](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#参数选择与装配前询问)落实本次配置，按分镜提供种子和实际素材，调用[场次生成任务接口](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#场次生成任务接口)。下文关于一采、二采、导演台组、Refine 和缓存的配置适用于 AiMixer。二采与后处理按具体获批来源及执行授权接续。
