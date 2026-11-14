@@ -6,7 +6,7 @@ license: MIT
 
 # Nora 分镜设计
 
-明确项目、集号、场次及当前范围，按[业务接续](references/分镜阶段接续规范.md#4-整理场次分镜并划分视频生成分段)核对剧本版本及内容边界。编写或修订逐镜正文时使用[Studio共用分镜](../studio-storyboard/SKILL.md)，按[场次业务规则](references/场次分镜制作规范.md)和[场次文档模板](templates/场次分镜模板.md)保存。镜头写法、字段与方法查用以共用技能为维护入口。
+明确项目、集号、场次及当前范围，按[业务接续](references/分镜阶段接续规范.md#4-整理场次分镜并划分视频生成分段)及[共用阶段接续](../studio-video-production/SKILL.md#阶段接续与交接)核对剧本版本及内容边界，依据留在当前场次分镜。编写或修订逐镜正文时使用[Studio共用分镜](../studio-storyboard/SKILL.md)，按[场次业务规则](references/场次分镜制作规范.md)和[场次文档模板](templates/场次分镜模板.md)保存。镜头写法、字段与方法查用以共用技能为维护入口。
 
 | 业务动作 | 接续规则 |
 | --- | --- |
