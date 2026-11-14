@@ -31,15 +31,22 @@ const workflowLabels = { aimixer: 'AiMixer 制作记录', songssx: 'Songssx 制�
 function workflowView(episode: FileItem, workflow: ProductionWorkflow) {
   const songssx = workflow === 'songssx';
   const sceneRounds = Object.fromEntries(Object.entries(episode.sceneRounds || {}).map(([scene, rounds]) =>
-    [scene, rounds.filter(round => Boolean(round.songssx) === songssx)]));
+    [scene, rounds.filter(round => (round.workflow ?? (round.songssx ? 'songssx' : 'aimixer')) === workflow)]));
   const episodeRounds = (episode.episodeRounds || []).flatMap(round => {
     const scenes = round.scenes.filter(scene => sceneRounds[scene]?.some(entry => entry.number === round.number));
     return scenes.length ? [{ ...round, scenes }] : [];
   });
   const scenes = episode.scenes?.filter(scene => sceneRounds[scene]?.length || !episode.sceneRounds?.[scene]?.length
     || (!songssx && episode.segments?.[scene]?.some(segment => segment.videos.length)));
-  const segments = songssx ? Object.fromEntries(Object.entries(episode.segments || {}).map(([scene, rows]) =>
-    [scene, rows.map(row => ({ ...row, videos: [] }))])) : episode.segments;
+  const segments = Object.fromEntries(Object.entries(episode.segments || {}).map(([scene, rows]) => {
+    const standalone = (episode.sceneRounds?.[scene] || [])
+      .filter(round => round.workflow === 'songssx' && !round.songssx)
+      .flatMap(round => round.segments);
+    return [scene, rows.map(row => ({
+      ...row, videos: row.videos.filter(video =>
+        standalone.some(entry => entry.id === row.id && entry.key === video.key) === songssx),
+    }))];
+  }));
   return { ...episode, scenes, sceneRounds, episodeRounds, segments };
 }
 
@@ -90,9 +97,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     : workflows[0] || loaded?.productionWorkflow;
   const songssx = workflow === 'songssx';
   const current = useMemo(() => loaded && (!mixed || workflow)
-    ? (songssx || loaded.sceneRounds && Object.values(loaded.sceneRounds).some(rounds => rounds.some(round => round.songssx)))
-      ? workflowView(loaded, workflow || 'aimixer') : loaded
-    : undefined, [loaded, mixed, workflow, songssx]);
+    ? workflow ? workflowView(loaded, workflow) : loaded
+    : undefined, [loaded, mixed, workflow]);
   useEffect(() => {
     if (selected && !selectedItem) onSelect(null);
   }, [selected, selectedItem, onSelect]);
@@ -139,6 +145,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
     .map(item => [item.number, item])).values()].sort((a, b) => b.number - a.number);
   const selectedRound = roundNumberForScene(selectedScene);
   const round = sceneRounds.find(item => item.number === selectedRound);
+  const wholeScenePlayback = round ? !!round.songssx : songssx;
   const currentStoryboard = current?.storyboards?.[selectedScene];
   const recordScenes = episodeRounds.find(item => item.number === recordNumber)?.scenes || [selectedScene];
   const recordRounds = recordScenes.flatMap(id => (current?.sceneRounds?.[id] || [])
@@ -149,9 +156,9 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const downloads = useQuery({
     queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision, ...(access.roundDownloads ? [selectedRound] : [])],
     queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene, access.roundDownloads ? selectedRound : undefined)),
-    enabled: workMode && !songssx && !!current && !!selectedScene,
+    enabled: workMode && !wholeScenePlayback && !!current && !!selectedScene,
   });
-  const handoffs = (!songssx && downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!))) || [];
+  const handoffs = (!wholeScenePlayback && downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!))) || [];
   const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];
   const productionTask = workMode ? current?.productionTask : undefined;
   const roundHistory = workMode ? current?.roundHistory : undefined;
@@ -164,7 +171,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const nextRoundNumber = continuous ? playback!.rounds[nextScene] : undefined;
   const nextRound = current?.sceneRounds?.[nextScene]?.find(item => item.number === nextRoundNumber);
   const nextEntry = nextRound?.segments[0];
-  const nextVideo = songssx ? nextRound?.songssx?.video : nextEntry && current?.segments?.[nextScene]?.find(item => item.id === nextEntry.id)?.videos
+  const nextVideo = nextRound?.songssx ? nextRound.songssx.video : nextEntry && current?.segments?.[nextScene]?.find(item => item.id === nextEntry.id)?.videos
     .find(video => video.stage === nextEntry.stage && video.run === nextEntry.run && (!nextEntry.key || video.key === nextEntry.key));
   const episodePlayback: EpisodePlayback = {
     continuous,
@@ -296,7 +303,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
         <PointerTooltip text={issue.key}><button className="link"  onClick={() => preview({ kind: 'document', key: issue.key, name: issue.key.split('/').pop()! })}>{issue.key.split('/').pop()}</button></PointerTooltip>：{issue.message}
       </li>)}</ul>
     </div> : null}
-    <SceneWorkspace songssx={songssx} roundDownloads={songssx && <SongssxRoundDownloads url={roundDownloadUrl}
+    <SceneWorkspace songssx={wholeScenePlayback} roundDownloads={wholeScenePlayback && <SongssxRoundDownloads url={roundDownloadUrl}
       round={episodeRound?.number} ready={songssxReady} total={episodeRound?.scenes.length ?? 0} />}
       wideVideo={wideVideo} onToggleWide={() => setWideVideo(value => !value)} repeatControl={{ checked: repeatVideo, onChange: setRepeatVideo }} segmentTab={segmentTab} onSegmentTabChange={setSegmentTab} episodeNotesExportControl={episodeNotesExport.control} episodePlayback={episodePlayback} view={sceneView} onViewChange={setSceneView} key={current.name + '/' + selectedScene + '/' + roundEntry} scope={access.scope(project, current.name, selectedScene)} segments={segments} sceneRounds={sceneRounds} selectedRound={selectedRound} onRoundChange={selectRound} previousEnding={workMode || songssx ? null : previousEpisodeEnding(current.previousEpisode ? [current.previousEpisode] : [], current.name)} emptyMessage={emptyMessage} revision={revision} directorScenes={directorScenes} integrateSheets={integrateSheets} onIntegrateSheetsChange={setIntegrateSheets} storyboardVersion={round ? round.storyboard?.version || '' : current.storyboards?.[selectedScene]?.version || ''} storyboardDocument={round ? round.storyboard?.doc : current.storyboards?.[selectedScene]?.doc} storyboardSource={round ? round.storyboard || undefined : current.storyboards?.[selectedScene]} />
     {episodeNotesExport.dialog}

@@ -16,7 +16,8 @@ import execution_records as recordio
 from project_paths import input_file
 from h3_browser_context import request_context, empty_context
 from prepared_documents import read_journal
-from songssx_browser import songssx_scene, set_scene_playback
+from songssx_browser import songssx_contexts, songssx_scene, set_scene_playback
+from songssx_workflow import PLANNER, WORKFLOW
 
 
 def review_page(space, project):
@@ -80,6 +81,18 @@ def read_record(path):
     return recordio.read(path) if recordio.exists(path) else {}
 
 
+def recorded_songssx(project, candidate):
+    task_record = task_for(project, candidate['record'])
+    if not task_record:
+        return False
+    task, record = task_record
+    request = read_record(record/task.get('request_name', '请求.json'))
+    if request:
+        return request['prompt'].get(PLANNER, {}).get('class_type') == 'MiniMaxH3TimelinePlanner'
+    prepared = read_record(record/'执行检查报告.json').get('prepared_input', {})
+    return prepared.get('video_plan', {}).get('workflow_id') == WORKFLOW
+
+
 def context_for(data, api, candidate, active=None, bindings=None):
     active=set() if active is None else active
     bindings={} if bindings is None else bindings
@@ -103,6 +116,7 @@ def context_for(data, api, candidate, active=None, bindings=None):
     task_state=read_record(record/'后台任务状态.json')
     if not request or not task_state.get('prompt_id'):
         return empty_context('尚未取得实际提交请求及凭据；不以准备稿替代。')
+    report=read_record(record/'执行检查报告.json')
     root=data['root']
     def key(_, value, original):
         path=input_file(data['project'],value,recorded=True)
@@ -110,9 +124,16 @@ def context_for(data, api, candidate, active=None, bindings=None):
             raise ValueError('实际输入越出本视频与共用资源区')
         return path.relative_to(root).as_posix()
     workspace_api=api.split('/projects/')[0]
-    result=request_context(root,task,candidate['index'],request,workspace_api,
-        read_record(record/'执行检查报告.json').get('sources',{}),bindings,resolve_key=key,
-        file_link=lambda _, path:workspace_api+'/production-files/'+quote(path,safe='/'))
+    prepared = report.get('prepared_input', {})
+    if prepared.get('video_plan', {}).get('workflow_id') == WORKFLOW:
+        contexts = songssx_contexts(data['project'], prepared, request['prompt'],
+            prepared['video_plan']['segments'], lambda _: empty_context(None),
+            lambda path: workspace_api+'/production-files/'+quote(path.relative_to(root).as_posix(), safe='/'))
+        result = list(contexts)[candidate['index']]
+    else:
+        result=request_context(root,task,candidate['index'],request,workspace_api,
+            report.get('sources',{}),bindings,resolve_key=key,
+            file_link=lambda _, path:workspace_api+'/production-files/'+quote(path,safe='/'))
     result['prompts']['englishUrl']=file_url(api,(record/task.get('request_name','请求.json')).relative_to(data['project']).as_posix())
     if row['提示词或正文'] not in MISSING:
         prompt=link_path(data['project'],row['提示词或正文'])
@@ -275,6 +296,11 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         round_view={'number':item['number'],'created_at':item['created_at'],'note':item['note'],
                        'episodeRound':True,'script':script,'storyboard':script,'segments':values,
                        'record':ref(project,api,project/'制作记录.md'),'issues':issues,'reviewOutputs':review_outputs}
+        if not source:
+            generation = [upstream_candidate(data['candidates'], entry) if entry['stage'] == '后处理' else entry
+                          for entry in item['values']]
+            if all(recorded_songssx(project, entry) for entry in generation):
+                round_view['workflow'] = 'songssx'
         if source:
             scene_entry={'songssx_execution':f"执行记录/{source['execution']}", 'segments':values, 'issues':issues}
             selected=item['values'][0]
@@ -321,8 +347,9 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         directorSheets={'whole':director_sheets(data,api)},productionComplete=False,productionIssues=[],
         workStatus={'label':progress['当前阶段'],'summaryHtml':'','deliverySummary':'','record':ref(project,api,project/'README.md')})
     result['productionWorkflows']=[workflow for workflow, present in (
-        ('aimixer', any('songssx' not in round_ for round_ in rounds)),
-        ('songssx', any(round_.get('songssx',{}).get('recorded') for round_ in rounds))) if present]
+        ('aimixer', any('songssx' not in round_ and round_.get('workflow') != 'songssx' for round_ in rounds)),
+        ('songssx', any(round_.get('workflow') == 'songssx' or round_.get('songssx',{}).get('recorded')
+                        for round_ in rounds))) if present]
     if not result['productionWorkflows'] and any('songssx' in round_ for round_ in rounds):
         result['productionWorkflow']='songssx'
     return result

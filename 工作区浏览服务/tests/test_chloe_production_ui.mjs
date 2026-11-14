@@ -249,6 +249,23 @@ try {
   await page.getByText('GEN 2 · 1–2 秒',{exact:true}).waitFor();
   await references.getByRole('button',{name:/P002 隔离参考图/}).waitFor();
   assert.equal(await references.getByRole('button',{name:/P001 隔离参考图/}).count(),0);
+
+  // Independent Songssx outputs share the workflow view with whole-scene output.
+  scopedDetail={...fixture.detail,productionWorkflows:['songssx'],
+   sceneRounds:{whole:[{...songssxRound,number:1},{...scene,workflow:'songssx'}]}};
+  const requests=[];
+  page.on('request',request=>requests.push(request.url()));
+  await page.reload();
+  await page.getByRole('button',{name:'分段制作',exact:true}).click();
+  assert.equal(await workflow.count(),0);
+  const independentVideo=page.locator('.segment-video video');
+  for (const entry of scene.segments) {
+   const video=fixture.detail.segments.whole.find(segment=>segment.id===entry.id).videos.find(video=>video.key===entry.key);
+   await page.getByRole('button',{name:new RegExp('^分段 '+entry.id)}).click();
+   await independentVideo.waitFor();
+   await page.waitForFunction(()=>document.querySelector('.segment-video video')?.readyState>=2);
+   assert.ok(requests.some(url=>url.endsWith(video.url)),video.url);
+  }
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

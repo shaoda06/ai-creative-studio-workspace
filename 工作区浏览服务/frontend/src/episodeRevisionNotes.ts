@@ -44,7 +44,7 @@ export function episodeExportNotes(saved: SavedEpisodeNotes, review: EpisodeRevi
     const order = (id: string) => { const index = ids.indexOf(id); return index < 0 ? ids.length + Number(id.slice(1)) : index; };
     return Object.values(saved.scenes[scene]?.notes || {}).filter(note => {
       const round = review.sourceRounds?.[scene]?.find(item => item.number === note.roundNumber);
-      const workflow = round?.songssx || note.stage === '场次生成' ? 'songssx' : 'aimixer';
+      const workflow = round?.workflow ?? (round?.songssx || note.stage === '场次生成' ? 'songssx' : 'aimixer');
       return hasNoteContent(note) && (!review.workflow || workflow === review.workflow);
     })
       .sort((a, b) => order(a.segment) - order(b.segment) || (a.roundNumber ?? 0) - (b.roundNumber ?? 0)

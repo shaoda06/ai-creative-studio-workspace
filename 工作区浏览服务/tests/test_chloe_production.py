@@ -253,6 +253,29 @@ class ChloeProductionTests(unittest.TestCase):
         self.rounds([self.round(1,[('P001','E001')])])
         with self.assertRaisesRegex(ValueError,'完整'):state(self.project)
 
+    def test_independent_songssx_requests_keep_separate_round_videos(self):
+        self.plan()
+        for identity, execution in [('P001', 'E001'), ('P002', 'E002')]:
+            self.candidate(identity, execution)
+            folder = self.project/'执行记录'/execution
+            folder.mkdir()
+            manifest = folder/'任务清单.json'
+            manifest.write_text(json.dumps({'tasks': [{'record_dir': f'执行记录/{execution}'}]}))
+            body = self.record.read_text()
+            self.record.write_text(body.replace(f'| {execution} | 视频生成 | 不适用 | H3 | 不适用 | 不适用 |',
+                f'| {execution} | 视频生成 | 不适用 | H3 | 不适用 | [参数](<执行记录/{execution}/任务清单.json>) |'))
+            (folder/'请求.json').write_text(json.dumps({'prompt': {
+                browser.PLANNER: {'class_type': 'MiniMaxH3TimelinePlanner'}}}))
+        self.rounds([self.round(1, [('P001', 'E001'), ('P002', 'E002')])])
+        detail = browser.detail(self.projects, self.project.name, self.api, 'V001')
+        self.assertEqual(detail['productionWorkflows'], ['songssx'])
+        round_, = detail['sceneRounds']['whole']
+        self.assertEqual(round_['workflow'], 'songssx')
+        self.assertNotIn('songssx', round_)
+        self.assertEqual([row['key'] for row in round_['segments']],
+                         [item['videos'][0]['key'] for item in detail['segments']['whole']])
+        self.assertEqual(len({item['videos'][0]['url'] for item in detail['segments']['whole']}), 2)
+
     def test_exact_shared_input_and_output_boundary(self):
         actual,reference,ref=self.resource(kind='image',shared=True)
         key='@shared/'+actual.relative_to(self.root/'综合资料').as_posix()
