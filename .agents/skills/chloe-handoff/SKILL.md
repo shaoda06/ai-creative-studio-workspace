@@ -13,7 +13,7 @@ description: 核对 Chloe 已采用片段及顺序，准备可下载的剪映清
 
 准备或继续剪映交接、接收人工成片时，按[复盘建议接续](../chloe-review/SKILL.md#建议接续与验证回填)读取相关建议及已有T记录；J交接或实际K核对中的T关联、清单与成片落实依据的交回按[阶段记录落点的剪映交接项](../chloe-review/SKILL.md#阶段记录落点)执行。
 
-先查本轮后台 `business_sync.handoff`、视频 README 的剪映交接行及其已有清单。已生成时，核对该清单与当前采用组合并复用。全轮直接沿用二采或缺少清单时，由本阶段按相同轮次和采用顺序在 `剪辑交接/` 补齐唯一的 `.jianying.json` 清单和交接行。准确引用和按需打包按[共用剪映工具](../studio-jianying/SKILL.md)及[媒体清单下载](../studio-workspace-browser/references/业务接入规范.md#项目媒体清单与剪映下载)执行。
+先查本轮后台 `business_sync.handoff`、视频 README 的剪映交接行及其已有清单。已生成时，核对该清单与当前采用组合并复用。AiMixer 全轮直接沿用二采或逐段交接缺少清单时，由本阶段按相同轮次和采用顺序在 `剪辑交接/` 补齐唯一的 `.jianying.json` 清单和交接行。准确引用和按需打包按[共用剪映工具](../studio-jianying/SKILL.md)及[媒体清单下载](../studio-workspace-browser/references/业务接入规范.md#项目媒体清单与剪映下载)执行。
 
 用户在剪映完成人工字幕、音轨、转场及精剪，再将成片导出到本视频`成片/`。正式交接的时间线以本轮已采用片段及顺序为准。
 

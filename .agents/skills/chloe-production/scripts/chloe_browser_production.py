@@ -317,7 +317,9 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                           'materialNote':row['输入槽位'],'materialReview':ref(project,api,project/'制作记录.md')})
     progress=fields(document(project,'README.md'),'定位与当前进度')
     workflows=[]
-    if any(video['url'] or video['taskStateUrl'] for segment in segments for video in segment['videos']):
+    legacy_executions = (value['record'] for value in data['candidates'].values() if value['stage'] in STAGES)
+    if (any(video['url'] or video['taskStateUrl'] for segment in segments for video in segment['videos'])
+            or any(row['任务ID'] not in MISSING for row in legacy_executions)):
         workflows.append('aimixer')
     if any(row.get('songssx', {}).get('recorded') for row in rounds):
         workflows.append('songssx')

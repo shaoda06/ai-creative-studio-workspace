@@ -127,6 +127,22 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
             files = songssx_round_videos(fixture.projects, project.name, data, 2)
             self.assertEqual(len(files), 1)
             self.assertEqual(key(files[0][0]), report['items'][0]['path'])
+
+            from chloe_result_records import put
+
+            # Old executions can have a registered ID before a local file or state snapshot exists.
+            pending_legacy = '\n'.join(line for line in after.splitlines()
+                                       if not line.startswith(('| E001 | P001视频 |', '| E002 | P002视频 |'))) + '\n'
+            fixture.record.write_text(pending_legacy)
+            self.assertEqual(detail()['productionWorkflows'], ['songssx'])
+            fixture.record.write_text(put(pending_legacy, '执行记录', ['执行编号'], {
+                '执行编号': 'E001', '任务ID': 'legacy-task', '执行状态': '失败',
+            }, replace=True))
+            data = detail()
+            self.assertEqual(data['productionWorkflows'], ['aimixer', 'songssx'])
+            self.assertFalse(data['segments']['whole'][0]['videos'][0]['url'])
+            self.assertEqual(data['segments']['whole'][0]['videos'][0]['taskStatus'], '失败')
+            self.assertEqual(data['sceneRounds']['whole'][1]['songssx']['video']['key'], scene['video']['key'])
         finally:
             await store.close()
 
