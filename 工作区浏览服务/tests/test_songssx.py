@@ -11,6 +11,9 @@ import wave
 
 from backend.main import SubmissionPlanInput
 from backend.services import comfy_tasks, execution_checks, result_registration, submission_plans
+from backend.services.episode_downloads import songssx_round_videos
+from backend.services.review_notes import ExportChanges, NoteChange
+from tests import test_chloe_production as chloe_fixtures
 from prepared_documents import read_journal
 from songssx_browser import songssx_contexts, songssx_scene
 from songssx_workflow import aligned_frames, validate
@@ -22,6 +25,111 @@ PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
 
 
 class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_chloe_scene_registers_one_candidate_and_preserves_aimixer(self):
+        fixture = chloe_fixtures.ChloeProductionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.plan()
+        project, workspace = fixture.project, fixture.root
+        legacy, _, _ = fixture.candidate('P001', 'E001')
+        fixture.candidate('P002', 'E002')
+        fixture.rounds([fixture.round(1, [('P001', 'E001'), ('P002', 'E002')])])
+        earlier = json.loads((project / '制作轮次.json').read_text())['rounds'][0]
+        source, _, _ = fixture.resource(kind='image', key='songssx-reference')
+        record = project / '执行记录/E003'
+        record.mkdir()
+        key = lambda path: path.relative_to(project).as_posix()
+        plan = record / '提交任务清单.json'
+        task = {'title': 'Chloe 整场测试', 'task_type': 'video-scene-generation',
+                'authorization': '隔离测试', 'record_dir': key(record), 'output': '候选/整场.mp4',
+                'songssx': {'width': 1280, 'height': 736, 'seed': 7, 'remote_prefix': 'video/test/chloe',
+                            'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': []},
+                            'segments': [{'p': p, 'duration': duration, 'overlap_frames': overlap,
+                                          'images': [key(source)], 'prompt': PROMPT, 'prompt_zh': p+' 中文参考'}
+                                         for p, duration, overlap in [('P001', 5, 0), ('P002', 4, 22)]]}}
+        spec = {'script': earlier['script'], 'note': '隔离整场'}
+        (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': ['http://127.0.0.1:1']}))
+        payload = SubmissionPlanInput(project=project.name, plan_file=key(plan), thread_id='test',
+            desktop=dict(node='test', server='test', pipe='test', caller_thread='test'),
+            prepare_only=True, start_paused=True)
+        store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+        adapter = {'production_adapter': 'chloe-production'}
+        detail = lambda: chloe_fixtures.browser.detail(fixture.projects, project.name, fixture.api, 'V001')
+        try:
+            plan.write_text(json.dumps({'tasks': [task]}))
+            with self.assertRaisesRegex(ValueError, '须提供 chloe_round'):
+                await submission_plans.execute(store, payload, **adapter)
+            mismatched = deepcopy(task)
+            mismatched['songssx']['segments'].reverse()
+            plan.write_text(json.dumps({'chloe_round': spec, 'tasks': [mismatched]}))
+            with self.assertRaisesRegex(ValueError, 'P 顺序和计划时长'):
+                await submission_plans.execute(store, payload, **adapter)
+            self.assertEqual(json.loads((project / '制作轮次.json').read_text())['rounds'], [earlier])
+            plan.write_text(json.dumps({'chloe_round': spec, 'tasks': [task]}))
+            self.assertEqual((await submission_plans.execute(store, payload, **adapter))['production_round'], 2)
+            self.assertEqual((await submission_plans.execute(store, payload, **adapter))['production_round'], 2)
+            self.assertFalse(store.rows)
+            self.assertEqual(detail()['productionWorkflows'], ['aimixer'])
+            rounds = json.loads((project / '制作轮次.json').read_text())['rounds']
+            self.assertEqual(rounds[0], earlier)
+            self.assertEqual([entry['slot'] for entry in rounds[1]['segments']], ['整场视频', '整场视频'])
+
+            payload.prepare_only = False
+            prompt = record / '提示词.md'
+            original = prompt.read_text()
+            prompt.write_text(original.replace('P002 中文参考', '不匹配的中文参考'))
+            with self.assertRaisesRegex(ValueError, '实际提示词与已登记轮次不一致'):
+                await submission_plans.execute(store, payload, **adapter)
+            self.assertFalse(store.rows)
+            prompt.write_text(original)
+            with patch.object(store, 'read_session_name', AsyncMock()):
+                accepted = await submission_plans.execute(store, payload, **adapter)
+            retry = await submission_plans.execute(store, payload, **adapter)
+            task_id = accepted['tasks'][0]['local_task_id']
+            self.assertEqual(retry['tasks'][0]['local_task_id'], task_id)
+            self.assertEqual(list(store.rows), [task_id])
+            self.assertEqual(detail()['productionWorkflows'], ['aimixer', 'songssx'])
+            store.save(task_id, prompt_id='simulated-prompt')
+            remote = {'filename': 'scene.mp4', 'subfolder': 'video/test', 'type': 'output'}
+            result = {'state': 'success', 'files': [{'node_id': '404', 'output_key': 'images',
+                                                   'index': 0, 'file': remote}]}
+
+            def download(_, args):
+                destination = Path(args.output)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+                     'color=size=64x64:rate=24', '-t', '10', '-pix_fmt', 'yuv420p', str(destination)], check=True)
+                return {'remote': remote, 'path': args.output, 'bytes': destination.stat().st_size}
+
+            with patch.object(store.client, 'download', side_effect=download):
+                await store.finish_collection(task_id, result)
+            report = result_registration.register(store, task_id)
+            self.assertEqual(report['business_sync']['stage'], '场次生成')
+            self.assertTrue(report['business_sync']['round_ready'])
+            self.assertFalse(report['business_sync']['adopted'])
+            after = (project / '制作记录.md').read_text()
+            self.assertEqual(result_registration.register(store, task_id), report)
+            self.assertEqual((project / '制作记录.md').read_text(), after)
+            self.assertEqual(sum(line.startswith('| E003 | 整场视频 |') for line in after.splitlines()), 1)
+            data = detail()
+            older, newer = data['sceneRounds']['whole']
+            self.assertNotIn('songssx', older)
+            self.assertEqual(older['segments'][0]['key'], key(legacy))
+            scene = newer['songssx']
+            self.assertEqual([(row['id'], row['gen'], row['start']) for row in scene['segments']],
+                             [('P001', 1, 0), ('P002', 2, 124 / 24)])
+            self.assertEqual(scene['segments'][1]['context']['prompts']['chinese'], 'P002 中文参考')
+            self.assertTrue(scene['video']['url'].startswith(fixture.api + '/projects/'))
+            note = NoteChange(segment='P002', stage='场次生成', run='R002', text='隔离意见',
+                              fileRevision=scene['video']['fileRevision'], roundNumber=2, expectedText='')
+            chloe_fixtures.browser.validate_notes(project, 'V001', {(2, 'P002', '场次生成', 'R002')},
+                                                 ExportChanges(notes=[note], rounds=[]))
+            files = songssx_round_videos(fixture.projects, project.name, data, 2)
+            self.assertEqual(len(files), 1)
+            self.assertEqual(key(files[0][0]), report['items'][0]['path'])
+        finally:
+            await store.close()
+
     async def test_iris_submission_registers_the_round_and_approved_storyboard(self):
         with TemporaryDirectory() as directory:
             workspace = Path(directory).resolve()

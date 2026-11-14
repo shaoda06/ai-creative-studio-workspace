@@ -11,7 +11,7 @@ import chloe_production as production
 resources=records.resources
 
 
-def validate(owner, plan, count):
+def validate(owner, plan, count, *, task=None):
     document,body,execution=records.validate(owner,plan,count)
     if document!=owner/'制作记录.md':
         raise ValueError('视频结果须写本视频制作记录')
@@ -24,6 +24,24 @@ def validate(owner, plan, count):
     if len(stages)!=1:
         raise ValueError('同一执行不能混合制作阶段')
     stage=next(iter(stages))
+    if stage == production.SCENE_STAGE and not current['songssx']:
+        raise ValueError('整场视频须关联 Songssx 制作轮次')
+    if stage == production.SCENE_STAGE and task is not None:
+        from songssx_workflow import PLANNER, shot_blocks
+
+        if Path(task.record_dir) != owner / '执行记录' / plan['execution'] or 'gap_repair' in task.video_plan:
+            raise ValueError('整场视频须关联本轮执行目录及完整场次请求')
+        segments = task.video_plan['segments']
+        if [(v['id'], v['duration']) for v in current['values']] != [(v['p'], v['planned_seconds']) for v in segments]:
+            raise ValueError('实际 GEN 与 Chloe 轮次 P 顺序或时长不一致')
+        timeline = json.loads(task.workflow[PLANNER]['inputs']['timeline_data'])
+        prompts = production.prompt_sections(value, execution)
+        for entry, row, gen in zip(current['values'], segments, timeline['segmentConfig']['segments'], strict=True):
+            identity = entry['id']
+            if (len(shot_blocks(gen['prompt'])) != len(entry['shotIds'])
+                    or prompts['模型提示词正文'][identity] != gen['prompt'].strip()
+                    or prompts['中文提示词参考版'][identity] != row['prompt_zh'].strip()):
+                raise ValueError(identity + ' 的实际提示词与已登记轮次不一致')
     if stage=='后处理':
         review_doc,review=records.approval(owner,plan,body)
         if review_doc!=document:
@@ -46,7 +64,7 @@ def validate(owner, plan, count):
             if type(expected['audio_tracks']) is not int or expected['audio_tracks']<0:
                 raise ValueError('音轨数须为非负整数')
     elif plan.get('adopt'):
-        raise ValueError('一采和二采返回后仅登记待审，不自动采用')
+        raise ValueError('生成候选返回后仅登记待审，不自动采用')
     return document,body,execution,value,stage
 
 
@@ -119,7 +137,8 @@ def finish(owner, plan, report, report_path):
                 progress,manifest=handoff(owner,value,round_row,progress,time)
                 next_action='剪映人工后期' if manifest else '确认本轮其余分段采用'
             else:
-                next_action=f"审阅第{plan['round']}轮整片{stage}"
+                next_action = (f"审阅第{plan['round']}轮整场视频" if stage == production.SCENE_STAGE
+                               else f"审阅第{plan['round']}轮整片{stage}")
             for key,val in {'处理状态':'正常' if manifest else '待用户决定','当前问题':'无' if manifest else next_action,
                             '下一步':next_action,'当前阶段':'人工后期' if manifest else '视频制作'}.items():
                 before=next(r['内容'] for r in records.rows(progress,'定位与当前进度') if r['字段']==key)

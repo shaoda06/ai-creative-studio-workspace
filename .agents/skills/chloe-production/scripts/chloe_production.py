@@ -13,6 +13,8 @@ from chloe_documents import records, media_reference, MISSING, read_document, te
 from chloe_init import resources
 
 STAGES = ('一采', '二采', '后处理')
+SCENE_STAGE = '场次生成'
+SCENE_SLOT = '整场视频'
 
 
 def local(project, value):
@@ -93,7 +95,7 @@ def state(project):
     candidates = {}
     for row in records(doc, '视频分段执行'):
         identity, stage, run, execution, slot = (row[key] for key in ('分段编号','制作阶段','候选版本','执行编号','输出槽位'))
-        if not re.fullmatch(r'P\d{3,}', identity) or stage not in STAGES or not re.fullmatch(r'R\d{3,}', run):
+        if not re.fullmatch(r'P\d{3,}', identity) or stage not in (*STAGES, SCENE_STAGE) or not re.fullmatch(r'R\d{3,}', run):
             raise ValueError('视频分段执行的分段、阶段或候选版本无效')
         key = (identity, execution, slot)
         if key in candidates or any((identity, stage, run) == (v['id'],v['stage'],v['run']) for v in candidates.values()):
@@ -133,6 +135,13 @@ def state(project):
             ids.append(segment['id']); values.append({**candidates[key], **row_plan[segment['id']], 'carried':key in seen})
         if not ids or ids != list(row_plan):
             raise ValueError('轮次必须按脚本计划保存完整且唯一的分段顺序')
+        songssx = any(v['stage'] == SCENE_STAGE for v in values)
+        if songssx and (
+            any(v['stage'] != SCENE_STAGE or v['slot'] != SCENE_SLOT for v in values)
+            or len({(v['execution'], v['run']) for v in values}) != 1
+            or [v['index'] for v in values] != list(range(len(values)))
+        ):
+            raise ValueError('Songssx 轮次须按 GEN 顺序关联同一次整场执行')
         base = item.get('base_round')
         if base is not None:
             if base not in rounds:
@@ -152,7 +161,7 @@ def state(project):
                 raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
             media_reference(root, project/'制作记录.md', output['resource'])
         seen.update((v['id'],v['execution'],v['slot']) for v in values)
-        rounds[number] = {**item, 'values':values}
+        rounds[number] = {**item, 'values':values, 'songssx':songssx}
     for value in candidates.values():
         execution=value['record']
         if execution['执行状态']=='已完成' and not value['ref']:
@@ -163,6 +172,10 @@ def state(project):
             if not source or source['stage']!=expected:
                 raise ValueError(value['stage']+'须关联同一分段的'+expected+'执行')
     for row in records(document(project,'README.md'),'当前采用'):
+        if row['用途'] == SCENE_SLOT:
+            reference = media_reference(root, project/'README.md', row['资源引用'])
+            if not any(round_['songssx'] and round_['values'][0]['ref'] == reference for round_ in rounds.values()):
+                raise ValueError('当前采用的整场视频未对应 Songssx 轮次的准确输出')
         match=re.fullmatch(r'(P\d{3,})/(一采|二采|后处理)',row['用途'])
         if match:
             reference=media_reference(root,project/'README.md',row['资源引用'])
@@ -248,7 +261,7 @@ def check_handoffs(value):
         media = spec['media']
         timeline = [local(project, item['file']) for item in media if item['timeline']]
         matching = [row for row in value['rounds'].values()
-                    if all(v['ref'] for v in row['values']) and
+                    if not row['songssx'] and all(v['ref'] for v in row['values']) and
                     [root/v['ref']['file'] for v in row['values']] == timeline and
                     datetime.fromisoformat(row['created_at']) <= when]
         if not matching:
