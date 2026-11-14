@@ -20,6 +20,12 @@ python3 .agents/skills/studio-comfyui/scripts/comfyui_dispatch.py --project /实
 
 output-plan仍显式提供输出节点、images索引、项目内目标和取回凭据名。technical只保存实际结果和技术报告，不填写人物卡或业务采用；未指定adapter的既有业务计划仍使用原业务登记及安全要求。新任务与恢复均保留真实会话上下文、原服务和请求，不能用技术适配伪称业务已采用。
 
+### 入队后结束当前回合
+
+后台确认入队（清单返回 `status=enqueued` 和 `next_action=end-turn`，逐项入口返回 `dispatch_state=enqueued`）后，Agent 按回执简短汇报已入队的任务组和数量，随即结束当前回合。后台负责上传、提交远端、监控和取回。Agent 不补抄任务 ID 或刷新网页，不等待远端接单或出结果，不主动查询状态，也不创建定时器或 heartbeat。
+
+收到后台通知后，在来源会话按[后台通知接续](../../studio-workspace-browser/references/ComfyUI-任务监控规范.md#后台通知接续)读取报告并接续。用户主动询问进度时，按[主动查询进度](../../studio-workspace-browser/references/进度查询与结果处理规范.md#主动查询进度)用原任务组 ID 或任务 ID 查一次并汇报当前状态。
+
 ## 配置与通信
 
 scripts/comfyui_config.py读取实际工作区comfyui-config.json，按既有格式和认证执行；不输出密码或复制凭据到请求。通信实现为scripts/comfyui_client.py，所有文件访问保留项目边界。日常任务不自动查询库存或安装节点。

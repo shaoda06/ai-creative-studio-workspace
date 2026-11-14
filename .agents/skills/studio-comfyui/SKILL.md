@@ -7,7 +7,7 @@ description: 在准备、装配交接或提交明确的 ComfyUI 请求时使用�
 
 使用scripts/comfyui_dispatch.py将明确任务交给[任务后台](../studio-workspace-browser/SKILL.md)，不另建轮询或监控器。配置读取工作区comfyui-config.json，不输出凭据。实际请求、上传、任务ID和取回证据保留在调用方指定范围。
 
-任务参数、准备/提交、技术结果适配和命令见[提交接口](references/ComfyUI工具调用规范.md)。只准备使用--prepare-only，已有授权且输入齐备时才提交。超时或取回失败恢复原任务，不自动重新POST。
+任务参数、准备/提交、技术结果适配和命令见[提交接口](references/ComfyUI工具调用规范.md)。后台确认入队时执行[入队后结束当前回合](references/ComfyUI工具调用规范.md#入队后结束当前回合)。只准备使用--prepare-only，已有授权且输入齐备时才提交。超时或取回失败恢复原任务，不自动重新POST。
 
 scripts/comfyui_client.py维护通信；scripts/project_paths.py维护路径边界；scripts/workflow_graph.py维护画布转换。具体模型装配由对应工具负责。
 
