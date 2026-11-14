@@ -57,7 +57,7 @@ def load_scene_rounds(project, episode, scene, read):
                 storyboard_context(documents['storyboard'], segment, entry['storyboard']['file']) if 'storyboard' in documents
                 else {'scriptHtml': '', 'shots': [], 'dialogues': [], 'issues': []}))
             if scene in playbacks:
-                set_scene_playback(project, item['songssx'], playbacks.pop(scene))
+                set_scene_playback(project, item['songssx'], playbacks.pop(scene), item['issues'])
         if playbacks:
             item['issues'].append('整场主播放缺少对应的 Songssx 时间轴：' + '、'.join(playbacks))
         result.append(item)

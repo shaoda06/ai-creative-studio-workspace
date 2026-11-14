@@ -287,7 +287,7 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
             scene=songssx_scene(project,scene_entry,contexts.__getitem__,media_url=lambda path:
                 workspace_api+'/production-files/'+quote(path.relative_to(data['root']).as_posix(),safe='/'))
             if item['playback'] and scene['recorded'] and scene['segments']:
-                set_scene_playback(project,scene,item['playback'])
+                set_scene_playback(project,scene,item['playback'],issues)
             if scene_video := scene.get('video'):
                 if not selected['ref'] or project / scene_video['key'] != data['root'] / selected['ref']['file']:
                     scene_video['url']=''

@@ -4,13 +4,13 @@ from pathlib import Path
 import re
 import sys
 
-from prepared_documents import Documents, publish
+from prepared_documents import Documents, publish, read_journal
 from project_paths import project_file
 from iris_works import work_root
 from iris_workbench import SHOT_HEADING, apply_plan_timing, scene_segments, segment_rows, segment_text
 from iris_browser_production import SONGSSX_TASK, STAGES, VIDEO_EXTENSIONS, local_key
 from backend.services.scene_postprocess import output_for_source
-from songssx_browser import playback_video, scene_playbacks
+from songssx_browser import playback_video, postprocess_playback, scene_playbacks
 from songssx_workflow import PLANNER, shot_blocks
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-storyboard/scripts'))
@@ -111,8 +111,32 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
     previous = existing if existing and not rebuild else base
     selected = {item['id']: item for item in previous.get('segments', [])}
     review_outputs = list(existing.get('review_outputs', [])) if existing and not rebuild else []
-    playback_sources = {playback_video(project, output)['key']
-                        for output in scene_playbacks(previous.get('review_outputs', [])).values()}
+    base_playbacks = {scene: playback_video(project, output)['key']
+                      for scene, output in scene_playbacks(base.get('review_outputs', [])).items()}
+    playback_sources = set(base_playbacks.values())
+    declared_playback = spec.get('postprocess_playback', {})
+    if not isinstance(declared_playback, dict) or not all(
+            scene in scenes and isinstance(directory, str) and directory
+            for scene, directory in declared_playback.items()):
+        raise ValueError('postprocess_playback 须将本轮实际场次映射到后处理执行目录')
+    main_playback = {work_file(project, batch.parent, record): scene for scene, record in declared_playback.items()}
+    if len(main_playback) != len(declared_playback):
+        raise ValueError('一个整场后处理任务只能为一个场次登记主播放')
+    if main_playback:
+        native_scenes = set()
+        for base_batch in base.get('batches', []):
+            journal = read_journal(project_file(project, base_batch, recorded=True))
+            if journal.get('accepted'):
+                for task in journal['tasks']:
+                    plan = task.get('video_plan') or {}
+                    if task['task_type'] != SONGSSX_TASK or 'gap_repair' in plan:
+                        continue
+                    identities = [row['p'] for row in plan['segments']]
+                    target, = task['outputs']
+                    key = local_key(project, target['path'], task.get('project'))
+                    native_scenes.update(scene for scene, ids in scenes.items() if ids == identities
+                        and all(pid in selected and local_key(project, selected[pid]['file']) == key
+                                for pid in ids))
     changes = {}
     for task in tasks:
         directory = work_file(project, batch.parent, task['record_dir'])
@@ -151,7 +175,7 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
                 if path.suffix.lower() not in VIDEO_EXTENSIONS:
                     continue
                 match = re.match(r'(P\d{3,})(?:-|\.)', path.name)
-                if not match:
+                if not match or directory in main_playback:
                     if kind != 'video-postprocess':
                         raise ValueError('逐段输出须以 P 段号开头：' + path.name)
                     upload, = task['uploads']
@@ -160,9 +184,21 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
                             and source_path not in {local_key(project, item['file']) for item in selected.values()}):
                         raise ValueError('整场后处理须引用本轮沿用的原视频')
                     output_for_source(project, task, source_path)
-                    item = {'label': f'{run[1]} 整场后处理', 'postprocess': directory.relative_to(project).as_posix(),
-                            'source': source_path}
-                    if not any(output.get('postprocess') == item['postprocess'] for output in review_outputs):
+                    record = directory.relative_to(project).as_posix()
+                    if scene := main_playback.pop(directory, None):
+                        if scene not in native_scenes:
+                            raise ValueError('整场后处理主播放须沿用本轮指定场次的原 Songssx 时间轴')
+                        original_key = local_key(project, selected[scenes[scene][0]]['file'])
+                        if source_path != (base_playbacks.get(scene) or original_key):
+                            raise ValueError('整场后处理主播放须使用来源轮该场次的准确播放版本')
+                        item = postprocess_playback(scene, run[1], record, source_path)
+                        existing_playback = scene_playbacks(review_outputs).get(scene)
+                        if existing_playback and existing_playback != item:
+                            raise ValueError('本轮场次已登记其他主播放')
+                        review_outputs = [entry for entry in review_outputs if entry.get('postprocess') != record]
+                        review_outputs.append(item)
+                    elif not any(output.get('postprocess') == record for output in review_outputs):
+                        item = {'label': f'{run[1]} 整场后处理', 'postprocess': record, 'source': source_path}
                         review_outputs.append(item)
                     continue
                 pairs.append((match[1], output))
@@ -176,6 +212,8 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
                                  'file': project_file(project, output['path']).relative_to(project).as_posix()}
             if identity in prompts:
                 changes[identity]['prompt'] = prompts[identity]
+    if main_playback:
+        raise ValueError('主播放声明须对应本批次的整场后处理任务')
     if prompts.keys() - changes.keys():
         raise ValueError('提示词引用须属于本批实际生成的 P 段')
     original = {entry['id']: entry for entry in base.get('segments', [])}
@@ -188,6 +226,8 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
         raise ValueError('本轮缺少候选的 P 段：' + '、'.join(sorted(set(durations) - selected.keys())))
     if any(selected[identity]['duration'] != duration for identity, duration in durations.items()):
         raise ValueError('沿用分段时长与本轮分镜计划不一致')
+    if changes.keys() & {identity for scene in declared_playback for identity in scenes[scene]}:
+        raise ValueError('同一场次不能同时重做原分段和登记整场后处理主播放')
     segments = [selected[identity] for identity in durations]
     batches = list(dict.fromkeys([*base.get('batches', []), *(existing or {}).get('batches', []), batch_key]))
     item = {'number': number, 'created_at': existing['created_at'] if existing else now,

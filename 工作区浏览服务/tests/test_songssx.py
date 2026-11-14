@@ -215,6 +215,35 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(retry['reused'])
                 self.assertEqual(len(store.rows), 1)
                 self.assertEqual(index.read_text(), before)
+                source = project / task['output']
+                source.parent.mkdir(parents=True, exist_ok=True)
+                run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=s=64x48:r=24',
+                     '-frames:v', '124', '-c:v', 'libx264', str(source)], check=True)
+                post = production / '执行记录/R002-后处理'
+                post.mkdir()
+                post_record = production / '生产任务-R002-v01.md'
+                post_record.write_text('# 整场补帧')
+                post_plan = post / '任务清单.json'
+                post_plan.write_text(json.dumps({
+                    'iris_round': {**spec, 'record': key(post_record), 'base_round': 1,
+                                   'postprocess_playback': {'S001': key(post)}},
+                    'tasks': [{'title': '隔离补帧', 'task_type': 'video-postprocess',
+                               'authorization': '隔离测试', 'record_dir': key(post),
+                               'video_postprocess': {'source': key(source), 'resolution': 'original', 'fps': 30},
+                               'references': [{'file': key(source), 'placeholder': 'planned/video.mp4'}],
+                               'output_nodes': ['16'],
+                               'outputs': [{'path': key(production / '候选/S001-R002.mp4'), 'node_id': '16',
+                                            'output_key': 'images', 'index': 0, 'response_name': '取回.json'}],
+                               'video_plan': {'adapter': 'technical', 'metadata': 'ffprobe'}}],
+                }))
+                pending = await submission_plans.execute(
+                    store, payload.model_copy(update={'plan_file': key(post_plan), 'prepare_only': True}), **adapter)
+                self.assertEqual(pending['production_round'], 2)
+                original, processed = json.loads(index.read_text())['rounds']
+                self.assertEqual(original, result)
+                self.assertEqual(processed['segments'], original['segments'])
+                declaration, = processed['review_outputs']
+                self.assertEqual(declaration['playback'], {'scene': 'S001', 'run': 'R002', 'stage': '后处理'})
             finally:
                 await store.close()
 

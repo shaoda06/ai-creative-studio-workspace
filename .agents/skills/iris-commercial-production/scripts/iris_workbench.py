@@ -420,7 +420,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
                 value = songssx_scene(project, scene_entry, contexts.__getitem__)
                 if value.get('video', {}).get('key', key) == key:
                     if scene in playbacks:
-                        set_scene_playback(project, value, playbacks.pop(scene))
+                        set_scene_playback(project, value, playbacks.pop(scene), issues)
                         video = value['video']
                         video['approved'] = all((identity, video['key']) in adopted for identity in identities)
                     songssx_by_round[number][scene] = scope_links(
