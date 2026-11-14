@@ -23,9 +23,9 @@ try {
   const errors=[],unexpected=[],downloads=[],writes=[],technicalDownloads=[];
   page.on('pageerror',error=>errors.push(String(error)));
   const base='/api/workspaces/commercial/projects/隔离多作品';
-  const works=[{id:'F001',name:'产品片',key:'作品/F001-产品片',status:'待启动'},{id:'F002',name:'品牌片',key:'作品/F002-品牌片',status:'剪映草稿已交接'},
-    {id:'F003',name:'中英同片',key:'作品/F003-中英同片',hasArchive:true},
-    {id:'F004',name:'待启动作品',key:'作品/F004-待启动作品',status:'待启动'}];
+  const works=[{id:'F001',name:'产品片',key:'03-作品/F001-产品片',status:'待启动'},{id:'F002',name:'品牌片',key:'03-作品/F002-品牌片',status:'剪映草稿已交接'},
+    {id:'F003',name:'中英同片',key:'03-作品/F003-中英同片',hasArchive:true},
+    {id:'F004',name:'待启动作品',key:'03-作品/F004-待启动作品',status:'待启动'}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
   let failWork=true,failSave=true,missing=true;
   let songssxDetail=false;
@@ -39,7 +39,7 @@ try {
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[{id:'隔离多作品',name:'隔离多作品'}]}]});
    if(path===base)return route.fulfill({json:{name:'隔离多作品',
     works:works.map(work=>({...work,statusLabel:work.id==='F001'?overviewStatus:work.status})),
-    files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'作品',name:'作品',children:[]}]}});
+    files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'03-作品',name:'03-作品',children:[]}]}});
    if(path===base+'/document') {
     const key=url.searchParams.get('path');
     if(key==='项目状态.md'){
@@ -59,7 +59,7 @@ try {
     const script=key+'/03-创意脚本/制作脚本-v01.md',packageKey=key+'/07-返修交接/草稿.jianying.json';
     if(suffix==='') {
      if(identity==='F002'&&failWork){failWork=false;return route.fulfill({status:503,json:{detail:'隔离作品读取失败'}})}
-     return route.fulfill({json:{productionSection:key+'/06-视频生产',files:[{kind:'group',name:'03-创意脚本',key:key+'/03-创意脚本',children:[file(script)]},{kind:'group',name:'06-视频生产',key:key+'/06-视频生产',children:[]}],irisPresentation:{primary:{'03-创意脚本':[script]},adopted:[],delivery:{status:'草稿可交接',summary:work.name+'交付版本',archivedHandoff:null,items:[{title:work.name+'横版',type:'剪映草稿',version:'v01',purpose:'本片版本',file:{...file(packageKey),jianying:{jypack:base+'/jianying-download?path='+encodeURIComponent(packageKey)}}}]}}}});
+     return route.fulfill({json:{productionSection:key+'/06-视频生产',files:[{kind:'group',name:'03-创意脚本',key:key+'/03-创意脚本',children:[file(script)]},{kind:'group',name:'06-视频生产',key:key+'/06-视频生产',children:[]}],irisPresentation:{primary:{'03-创意脚本':[script],'04-完单复盘':['04-完单复盘/项目复盘.md']},adopted:[],delivery:{exportFolder:'08-成片',status:'草稿可交接',summary:work.name+'交付版本',archivedHandoff:null,items:[{title:work.name+'横版',type:'剪映草稿',version:'v01',purpose:'本片版本',file:{...file(packageKey),jianying:{jypack:base+'/jianying-download?path='+encodeURIComponent(packageKey)}}}]}}}});
     }
     if(identity==='F004' && suffix==='/production-detail'){
      const detail={kind:'group',name:identity,scenes:['whole'],segments:{whole:[]}};
@@ -253,11 +253,12 @@ try {
   assert.equal(await page.getByText('产品片专属正文',{exact:true}).count(),0);
   await tabs.getByRole('button',{name:'交付与复盘',exact:true}).click();
   await page.getByRole('heading',{name:'品牌片横版',exact:true}).waitFor();
+  await page.getByText(/08-成片/).waitFor();
   assert.equal(downloads.length,0);
   const downloaded=page.waitForEvent('download');
   await page.getByRole('button',{name:'下载剪映草稿包',exact:true}).click();
   assert.equal((await downloaded).suggestedFilename(),'F002.jypack');
-  assert.deepEqual(downloads,['作品/F002-品牌片/07-返修交接/草稿.jianying.json']);
+  assert.deepEqual(downloads,['03-作品/F002-品牌片/07-返修交接/草稿.jianying.json']);
   await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
   const workList=page.getByRole('region',{name:'视频制作',exact:true});
   await workList.getByRole('heading',{name:'作品列表',exact:true}).waitFor();
@@ -484,7 +485,7 @@ try {
    const clicked=page.waitForEvent('download');
    await handoff.getByRole('button',{name:label,exact:true}).click();
    assert.equal((await clicked).suggestedFilename(),'F002.'+ext);
-   assert.equal(downloads.at(-1),'作品/F002-品牌片/07-返修交接/草稿.jianying.json');
+   assert.equal(downloads.at(-1),'03-作品/F002-品牌片/07-返修交接/草稿.jianying.json');
   }
   await page.getByText('制作素材与审阅（4）',{exact:true}).click();
   for(const group of ['待审核','待修改','当前采用','历史素材'])await page.getByText(group+'（1）',{exact:true}).waitFor();

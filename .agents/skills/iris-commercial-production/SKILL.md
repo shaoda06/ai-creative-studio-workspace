@@ -1,6 +1,6 @@
 ---
 name: iris-commercial-production
-description: Iris 商业视频生产二级业务阶段，按批准备内容和真实输入，管理H3一采审阅与二采接续、候选及按需样片说明。
+description: Iris 商业视频生产二级业务阶段，按批准备内容和真实输入，按实际工作流管理制作轮次、候选审阅、兼容任务接续及按需样片说明。
 ---
 
 # Iris 视频生产

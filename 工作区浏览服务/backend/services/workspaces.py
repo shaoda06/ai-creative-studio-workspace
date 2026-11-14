@@ -6,6 +6,7 @@ import re
 from urllib.parse import quote, unquote
 
 from backend.services.project_files import ProjectFiles
+from project_resources import resource_directory, resolve_file
 from workspace_project_index import ordered_projects, project_directories
 
 
@@ -77,7 +78,7 @@ class Workspaces:
                 project = entry['project']
                 relative = Path(entry['directory'])
                 project_root = space.projects.project(project)
-                directory = (project_root / relative).resolve()
+                directory = resolve_file(project_root, relative)
                 if (source not in self.items or relative.is_absolute()
                         or not relative.parts or any(part.startswith('.') for part in relative.parts)
                         or not directory.is_relative_to(project_root) or not directory.is_dir()):
@@ -125,6 +126,7 @@ def jianying_links(api, project, key):
 def project_tree(projects, name, api, directory=None):
     root = projects.project(name)
     prefix = api + '/projects/' + quote(name, safe='') + '/files/'
+    media = resource_directory(root)
 
     def read(directory):
         result = []
@@ -133,7 +135,7 @@ def project_tree(projects, name, api, directory=None):
                 continue
             key = path.relative_to(root).as_posix()
             if path.is_dir():
-                result.append({'kind': 'group', 'name': path.name, 'key': key, 'children': [] if key == '资源' else read(path)})
+                result.append({'kind': 'group', 'name': path.name, 'key': key, 'children': [] if path == media else read(path)})
             elif path.is_file():
                 item = {'kind': 'file', 'name': path.name, 'key': key,
                         'url': prefix + quote(key, safe='/')}

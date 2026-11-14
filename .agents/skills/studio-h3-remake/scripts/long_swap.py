@@ -43,9 +43,14 @@ def aligned_frames(needed, minimum):
     return max(minimum, 5 + 17 * ((needed - 5 + 16) // 17))
 
 
-def plan_segments(total, cuts, mode="swap"):
+def plan_segments(total, cuts, mode="swap", *, splits=()):
     if total < 1 or sorted(set(cuts)) != list(cuts) or any(not 0 < cut < total for cut in cuts):
         raise ValueError("切点须为原片内部严格递增的 24 fps 帧号")
+    if (sorted(set(splits)) != list(splits)
+            or any(not 0 < split < total or split in cuts for split in splits)):
+        raise ValueError("镜头内拆段点须为原片内部严格递增的 24 fps 帧号，且不能与切点重合")
+    if splits and mode != "swap":
+        raise ValueError("--split-at 仅用于 Swap 的镜头内续接")
     segments = []
     boundaries = [0, *cuts, total]
     if mode == "edit":
@@ -57,16 +62,25 @@ def plan_segments(total, cuts, mode="swap"):
 
     for shot_start, shot_end in zip(boundaries, boundaries[1:]):
         length = shot_end - shot_start
-        continuation_capacity = MAX_GENERATION - PREFIX
-        parts = max(1, (length - PREFIX + continuation_capacity - 1) // continuation_capacity)
-        first = max((length + parts - 1) // parts, length - (parts - 1) * continuation_capacity)
-        size, extra = divmod(length - first, max(1, parts - 1))
+        shot_splits = [split for split in splits if shot_start < split < shot_end]
+        if shot_splits:
+            edges = [shot_start, *shot_splits, shot_end]
+            keeps = [end - start for start, end in zip(edges, edges[1:])]
+            if any(keep < PREFIX for keep in keeps[:-1]):
+                raise ValueError("镜头内续接前的正文至少需要 17 帧")
+        else:
+            continuation_capacity = MAX_GENERATION - PREFIX
+            parts = max(1, (length - PREFIX + continuation_capacity - 1) // continuation_capacity)
+            first = max((length + parts - 1) // parts, length - (parts - 1) * continuation_capacity)
+            size, extra = divmod(length - first, max(1, parts - 1))
+            keeps = [first, *(size + int(offset <= extra) for offset in range(1, parts))]
         start = shot_start
-        for offset in range(parts):
-            keep = first if offset == 0 else size + int(offset <= extra)
+        for offset, keep in enumerate(keeps):
             head = PREFIX if offset else 0
             needed = keep + head
             generation = aligned_frames(needed, MIN_SWAP_GENERATION)
+            if generation > MAX_GENERATION:
+                raise ValueError(f"从第 {start} 帧开始的段超过 {MAX_GENERATION} 帧（含预卷），请调整拆段点")
             # Three segments per chain. A fresh chain still uses the matching source preroll.
             previous = segments[-1] if offset % 3 else None
             prefix_at = previous.head + previous.keep - PREFIX if previous else None
@@ -103,7 +117,7 @@ def read_plan(work):
 def prepare(args):
     source = args.source.resolve()
     total, has_audio = probe(source)
-    segments = plan_segments(total, args.cut, args.mode)
+    segments = plan_segments(total, args.cut, args.mode, splits=args.split_at)
     args.work.mkdir(parents=True, exist_ok=True)
     inputs = args.work / "sources"
     inputs.mkdir()
@@ -152,17 +166,12 @@ def load_task(template, args, segment):
     return nodes
 
 
-def graph(args):
-    segment = requested_segment(args)
+def swap_nodes(args, segment):
     if segment.generation < MIN_SWAP_GENERATION:
         raise ValueError("Swap 分段请用 prepare --mode swap 准备")
     if (segment.previous_prefix_at is not None) != bool(args.previous):
         raise ValueError("只有续接段须提供上一段原始生成结果的服务器输入名")
     nodes = load_task(SWAP_TEMPLATE, args, segment)
-    nodes["9"]["inputs"]["image"] = args.face
-    nodes["64"]["inputs"]["image"] = args.full_body
-    if args.reference_order == "full-body-first":
-        nodes["42"]["inputs"].update(ref_1=["64", 0], ref_2=["9", 0])
     if args.previous:
         nodes["69"] = {"class_type": "LoadVideo", "inputs": {"file": args.previous}}
         nodes["70"] = {"class_type": "GetVideoComponents", "inputs": {"video": ["69", 0]}}
@@ -171,6 +180,33 @@ def graph(args):
             "prefix_frames": segment.head, "prefix_at": segment.previous_prefix_at,
         }}
         nodes["16"]["inputs"]["latent_image"] = ["71", 0]
+    return nodes
+
+
+def graph(args):
+    nodes = swap_nodes(args, requested_segment(args))
+    nodes["9"]["inputs"]["image"] = args.face
+    nodes["64"]["inputs"]["image"] = args.full_body
+    if args.reference_order == "full-body-first":
+        nodes["42"]["inputs"].update(ref_1=["64", 0], ref_2=["9", 0])
+    write_json(args.output, nodes)
+
+
+def swap_keyframes(args):
+    segment = requested_segment(args)
+    if not 1 <= len(args.keyframe) <= 4:
+        raise ValueError("每段须提供 1 到 4 张目标帧")
+    frames = [int(frame) for frame, _ in args.keyframe]
+    if len(set(frames)) != len(frames) or any(not segment.start <= frame < segment.end for frame in frames):
+        raise ValueError(f"目标帧号须互不重复并位于当前段正文 [{segment.start}, {segment.end})")
+    nodes = swap_nodes(args, segment)
+    conditioning = nodes["42"]["inputs"]
+    del conditioning["ref_2"], nodes["64"]
+    conditioning["pins"] = ",".join(str(frame - segment.start + segment.head) for frame in frames)
+    for index, (_, image) in enumerate(args.keyframe, 1):
+        node_id = ("9", "64", "73", "74")[index - 1]
+        nodes[node_id] = {"class_type": "LoadImage", "inputs": {"image": image}}
+        conditioning[f"ref_{index}"] = [node_id, 0]
     write_json(args.output, nodes)
 
 
@@ -219,7 +255,8 @@ def add_graph_arguments(command):
     command.add_argument("--prompt", required=True, type=Path, help="本段六段式英文正文文件，UTF-8")
     command.add_argument("--audio-conditioning", choices=("source", "silent"), default="source",
                          help="source 参考（默认），silent 不参考，join 时封回原声")
-    command.add_argument("--short-edge", type=int, choices=(480, 736, 1088), help="本轮确认的短边像素，省略沿用模板 480")
+    command.add_argument("--short-edge", type=int, choices=(*range(480, 737, 32), 1088), metavar="PIXELS",
+                         help="短边像素：480–736 之间的 32 倍数或 1088，省略沿用模板 480")
     command.add_argument("--seed", type=int, help="采样种子，省略沿用模板固定值")
     command.add_argument("--output-prefix", required=True, help="服务器输出目录前缀，工具附加段号")
     command.add_argument("--output", required=True, type=Path, help="要写入的本地 API JSON，不能已存在")
@@ -233,6 +270,8 @@ def main():
     command.add_argument("work", type=Path)
     command.add_argument("--cut", type=int, action="append", default=[],
                          help="24 fps 源片中的切点帧号，从 0 起算，可重复")
+    command.add_argument("--split-at", type=int, action="append", default=[],
+                         help="Swap 镜头内显存拆段的正文起点，24 fps 源片帧号，从 0 起算，可重复；保留 17 帧预卷")
     command.add_argument("--mode", choices=("swap", "edit"), default="swap",
                          help="默认 swap，超长镜头自动切分并规划续接；edit 按给定切点独立分段")
     command.set_defaults(run=prepare)
@@ -244,6 +283,12 @@ def main():
                          help="默认面部图第一；反向时需同步正文 Picture 编号")
     command.add_argument("--previous", help="续接段上一段原始结果的服务器输入名")
     command.set_defaults(run=graph)
+    command = commands.add_parser("swap-keyframes", help="按源帧位置装配 Swap 目标帧及续接")
+    add_graph_arguments(command)
+    command.add_argument("--keyframe", nargs=2, action="append", required=True, metavar=("FRAME", "IMAGE"),
+                         help="24 fps 规范源片的 0 起算正文帧号和目标图的服务器输入名，按 Picture 顺序传入 1–4 次")
+    command.add_argument("--previous", help="续接段上一段原始结果的服务器输入名")
+    command.set_defaults(run=swap_keyframes)
     command = commands.add_parser("edit-graph", help="按实际上传名装配一个 Edit 分段请求")
     add_graph_arguments(command)
     command.add_argument("--reference", required=True, help="目标参考帧图像的服务器输入名")

@@ -14,7 +14,9 @@ from chloe_documents import records, media_reference, MISSING, read_document, te
 from chloe_init import resources
 from songssx_browser import scene_playbacks
 
-STAGES = ('一采', '二采', '场次生成', '后处理')
+SCENE_STAGE = '场次生成'
+SCENE_SLOT = '整场视频'
+STAGES = ('一采', '二采', SCENE_STAGE, '后处理')
 VIDEO_PURPOSE = re.compile(r'(P\d{3,})/(' + '|'.join(STAGES) + ')')
 
 
@@ -220,6 +222,10 @@ def state(project):
                                                   and not scene_source(candidates, value)):
                 raise ValueError(value['stage']+'的上游执行阶段不符合要求')
     for row in records(document(project,'README.md'),'当前采用'):
+        if row['用途'] == SCENE_SLOT:
+            reference = media_reference(root, project/'README.md', row['资源引用'])
+            if not any(r['scene_source'] and r['values'][0]['ref'] == reference for r in rounds.values()):
+                raise ValueError('当前采用的整场视频须对应本轮准确输出')
         match=VIDEO_PURPOSE.fullmatch(row['用途'])
         if match:
             reference=media_reference(root,project/'README.md',row['资源引用'])

@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/iris-commercial-production/scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-workspace-browser/scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3-aimixer/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/studio-h3-songssx/scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / '.agents/skills/chloe-production/scripts'))
 import chloe_browser_production
 import iris_browser_production

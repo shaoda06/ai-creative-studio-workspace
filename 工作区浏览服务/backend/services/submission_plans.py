@@ -101,6 +101,15 @@ async def execute(store, payload, *, production_adapter=None):
     documents = None
     preparation_history = []
     round_spec = source.get('iris_round')
+    chloe_round = source.get('chloe_round')
+    if 'chloe_round' in source and (production_adapter != 'chloe-production'
+                                    or not isinstance(chloe_round, dict) or len(source['tasks']) != 1):
+        raise ValueError('chloe_round 须通过 Chloe 视频空间提交一个整场任务')
+    if production_adapter == 'chloe-production' and chloe_round is None and any(
+            entry['task_type'] == 'video-scene-generation' and 'gap_repair' not in entry.get('songssx', {})
+            and entry.get('video_plan', {}).get('business_result', {}).get('adapter') != 'chloe-video'
+            for entry in source['tasks']):
+        raise ValueError('Chloe Songssx 整场任务须提供 chloe_round 自动关联轮次，或提供既有轮次的 chloe-video 关联')
     if 'iris_round' in source and (production_adapter != 'iris-commercial-production' or not isinstance(round_spec, dict)):
         raise ValueError('iris_round 须通过 Iris 商业生产空间提交')
     if round_spec is not None:
@@ -184,7 +193,7 @@ async def execute(store, payload, *, production_adapter=None):
         if len(journal.get('accepted', [])) == len(journal['tasks']):
             return submission_response(store, journal, reused=True)
     else:
-        if (production_adapter == 'iris-commercial-production' and (root / '作品').is_dir()
+        if (production_adapter == 'iris-commercial-production' and ((root / '03-作品').is_dir() or (root / '作品').is_dir())
                 and any(entry['task_type'].startswith('video-') for entry in source['tasks']) and round_spec is None):
             raise ValueError('Iris 作品视频任务须提供 iris_round，由脚本登记轮次和分镜')
         documents = documents or Documents(root)
@@ -198,8 +207,13 @@ async def execute(store, payload, *, production_adapter=None):
         if round_spec is not None:
             register_iris_round(root, round_spec, tasks, journal_file, store.client.now(), write=False,
                                 reprepare=payload.reprepare)
+        if chloe_round is not None:
+            from chloe_songssx import register as register_chloe_round
+            number = register_chloe_round(root, chloe_round, tasks[0], plan_file, documents, store.client.now())
         journal = dict(source=source, thread_id=payload.thread_id, tasks=tasks, writes=documents.writes(),
                        record_format='compact', journal_encoding='shared-writes-v1', preparation_history=preparation_history)
+        if chloe_round is not None:
+            journal['production_round'] = number
         write_journal(journal_file, journal)
     if not payload.prepare_only and any(not entry.get('authorization') for entry in source['tasks']):
         raise ValueError('此清单仅准备，尚缺实际执行授权依据')
@@ -250,7 +264,7 @@ async def execute(store, payload, *, production_adapter=None):
             write_journal(journal_file, journal)
     if payload.prepare_only or payload.start_paused and any(data.image_plan and data.image_plan.get('local_processing') for data in inputs):
         return dict(status='prepared', tasks=prepared, next_action='continue-caller-workflow',
-                    **({'production_round': journal['production_round']} if round_spec is not None else {}))
+                    **({'production_round': journal['production_round']} if 'production_round' in journal else {}))
     if inputs and not accepted and not any(local_flags):
         result = await store.enqueue_group(inputs, source.get('group_title') or plan_file.stem)
         journal['group_id'] = result['group_id']

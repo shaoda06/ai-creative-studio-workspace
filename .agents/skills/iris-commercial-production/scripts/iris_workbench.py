@@ -78,7 +78,7 @@ def work_status(projects, name, space_api, project, root):
     api = space_api + '/projects/' + quote(name, safe='')
     ref = document_ref(project, api, path)
     text = path.read_text('utf-8-sig')
-    delivery = delivery_overview(projects, name, space_api, project, text)
+    delivery = delivery_overview(projects, name, space_api, project, path, text)
     summary = re.search(r'(?m)^(?:-\s*)?(?:当前阶段与下一步|状态)[：:]\s*([^\n]+)', text)
     records = {row['对象']: row['当前版本/文件'] for row in table(text, '对象', '当前版本/文件')}
     return {'label': work_status_label(text.splitlines()), 'summaryHtml': production.legacy_links(
@@ -420,7 +420,7 @@ def detail(projects, name, space_api, work, view=None, *, executions=None):
                 value = songssx_scene(project, scene_entry, contexts.__getitem__)
                 if value.get('video', {}).get('key', key) == key:
                     if scene in playbacks:
-                        set_scene_playback(project, value, playbacks.pop(scene))
+                        set_scene_playback(project, value, playbacks.pop(scene), issues)
                         video = value['video']
                         video['approved'] = all((identity, video['key']) in adopted for identity in identities)
                     songssx_by_round[number][scene] = scope_links(

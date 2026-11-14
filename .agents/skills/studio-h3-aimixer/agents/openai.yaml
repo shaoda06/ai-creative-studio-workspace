@@ -1,4 +1,4 @@
 interface:
-  display_name: "AiMixer 导演台"
-  short_description: "装配 AiMixer 视频任务并接续选组、缓存二采和逐段取回"
-  default_prompt: "使用 $studio-h3-aimixer 准备或接续 AiMixer 导演台任务。"
+  display_name: "AiMixer 导演台（兼容）"
+  short_description: "兼容接续已有或明确指定的 AiMixer 任务，处理运行组、缓存二采和逐段取回"
+  default_prompt: "使用 $studio-h3-aimixer 按原画布接续已有 AiMixer 导演台任务。"

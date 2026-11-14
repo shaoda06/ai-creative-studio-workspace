@@ -105,6 +105,8 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             self.assertFalse(video['approved'])
 
     def test_accepted_songssx_scene_uses_one_output_and_preserves_other_workflow(self):
+        from iris_rounds import register
+
         first = self.register()
         root = self.works['F001'] + '/06-视频生产/'
         record = root + '执行记录/R002-场次生成'
@@ -127,6 +129,7 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
                    '| --- | --- | --- | --- | --- |\n'
                    '| P001 | S001 | SH001 | 5秒 | Shot 1：0–5秒 |\n'
                    '| P002 | S001 | SH002 | 5秒 | Shot 1：0–5秒 |\n\n'
+                   '### 分段 P001\n#### SH001｜第一镜\n**台词**：无。\n'
                    '### 分段 P002\n#### SH002｜第二镜\n**台词**：六娘：进来。\n')
         second = {**first, 'number': 2, 'storyboard': {'file': board, 'version': 'v02'}, 'batches': [journal],
                   'segments': [{'id': segment, 'duration': 5, 'stage': '一采', 'run': 'R002', 'file': output}
@@ -177,16 +180,42 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             {'label': '返修', 'file': repaired, 'playback': {'scene': 'S001', 'run': 'R003', 'stage': '场次生成'}},
             {'label': '整场对照', 'file': output},
         ]}
-        fourth = {**second, 'number': 4, 'review_outputs': [
-            {'label': '补帧', 'postprocess': process_record, 'source': repaired,
-             'playback': {'scene': 'S001', 'run': 'R004', 'stage': '后处理'}},
-        ]}
-        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, second, third, fourth]}))
+        self.write(root + '制作轮次.json', json.dumps({'rounds': [first, second, third]}))
+        fields = Path(__file__).resolve().parents[2] / '.agents/skills/studio-storyboard/templates/逐镜正文模板.md'
+        proof = '\n'.join(line.split('：')[0] + '：测试' for line in fields.read_text().splitlines()
+                          if line.startswith('**'))
+        board_text = (self.project / board).read_text()
+        (self.project / board).write_text(board_text.replace('**台词**：无。', proof.replace('**台词**：测试', '**台词**：无。'))
+                                         .replace('**台词**：六娘：进来。', proof.replace('**台词**：测试', '**台词**：六娘：进来。')))
+        process_task['video_plan'] = {'adapter': 'technical'}
+        process_note = root + '生产任务-R004-v01.md'
+        self.write(process_note, '# 补帧执行')
+        request = {'work': 'F001', 'record': process_note, 'base_round': 3, 'storyboard': second['storyboard'],
+                   'postprocess_playback': {'S001': process_record}}
+        batch = self.project / process_record / '任务清单-装配结果.json'
+        with self.assertRaisesRegex(ValueError, '准确播放版本'):
+            register(self.project, request, [{**process_task, 'uploads': [{'file': output}]}],
+                     batch, '2026-11-06', write=False)
+        self.assertEqual(register(self.project, request, [process_task], batch, '2026-11-06', write=True), 4)
+        self.assertEqual(register(self.project, request, [process_task], batch, '2026-11-06', write=True), 4)
         rounds = self.detail()['sceneRounds']['S001']
         self.assertEqual([round_['songssx']['video']['key'] for round_ in rounds], [output, repaired, ''])
         self.assertEqual([item['name'] for item in rounds[1]['reviewOutputs']], ['整场对照'])
         self.assertEqual(rounds[2]['reviewOutputs'], [])
         self.write(process_record + '/取回.json', '{}')
+        self.write(process_record + '/结果收尾报告.json', json.dumps({'task_id': 'test-task',
+            'items': [{'path': processed, 'metadata': {'duration': 248 / 24, 'frame_rate': 30}}]}))
+        # Migration preserves submitted task evidence and resolves its old directory on read.
+        import project_resources as resources
+        with resources.edit_index(self.project) as index:
+            index['aliases']['旧执行记录'] = root + '执行记录'
+        for current, original_task in ((record, task), (process_record, process_task)):
+            historical = '旧执行记录/' + Path(current).name
+            self.write(current + '/执行检查报告.json', json.dumps({
+                'prepared_input': {**original_task, 'record_dir': historical}}))
+            self.write(current + '/后台任务状态.json', json.dumps({
+                'id': 'test-task', 'task_type': original_task['task_type'],
+                'record_dir': historical, 'status': 'completed'}))
         rounds = self.detail()['sceneRounds']['S001']
         for round_, path in zip(rounds[1:], (repaired, processed), strict=True):
             player = round_['songssx']
@@ -204,6 +233,36 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
             self.assertEqual(self.client.put(api + '/production-notes?view=current', json=change).status_code, 200)
             self.assertEqual(self.client.put(api + '/production-notes?view=current',
                                              json={**change, 'roundNumber': 2}).status_code, 409)
+        direct_record = root + '执行记录/R005-后处理'
+        direct_output = root + '候选/R005-原整场补帧.mp4'
+        direct_task = {**process_task, 'record_dir': direct_record, 'uploads': [{'file': output}],
+                       'video_plan': {'adapter': 'technical', 'metadata': 'ffprobe'},
+                       'outputs': [{'path': direct_output, 'response_name': '取回.json'}]}
+        direct_batch = direct_record + '/任务清单-装配结果.json'
+        self.write(direct_batch, json.dumps({'accepted': [True], 'tasks': [direct_task]}))
+        self.write(direct_record + '/执行检查报告.json', json.dumps({'prepared_input': direct_task}))
+        self.write(direct_record + '/后台任务状态.json', json.dumps({
+            'id': 'direct', 'task_type': 'video-postprocess', 'record_dir': direct_record, 'status': 'completed'}))
+        self.write(direct_output, '原整场补帧')
+        self.write(direct_record + '/取回.json', '{}')
+        self.write(root + '生产任务-R005-v01.md', '# 原整场补帧执行')
+        register(self.project, {**request, 'record': root + '生产任务-R005-v01.md', 'base_round': 2,
+                                'postprocess_playback': {'S001': direct_record}},
+                 [direct_task], self.project / direct_batch, '2026-11-06', write=True)
+        self.assertFalse(self.detail()['sceneRounds']['S001'][-1]['songssx']['video']['url'])
+        direct_report = {'task_id': 'direct', 'items': [
+            {'path': direct_output, 'metadata': {'duration': 248 / 24, 'frame_rate': 30}}]}
+        self.write(direct_record + '/结果收尾报告.json', json.dumps(direct_report))
+        direct = self.detail()['sceneRounds']['S001'][-1]['songssx']
+        self.assertEqual(direct['video']['key'], direct_output)
+        self.assertEqual([part['start'] for part in direct['segments']], [0, 124 / 24])
+        direct_report['items'][0]['metadata']['duration'] = 9
+        self.write(direct_record + '/结果收尾报告.json', json.dumps(direct_report))
+        invalid = self.detail()
+        self.assertFalse(invalid['sceneRounds']['S001'][-1]['songssx']['video']['url'])
+        self.assertIn('时长与原 Songssx 时间轴不符',
+                      invalid['sceneRounds']['S001'][-1]['songssx']['video']['deliveryStatus'])
+        self.assertEqual(invalid['sceneRounds']['S001'][-2]['songssx']['video']['key'], processed)
 
     def test_missing_candidate_retains_round_and_recovery_uses_same_path(self):
         spec = self.register()

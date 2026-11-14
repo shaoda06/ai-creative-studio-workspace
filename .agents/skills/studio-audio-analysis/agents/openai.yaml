@@ -1,0 +1,3 @@
+interface:
+  display_name: "Studio 音频分析"
+  short_description: "查找音效和配乐并核对许可，筛选、制作音效，检查落点、响度和混音"

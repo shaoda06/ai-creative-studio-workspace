@@ -70,6 +70,18 @@ def validate_task(data, plan, checked):
                 [(row['p'], row['planned_seconds']) for row in timeline['segments']]
                 != [(item['id'], item['duration']) for item in round_row['values']]):
             raise ValueError('整场生成须匹配完整轮次及分段时长')
+        if plan.get('automatic_round'):
+            from songssx_workflow import PLANNER, shot_blocks
+
+            request = json.loads(data.workflow[PLANNER]['inputs']['timeline_data'])
+            prompts = production.prompt_sections(value, execution)
+            for entry, row, gen in zip(round_row['values'], timeline['segments'],
+                                       request['segmentConfig']['segments'], strict=True):
+                identity = entry['id']
+                if (len(shot_blocks(gen['prompt'])) != len(entry['shotIds'])
+                        or prompts['模型提示词正文'][identity] != gen['prompt'].strip()
+                        or prompts['中文提示词参考版'][identity] != row['prompt_zh'].strip()):
+                    raise ValueError(identity + ' 的实际提示词与已登记轮次不一致')
     elif stage == '后处理':
         sources = [production.upstream_candidate(value['candidates'], item) for item in round_row['values']
                    if item['execution'] == execution['执行编号']]
@@ -157,7 +169,8 @@ def finish(owner, plan, report, report_path):
                 progress,manifest=handoff(owner,value,round_row,progress,time)
                 next_action='剪映人工后期' if manifest else '确认本轮其余分段采用'
             else:
-                next_action=f"审阅第{plan['round']}轮整片{stage}"
+                next_action = (f"审阅第{plan['round']}轮整场视频" if stage == production.SCENE_STAGE
+                               else f"审阅第{plan['round']}轮整片{stage}")
             for key,val in {'处理状态':'正常' if manifest else '待用户决定','当前问题':'无' if manifest else next_action,
                             '下一步':next_action,'当前阶段':'人工后期' if manifest else '视频制作'}.items():
                 before=next(r['内容'] for r in records.rows(progress,'定位与当前进度') if r['字段']==key)

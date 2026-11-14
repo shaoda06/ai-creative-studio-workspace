@@ -170,7 +170,7 @@ def production_data(project, api, work=None, *, legacy_fallback=True, executions
 def legacy_sources(project, work=None):
     if work is not None:
         return historical_sources(project, work, 'archives')
-    return sorted(path for folder in ('归档', '历史制作资料') for path in (project / folder).glob('*')
+    return sorted(path for folder in ('98-归档', '归档', '历史制作资料') for path in (project / folder).glob('*')
                   if path.is_dir() and (path / '09-剧集制作').is_dir())
 
 

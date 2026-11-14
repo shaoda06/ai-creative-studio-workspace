@@ -1,4 +1,4 @@
-"""Move a flat Iris project into one explicitly named work, preserving task evidence.
+"""Recover a pre-work Iris project into the legacy work layout before migrate_layout.py.
 
 Dry-run is the default. The caller supplies the work identity and scope; this
 script does not infer works, adoption, generation authorization or delivery.
@@ -47,7 +47,7 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
     project = Path(project).resolve()
     if not re.fullmatch(r'F\d{3,}-.+', folder):
         raise ValueError('作品目录须为 F编号-名称')
-    if (project / '作品').exists():
+    if (project / '作品').exists() or (project / '03-作品').exists():
         raise FileExistsError('项目已有作品目录，不能重复执行迁移')
     prefix = '作品/' + folder
     mapping = migration_files(project, prefix)
@@ -55,7 +55,7 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
     aliases = json.loads(index_path.read_text('utf-8-sig')).get('aliases', {}) if index_path.is_file() else {}
     readme = (project / 'README.md').read_text('utf-8-sig')
     original_sections = sections(readme)
-    records = [str(path.relative_to(project)) for path in (project / '06-视频生产/执行记录',) if path.is_dir()]
+    records = [path.relative_to(project).as_posix() for path in (project / '06-视频生产/执行记录',) if path.is_dir()]
     result = {'project': project.name, 'work': prefix, 'moved': mapping, 'records': records, 'archives': list(archives)}
     if not apply:
         return result
@@ -102,7 +102,7 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
                 if not (source.exists() or key in aliases or key in mapping):
                     return value
                 target = destination(source)
-                return target.relative_to(project).as_posix() if is_rooted else os.path.relpath(target, new.parent)
+                return target.relative_to(project).as_posix() if is_rooted else Path(os.path.relpath(target, new.parent)).as_posix()
             return re.sub(r'(?<![\w/])[\w.\-\u4e00-\u9fff]+(?:/[^\s|；;，<>`\[\]()：]+)+/?', path, value)
         for line in text.splitlines():
             if line.startswith('|') and ('当前版本/文件' in line or '项目文件' in line or '归档交接记录' in line):
@@ -117,7 +117,8 @@ def migrate(project, folder, title, description, *, apply=False, archives=(), cl
                 relative = Path(unquote(href.path))
                 source = (project / relative if project_table else old.parent / relative).resolve()
                 target = destination(source)
-                value = target.relative_to(project).as_posix() if project_table and target.is_relative_to(project) else os.path.relpath(target, new.parent)
+                value = (target.relative_to(project).as_posix() if project_table and target.is_relative_to(project)
+                         else Path(os.path.relpath(target, new.parent)).as_posix())
                 value += ('?' + href.query if href.query else '') + ('#' + href.fragment if href.fragment else '')
                 label = match[1].replace('项目状态', '作品状态') if source == project / '项目状态.md' else match[1]
                 return label + '(<'+ value + '>)'

@@ -227,9 +227,9 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(report, result_registration.register(self.store, key))
             return report, Path(target.path)
 
-        def media(name, size, duration):
+        def media(name, size, duration, fps=24):
             path = self.root / name
-            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'color=s={size}:r=24:d={duration}',
+            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'color=s={size}:r={fps}:d={duration}',
                             '-c:v','libx264','-pix_fmt','yuv420p',str(path)], check=True)
             return path.read_bytes()
 
@@ -282,11 +282,11 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
         second, processing = declare('E003','后处理',3,'E002','R002')
         fixture.rounds([first,preview,second])
         processing['adopt'] = {'document':'制作记录.md','review':'R001'}
-        processing['outputs'][0].update(previous='无',expected={'width':128,'height':96,'frame_rate':24,
+        processing['outputs'][0].update(previous='无',expected={'width':128,'height':96,'frame_rate':30,
                                                                 'duration':duration,'audio_tracks':0})
         post_task = dict(task_type='video-postprocess',title='隔离整片后处理',authorization='隔离授权',
                          record_dir='执行记录/E003',output_nodes=['16'],references=[{'file':derived,'placeholder':'planned/video.mp4'}],
-                         video_postprocess={'source':derived,'resolution':[128,96],'fps':'original'},
+                         video_postprocess={'source':derived,'resolution':[128,96],'fps':30},
                          outputs=[{'path':'候选/处理版.mp4','node_id':'16','output_key':'images','index':0,'response_name':'取回.json'}],
                          video_plan={'adapter':'technical','metadata':'ffprobe','business_result':processing})
         with self.assertRaisesRegex(ValueError,'审阅|批准'):
@@ -294,7 +294,7 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
         fixtures.add_row(fixture.record,'审阅记录',['R001','2026-11-08T12:00:00+08:00',
             '[第2轮](<制作轮次.json#round-2>)','通过','无','隔离用户批准'])
         accepted = await self.enqueue([post_task], '后处理')
-        report, processed = await collect(accepted, media('processed.mp4','128x96',duration))
+        report, processed = await collect(accepted, media('processed.mp4','128x96',duration,fps=30))
         self.assertTrue(report['business_sync']['adopted'])
         handoff = json.loads(Path(report['business_sync']['handoff']).read_text('utf-8'))
         self.assertEqual([project/item['file'] for item in handoff['media']], [processed])

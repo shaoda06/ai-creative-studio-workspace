@@ -1,9 +1,11 @@
 ---
 name: studio-h3-aimixer
-description: 在已选择 AiMixer 导演台，需要配置、装配、核对或接续原任务时使用。处理运行组、素材槽位、缓存一采二采与逐段取回。
+description: 在兼容接续已有 AiMixer 任务，或任务已明确指定 AiMixer 时使用。处理配置、装配、运行组、素材槽位、缓存一采二采与逐段取回。
 ---
 
 # AiMixer 导演台
+
+本入口承接 [H3 工作流选择](../studio-h3/SKILL.md#h3-工作流选择)中的兼容任务。
 
 按[使用规范](references/ComfyUI-AiMixer导演台节点使用规范.md)确认场次分批、运行组、缓存及逐段成果。标准版的确认与装配读[参数与基准](references/参数与基准规范.md)。正文格式和参考语义读[共用 H3](../studio-h3/SKILL.md)。
 

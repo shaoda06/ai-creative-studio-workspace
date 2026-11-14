@@ -28,7 +28,7 @@
 
 前缀不加扩展名，保留保存节点自身流水号，成果取回只使用真实返回的filename/subfolder/type。前缀不写“已批准／最终版”；远端生成文件的存在不代表正式采用。本机目录、证据文件名及上传input目录继续使用各自既有规则，不能把带斜杠的远端输出前缀复用为本地证据名称。
 
-任务清单入口自动装配上述输出前缀。`image_type=画风样例`使用样例目录；剧集素材从对象编号取得EP；图片超分从原生成记录读取类型。视频从实际scene、selected_indices和分段身份装配目录，不改变cache_name、AiMixer 导演台节点ID、timeline_data或导出模式。旧式API提交由Agent按本节显式填写保存前缀，不改变已有任务的实际请求。
+任务清单入口自动装配上述输出前缀。`image_type=画风样例`使用样例目录；剧集素材从对象编号取得EP；图片超分从原生成记录读取类型。AiMixer 逐段任务从实际scene、selected_indices和分段身份装配目录，不改变cache_name、导演台节点ID、timeline_data或导出模式。Songssx 整场输出按[场次生成任务接口](../../studio-h3-songssx/references/ComfyUI-Songssx导演台使用规范.md#场次生成任务接口)声明本场输出。旧式API提交由Agent按本节显式填写保存前缀，不改变已有任务的实际请求。
 
 **AiMixer 导演台插件例外**：MiniMax AiMixer 导演台插件自行写入`output/minimax_seg_export/{运行目录}/`的分段文件保持现有保存规则；`minimax_seg_cache`缓存目录和身份不调整。这是AiMixer 导演台插件的分段保存行为，不是H3模型自身规定。外接SaveVideo／VHS保存前缀不控制插件内部的分段保存位置。
 

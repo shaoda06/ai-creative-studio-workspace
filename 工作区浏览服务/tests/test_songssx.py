@@ -11,6 +11,9 @@ import wave
 
 from backend.main import SubmissionPlanInput
 from backend.services import comfy_tasks, execution_checks, result_registration, submission_plans
+from backend.services.episode_downloads import songssx_round_videos
+from backend.services.review_notes import ExportChanges, NoteChange
+from tests import test_chloe_production as chloe_fixtures
 from prepared_documents import read_journal
 from songssx_browser import songssx_contexts, songssx_scene
 from songssx_workflow import aligned_frames, validate
@@ -22,6 +25,127 @@ PROMPT = ('subject_definitions: <Picture 1> sets the room.\nsummary: A pause.\n'
 
 
 class SongssxTests(unittest.IsolatedAsyncioTestCase):
+    async def test_chloe_scene_registers_one_candidate_and_preserves_aimixer(self):
+        fixture = chloe_fixtures.ChloeProductionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.plan()
+        project, workspace = fixture.project, fixture.root
+        legacy, _, _ = fixture.candidate('P001', 'E001')
+        fixture.candidate('P002', 'E002')
+        fixture.rounds([fixture.round(1, [('P001', 'E001'), ('P002', 'E002')])])
+        earlier = json.loads((project / '制作轮次.json').read_text())['rounds'][0]
+        source, _, _ = fixture.resource(kind='image', key='songssx-reference')
+        record = project / '执行记录/E003'
+        record.mkdir()
+        key = lambda path: path.relative_to(project).as_posix()
+        plan = record / '提交任务清单.json'
+        task = {'title': 'Chloe 整场测试', 'task_type': 'video-scene-generation',
+                'authorization': '隔离测试', 'record_dir': key(record), 'output': '候选/整场.mp4',
+                'songssx': {'width': 1280, 'height': 736, 'seed': 7, 'remote_prefix': 'video/test/chloe',
+                            'configuration': {'high_steps': 4, 'scene_type': 'dialogue', 'speed': None, 'loras': []},
+                            'segments': [{'p': p, 'duration': duration, 'overlap_frames': overlap,
+                                          'images': [key(source)], 'prompt': PROMPT, 'prompt_zh': p+' 中文参考'}
+                                         for p, duration, overlap in [('P001', 5, 0), ('P002', 4, 22)]]}}
+        spec = {'script': earlier['script'], 'note': '隔离整场'}
+        (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': ['http://127.0.0.1:1']}))
+        payload = SubmissionPlanInput(project=project.name, plan_file=key(plan), thread_id='test',
+            desktop=dict(node='test', server='test', pipe='test', caller_thread='test'),
+            prepare_only=True, start_paused=True)
+        store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+        adapter = {'production_adapter': 'chloe-production'}
+        detail = lambda: chloe_fixtures.browser.detail(fixture.projects, project.name, fixture.api, 'V001')
+        try:
+            plan.write_text(json.dumps({'tasks': [task]}))
+            with self.assertRaisesRegex(ValueError, '须提供 chloe_round'):
+                await submission_plans.execute(store, payload, **adapter)
+            mismatched = deepcopy(task)
+            mismatched['songssx']['segments'].reverse()
+            plan.write_text(json.dumps({'chloe_round': spec, 'tasks': [mismatched]}))
+            with self.assertRaisesRegex(ValueError, 'P 顺序和计划时长'):
+                await submission_plans.execute(store, payload, **adapter)
+            self.assertEqual(json.loads((project / '制作轮次.json').read_text())['rounds'], [earlier])
+            plan.write_text(json.dumps({'chloe_round': spec, 'tasks': [task]}))
+            self.assertEqual((await submission_plans.execute(store, payload, **adapter))['production_round'], 2)
+            self.assertEqual((await submission_plans.execute(store, payload, **adapter))['production_round'], 2)
+            self.assertFalse(store.rows)
+            self.assertEqual(detail()['productionWorkflows'], ['aimixer'])
+            rounds = json.loads((project / '制作轮次.json').read_text())['rounds']
+            self.assertEqual(rounds[0], earlier)
+            self.assertEqual([entry['slot'] for entry in rounds[1]['segments']], ['整场视频', '整场视频'])
+
+            payload.prepare_only = False
+            prompt = record / '提示词.md'
+            original = prompt.read_text()
+            prompt.write_text(original.replace('P002 中文参考', '不匹配的中文参考'))
+            with self.assertRaisesRegex(ValueError, '实际提示词与已登记轮次不一致'):
+                await submission_plans.execute(store, payload, **adapter)
+            self.assertFalse(store.rows)
+            prompt.write_text(original)
+            with patch.object(store, 'read_session_name', AsyncMock()):
+                accepted = await submission_plans.execute(store, payload, **adapter)
+            retry = await submission_plans.execute(store, payload, **adapter)
+            task_id = accepted['tasks'][0]['local_task_id']
+            self.assertEqual(retry['tasks'][0]['local_task_id'], task_id)
+            self.assertEqual(list(store.rows), [task_id])
+            self.assertEqual(detail()['productionWorkflows'], ['aimixer', 'songssx'])
+            store.save(task_id, prompt_id='simulated-prompt')
+            remote = {'filename': 'scene.mp4', 'subfolder': 'video/test', 'type': 'output'}
+            result = {'state': 'success', 'files': [{'node_id': '404', 'output_key': 'images',
+                                                   'index': 0, 'file': remote}]}
+
+            def download(_, args):
+                destination = Path(args.output)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+                     'color=size=64x64:rate=24', '-t', '10', '-pix_fmt', 'yuv420p', str(destination)], check=True)
+                return {'remote': remote, 'path': args.output, 'bytes': destination.stat().st_size}
+
+            with patch.object(store.client, 'download', side_effect=download):
+                await store.finish_collection(task_id, result)
+            report = result_registration.register(store, task_id)
+            self.assertEqual(report['business_sync']['stage'], '场次生成')
+            self.assertTrue(report['business_sync']['round_ready'])
+            self.assertFalse(report['business_sync']['adopted'])
+            after = (project / '制作记录.md').read_text()
+            self.assertEqual(result_registration.register(store, task_id), report)
+            self.assertEqual((project / '制作记录.md').read_text(), after)
+            self.assertEqual(sum(line.startswith('| E003 | 整场视频 |') for line in after.splitlines()), 1)
+            data = detail()
+            older, newer = data['sceneRounds']['whole']
+            self.assertNotIn('songssx', older)
+            self.assertEqual(older['segments'][0]['key'], key(legacy))
+            scene = newer['songssx']
+            self.assertEqual([(row['id'], row['gen'], row['start']) for row in scene['segments']],
+                             [('P001', 1, 0), ('P002', 2, 124 / 24)])
+            self.assertEqual(scene['segments'][1]['context']['prompts']['chinese'], 'P002 中文参考')
+            self.assertTrue(scene['video']['url'].startswith(fixture.api + '/projects/'))
+            note = NoteChange(segment='P002', stage='场次生成', run='R002', text='隔离意见',
+                              fileRevision=scene['video']['fileRevision'], roundNumber=2, expectedText='')
+            chloe_fixtures.browser.validate_notes(project, 'V001', {(2, 'P002', '场次生成', 'R002')},
+                                                 ExportChanges(notes=[note], rounds=[]))
+            files = songssx_round_videos(fixture.projects, project.name, data, 2)
+            self.assertEqual(len(files), 1)
+            self.assertEqual(key(files[0][0]), report['items'][0]['path'])
+
+            from chloe_result_records import put
+
+            # Old executions can have a registered ID before a local file or state snapshot exists.
+            pending_legacy = '\n'.join(line for line in after.splitlines()
+                                       if not line.startswith(('| E001 | P001视频 |', '| E002 | P002视频 |'))) + '\n'
+            fixture.record.write_text(pending_legacy)
+            self.assertEqual(detail()['productionWorkflows'], ['songssx'])
+            fixture.record.write_text(put(pending_legacy, '执行记录', ['执行编号'], {
+                '执行编号': 'E001', '任务ID': 'legacy-task', '执行状态': '失败',
+            }, replace=True))
+            data = detail()
+            self.assertEqual(data['productionWorkflows'], ['aimixer', 'songssx'])
+            self.assertFalse(data['segments']['whole'][0]['videos'][0]['url'])
+            self.assertEqual(data['segments']['whole'][0]['videos'][0]['taskStatus'], '失败')
+            self.assertEqual(data['sceneRounds']['whole'][1]['songssx']['video']['key'], scene['video']['key'])
+        finally:
+            await store.close()
+
     async def test_iris_submission_registers_the_round_and_approved_storyboard(self):
         with TemporaryDirectory() as directory:
             workspace = Path(directory).resolve()
@@ -91,6 +215,35 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(retry['reused'])
                 self.assertEqual(len(store.rows), 1)
                 self.assertEqual(index.read_text(), before)
+                source = project / task['output']
+                source.parent.mkdir(parents=True, exist_ok=True)
+                run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=s=64x48:r=24',
+                     '-frames:v', '124', '-c:v', 'libx264', str(source)], check=True)
+                post = production / '执行记录/R002-后处理'
+                post.mkdir()
+                post_record = production / '生产任务-R002-v01.md'
+                post_record.write_text('# 整场补帧')
+                post_plan = post / '任务清单.json'
+                post_plan.write_text(json.dumps({
+                    'iris_round': {**spec, 'record': key(post_record), 'base_round': 1,
+                                   'postprocess_playback': {'S001': key(post)}},
+                    'tasks': [{'title': '隔离补帧', 'task_type': 'video-postprocess',
+                               'authorization': '隔离测试', 'record_dir': key(post),
+                               'video_postprocess': {'source': key(source), 'resolution': 'original', 'fps': 30},
+                               'references': [{'file': key(source), 'placeholder': 'planned/video.mp4'}],
+                               'output_nodes': ['16'],
+                               'outputs': [{'path': key(production / '候选/S001-R002.mp4'), 'node_id': '16',
+                                            'output_key': 'images', 'index': 0, 'response_name': '取回.json'}],
+                               'video_plan': {'adapter': 'technical', 'metadata': 'ffprobe'}}],
+                }))
+                pending = await submission_plans.execute(
+                    store, payload.model_copy(update={'plan_file': key(post_plan), 'prepare_only': True}), **adapter)
+                self.assertEqual(pending['production_round'], 2)
+                original, processed = json.loads(index.read_text())['rounds']
+                self.assertEqual(original, result)
+                self.assertEqual(processed['segments'], original['segments'])
+                declaration, = processed['review_outputs']
+                self.assertEqual(declaration['playback'], {'scene': 'S001', 'run': 'R002', 'stage': '后处理'})
             finally:
                 await store.close()
 
@@ -169,6 +322,90 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
                 with self.assertRaisesRegex(ValueError, 'Audio 提示词标签'):
                     validate(bound, data.video_plan, data.outputs, data.uploads)
+            finally:
+                await store.close()
+
+    async def test_editable_video_only_through_shared_submission_and_upload(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / '综合资料'
+            project.mkdir()
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            source = project / 'source.mp4'
+            run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=s=96x64:r=30:d=9',
+                 '-f', 'lavfi', '-i', 'sine=duration=9', '-c:v', 'libx264',
+                 '-c:a', 'aac', str(source)], check=True)
+            plan = project / 'plan.json'
+            prompt = PROMPT.replace('<Picture 1>', '<Video 1>').replace('Room tone.', 'Reuse <Audio 1>.')
+            task_spec = dict(title='可编辑视频参考', task_type='video-scene-generation',
+                             record_dir='record', output='candidate.mp4', authorization='隔离验证',
+                             songssx=dict(width=1152, height=768, seed=7, remote_prefix='video/test/edit',
+                                         configuration=dict(high_steps=4, scene_type='dialogue', speed=None, loras=[2]),
+                                         reference_videos=[dict(file=source.name, start=0, source_start=1, duration=8,
+                                                                reference_size=[768, 512])],
+                                         video_audio_enabled=True,
+                                         segments=[dict(p='P001', duration=8, overlap_frames=0, prompt=prompt)]))
+            plan.write_text(json.dumps({'tasks': [task_spec]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project='@shared', plan_file=plan.name, thread_id='test',
+                                          desktop=desktop, start_paused=True)
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            try:
+                with patch.object(store, 'read_session_name', new_callable=AsyncMock), \
+                        patch.object(store.client, 'submit', side_effect=AssertionError('paused cannot submit')), \
+                        patch.object(store.client, 'upload', side_effect=AssertionError('paused cannot upload')):
+                    self.assertEqual((await submission_plans.execute(store, payload))['status'], 'enqueued')
+                key, row = next(iter(store.rows.items()))
+                self.assertEqual(row['state']['status'], 'paused')
+                self.assertIsNone(row['state']['prompt_id'])
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                self.assertEqual(task['uploads'][0]['json-path'], ['videoClips', 0, 'file'])
+                self.assertEqual(task['outputs'][0]['node_id'], '404')
+                self.assertEqual(task['video_plan']['segments'][0]['generation_frames'], [0, 192])
+                remote = {'name': 'renamed.mp4', 'subfolder': 'record', 'type': 'input'}
+                uploaded = dict(remote=remote, input_path='record/renamed.mp4', sha256=sha256(source.read_bytes()).hexdigest())
+                with patch.object(store.client, 'upload', return_value=uploaded) as upload:
+                    bound = await store.prepare(key)
+                    self.assertEqual(await store.prepare(key), bound)
+                upload.assert_called_once()
+                planner = bound['402']['inputs']
+                timeline = json.loads(planner['timeline_data'])
+                self.assertTrue(timeline['videoAudioEnabled'])
+                self.assertEqual((planner['width'], planner['height'], planner['generation_seconds']), (1152, 768, 8))
+                clip, = timeline['videoClips']
+                self.assertEqual(clip, dict(id='video-1', file='record/renamed.mp4', name=source.name,
+                                            start=0, trimStart=1, duration=8, sourceDuration=9,
+                                            hasAudio=True, referenceMode='edit', referenceWidth=768, referenceHeight=512))
+                canvas = json.loads((project / 'record/任务.workflow.json').read_text())
+                self.assertEqual(json.loads(next(node for node in canvas['nodes'] if node['id'] == 402)['widgets_values'][3]),
+                                 timeline)
+                prepared = {**task, 'uploads': [{**task['uploads'][0], 'file': source.name}]}
+                context, = songssx_contexts(project, prepared, bound, task['video_plan']['segments'], lambda _: {'issues': []})
+                self.assertEqual(context['references']['segment'], [
+                    {'name': source.name, 'kind': 'video', 'label': '<Video 1> · <Audio 1>', 'url': source.name},
+                ])
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                segment = timeline['segmentConfig']['segments'][0]
+                for field, value, message in (
+                    ('start', 7, '合计不超过 15 秒'),
+                    ('start', 8, 'Picture 参考素材'),
+                    ('trimStart', 2, '源截取区间无效'),
+                    ('referenceMode', 'guide', '须绑定为可编辑参考'),
+                ):
+                    previous = clip[field]
+                    clip[field] = value
+                    planner['timeline_data'] = json.dumps(timeline)
+                    with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, message):
+                        validate(bound, data.video_plan, data.outputs, data.uploads)
+                    clip[field] = previous
+                timeline['videoAudioEnabled'] = False
+                planner['timeline_data'] = json.dumps(timeline)
+                with self.assertRaisesRegex(ValueError, 'Audio 提示词标签'):
+                    validate(bound, data.video_plan, data.outputs, data.uploads)
+                segment['prompt'] = prompt.replace('Reuse <Audio 1>.', 'Silence.')
+                planner['timeline_data'] = json.dumps(timeline)
+                validate(bound, data.video_plan, data.outputs, data.uploads)
             finally:
                 await store.close()
 
@@ -363,7 +600,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                         validate(invalid, data.video_plan, data.outputs, data.uploads)
                 with self.assertRaisesRegex(ValueError, '逐一绑定实际上传目标'):
                     validate(bound, data.video_plan, data.outputs, data.uploads[:-1])
-                with self.assertRaisesRegex(ValueError, '仅在 gap_repair'):
+                with self.assertRaisesRegex(ValueError, '须绑定为可编辑参考'):
                     validate(bound, {k: v for k, v in data.video_plan.items() if k != 'gap_repair'},
                              data.outputs, data.uploads)
 

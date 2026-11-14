@@ -17,7 +17,7 @@ _USES = {}
 def usages(project):
     files = [path for path in project.rglob('*') if path.is_file()
              and (path.suffix == '.md' or path.name in ('执行档案.json', '资源关联.json'))
-             and not any(part in ('资源', '历史版本', '历史制作资料', '归档', '.git') for part in path.relative_to(project).parts)]
+             and not any(part in ('02-资源', '资源', '历史版本', '历史制作资料', '98-归档', '归档', '.git') for part in path.relative_to(project).parts)]
     stamp = tuple((str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in files)
     index = resources.index_path(project)
     stamp += ((str(index), index.stat().st_mtime_ns, index.stat().st_size),)

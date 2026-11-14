@@ -100,8 +100,12 @@ def append_round(project, episode, plan, target):
         if 'base_round' in change:
             if review_only:
                 raise ValueError('联调查看轮次须提供完整场次组合')
-            from scene_rounds import referenced_round
-            base = referenced_round(project, episode + '-' + scene, change['base_round'])
+            if type(change['base_round']) is not int or change['base_round'] < 1:
+                raise ValueError('场次修改轮次引用须为正整数')
+            base = next((item for item in scene_entries(project, episode, scene)
+                         if item['number'] == change['base_round']), None)
+            if base is None:
+                raise ValueError('输入映射引用的场次修改轮次不存在')
         if script is None:
             script = change.get('script') or (base.get('script') if base else None)
         if change.get('script') and change['script'] != script:
@@ -109,6 +113,15 @@ def append_round(project, episode, plan, target):
         value = {**(base or {}), **change}
         if 'songssx_execution' in change and 'songssx_postprocess' not in change and change['songssx_execution'] != (base or {}).get('songssx_execution'):
             value.pop('songssx_postprocess', None)
+        if 'songssx_postprocess' in change and 'postprocess_source' not in change:
+            value.pop('postprocess_source', None)
+            if change['songssx_postprocess'] and base:
+                local_source = next((output['file'] for output in base.get('review_outputs', [])
+                                     if 'file' in output and output.get('playback', {}).get('scene') == scene), None)
+                if local_source:
+                    value['postprocess_source'] = local_source
+        if not value.get('songssx_postprocess'):
+            value.pop('postprocess_source', None)
         if ('review_outputs' not in change and value.get('review_outputs')
                 and any(value.get(key) != (base or {}).get(key)
                         for key in ('songssx_execution', 'songssx_postprocess'))):

@@ -22,13 +22,20 @@ def scene_playbacks(outputs):
     return selected
 
 
-def playback_video(project, output):
+def postprocess_playback(scene, run, record, source, *, label=None):
+    return {'label': label or f'{run} 整场后处理', 'postprocess': record, 'source': source,
+            'playback': {'scene': scene, 'run': run, 'stage': '后处理'}}
+
+
+def playback_video(project, output, *, timeline_end=None):
     from backend.services.scene_postprocess import review_output
     from project_paths import project_file
 
     item = {key: value for key, value in output.items() if key != 'playback'}
+    task = {}
     if 'postprocess' in item:
-        key = review_output(project, item, lambda key: key).get('key')
+        task = review_output(project, item, lambda key: key, timeline_end=timeline_end)
+        key = task.get('key')
     else:
         path = project_file(project, item['file'])
         if path.suffix.lower() != '.mp4':
@@ -37,15 +44,24 @@ def playback_video(project, output):
     stamp = (project / key).stat() if key else None
     revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''
     run, stage = output['playback']['run'], output['playback']['stage']
-    return {'key': key or '', 'url': quote(key, safe='/-._~') + '?v=' + revision if key else '',
+    video = {'key': key or '', 'url': quote(key, safe='/-._~') + '?v=' + revision if key else '',
             'run': run, 'stage': stage, 'approved': False, 'candidateNumber': int(run[1:]),
             'fileRevision': revision, 'deliveryStatus': '已取回' if key else '未取回'}
+    if 'record' in task:
+        state = task['taskState']
+        video.update(taskStatus=state.get('status', ''), checkedAt=state.get('updated_at', ''),
+                     taskStateUrl=quote(task['record'] + '/后台任务状态.json', safe='/-._~'))
+    if 'issue' in task:
+        video.update(deliveryStatus=task['issue'])
+    return video
 
 
-def set_scene_playback(project, scene, output):
+def set_scene_playback(project, scene, output, issues):
     if not scene.get('recorded') or not scene.get('segments'):
         raise ValueError('整场主播放须关联已登记的 Songssx 时间轴')
-    scene['video'] = playback_video(project, output)
+    scene['video'] = playback_video(project, output, timeline_end=scene['segments'][-1]['end'])
+    if scene['video']['deliveryStatus'] not in ('已取回', '未取回'):
+        issues.append(scene['video']['deliveryStatus'])
     for segment in scene['segments']:
         segment['context']['source'] = '原 Songssx 分段生成记录'
 
@@ -53,7 +69,7 @@ def set_scene_playback(project, scene, output):
 def songssx_contexts(project, data, workflow, segments, context_for, media_url=None):
     from project_paths import project_file, scope_workspace, SHARED_DIRECTORY
     from project_resources import resolve_file
-    from songssx_workflow import PLANNER
+    from songssx_workflow import PLANNER, video_references
 
     timeline = json.loads(workflow[PLANNER]['inputs']['timeline_data'])
     prepared = timeline if workflow is data['workflow'] else json.loads(data['workflow'][PLANNER]['inputs']['timeline_data'])
@@ -67,25 +83,35 @@ def songssx_contexts(project, data, workflow, segments, context_for, media_url=N
         chinese = row.get('prompt_zh', '') if gen['prompt'] == prepared_gen['prompt'] else ''
         context.update(shotTimingSource='plan', prompts={'english': gen['prompt'], 'chinese': chinese},
                        references={'common': [], 'segment': []})
-        for pool, label, kind in media_types:
-            for index, identity in enumerate(gen.get(pool, []), 1):
-                key = sources[pool][identity]
-                root = project
-                if key.startswith('@shared/'):
-                    root = scope_workspace(project) / SHARED_DIRECTORY
-                    key = key.removeprefix('@shared/')
-                source = resolve_file(root, project_file(root, key, recorded=True))
-                item = {'name': source.name, 'label': f'<{label} {index}>', 'kind': kind}
-                if source.is_file():
-                    if media_url:
-                        item['url'] = media_url(source)
-                    else:
-                        url = quote(source.relative_to(root).as_posix(), safe='/-._~')
-                        item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+        references = [(sources[pool][identity], f'<{label} {index}>', kind)
+                      for pool, label, kind in media_types
+                      for index, identity in enumerate(gen.get(pool, []), 1)]
+        clips = timeline.get('videoClips', [])
+        audio_index = len(gen.get('audios', []))
+        video_slots = video_references(clips, gen['startFrame'], gen['endFrame']) if clips else []
+        for index, (slot, _) in enumerate(video_slots, 1):
+            label = f'<Video {index}>'
+            if timeline.get('videoAudioEnabled') and clips[slot]['hasAudio']:
+                audio_index += 1
+                label += f' · <Audio {audio_index}>'
+            references.append((slots['videoClips', slot], label, 'video'))
+        for key, label, kind in references:
+            root = project
+            if key.startswith('@shared/'):
+                root = scope_workspace(project) / SHARED_DIRECTORY
+                key = key.removeprefix('@shared/')
+            source = resolve_file(root, project_file(root, key, recorded=True))
+            item = {'name': source.name, 'label': label, 'kind': kind}
+            if source.is_file():
+                if media_url:
+                    item['url'] = media_url(source)
                 else:
-                    item['missing'] = True
-                    context['issues'].append('该次输入原素材缺失：' + source.name)
-                context['references']['segment'].append(item)
+                    url = quote(source.relative_to(root).as_posix(), safe='/-._~')
+                    item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+            else:
+                item['missing'] = True
+                context['issues'].append('该次输入原素材缺失：' + source.name)
+            context['references']['segment'].append(item)
         yield context
 
 
@@ -96,7 +122,9 @@ def songssx_task(project, key, task_type):
     report = directory / '执行检查报告.json'
     state_file = directory / '后台任务状态.json'
     state = read(state_file) if exists(state_file) else {}
-    recorded = state.get('task_type') == task_type and state.get('record_dir') == key and bool(state.get('id'))
+    state_directory = state.get('record_dir')
+    recorded = (state.get('task_type') == task_type and bool(state.get('id')) and bool(state_directory)
+                and project_file(project, state_directory, recorded=True) == directory)
     return directory, state, recorded, read(report)['prepared_input'] if exists(report) else None
 
 
@@ -120,7 +148,7 @@ def songssx_scene(project, entry, context_for, *, media_url=None):
         return result
     segments = plan.get('segments', [])
     if (data.get('task_type') != TASK_TYPE or plan.get('workflow_id') != WORKFLOW
-            or data.get('record_dir') != key
+            or not data.get('record_dir') or project_file(project, data['record_dir'], recorded=True) != directory
             or [(row['p'], row['planned_seconds']) for row in segments]
             != [(segment['id'], segment['duration']) for segment in entry['segments']]):
         entry['issues'].append('Songssx 执行记录与本轮场次或分段不匹配')
@@ -134,27 +162,23 @@ def songssx_scene(project, entry, context_for, *, media_url=None):
             project, data, workflow, segments, context_for, media_url), strict=True):
         segment['context'] = context
     target, = data['outputs']
-    if postprocess := entry.get('songssx_postprocess'):
-        from backend.services.scene_postprocess import output_for_source
-
-        source = resolve_file(project, project_file(project, entry.get('postprocess_source', target['path'])))
-        directory, state, recorded, processed = songssx_task(project, postprocess, 'video-postprocess')
-        key = postprocess
-        if processed is None:
-            if recorded:
-                entry['issues'].append('Songssx 后处理执行检查报告缺失')
-            return result
-        try:
-            if processed.get('record_dir') != key:
-                raise ValueError('Songssx 后处理记录目录不符')
-            target = output_for_source(project, processed, source)
-        except ValueError:
-            entry['issues'].append('Songssx 后处理须对应本场原视频及一个整场 MP4')
-            return result
-    actual = resolve_file(project, project_file(project, target['path']))
-    relative = actual.relative_to(project).as_posix()
     stage = entry['segments'][0]['stage']
     run = entry['segments'][0]['run']
+    if postprocess := entry.get('songssx_postprocess'):
+        source = entry.get('postprocess_source', target['path'])
+        if not exists(project_file(project, postprocess) / '执行检查报告.json'):
+            return result
+        declaration = postprocess_playback(entry.get('scene', 'whole'), run, postprocess, source)
+        try:
+            result['video'] = playback_video(project, declaration, timeline_end=result['segments'][-1]['end'])
+        except ValueError as error:
+            entry['issues'].append(str(error))
+        else:
+            if result['video']['deliveryStatus'] not in ('已取回', '未取回'):
+                entry['issues'].append(result['video']['deliveryStatus'])
+        return result
+    actual = resolve_file(project, project_file(project, target['path']))
+    relative = actual.relative_to(project).as_posix()
     saved = recorded and exists(directory / target['response_name']) and actual.is_file()
     stamp = actual.stat() if saved else None
     revision = f'{stamp.st_mtime_ns}-{stamp.st_size}' if stamp else ''

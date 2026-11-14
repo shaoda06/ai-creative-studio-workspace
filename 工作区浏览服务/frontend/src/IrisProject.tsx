@@ -26,7 +26,8 @@ const readingStages = {
   storyboard: { label: '分镜与声音', folder: '04-分镜声音' },
 } as const;
 
-const archiveNames = ['07-交接', '07-审阅', '08-复盘', '归档', '历史制作资料'];
+const reviewFolders = ['04-完单复盘', '08-完单复盘'];
+const archiveNames = ['07-交接', '07-审阅', '08-复盘', '98-归档', '归档', '历史制作资料'];
 const deliveryTabs = [
   { value: 'results', label: '交付成果' },
   { value: 'handoff', label: '返修与交接' },
@@ -339,12 +340,12 @@ function IrisDelivery({ baseUrl, files, presentation, openProduction }: {
   const [view, setView] = useRefreshState<(typeof deliveryTabs)[number]['value']>(`${baseUrl}/delivery-view`, 'results');
   const delivery = presentation?.delivery;
   const handoffKeys = presentation?.primary['07-返修交接'] || [];
-  const reviewKeys = presentation?.primary['08-完单复盘'] || [];
+  const reviewKeys = reviewFolders.flatMap(folder => presentation?.primary[folder] || []);
   const archivedHandoff = !handoffKeys.length ? delivery?.archivedHandoff : null;
   const keys = view === 'handoff' ? (archivedHandoff ? [archivedHandoff] : handoffKeys) : reviewKeys;
   const documents = keys.map(key => ({ value: key, label: key.split('/').at(-1)!.replace(/\.md$/i, '') }));
   const excluded = new Set([...handoffKeys, ...reviewKeys, ...(delivery?.items.map(({ file }) => file.key!) || [])]);
-  const extras = omitDisplayedFiles(files.filter(item => item.name === '07-返修交接' || item.name === '08-完单复盘'), excluded);
+  const extras = omitDisplayedFiles(files.filter(item => item.name === '07-返修交接' || reviewFolders.includes(item.name)), excluded);
   const archives = files.filter(item => archiveNames.includes(item.name) || item.name === '复盘.md');
   return <>
     <UnderlineTabs label="交付与复盘视图" items={[...deliveryTabs]} selected={view} onChange={setView} />

@@ -167,6 +167,25 @@ class SceneRoundTests(unittest.TestCase):
         actual = selected['songssx']['video']
         self.assertEqual(actual['key'], derived)
         self.assertEqual(selected['reviewOutputs'], [])
+        repair_postprocess = self.root + '/其他资料/执行附件/C001-R005'
+        repaired_processed = self.root + '/其他资料/候选视频/EP001-C001-R005-返修补帧.mp4'
+        self.create({**planned, 'base_round': selected['number'], 'songssx_postprocess': repair_postprocess,
+                     'segments': [{**entry, 'stage': '后处理', 'run': 'R005'} for entry in planned['segments']]})
+        self.write(repair_postprocess + '/执行检查报告.json', json.dumps({'prepared_input': {
+            'record_dir': repair_postprocess, 'task_type': 'video-postprocess',
+            'uploads': [{'file': derived}], 'outputs': [{'path': repaired_processed, 'response_name': '取回.json'}],
+        }}))
+        self.write(repaired_processed, 'repaired processed fixture')
+        write_entries(self.project / repair_postprocess, {
+            '后台任务状态.json': {'id': 'test-repair-postprocess', 'task_type': 'video-postprocess',
+                             'status': 'completed', 'record_dir': repair_postprocess},
+        })
+        self.assertFalse(self.episode()['sceneRounds']['C001'][-1]['songssx']['video']['url'])
+        write_entries(self.project / repair_postprocess, {'取回.json': {}})
+        after = self.episode()['sceneRounds']['C001'][-1]['songssx']
+        self.assertEqual(after['video']['key'], repaired_processed)
+        self.assertEqual([part['start'] for part in after['segments']],
+                         [part['start'] for part in before['songssx']['segments']])
         self.assertEqual([item['start'] for item in selected['songssx']['segments']], [0, 124 / 24, 254 / 24])
         revised_note = value.model_copy(update={'roundNumber': selected['number'], 'run': 'R004',
                                                 'fileRevision': actual['fileRevision']})

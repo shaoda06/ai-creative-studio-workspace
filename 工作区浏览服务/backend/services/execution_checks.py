@@ -328,6 +328,9 @@ def prepare_report(store, data, *, at_execution=False, previous=...):
             if previous['sources'] == report['sources']:
                 if not at_execution and data.task_type == songssx_workflow.TASK_TYPE:
                     songssx_workflow.validate(data.workflow, data.video_plan, data.outputs, data.uploads)
+                    if 'business_result' in data.video_plan:
+                        from backend.services.business_results import validate as validate_business_result
+                        validate_business_result(data)
                 report.update(previous)
                 changed = False
                 if not content_current:

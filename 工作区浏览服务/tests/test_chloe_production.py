@@ -250,6 +250,8 @@ class ChloeProductionTests(unittest.TestCase):
         self.rounds([self.round(1,[('P001','E001'),('P002','E002')])])
         data=browser.detail(self.projects,self.project.name,self.api,'V001')
         self.assertEqual(data['segments']['whole'][0]['videos'][0]['url'],'')
+        self.assertEqual(data['productionWorkflows'], [])
+        self.assertEqual(data['productionWorkflow'], 'aimixer')
         self.rounds([self.round(1,[('P001','E001')])])
         with self.assertRaisesRegex(ValueError,'完整'):state(self.project)
 
@@ -275,6 +277,15 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertEqual([row['key'] for row in round_['segments']],
                          [item['videos'][0]['key'] for item in detail['segments']['whole']])
         self.assertEqual(len({item['videos'][0]['url'] for item in detail['segments']['whole']}), 2)
+
+        self.candidate('P001', 'E003', 'R002', output=False)
+        self.assertEqual(browser.detail(self.projects, self.project.name, self.api, 'V001')['productionWorkflows'],
+                         ['songssx'])
+        body = self.record.read_text()
+        self.record.write_text(body.replace('| E003 | 视频生成 | 不适用 | H3 | 不适用 | 不适用 | 隔离授权 | 未取得 |',
+                                            '| E003 | 视频生成 | 不适用 | H3 | 不适用 | 不适用 | 隔离授权 | legacy-task |'))
+        self.assertEqual(browser.detail(self.projects, self.project.name, self.api, 'V001')['productionWorkflows'],
+                         ['aimixer', 'songssx'])
 
     def test_exact_shared_input_and_output_boundary(self):
         actual,reference,ref=self.resource(kind='image',shared=True)

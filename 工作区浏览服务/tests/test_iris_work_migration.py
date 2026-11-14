@@ -10,6 +10,9 @@ script = Path(__file__).resolve().parents[2] / '.agents/skills/iris-commercial-b
 spec = importlib.util.spec_from_file_location('migrate_work', script)
 migration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migration)
+layout_spec = importlib.util.spec_from_file_location('migrate_layout', script.with_name('migrate_layout.py'))
+layout = importlib.util.module_from_spec(layout_spec)
+layout_spec.loader.exec_module(layout)
 
 
 class WorkMigrationTests(unittest.TestCase):
@@ -58,3 +61,46 @@ class WorkMigrationTests(unittest.TestCase):
                 self.assertEqual(archive.read('项目状态.md').decode().splitlines()[-1], '| 脚本 | 03-创意脚本/制作脚本-v01.md |')
             with self.assertRaises(FileExistsError):
                 migration.migrate(project, 'F001-隔离片', '隔离片', '不重复迁移', apply=True)
+
+
+class NumberedLayoutMigrationTests(unittest.TestCase):
+    def test_numbered_layout_rewrites_live_references_and_preserves_execution_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory).resolve()
+            work = '作品/F001-隔离'
+            old_export = work + '/07-返修交接/成片/成片.mp4'
+            old_resource = '资源/视频/VID-test/V001/素材.mp4'
+            for folder in ('归档', '08-完单复盘', work + '/99-综合资料'):
+                (project / folder).mkdir(parents=True)
+
+            def write(relative, data):
+                target = project / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(data)
+
+            write(old_export, 'final')
+            write(old_resource, 'resource')
+            write('资源/资源索引.json', json.dumps({'aliases': {'旧素材.mp4': old_resource}, 'files': {}, 'outputs': {}}))
+            write(work + '/07-返修交接/剪映.jianying.json', json.dumps({'media': [{'file': old_resource}]}))
+            write(work + '/作品状态.md', f'[成片](07-返修交接/成片/成片.mp4)\n| 文件 | {old_export} |\n')
+            write(work + '/05-资产/资产清单.md', f'资源文件：../../../{old_resource}\n')
+            evidence = work + '/06-视频生产/执行记录/原请求.json'
+            original = json.dumps({'record_dir': evidence, 'file': old_resource})
+            write(evidence, original)
+
+            self.assertEqual(layout.migrate(project)['works'], 1)
+            self.assertTrue((project / old_export).is_file())
+            result = layout.migrate(project, apply=True)
+            new_work = '03-' + work
+            new_resource = '02-' + old_resource
+            state = (project / new_work / '作品状态.md').read_text()
+            self.assertIn('[成片](08-成片/成片.mp4)', state)
+            self.assertIn(new_work + '/08-成片/成片.mp4', state)
+            self.assertIn('../../../' + new_resource, (project / new_work / '05-资产/资产清单.md').read_text())
+            self.assertEqual((project / new_work / '08-成片/成片.mp4').read_text(), 'final')
+            self.assertEqual((project / ('03-' + evidence)).read_text(), original)
+            self.assertFalse((project / new_work / '99-综合资料').exists())
+            manifest = json.loads((project / new_work / '07-返修交接/剪映.jianying.json').read_text())
+            self.assertEqual(manifest['media'][0]['file'], new_resource)
+            with zipfile.ZipFile(project / result['backup']) as archive:
+                self.assertIn(old_export, archive.read(work + '/作品状态.md').decode())

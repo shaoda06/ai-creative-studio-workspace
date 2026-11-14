@@ -22,7 +22,7 @@ from media_files import store_media
 
 def preserved(relative):
     parts = Path(relative).parts
-    return any(part.startswith('.') or part in ('资源', '历史制作资料', '归档', '98-成片交付')
+    return any(part.startswith('.') or part in ('02-资源', '资源', '历史制作资料', '98-归档', '归档', '08-成片', '98-成片交付')
                or any(word in part for word in ('快照', '剪映草稿', '剪映包', '原生交付', '验收', '验证', '核查', '检查', '抽帧', '帧图', '初剪图层', '样稿', '原型')) for part in parts[:-1])
 
 
@@ -77,7 +77,7 @@ def inspect(project):
         raise PermissionError('已归档项目保持原样：' + str(project))
     media, protected, documents = {}, [], []
     for folder, dirs, names in os.walk(project, followlinks=False):
-        dirs[:] = sorted(name for name in dirs if not name.startswith('.') and name != '资源'
+        dirs[:] = sorted(name for name in dirs if not name.startswith('.') and name not in ('02-资源', '资源')
                          and not (Path(folder) / name).is_symlink())
         for name in sorted(names):
             path = Path(folder) / name

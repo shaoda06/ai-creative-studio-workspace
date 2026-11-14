@@ -11,6 +11,8 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 
 [共用视频制作流程](../studio-video-production/SKILL.md)从已确认脚本接续到视频候选和技术结果，按环节调用剧本、分镜、参考素材、提示词和创作技法等规则，以及模型、媒体处理和任务后台等工具。单独写作、分镜、生成或技术任务也可从核心的对应环节进入。所属业务负责前期准备，以及候选返回后的审阅、返修接续、采用与交付。
 
+新制作或已有任务的接续按[共用工作流选择](../studio-video-production/SKILL.md#工作流选择)确定工作流。
+
 ## 业务入口
 
 | 任务 | 入口 |
@@ -27,11 +29,12 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 | 各业务账号及独立项目的社交媒体运营与发布 | [Studio运营一级业务](../studio-social-operations/SKILL.md) |
 | 明确清单的剪映草稿与ZIP/jypack | [剪映工具](../studio-jianying/SKILL.md) |
 | 实拍剪辑、口播包装与配音解说动画 | [按需剪辑与动效工具](#按需剪辑与动效工具) |
-| Markdown与实际配图的带水印PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
+| Markdown与实际配图的PDF | [PDF导出](../studio-pdf-export/SKILL.md)，业务批准留调用方 |
 | 整个项目归档／恢复、浏览分类及关联 Codex 对话收尾 | [项目归档](../studio-archive/SKILL.md) |
 | 外部浏览器任务、标签组和窗口收尾 | [浏览器操作](../studio-browser-operations/SKILL.md) |
 | 从用户指定的作品链接取得视频文件 | [视频下载](../studio-video-download/SKILL.md) |
 | 指定视频的字幕、转写或画面分析 | [视频读取](../studio-video-study/SKILL.md) |
+| 查找音效或配乐并核对许可，筛选和制作音效，核对落点、响度及混音，或准备整片声音设计 | [音频分析](../studio-audio-analysis/SKILL.md) |
 | 共用提示词的收录、检索和整理 | [提示词管理](../studio-prompt-library/SKILL.md) |
 | 按名称或视觉要求检索、预览、复制风格，或维护风格库 | [Krea2 风格库](../studio-krea2-style-library/SKILL.md) |
 
