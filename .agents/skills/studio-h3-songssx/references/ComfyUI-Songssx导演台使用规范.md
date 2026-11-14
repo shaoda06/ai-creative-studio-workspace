@@ -112,6 +112,8 @@ Studio 的标准 Ref2VA 装配按[共用 H3 的生成段时长](../../studio-h3/
 
 落实[本次参数选择](#参数选择与装配前询问)后，调用[共用准备与入队入口](../../studio-comfyui/references/固定脚本接口规范.md#准备检查与提交复用)。清单的任务项使用 `task_type: "video-scene-generation"`，提供 `title`、`record_dir`、`output` 和 `songssx`。准备检查通过并具备本次执行授权后才入队。待提交任务复用准备报告时，仍按当前 Songssx 装配规则核对请求。
 
+需要自动关联业务结果时，在任务项的 `video_plan.business_result` 提供[已登记的业务结果适配](../../studio-workspace-browser/references/ComfyUI-任务监控规范.md#显式业务结果接续)。准备器保留该关联，技术取回沿用场次的原报告。
+
 - `songssx` 提供 `width`、`height`、`seed`、`remote_prefix` 及 `configuration`。画幅由调用方用于选择实际宽高，尺寸按[第 2 步](#第-2-步)核对。
 - `configuration` 提供 `high_steps`（实际高清步数）、`scene_type`（打戏 `combat` 或文戏 `dialogue`）、`speed`（按[第 5 步](#第-5-步)填写）及 `loras`（所选附加 LoRA 的数字编号数组，选 0 时传 `[]`）。脚本根据现行六步配置固定低清步数、缩放倍率和居中裁切，按基准权重启用所选打戏组和附加 LoRA。
 - 已有清单缺少 `configuration` 时，兼容入口沿用原 `reference_image_center_crop`、`lowres_scale` 和当时的标准装配方式。已有任务使用各自的执行副本。

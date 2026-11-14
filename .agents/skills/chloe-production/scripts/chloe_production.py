@@ -9,12 +9,43 @@ import sys
 
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS/'chloe-positioning/scripts'))
+sys.path.insert(0, str(SKILLS/'studio-h3-songssx/scripts'))
 from chloe_documents import records, media_reference, MISSING, read_document, template, check_manifest
 from chloe_init import resources
+from songssx_browser import scene_playbacks
 
-STAGES = ('一采', '二采', '后处理')
 SCENE_STAGE = '场次生成'
 SCENE_SLOT = '整场视频'
+STAGES = ('一采', '二采', SCENE_STAGE, '后处理')
+VIDEO_PURPOSE = re.compile(r'(P\d{3,})/(' + '|'.join(STAGES) + ')')
+
+
+def upstream_candidate(candidates, value):
+    sources = [item for item in candidates.values()
+               if item['execution'] == value['record']['上游执行'] and item['id'] == value['id']]
+    if len(sources) != 1:
+        raise ValueError('须关联同一分段的唯一上游执行')
+    return sources[0]
+
+
+def scene_source(candidates, value):
+    visited = set()
+    while value['stage'] == '后处理':
+        if value['execution'] in visited:
+            raise ValueError('后处理上游执行循环引用')
+        visited.add(value['execution'])
+        value = upstream_candidate(candidates, value)
+    return value if value['stage'] == '场次生成' else None
+
+
+def video_version(root, reference):
+    path = root / reference['file']
+    return json.loads((path.parent/'版本信息.json').read_text('utf-8'))
+
+
+def timeline_values(round_row):
+    values = round_row['values']
+    return values[:1] if round_row['scene_source'] else values
 
 
 def local(project, value):
@@ -95,7 +126,7 @@ def state(project):
     candidates = {}
     for row in records(doc, '视频分段执行'):
         identity, stage, run, execution, slot = (row[key] for key in ('分段编号','制作阶段','候选版本','执行编号','输出槽位'))
-        if not re.fullmatch(r'P\d{3,}', identity) or stage not in (*STAGES, SCENE_STAGE) or not re.fullmatch(r'R\d{3,}', run):
+        if not re.fullmatch(r'P\d{3,}', identity) or stage not in STAGES or not re.fullmatch(r'R\d{3,}', run):
             raise ValueError('视频分段执行的分段、阶段或候选版本无效')
         key = (identity, execution, slot)
         if key in candidates or any((identity, stage, run) == (v['id'],v['stage'],v['run']) for v in candidates.values()):
@@ -135,13 +166,13 @@ def state(project):
             ids.append(segment['id']); values.append({**candidates[key], **row_plan[segment['id']], 'carried':key in seen})
         if not ids or ids != list(row_plan):
             raise ValueError('轮次必须按脚本计划保存完整且唯一的分段顺序')
-        songssx = any(v['stage'] == SCENE_STAGE for v in values)
-        if songssx and (
-            any(v['stage'] != SCENE_STAGE or v['slot'] != SCENE_SLOT for v in values)
-            or len({(v['execution'], v['run']) for v in values}) != 1
-            or [v['index'] for v in values] != list(range(len(values)))
-        ):
-            raise ValueError('Songssx 轮次须按 GEN 顺序关联同一次整场执行')
+        scene_sources = [scene_source(candidates, value) for value in values]
+        scene = next((source for source in scene_sources if source), None)
+        if scene and (any(not source or (source['execution'], source['slot']) != (scene['execution'], scene['slot'])
+                          for source in scene_sources)
+                      or len({(value['execution'], value['slot'], value['stage'], value['run']) for value in values}) != 1
+                      or [source['index'] for source in scene_sources] != list(range(len(values)))):
+            raise ValueError('整场轮次须按原分段顺序关联同一场次执行及一个完整输出')
         base = item.get('base_round')
         if base is not None:
             if base not in rounds:
@@ -152,7 +183,25 @@ def state(project):
                 raise ValueError('changed_segments 必须对应实际变化的分段')
         elif 'changed_segments' in item:
             raise ValueError('changed_segments 必须有 base_round')
+        playbacks = scene_playbacks(item.get('review_outputs', []))
+        if playbacks:
+            selected = values[0]
+            playback = playbacks.get('whole')
+            if (not scene or set(playbacks) != {'whole'} or set(playback) != {'label','file','playback'}
+                    or selected['stage'] != '后处理' or not selected['ref']
+                    or playback['playback']['stage'] != selected['stage'] or playback['playback']['run'] != selected['run']
+                    or local(project, playback['file']) != root / selected['ref']['file']):
+                raise ValueError('整片主播放须引用本轮登记的准确派生视频')
+            upstream = upstream_candidate(candidates, selected)
+            info = video_version(root, selected['ref'])
+            if not upstream['ref'] or (info['parent'] or {}).get('file') != (root/upstream['ref']['file']).relative_to(project).as_posix():
+                raise ValueError('派生整片须关联准确的上游资源版本')
+            original = video_version(root, upstream['ref'])
+            if abs(info['facts']['duration_seconds']-original['facts']['duration_seconds']) > 1/info['facts']['fps']+0.001:
+                raise ValueError('派生整片须保留原片时长及分段时间轴')
         for output in item.get('review_outputs', []):
+            if 'playback' in output:
+                continue
             if set(output) == {'label', 'postprocess', 'source'}:
                 local(project, output['postprocess'])
                 local(project, output['source'])
@@ -161,22 +210,23 @@ def state(project):
                 raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
             media_reference(root, project/'制作记录.md', output['resource'])
         seen.update((v['id'],v['execution'],v['slot']) for v in values)
-        rounds[number] = {**item, 'values':values, 'songssx':songssx}
+        rounds[number] = {**item, 'values':values, 'scene_source':scene, 'playback':playbacks.get('whole')}
     for value in candidates.values():
         execution=value['record']
         if execution['执行状态']=='已完成' and not value['ref']:
             raise ValueError('已完成的视频分段缺少准确输出引用')
         if value['stage'] in ('二采','后处理'):
-            source=next((v for v in candidates.values() if v['execution']==execution['上游执行'] and v['id']==value['id']),None)
-            expected='一采' if value['stage']=='二采' else '二采'
-            if not source or source['stage']!=expected:
-                raise ValueError(value['stage']+'须关联同一分段的'+expected+'执行')
+            source = upstream_candidate(candidates, value)
+            allowed = ('一采',) if value['stage'] == '二采' else STAGES
+            if source['stage'] not in allowed or (value['stage']=='后处理' and source['stage']=='后处理'
+                                                  and not scene_source(candidates, value)):
+                raise ValueError(value['stage']+'的上游执行阶段不符合要求')
     for row in records(document(project,'README.md'),'当前采用'):
         if row['用途'] == SCENE_SLOT:
             reference = media_reference(root, project/'README.md', row['资源引用'])
-            if not any(round_['songssx'] and round_['values'][0]['ref'] == reference for round_ in rounds.values()):
-                raise ValueError('当前采用的整场视频未对应 Songssx 轮次的准确输出')
-        match=re.fullmatch(r'(P\d{3,})/(一采|二采|后处理)',row['用途'])
+            if not any(r['scene_source'] and r['values'][0]['ref'] == reference for r in rounds.values()):
+                raise ValueError('当前采用的整场视频须对应本轮准确输出')
+        match=VIDEO_PURPOSE.fullmatch(row['用途'])
         if match:
             reference=media_reference(root,project/'README.md',row['资源引用'])
             if not any(v['id']==match[1] and v['stage']==match[2] and v['ref']==reference for v in candidates.values()):
@@ -243,13 +293,13 @@ def check_handoffs(value):
     adoptions = {}
     for row in records(readme, '采用变更'):
         purpose = row['变更范围']
-        if re.fullmatch(r'P\d{3,}/(一采|二采|后处理)', purpose):
+        if VIDEO_PURPOSE.fullmatch(purpose):
             if row['记录时间'] in MISSING or row['依据'] in MISSING:
                 raise ValueError('片段采用变更须填写时间和依据')
             ref = None if row['新值或新版本'] in MISSING else media_reference(root, project/'README.md', row['新值或新版本'])
             adoptions.setdefault(purpose, []).append((datetime.fromisoformat(row['记录时间']), ref))
     for row in records(readme, '当前采用'):
-        if re.fullmatch(r'P\d{3,}/(一采|二采|后处理)', row['用途']):
+        if VIDEO_PURPOSE.fullmatch(row['用途']):
             ref = media_reference(root, project/'README.md', row['资源引用'])
             adoptions.setdefault(row['用途'], []).append((datetime.fromisoformat(row['采用时间']), ref))
     for path in manifests:
@@ -261,8 +311,8 @@ def check_handoffs(value):
         media = spec['media']
         timeline = [local(project, item['file']) for item in media if item['timeline']]
         matching = [row for row in value['rounds'].values()
-                    if not row['songssx'] and all(v['ref'] for v in row['values']) and
-                    [root/v['ref']['file'] for v in row['values']] == timeline and
+                    if all(v['ref'] for v in row['values']) and
+                    [root/v['ref']['file'] for v in timeline_values(row)] == timeline and
                     datetime.fromisoformat(row['created_at']) <= when]
         if not matching:
             raise ValueError('剪映时间线须按交接轮次完整匹配片段版本与顺序，不得遗漏、重复或乱序')

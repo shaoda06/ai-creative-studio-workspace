@@ -471,7 +471,7 @@ def check_relations(root, path, doc):
             continue
         ref = media_reference(root,path,row['资源引用'])
         if owner != root/'综合资料' and ref['owner'] == '综合资料':
-            data = json.loads((owner/'资源/共用引用.json').read_text())
+            data = json.loads((owner/'资源/共用引用.json').read_text('utf-8'))
             if data['references'].get(row['共用引用键']) != ref:
                 raise ValueError('实际共用输入与共用引用表不一致')
         elif row['共用引用键'] != '不适用':
@@ -631,13 +631,13 @@ def check_system(root, owner):
             raise ValueError('缺少固定资源分类：'+kind)
     for file, ref in index['files'].items():
         target = resources.local(owner,file)
-        family = json.loads((target.parent.parent/'资源信息.json').read_text())
+        family = json.loads((target.parent.parent/'资源信息.json').read_text('utf-8'))
         if ref['file'] != file or family['resource_id'] != ref['resource_id']:
             raise ValueError('资源信息与索引不一致')
         # Queue reservations have an output identity but no version directory yet.
         if not target.parent.exists() and file in index['outputs'].values():
             continue
-        info = json.loads((target.parent/'版本信息.json').read_text())
+        info = json.loads((target.parent/'版本信息.json').read_text('utf-8'))
         if any(info[k] != ref[k] for k in ('resource_id','version','file','kind','origin','producer','parent')):
             raise ValueError('版本信息与索引不一致')
         if info['facts']['bytes'] != target.stat().st_size:
@@ -648,7 +648,7 @@ def check_system(root, owner):
         for name in ('剪辑交接','成片'):
             if not (owner/name).is_dir():
                 raise ValueError('缺少固定目录：'+name)
-        data = json.loads((owner/'资源/共用引用.json').read_text())
+        data = json.loads((owner/'资源/共用引用.json').read_text('utf-8'))
         if set(data) != {'format','references'} or data['format'] != 1 or not isinstance(data['references'],dict):
             raise ValueError('共用引用格式错误')
         for key, ref in data['references'].items():
@@ -661,7 +661,7 @@ def check_system(root, owner):
 
 
 def check_manifest(owner, path):
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text('utf-8'))
     if not isinstance(data['name'],str) or not data['name'].strip() or not data['media']:
         raise ValueError('剪映清单缺少名称或媒体')
     names = set(); timeline = False

@@ -107,8 +107,9 @@ async def execute(store, payload, *, production_adapter=None):
         raise ValueError('chloe_round 须通过 Chloe 视频空间提交一个整场任务')
     if production_adapter == 'chloe-production' and chloe_round is None and any(
             entry['task_type'] == 'video-scene-generation' and 'gap_repair' not in entry.get('songssx', {})
+            and entry.get('video_plan', {}).get('business_result', {}).get('adapter') != 'chloe-video'
             for entry in source['tasks']):
-        raise ValueError('Chloe Songssx 整场任务须提供 chloe_round，自动关联脚本和制作轮次')
+        raise ValueError('Chloe Songssx 整场任务须提供 chloe_round 自动关联轮次，或提供既有轮次的 chloe-video 关联')
     if 'iris_round' in source and (production_adapter != 'iris-commercial-production' or not isinstance(round_spec, dict)):
         raise ValueError('iris_round 须通过 Iris 商业生产空间提交')
     if round_spec is not None:

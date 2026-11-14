@@ -74,5 +74,5 @@ def register(project, spec, task, plan_file, documents, now):
     documents.put(document, body)
     documents.put(index, json.dumps(rounds, ensure_ascii=False, indent=2) + '\n')
     plan['business_result'] = dict(adapter='chloe-video', document=document.name, execution=execution,
-                                   round=number, outputs=[dict(slot=production.SCENE_SLOT)])
+                                   round=number, outputs=[dict(slot=production.SCENE_SLOT)], automatic_round=True)
     return number

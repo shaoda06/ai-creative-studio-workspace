@@ -10,6 +10,9 @@ from backend import main
 from backend.services import comfy_tasks as tasks, submission_plans, result_registration
 from tests import test_chloe_production as fixtures
 from tests.test_submission_lifecycle import ENGLISH
+from tests.test_songssx import PROMPT
+from backend.services.episode_downloads import songssx_round_videos
+from backend.services.review_notes import ExportChanges
 from workflow_paths import workflow_file
 from chloe_production import prompt_sections
 import execution_records as recordio
@@ -179,3 +182,126 @@ class ChloeChainTests(unittest.IsolatedAsyncioTestCase):
         for entries in ([second],[first,first]):
             path.write_text(json.dumps({'tasks':entries}))
             with self.assertRaisesRegex(ValueError,'对应唯一任务'):fixtures.browser.task_for(self.project,row)
+
+    async def test_songssx_whole_video_review_postprocess_and_handoff(self):
+        project, fixture = self.project, self.f
+        ids = ('P001', 'P002')
+        slot = '整片视频'
+        def declare(execution, stage, number, upstream='不适用', run='R001', *, local_result=False):
+            folder = project / '执行记录' / execution
+            folder.mkdir()
+            prompt_link = '不适用'
+            if stage == '场次生成':
+                prompt = '\n\n'.join('## '+title+'\n\n'+'\n\n'.join(f'### {p}\n\n{body}' for p in ids)
+                                     for title, body in [('模型提示词正文', PROMPT), ('中文提示词参考版', '隔离中文')])
+                (folder / '提示词.md').write_text(prompt+'\n', encoding='utf-8')
+                prompt_link = f'[提示词](<执行记录/{execution}/提示词.md>)'
+            fixtures.add_row(fixture.record,'执行记录',[execution,'视频生成' if stage=='场次生成' else '视频处理',
+                upstream,'隔离工作流',prompt_link,'不适用' if local_result else f'[参数](<执行记录/{stage}任务清单.json>)','隔离授权',
+                '未取得','未取得','未取得','准备中','无'])
+            for index, p in enumerate(ids):
+                fixtures.add_row(fixture.record,'视频分段执行',[p,stage,run,execution,slot,str(index)])
+            round_row = fixture.round(number, [(p, execution) for p in ids])
+            for segment in round_row['segments']:
+                segment['slot'] = slot
+            return round_row, {'adapter':'chloe-video','document':'制作记录.md','execution':execution,
+                               'round':number,'outputs':[{'slot':slot}]}
+
+        async def collect(result, media):
+            key = result['tasks'][0]['local_task_id']
+            data = self.store.rows[key]['input']
+            target, = data.outputs
+            remote = {'filename':'isolated.mp4','subfolder':'video/test','type':'output'}
+            def download(_, args):
+                path = Path(args.output)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(media)
+                return {'path':str(path),'bytes':len(media),'remote':remote}
+
+            self.store.save(key, prompt_id='remote-'+Path(data.record_dir).name)
+            recordio.write(Path(data.record_dir)/'请求.json', {'prompt':data.workflow})
+            with patch.object(tasks.client,'download',side_effect=download):
+                await self.store.finish_collection(key, {'state':'success','files':[{
+                    'node_id':target.node_id,'output_key':target.output_key,'index':target.index,'file':remote}]})
+            report = result_registration.register(self.store, key)
+            self.assertEqual(report, result_registration.register(self.store, key))
+            return report, Path(target.path)
+
+        def media(name, size, duration):
+            path = self.root / name
+            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'color=s={size}:r=24:d={duration}',
+                            '-c:v','libx264','-pix_fmt','yuv420p',str(path)], check=True)
+            return path.read_bytes()
+
+        first, association = declare('E001','场次生成',1)
+        fixture.rounds([first])
+        scene_task = dict(task_type='video-scene-generation',title='隔离整片',authorization='隔离授权',
+                          record_dir='执行记录/E001',output='候选/整片.mp4',video_plan={'business_result':association},
+                          songssx={'width':736,'height':1280,'seed':7,'remote_prefix':'video/test/chloe',
+                                   'configuration':{'high_steps':4,'scene_type':'dialogue','speed':None,'loras':[]},
+                                   'segments':[{'p':p,'duration':duration,'overlap_frames':0,'images':[self.reference],
+                                                'prompt':PROMPT,'prompt_zh':p+' 中文'} for p,duration in zip(ids,(5,4))]})
+        accepted = await self.enqueue([scene_task], '场次生成')
+        detail = lambda: fixtures.browser.detail(fixture.projects,project.name,fixture.api,'V001')
+        self.assertFalse(detail()['sceneRounds']['whole'][0]['songssx']['video']['url'])
+        duration = detail()['sceneRounds']['whole'][0]['songssx']['segments'][-1]['end']
+        report, source = await collect(accepted, media('source.mp4','64x48',duration))
+        self.assertTrue(report['business_sync']['round_ready'])
+        self.assertFalse(report['business_sync']['adopted'])
+        page = detail()
+        self.assertEqual(page['productionWorkflows'], ['songssx'])
+        scene = page['sceneRounds']['whole'][0]['songssx']
+        self.assertTrue(scene['video']['url'])
+        self.assertFalse(scene['video']['approved'])
+        self.assertEqual([part['id'] for part in scene['segments']], list(ids))
+        self.assertEqual(scene['segments'][1]['start'], scene['segments'][0]['end'])
+        self.assertEqual(scene['segments'][1]['context']['prompts']['chinese'], 'P002 中文')
+        self.assertIn('/production-files/',scene['segments'][0]['context']['references']['segment'][0]['url'])
+        self.assertEqual([path for path,_ in songssx_round_videos(fixture.projects,project.name,page,1)], [source])
+        note = ExportChanges.model_validate({'notes':[{'segment':'P002','stage':'场次生成','run':'R001',
+            'roundNumber':1,'text':'第二段回看','fileRevision':scene['video']['fileRevision'],'expectedText':''}],
+            'rounds':[]})
+        fixtures.browser.validate_notes(project,'V001',{(1,'P002','场次生成','R001')},note)
+
+        preview, _ = declare('E002','后处理',2,'E001',local_result=True)
+        derived_path = self.root/'silent.mp4'
+        derived_path.write_bytes(source.read_bytes())
+        original_ref = fixtures.resources.reference(project, source)
+        derived_ref = fixtures.resources.register(project, derived_path, key='silent',
+            resource_id=original_ref['resource_id'], parent=source)
+        derived = derived_ref['file']
+        fixtures.add_row(fixture.record,'输出记录',['E002',slot,
+            f'[本视频:{derived_ref["resource_id"]}@{derived_ref["version"]}](<{derived}>)'])
+        preview['review_outputs'] = [{'label':'静音审阅版','file':derived,
+            'playback':{'scene':'whole','run':'R001','stage':'后处理'}}]
+        fixture.rounds([first,preview])
+        self.assertEqual(detail()['sceneRounds']['whole'][1]['songssx']['video']['key'],derived)
+        self.assertEqual([path for path,_ in songssx_round_videos(fixture.projects,project.name,detail(),2)],
+                         [project/derived])
+
+        second, processing = declare('E003','后处理',3,'E002','R002')
+        fixture.rounds([first,preview,second])
+        processing['adopt'] = {'document':'制作记录.md','review':'R001'}
+        processing['outputs'][0].update(previous='无',expected={'width':128,'height':96,'frame_rate':24,
+                                                                'duration':duration,'audio_tracks':0})
+        post_task = dict(task_type='video-postprocess',title='隔离整片后处理',authorization='隔离授权',
+                         record_dir='执行记录/E003',output_nodes=['16'],references=[{'file':derived,'placeholder':'planned/video.mp4'}],
+                         video_postprocess={'source':derived,'resolution':[128,96],'fps':'original'},
+                         outputs=[{'path':'候选/处理版.mp4','node_id':'16','output_key':'images','index':0,'response_name':'取回.json'}],
+                         video_plan={'adapter':'technical','metadata':'ffprobe','business_result':processing})
+        with self.assertRaisesRegex(ValueError,'审阅|批准'):
+            await self.enqueue([post_task],'后处理')
+        fixtures.add_row(fixture.record,'审阅记录',['R001','2026-11-08T12:00:00+08:00',
+            '[第2轮](<制作轮次.json#round-2>)','通过','无','隔离用户批准'])
+        accepted = await self.enqueue([post_task], '后处理')
+        report, processed = await collect(accepted, media('processed.mp4','128x96',duration))
+        self.assertTrue(report['business_sync']['adopted'])
+        handoff = json.loads(Path(report['business_sync']['handoff']).read_text('utf-8'))
+        self.assertEqual([project/item['file'] for item in handoff['media']], [processed])
+        page = detail()
+        after = page['sceneRounds']['whole'][2]['songssx']
+        self.assertTrue(after['video']['approved'])
+        self.assertEqual(after['video']['stage'], '后处理')
+        self.assertEqual(after['segments'][1]['start'],scene['segments'][1]['start'])
+        self.assertEqual([path for path,_ in songssx_round_videos(fixture.projects,project.name,page,3)], [processed])
+        fixtures.check(project)

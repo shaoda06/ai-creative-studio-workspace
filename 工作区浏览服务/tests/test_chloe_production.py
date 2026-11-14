@@ -486,9 +486,9 @@ class ChloeProductionTests(unittest.TestCase):
         download=browser.downloads(self.projects,self.project.name,self.api,'V001')
         self.assertEqual(download['workPackages'][0]['rounds'],[3])
         self.assertEqual(check_workspace(self.root)['errors'],[])
-        body=self.record.read_text().replace('| E005 | 视频处理 | E003 |','| E005 | 视频处理 | E001 |')
+        body=self.record.read_text().replace('| E005 | 视频处理 | E003 |','| E005 | 视频处理 | E002 |')
         self.record.write_text(body)
-        with self.assertRaisesRegex(ValueError,'二采执行'):state(self.project)
+        with self.assertRaisesRegex(ValueError,'同一分段的唯一上游'):state(self.project)
 
     def test_handoff_rejects_missing_duplicate_reordered_and_wrong_versions(self):
         manifest=self.prepare_handoff()

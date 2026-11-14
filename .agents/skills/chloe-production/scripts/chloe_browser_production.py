@@ -5,16 +5,18 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
-from chloe_production import state, local, link_path, fields, document, plan, director_slot, STAGES, SCENE_SLOT, SCENE_STAGE, prompt_sections, check_handoffs
+from chloe_production import (state, local, link_path, fields, document, plan, director_slot, STAGES,
+                              prompt_sections, check_handoffs, scene_source, timeline_values, upstream_candidate,
+                              SCENE_SLOT, VIDEO_PURPOSE)
 from chloe_documents import records, media_reference, MISSING
 from backend.parsers import documents
 from backend.services.workspaces import jianying_links
 from backend.services.scene_postprocess import review_output
 import execution_records as recordio
-from project_paths import input_file, input_key
+from project_paths import input_file
 from h3_browser_context import request_context, empty_context
 from prepared_documents import read_journal
-from songssx_browser import songssx_scene
+from songssx_browser import songssx_scene, set_scene_playback
 
 
 def review_page(space, project):
@@ -165,10 +167,9 @@ def production_data(project,api,work=None,**kwargs):
     segments={key:{**item,'scriptHtml':script_part(project,'脚本.md',item['shotIds']),
                    'scriptUrl':file_url(api,'脚本.md'),'videos':[]} for key,item in data['plan'].items()}
     for value in data['candidates'].values():
-        if value['stage'] == SCENE_STAGE:
-            continue
         item=segments.setdefault(value['id'],{'id':value['id'],'duration':0,'scriptHtml':'','videos':[]})
-        item['videos'].append(video(data,api,value))
+        if not scene_source(data['candidates'], value):
+            item['videos'].append(video(data,api,value))
     for item in segments.values():
         item['planned']=not item['videos']
     return {'segments':list(segments.values()),'batches':[],'issues':[]}
@@ -214,26 +215,6 @@ def apply_script_timing(context, script_shots, entry):
     context['shotTimingSource'] = 'plan'
 
 
-def round_script_context(context, project, source, entry, script_shots, html, url):
-    context.update(scriptHtml=html, scriptUrl=url)
-    context['issues'] = [issue for issue in context['issues']
-                         if issue != '执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。']
-    if len(context['shots']) == len(entry['shotIds']):
-        for shot, identity in zip(context['shots'], entry['shotIds']):
-            shot.update(id=identity, html=script_part(project, source, [identity]))
-    apply_script_timing(context, script_shots, entry)
-    context['dialogues'] = []
-    for shot in script_shots:
-        identity = shot['fields']['镜号']
-        if identity not in entry['shotIds']:
-            continue
-        for line in shot['fields']['台词'].splitlines():
-            speaker, separator, original = line.partition('：')
-            if separator and original.strip():
-                context['dialogues'].append({'shot':identity, 'index':len(context['dialogues']),
-                                             'speaker':speaker.strip(), 'original':original.strip()})
-
-
 def detail(projects,name,space_api,work,view=None,**kwargs):
     project=projects.project(name);check_work(project,work)
     if view=='archive':
@@ -243,68 +224,91 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
     current=script_document(project,api,'脚本.md')
     segments=production_data(project,api,work)['segments']
     by_id={v['id']:v for v in segments};rounds=[]
-    readme=project/'README.md'
-    adopted_scene=next((media_reference(data['root'],readme,row['资源引用'])
-                        for row in records(document(project,'README.md'),'当前采用') if row['用途']==SCENE_SLOT),None)
+    adopted_refs={row['用途']:media_reference(data['root'],project/'README.md',row['资源引用'])
+                  for row in records(document(project,'README.md'),'当前采用')
+                  if VIDEO_PURPOSE.fullmatch(row['用途']) or row['用途'] == SCENE_SLOT}
     for item in data['rounds'].values():
         script=script_document(project,api,item['script'])
-        script_doc=document(project,item['script'])
-        script_shots=next(section['shots'] for section in script_doc['sections'] if section['heading']=='镜头与分镜')
-        values=[]
-        issues=[]
-        scene=None
-        contexts={}
+        values=[]; contexts={}; issues=[]
+        source=item['scene_source']
         for entry in item['values']:
+            candidate=video(data,api,entry) if not source else None
             html=script_part(project,item['script'],entry['shotIds'])
-            value={**{key:entry[key] for key in ('id','duration','stage','run','carried','shotIds')},
-                   'scriptHtml':html,'scriptUrl':script['url']}
-            values.append(value)
-            identity=entry['id']
-            if item['songssx']:
-                context=empty_context(None)
-                context['shots']=[{'id':shot,'duration':None} for shot in entry['shotIds']]
-                round_script_context(context,project,item['script'],entry,script_shots,html,script['url'])
-                contexts[identity]=context
-                continue
-            candidate=video(data,api,entry)
-            value['key']=candidate['key']
+            values.append({**{key:entry[key] for key in ('id','duration','stage','run','carried','shotIds')},
+                           'scriptHtml':html,'scriptUrl':script['url']})
             # Keep original execution context attached to its actual script, never the current draft.
-            target=next(v for v in by_id[identity]['videos'] if v['key']==candidate['key'] and v['run']==entry['run'])
-            if not entry['carried']:
-                round_script_context(target['context'],project,item['script'],entry,script_shots,html,script['url'])
-        if item['songssx']:
-            execution=item['values'][0]['execution']
-            scene=songssx_scene(project, {
-                'songssx_execution':f'执行记录/{execution}','segments':values,'issues':issues,
-            }, contexts.__getitem__)
-            if scene.get('video'):
-                main=scene['video']
-                main['approved']=adopted_scene is not None and item['values'][0]['ref']==adopted_scene
-                main['adoptionKnown']=True
-                for key in ('url','taskStateUrl'):
-                    if main[key]:
-                        main[key]=api+'/files/'+main[key]
-                for segment in scene['segments']:
-                    context=segment['context']
-                    context['prompts']['chineseUrl']=file_url(api,f'执行记录/{execution}/提示词.md')
-                    for material in segment['context']['references']['segment']:
-                        if material.get('url','').startswith('/api/projects/'):
-                            material['url']=space_api+material['url'][4:]
-                        elif material.get('url'):
-                            material['url']=api+'/files/'+material['url']
-                for entry in values:
-                    entry['key']=main['key']
+            if source:
+                context=contexts[entry['id']]=empty_context(None)
+                context['shots']=[{'id':identity,'html':script_part(project,item['script'],[identity]),
+                                   'start':None,'duration':None}
+                                  for identity in entry['shotIds']]
+            else:
+                values[-1]['key']=candidate['key']
+                target=next(v for v in by_id[entry['id']]['videos'] if v['key']==candidate['key'] and v['run']==entry['run'])
+                context=target['context']
+            if source or not entry['carried']:
+                context.update(scriptHtml=html,scriptUrl=script['url'])
+                context['issues']=[issue for issue in context['issues'] if issue!='执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。']
+                if len(context['shots'])==len(entry['shotIds']):
+                    for shot,identity in zip(context['shots'],entry['shotIds']):
+                        shot.update(id=identity,html=script_part(project,item['script'],[identity]))
+                script_doc=document(project,item['script'])
+                script_shots=next(section['shots'] for section in script_doc['sections'] if section['heading']=='镜头与分镜')
+                apply_script_timing(context, script_shots, entry)
+                context['dialogues']=[]
+                for shot in script_shots:
+                    identity=shot['fields']['镜号']
+                    if identity not in entry['shotIds']:continue
+                    for line in shot['fields']['台词'].splitlines():
+                        speaker,separator,original=line.partition('：')
+                        if separator and original.strip():
+                            context['dialogues'].append({'shot':identity,'index':len(context['dialogues']),'speaker':speaker.strip(),'original':original.strip()})
         review_outputs=[]
         for output in item.get('review_outputs',[]):
+            if 'playback' in output:
+                continue
             if 'postprocess' in output:
                 review_outputs.append(review_output(project, output, lambda key: file_url(api, key)))
                 continue
             reference=media_reference(data['root'],project/'制作记录.md',output['resource'])
             review_outputs.append({'kind':'video','name':output['label'],'url':resource_file(data,api,reference)})
-        rounds.append({'number':item['number'],'created_at':item['created_at'],'note':item['note'],
+        round_view={'number':item['number'],'created_at':item['created_at'],'note':item['note'],
                        'episodeRound':True,'script':script,'storyboard':script,'segments':values,
-                       'record':ref(project,api,project/'制作记录.md'),'issues':issues,'reviewOutputs':review_outputs,
-                       **({'songssx':scene} if scene is not None else {})})
+                       'record':ref(project,api,project/'制作记录.md'),'issues':issues,'reviewOutputs':review_outputs}
+        if source:
+            scene_entry={'songssx_execution':f"执行记录/{source['execution']}", 'segments':values, 'issues':issues}
+            selected=item['values'][0]
+            if selected['stage']=='后处理' and not item['playback']:
+                upstream=upstream_candidate(data['candidates'], selected)
+                scene_entry['songssx_postprocess']=f"执行记录/{selected['execution']}"
+                if upstream['ref']:
+                    scene_entry['postprocess_source']=(data['root']/upstream['ref']['file']).relative_to(project).as_posix()
+            workspace_api=api.split('/projects/')[0]
+            scene=songssx_scene(project,scene_entry,contexts.__getitem__,media_url=lambda path:
+                workspace_api+'/production-files/'+quote(path.relative_to(data['root']).as_posix(),safe='/'))
+            if item['playback'] and scene['recorded'] and scene['segments']:
+                set_scene_playback(project,scene,item['playback'])
+            if scene_video := scene.get('video'):
+                if not selected['ref'] or project / scene_video['key'] != data['root'] / selected['ref']['file']:
+                    scene_video['url']=''
+                    if selected['ref']:
+                        issues.append('整场输出与业务登记的资源版本不一致')
+                if scene_video['url']:
+                    scene_video['url']=api+'/files/'+scene_video['url']
+                    scene_video['approved']=(adopted_refs.get(SCENE_SLOT) == selected['ref']
+                        or all(adopted_refs.get(v['id']+'/'+v['stage'])==v['ref'] for v in item['values']))
+                    scene_video['adoptionKnown']=True
+                if scene_video.get('taskStateUrl'):
+                    scene_video['taskStateUrl']=api+'/files/'+scene_video['taskStateUrl']
+                prompt = source['record']['提示词或正文']
+                if prompt not in MISSING:
+                    path = link_path(project, prompt).relative_to(project).as_posix()
+                    for segment in scene['segments']:
+                        segment['context']['prompts']['chineseUrl']=file_url(api,path)
+                for entry in values:
+                    entry['key']=scene_video['key']
+            round_view['songssx']=scene
+        rounds.append(round_view)
     materials=[];seen=set()
     for row in records(data['doc'],'输入记录'):
         reference=media_reference(data['root'],project/'制作记录.md',row['资源引用'])
@@ -316,21 +320,19 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                           'url':resource_file(data,api,reference),'materialGroup':'unknown','materialStatus':'实际输入',
                           'materialNote':row['输入槽位'],'materialReview':ref(project,api,project/'制作记录.md')})
     progress=fields(document(project,'README.md'),'定位与当前进度')
-    workflows=[]
-    legacy_executions = (value['record'] for value in data['candidates'].values() if value['stage'] in STAGES)
-    if (any(video['url'] or video['taskStateUrl'] for segment in segments for video in segment['videos'])
-            or any(row['任务ID'] not in MISSING for row in legacy_executions)):
-        workflows.append('aimixer')
-    if any(row.get('songssx', {}).get('recorded') for row in rounds):
-        workflows.append('songssx')
     result.update(scenes=['whole'],segments={'whole':segments},sceneRounds={'whole':rounds},
         episodeRounds=[{'number':v['number'],'scenes':['whole']} for v in rounds],
-        productionWorkflows=workflows,
-        productionWorkflow=workflows[0] if workflows else ('aimixer' if any(segment['videos'] for segment in segments) else 'songssx'),
         script=current,storyboards={'whole':current},materials=materials,materialRecord=ref(project,api,project/'制作记录.md'),
         productionTask=ref(project,api,project/'制作记录.md'),roundHistory=ref(project,api,project/'制作轮次.json'),
         directorSheets={'whole':director_sheets(data,api)},productionComplete=False,productionIssues=[],
         workStatus={'label':progress['当前阶段'],'summaryHtml':'','deliverySummary':'','record':ref(project,api,project/'README.md')})
+    legacy = [value for value in data['candidates'].values() if not scene_source(data['candidates'], value)]
+    result['productionWorkflows']=[workflow for workflow, present in (
+        ('aimixer', any(video['url'] or video['taskStateUrl'] for row in segments for video in row['videos'])
+         or any(value['record']['任务ID'] not in MISSING for value in legacy)),
+        ('songssx', any(round_.get('songssx',{}).get('recorded') for round_ in rounds))) if present]
+    if not result['productionWorkflows']:
+        result['productionWorkflow']='aimixer' if legacy else 'songssx'
     return result
 
 
@@ -354,8 +356,8 @@ def validate_notes(project,work,identities,changes,view=None):
     check_work(project,work);data=state(project)
     if view=='archive':raise ValueError('不可写入归档意见')
     rounds={n:{(v['id'],v['stage'],v['run']) for v in r['values']} for n,r in data['rounds'].items()}
-    if any(r.number not in rounds for r in changes.rounds) or any(
-          (n.segment,n.stage,n.run) not in identities and (n.roundNumber,n.segment,n.stage,n.run) not in identities or
+    if any(r.number not in rounds for r in changes.rounds) or any((n.segment,n.stage,n.run) not in identities and
+          (n.roundNumber,n.segment,n.stage,n.run) not in identities or
           n.roundNumber is not None and (n.segment,n.stage,n.run) not in rounds.get(n.roundNumber,set()) for n in changes.notes):
         raise ValueError('意见必须对应已有候选及其整片轮次')
 
@@ -375,14 +377,13 @@ def round_videos(data, number, stage=None):
     if stage is not None and stage not in STAGES:
         raise ValueError('制作阶段无效')
     files = []
-    item = selected_round(data, number)
-    for candidate in item['values'][:1] if item['songssx'] else item['values']:
+    for candidate in timeline_values(selected_round(data, number)):
         if (stage is not None and candidate['stage'] != stage) or not candidate['ref']:
             continue
         path = local(data['root'], candidate['ref']['file'])
         if not path.is_file():
             raise FileNotFoundError('原视频缺失：'+str(path))
-        member = ('整场' if item['songssx'] else candidate['id'])+'-'+candidate['run']+path.suffix
+        member = candidate['id']+'-'+candidate['run']+path.suffix
         files.append((path, member))
     return files
 
@@ -404,8 +405,7 @@ def downloads(projects,name,space_api,work,scene='whole',view=None,round_number=
     if round_number is not None:
         result['round']={kind:{'count':0,'url':None,'files':[]} for kind in ('videos','canvas')}
     result['workPackages']=[];seen=set()
-    candidates = ([row for row in data['candidates'].values() if row['stage'] in STAGES]
-                  if round_number is None else selected_round(data, round_number)['values'])
+    candidates = list(data['candidates'].values()) if round_number is None else selected_round(data, round_number)['values']
     for candidate in candidates:
         execution=candidate['execution']
         if execution in seen:continue

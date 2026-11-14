@@ -11,7 +11,7 @@ import chloe_production as production
 resources=records.resources
 
 
-def validate(owner, plan, count, *, task=None):
+def validate(owner, plan, count):
     document,body,execution=records.validate(owner,plan,count)
     if document!=owner/'制作记录.md':
         raise ValueError('视频结果须写本视频制作记录')
@@ -24,24 +24,6 @@ def validate(owner, plan, count, *, task=None):
     if len(stages)!=1:
         raise ValueError('同一执行不能混合制作阶段')
     stage=next(iter(stages))
-    if stage == production.SCENE_STAGE and not current['songssx']:
-        raise ValueError('整场视频须关联 Songssx 制作轮次')
-    if stage == production.SCENE_STAGE and task is not None:
-        from songssx_workflow import PLANNER, shot_blocks
-
-        if Path(task.record_dir) != owner / '执行记录' / plan['execution'] or 'gap_repair' in task.video_plan:
-            raise ValueError('整场视频须关联本轮执行目录及完整场次请求')
-        segments = task.video_plan['segments']
-        if [(v['id'], v['duration']) for v in current['values']] != [(v['p'], v['planned_seconds']) for v in segments]:
-            raise ValueError('实际 GEN 与 Chloe 轮次 P 顺序或时长不一致')
-        timeline = json.loads(task.workflow[PLANNER]['inputs']['timeline_data'])
-        prompts = production.prompt_sections(value, execution)
-        for entry, row, gen in zip(current['values'], segments, timeline['segmentConfig']['segments'], strict=True):
-            identity = entry['id']
-            if (len(shot_blocks(gen['prompt'])) != len(entry['shotIds'])
-                    or prompts['模型提示词正文'][identity] != gen['prompt'].strip()
-                    or prompts['中文提示词参考版'][identity] != row['prompt_zh'].strip()):
-                raise ValueError(identity + ' 的实际提示词与已登记轮次不一致')
     if stage=='后处理':
         review_doc,review=records.approval(owner,plan,body)
         if review_doc!=document:
@@ -52,8 +34,9 @@ def validate(owner, plan, count, *, task=None):
             raise ValueError('后处理须关联准确的已批准轮次')
         for v in current['values']:
             if v['execution']==plan['execution'] and not any(
-                    a['id']==v['id'] and a['execution']==execution['上游执行'] and a['stage']=='二采' for a in approved['values']):
-                raise ValueError('后处理上游不在批准的二采组合内')
+                    a['id']==v['id'] and a['execution']==execution['上游执行'] and a['ref']
+                    and (not current['scene_source'] or a['duration']==v['duration']) for a in approved['values']):
+                raise ValueError('后处理上游不在批准的轮次组合内')
         for output in plan['outputs']:
             expected=output['expected']
             if not isinstance(output['previous'],str):
@@ -64,8 +47,54 @@ def validate(owner, plan, count, *, task=None):
             if type(expected['audio_tracks']) is not int or expected['audio_tracks']<0:
                 raise ValueError('音轨数须为非负整数')
     elif plan.get('adopt'):
-        raise ValueError('生成候选返回后仅登记待审，不自动采用')
+        raise ValueError('生成结果返回后仅登记待审，不自动采用')
     return document,body,execution,value,stage
+
+
+def validate_task(data, plan, checked):
+    from project_paths import input_file
+    from backend.services.scene_postprocess import output_for_source
+
+    stages = {'video-first-pass': '一采', 'video-second-pass': '二采',
+              'video-scene-generation': '场次生成', 'video-postprocess': '后处理'}
+    _, _, execution, value, stage = checked
+    if stages.get(data.task_type) != stage:
+        raise ValueError('任务类型与原分段阶段不一致')
+    owner = value['project']
+    if Path(data.record_dir).resolve() != owner / '执行记录' / plan['execution']:
+        raise ValueError('任务目录与原执行不一致')
+    round_row = value['rounds'][plan['round']]
+    if stage == '场次生成':
+        timeline = data.video_plan
+        if ('gap_repair' in timeline or
+                [(row['p'], row['planned_seconds']) for row in timeline['segments']]
+                != [(item['id'], item['duration']) for item in round_row['values']]):
+            raise ValueError('整场生成须匹配完整轮次及分段时长')
+        if plan.get('automatic_round'):
+            from songssx_workflow import PLANNER, shot_blocks
+
+            request = json.loads(data.workflow[PLANNER]['inputs']['timeline_data'])
+            prompts = production.prompt_sections(value, execution)
+            for entry, row, gen in zip(round_row['values'], timeline['segments'],
+                                       request['segmentConfig']['segments'], strict=True):
+                identity = entry['id']
+                if (len(shot_blocks(gen['prompt'])) != len(entry['shotIds'])
+                        or prompts['模型提示词正文'][identity] != gen['prompt'].strip()
+                        or prompts['中文提示词参考版'][identity] != row['prompt_zh'].strip()):
+                    raise ValueError(identity + ' 的实际提示词与已登记轮次不一致')
+    elif stage == '后处理':
+        sources = [production.upstream_candidate(value['candidates'], item) for item in round_row['values']
+                   if item['execution'] == execution['执行编号']]
+        expected = {value['root'] / item['ref']['file'] for item in sources}
+        if round_row['scene_source']:
+            source, = expected
+            output_for_source(owner, data.model_dump(), source)
+            duration = production.video_version(value['root'], sources[0]['ref'])['facts']['duration_seconds']
+            target = plan['outputs'][0]['expected']
+            if abs(duration-target['duration']) > 1/target['frame_rate']+0.001:
+                raise ValueError('整场后处理须保留原片时长及分段时间轴')
+        elif not expected <= {input_file(owner, item['file']) for item in data.uploads}:
+            raise ValueError('后处理任务须使用已批准的准确源片')
 
 
 def technical(item, expected):
@@ -90,8 +119,9 @@ def handoff(owner, value, round_row, body, time):
     number=round_row['number']
     path=owner/'剪辑交接'/f'第{number}轮.jianying.json'
     spec={'name':owner.name+f'-第{number}轮','media':[{'file':str((value['root']/v['ref']['file']).relative_to(owner)),
-        'member':v['id']+'.mp4','timeline':True} for v in selected]}
-    if path.exists() and json.loads(path.read_text())!=spec:
+        'member':('整片' if round_row['scene_source'] else v['id'])+'.mp4','timeline':True}
+        for v in production.timeline_values(round_row)]}
+    if path.exists() and json.loads(path.read_text('utf-8'))!=spec:
         raise ValueError('既有交接组合不同，不覆盖历史清单')
     if not path.exists():
         resources.write_json(path,spec)
@@ -124,10 +154,12 @@ def finish(owner, plan, report, report_path):
         adopted=False; manifest=None
         time=records.now()
         if stage=='后处理' and latest:
-            for spec,item in zip(plan['outputs'],report['items'],strict=True):
-                v=next(v for v in round_row['values'] if v['execution']==plan['execution'] and v['slot']==spec['slot'])
-                progress=records.adopt(progress,v['id']+'/'+v['stage'],records.resource(owner,readme,item['path']),
-                    records.link(readme,document,plan['adopt']['review'])+'；'+records.report_link(readme,report_path,'技术核对'),time,expected=spec['previous'])
+            results = {spec['slot']: (spec, item) for spec, item in zip(plan['outputs'],report['items'],strict=True)}
+            for v in round_row['values']:
+                if v['execution'] == plan['execution']:
+                    spec,item = results[v['slot']]
+                    progress=records.adopt(progress,v['id']+'/'+v['stage'],records.resource(owner,readme,item['path']),
+                        records.link(readme,document,plan['adopt']['review'])+'；'+records.report_link(readme,report_path,'技术核对'),time,expected=spec['previous'])
             adopted=True
         ready=all(v['ref'] and v['record']['执行状态']=='已完成' for v in round_row['values'])
         next_action='等待本轮其余分段' if not ready else '整片审阅'

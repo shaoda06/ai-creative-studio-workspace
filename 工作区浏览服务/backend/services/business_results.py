@@ -31,14 +31,9 @@ def validate(data):
     plan,module=selected(data)
     if plan is not None:
         targets = data.segment_plan.targets if data.segment_plan else data.outputs
+        checked = module.validate(Path(data.project),plan,len(targets))
         if plan['adapter']=='chloe-video':
-            checked = module.validate(Path(data.project),plan,len(targets),task=data)
-            stages={'video-first-pass':'一采','video-second-pass':'二采','video-postprocess':'后处理',
-                    'video-scene-generation':'场次生成'}
-            if checked[4]!=stages.get(data.task_type):
-                raise ValueError('任务类型与原分段阶段不一致')
-        else:
-            module.validate(Path(data.project),plan,len(targets))
+            module.validate_task(data, plan, checked)
 
 
 def finish(data, report, report_path, state=None):
