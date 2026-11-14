@@ -41,6 +41,7 @@ REFERENCE_EXTENSIONS = {
     'images': {'.png', '.jpg', '.jpeg', '.webp'},
     'audios': {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wma'},
 }
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'}
 
 
 def api_from_canvas(canvas):
@@ -154,6 +155,49 @@ def gap_boundaries(before_frame, generated_frames):
     ]
 
 
+def video_references(clips, start_frame, end_frame):
+    """Return the planner's video slots in timeline order for one GEN."""
+    start, end = start_frame / FPS, end_frame / FPS
+    refs = []
+    for slot, clip in sorted(enumerate(clips), key=lambda pair: pair[1]['start']):
+        seconds = min(end, clip['start'] + clip['duration']) - max(start, clip['start'])
+        if seconds > 1e-9:
+            refs.append((slot, seconds))
+    return refs
+
+
+def prepare_video_references(root, entries, width, height):
+    if not isinstance(entries, list) or not entries:
+        raise ValueError('Songssx reference_videos 须为非空视频配置数组')
+    clips, paths, facts = [], [], {}
+    for index, entry in enumerate(entries, 1):
+        required = {'file', 'start', 'duration'}
+        if (not isinstance(entry, dict) or not required <= entry.keys()
+                or entry.keys() - required - {'source_start', 'reference_size'}):
+            raise ValueError(f'参考视频 {index} 须提供 file、start、duration，可选 source_start、reference_size')
+        path = input_file(root, entry['file'])
+        if path.suffix.lower() not in VIDEO_EXTENSIONS:
+            raise ValueError(f'Songssx 不支持视频素材格式：{path.name}')
+        start, trim, duration = entry['start'], entry.get('source_start', 0), entry['duration']
+        if (any(type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                for value in (start, trim, duration)) or duration < 2):
+            raise ValueError(f'参考视频 {index} 的轨道起点和源入点须为非负秒数，时长至少 2 秒')
+        size = entry.get('reference_size', [width, height])
+        if not isinstance(size, list) or len(size) != 2:
+            raise ValueError(f'参考视频 {index} 的 reference_size 须为 [宽, 高]')
+        validate_dimensions(*size)
+        if path not in facts:
+            facts[path] = probe(path)
+        metadata = facts[path]
+        if metadata['duration'] is None or trim + duration > metadata['duration'] + 1e-6:
+            raise ValueError(f'参考视频 {index} 的源截取区间超出可读视频时长：{path.name}')
+        clips.append(dict(id=f'video-{index}', start=start, trimStart=trim, duration=duration,
+                          sourceDuration=metadata['duration'], hasAudio=bool(metadata['audio']),
+                          referenceMode='edit', referenceWidth=size[0], referenceHeight=size[1]))
+        paths.append(path)
+    return clips, paths
+
+
 def validate(workflow, video_plan, outputs, uploads):
     planner, sampler, save = (workflow[key] for key in (PLANNER, SAMPLER, SAVE))
     if ([node['class_type'] for node in (planner, sampler, save)] !=
@@ -175,8 +219,20 @@ def validate(workflow, video_plan, outputs, uploads):
         raise ValueError('Songssx 的 GEN 数量或帧率不符合装配记录')
     gap = 'gap_repair' in video_plan
     clips = timeline['videoClips']
+    video_audio = timeline.get('videoAudioEnabled')
     if not gap and clips:
-        raise ValueError('Songssx 仅在 gap_repair 任务中接收两段边界视频')
+        if type(video_audio) is not bool:
+            raise ValueError('Songssx 须明确视频原声开关')
+        for clip in clips:
+            if (clip.get('referenceMode') != 'edit' or not clip.get('file')
+                    or type(clip.get('hasAudio')) is not bool):
+                raise ValueError('Songssx 场次视频须绑定为可编辑参考')
+            validate_dimensions(clip['referenceWidth'], clip['referenceHeight'])
+            start, trim, duration, source = (clip[key] for key in ('start', 'trimStart', 'duration', 'sourceDuration'))
+            if (any(type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                    for value in (start, trim, duration, source)) or duration < 2
+                    or trim + duration > source + 1e-6):
+                raise ValueError('Songssx 可编辑参考视频的时间线或源截取区间无效')
     if gap and timeline['audios']:
         raise ValueError('Songssx 双边界补生成只接收边界画面及独立参考图')
     if any(item.get('audioMode') != 'reference' for item in timeline['audios']):
@@ -184,8 +240,7 @@ def validate(workflow, video_plan, outputs, uploads):
     asset_ids = {kind: {item['id'] for item in timeline[kind]} for kind in REFERENCE_EXTENSIONS}
     expected_paths = {(PLANNER, 'timeline_data', (kind, index, 'file'))
                       for kind in asset_ids for index in range(len(timeline[kind]))}
-    if gap:
-        expected_paths.update((PLANNER, 'timeline_data', ('videoClips', i, 'file')) for i in range(2))
+    expected_paths.update((PLANNER, 'timeline_data', ('videoClips', i, 'file')) for i in range(len(clips)))
     paths = {(item['node'], item['input'], tuple(item.get('json-path', ()))) for item in uploads}
     if (any(len(ids) != len(timeline[kind]) for kind, ids in asset_ids.items())
             or len(uploads) != len(expected_paths) or paths != expected_paths):
@@ -203,9 +258,9 @@ def validate(workflow, video_plan, outputs, uploads):
                or any(clip.get(key) != value for key, value in expected.items())
                for clip, expected in zip(clips, boundaries, strict=True)):
             raise ValueError('Songssx 局部返修的视频边界须紧贴补生成区间，且仅提供画面')
-    minimum_images = 0 if gap else 1
     previous, previous_length = 0, 0
     identities = set()
+    used_videos = set()
     for index, (item, row) in enumerate(zip(segments, mapping, strict=True), 1):
         start, end = item['startFrame'], item['endFrame']
         overlap = previous - start
@@ -223,18 +278,32 @@ def validate(workflow, video_plan, outputs, uploads):
             raise ValueError(f'GEN {index} 的提示词格式错误：{findings[0]["detail"]}')
         if len(prompt) > PROMPT_CHARACTER_LIMIT:
             raise ValueError(f'GEN {index} 的提示词有 {len(prompt)} 字符，超过 {PROMPT_CHARACTER_LIMIT}')
-        for kind, label, minimum, maximum in (('images', 'Picture', minimum_images, 9), ('audios', 'Audio', 0, 3)):
+        videos = [] if gap else video_references(clips, start, end)
+        if (len(videos) > 3 or any(seconds < 2 - 1e-9 for _, seconds in videos)
+                or sum(seconds for _, seconds in videos) > 15 + 1e-9):
+            raise ValueError(f'GEN {index} 最多参考 3 段视频，每段须为 2 至 15 秒，合计不超过 15 秒')
+        used_videos.update(slot for slot, _ in videos)
+        paired_audios = sum(clips[slot]['hasAudio'] for slot, _ in videos) if video_audio else 0
+        minimum_images = 0 if gap or videos else 1
+        for kind, label, minimum, maximum, paired in (
+            ('images', 'Picture', minimum_images, 9, 0), ('audios', 'Audio', 0, 3, paired_audios),
+        ):
             refs = item[kind]
             if not minimum <= len(refs) <= maximum or len(set(refs)) != len(refs) or not set(refs) <= asset_ids[kind]:
                 raise ValueError(f'GEN {index} 的 {label} 参考素材分配无效')
             labels = {int(number) for number in re.findall(rf'<{label} (\d+)>', prompt)}
-            if labels != set(range(1, len(refs) + 1)):
+            if labels != set(range(1, len(refs) + paired + 1)):
                 raise ValueError(f'GEN {index} 的 {label} 提示词标签与实际参考素材不符')
-        if re.search(r'<Video \d+>', prompt):
-            raise ValueError(f'GEN {index} 的提示词标签与实际参考素材不符')
+        video_labels = {int(number) for number in re.findall(r'<Video (\d+)>', prompt)}
+        if video_labels != set(range(1, len(videos) + 1)):
+            raise ValueError(f'GEN {index} 的 Video 提示词标签与实际参考素材不符')
+        if len(item['images']) + len(item['audios']) + len(videos) > 12:
+            raise ValueError(f'GEN {index} 的参考文件合计不能超过 12 个')
         validate_shots(prompt, index, end - start, overlap)
         identities.add(row['p'])
         previous_length, previous = end - start, end
+    if not gap and len(used_videos) != len(clips):
+        raise ValueError('Songssx 每段可编辑参考视频须与至少一个 GEN 相交')
     if previous > MAX_SCENE_FRAMES:
         raise ValueError(f'Songssx 整场输出为 {previous} 帧，超过 {MAX_SCENE_FRAMES} 帧上限')
     if (timeline['selection'] != {'start': 0, 'duration': previous / FPS}
@@ -273,11 +342,18 @@ def prepare(root, spec, documents):
     if not isinstance(options, dict):
         raise ValueError('songssx 须为任务配置对象')
     legacy_fields = {'reference_image_center_crop', 'lowres_scale'}
-    unknown = options.keys() - {'width', 'height', 'seed', 'remote_prefix', 'segments', 'configuration', 'gap_repair'} - legacy_fields
+    unknown = options.keys() - {
+        'width', 'height', 'seed', 'remote_prefix', 'segments', 'configuration',
+        'gap_repair', 'reference_videos', 'video_audio_enabled',
+    } - legacy_fields
     if unknown:
         raise ValueError('未知 Songssx 配置字段：' + '、'.join(sorted(unknown)))
     if 'configuration' not in options and not legacy_fields <= options.keys():
         raise ValueError('Songssx 六步任务须提供 configuration，旧清单须保留原裁切与缩放字段')
+    if 'reference_videos' in options and 'gap_repair' in options:
+        raise ValueError('Songssx 可编辑参考视频与 gap_repair 须分别装配')
+    if 'video_audio_enabled' in options and 'reference_videos' not in options:
+        raise ValueError('Songssx video_audio_enabled 须与 reference_videos 一起填写')
     width, height = options['width'], options['height']
     validate_dimensions(width, height)
     prefix = options['remote_prefix']
@@ -311,7 +387,7 @@ def prepare(root, spec, documents):
         begin = end - overlap
         stop = begin + aligned_frames(entry['duration'], overlap)
         assigned = {'images': [], 'audios': []}
-        for kind, values in (('images', entry['images']), ('audios', entry.get('audios', []))):
+        for kind, values in (('images', entry.get('images', [])), ('audios', entry.get('audios', []))):
             if not isinstance(values, list):
                 raise ValueError(f'GEN {index} 的 {kind} 须为素材路径数组')
             for value in values:
@@ -349,6 +425,10 @@ def prepare(root, spec, documents):
     plan = {'adapter': 'technical', 'metadata': 'receipt', 'workflow_id': WORKFLOW, 'segments': rows}
     if 'business_result' in spec.get('video_plan', {}):
         plan['business_result'] = spec['video_plan']['business_result']
+    clips, paths = [], []
+    if 'reference_videos' in options:
+        clips, paths = prepare_video_references(root, options['reference_videos'], width, height)
+        timeline['videoAudioEnabled'] = options.get('video_audio_enabled', True)
     if 'gap_repair' in options:
         gap = options['gap_repair']
         if not isinstance(gap, dict) or gap.keys() != {'before', 'after'} or len(rows) != 1:
@@ -363,12 +443,12 @@ def prepare(root, spec, documents):
         before_frame = int(facts[0]['frames']) - 1
         plan['gap_repair'] = dict(before_source_frame=before_frame, replacement_frames=int(replacement_frames))
         clips = gap_boundaries(before_frame, end)
-        for index, (clip, path) in enumerate(zip(clips, paths, strict=True)):
-            clip.update(file=f'待上传/{clip["id"]}{path.suffix.lower()}', name=path.name)
-            uploads.append({'file': str(path), 'node': PLANNER, 'input': 'timeline_data',
-                            'subfolder': record.name, 'response-name': f'上传响应-{clip["id"]}.json',
-                            'json-path': ['videoClips', index, 'file']})
-        timeline.update(videoClips=clips, videoAudioEnabled=True)
+    for index, (clip, path) in enumerate(zip(clips, paths, strict=True)):
+        clip.update(file=f'待上传/{clip["id"]}{path.suffix.lower()}', name=path.name)
+        uploads.append({'file': str(path), 'node': PLANNER, 'input': 'timeline_data',
+                        'subfolder': record.name, 'response-name': f'上传响应-{clip["id"]}.json',
+                        'json-path': ['videoClips', index, 'file']})
+    timeline['videoClips'] = clips
     planner.update(width=width, height=height, generation_seconds=end / FPS,
                    timeline_data=json.dumps(timeline, ensure_ascii=False, allow_nan=False))
     api[SAMPLER]['inputs']['seed'] = seed

@@ -53,7 +53,7 @@ def set_scene_playback(project, scene, output):
 def songssx_contexts(project, data, workflow, segments, context_for, media_url=None):
     from project_paths import project_file, scope_workspace, SHARED_DIRECTORY
     from project_resources import resolve_file
-    from songssx_workflow import PLANNER
+    from songssx_workflow import PLANNER, video_references
 
     timeline = json.loads(workflow[PLANNER]['inputs']['timeline_data'])
     prepared = timeline if workflow is data['workflow'] else json.loads(data['workflow'][PLANNER]['inputs']['timeline_data'])
@@ -67,25 +67,34 @@ def songssx_contexts(project, data, workflow, segments, context_for, media_url=N
         chinese = row.get('prompt_zh', '') if gen['prompt'] == prepared_gen['prompt'] else ''
         context.update(shotTimingSource='plan', prompts={'english': gen['prompt'], 'chinese': chinese},
                        references={'common': [], 'segment': []})
-        for pool, label, kind in media_types:
-            for index, identity in enumerate(gen.get(pool, []), 1):
-                key = sources[pool][identity]
-                root = project
-                if key.startswith('@shared/'):
-                    root = scope_workspace(project) / SHARED_DIRECTORY
-                    key = key.removeprefix('@shared/')
-                source = resolve_file(root, project_file(root, key, recorded=True))
-                item = {'name': source.name, 'label': f'<{label} {index}>', 'kind': kind}
-                if source.is_file():
-                    if media_url:
-                        item['url'] = media_url(source)
-                    else:
-                        url = quote(source.relative_to(root).as_posix(), safe='/-._~')
-                        item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+        references = [(sources[pool][identity], f'<{label} {index}>', kind)
+                      for pool, label, kind in media_types
+                      for index, identity in enumerate(gen.get(pool, []), 1)]
+        clips = timeline.get('videoClips', [])
+        audio_index = len(gen.get('audios', []))
+        for index, (slot, _) in enumerate(video_references(clips, gen['startFrame'], gen['endFrame']), 1):
+            label = f'<Video {index}>'
+            if timeline.get('videoAudioEnabled') and clips[slot]['hasAudio']:
+                audio_index += 1
+                label += f' · <Audio {audio_index}>'
+            references.append((slots['videoClips', slot], label, 'video'))
+        for key, label, kind in references:
+            root = project
+            if key.startswith('@shared/'):
+                root = scope_workspace(project) / SHARED_DIRECTORY
+                key = key.removeprefix('@shared/')
+            source = resolve_file(root, project_file(root, key, recorded=True))
+            item = {'name': source.name, 'label': label, 'kind': kind}
+            if source.is_file():
+                if media_url:
+                    item['url'] = media_url(source)
                 else:
-                    item['missing'] = True
-                    context['issues'].append('该次输入原素材缺失：' + source.name)
-                context['references']['segment'].append(item)
+                    url = quote(source.relative_to(root).as_posix(), safe='/-._~')
+                    item['url'] = '/api/projects/%40shared/files/' + url if root != project else url
+            else:
+                item['missing'] = True
+                context['issues'].append('该次输入原素材缺失：' + source.name)
+            context['references']['segment'].append(item)
         yield context
 
 

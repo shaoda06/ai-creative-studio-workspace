@@ -1,6 +1,6 @@
 import unittest
 
-from songssx_workflow import validate_dimensions, validate_shots
+from songssx_workflow import validate_dimensions, validate_shots, video_references
 
 
 def prompt(description):
@@ -41,3 +41,12 @@ class ShotChecks(unittest.TestCase):
         for width, height in ((0, 736), (1280, 16416), (16416, 736), (1280, 735)):
             with self.subTest(width=width, height=height), self.assertRaisesRegex(ValueError, '对齐 32'):
                 validate_dimensions(width, height)
+
+
+class VideoReferences(unittest.TestCase):
+    def test_timeline_order_uses_the_intersection_with_each_gen(self):
+        clips = [dict(start=8, duration=8), dict(start=0, duration=8), dict(start=6, duration=4)]
+        self.assertEqual(video_references(clips, 0, 192), [(1, 8), (2, 2)])
+        self.assertEqual(video_references(clips, 192, 384), [(2, 2), (0, 8)])
+        self.assertEqual(video_references(clips, 144, 336), [(1, 2), (2, 4), (0, 6)])
+        self.assertEqual(video_references([dict(start=0, duration=8)] * 2, 0, 192), [(0, 8), (1, 8)])

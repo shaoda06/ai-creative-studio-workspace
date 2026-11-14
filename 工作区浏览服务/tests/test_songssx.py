@@ -296,6 +296,90 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 await store.close()
 
+    async def test_editable_video_only_through_shared_submission_and_upload(self):
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            project = workspace / '综合资料'
+            project.mkdir()
+            endpoint = 'http://127.0.0.1:1'
+            (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': [endpoint]}))
+            source = project / 'source.mp4'
+            run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=s=96x64:r=30:d=9',
+                 '-f', 'lavfi', '-i', 'sine=duration=9', '-c:v', 'libx264',
+                 '-c:a', 'aac', str(source)], check=True)
+            plan = project / 'plan.json'
+            prompt = PROMPT.replace('<Picture 1>', '<Video 1>').replace('Room tone.', 'Reuse <Audio 1>.')
+            task_spec = dict(title='可编辑视频参考', task_type='video-scene-generation',
+                             record_dir='record', output='candidate.mp4', authorization='隔离验证',
+                             songssx=dict(width=1152, height=768, seed=7, remote_prefix='video/test/edit',
+                                         configuration=dict(high_steps=4, scene_type='dialogue', speed=None, loras=[2]),
+                                         reference_videos=[dict(file=source.name, start=0, source_start=1, duration=8,
+                                                                reference_size=[768, 512])],
+                                         video_audio_enabled=True,
+                                         segments=[dict(p='P001', duration=8, overlap_frames=0, prompt=prompt)]))
+            plan.write_text(json.dumps({'tasks': [task_spec]}))
+            desktop = dict(node='test', server='test', pipe='test', caller_thread='test')
+            payload = SubmissionPlanInput(project='@shared', plan_file=plan.name, thread_id='test',
+                                          desktop=desktop, start_paused=True)
+            store = comfy_tasks.TaskStore(workspace / 'runtime', workspace)
+            try:
+                with patch.object(store, 'read_session_name', new_callable=AsyncMock), \
+                        patch.object(store.client, 'submit', side_effect=AssertionError('paused cannot submit')), \
+                        patch.object(store.client, 'upload', side_effect=AssertionError('paused cannot upload')):
+                    self.assertEqual((await submission_plans.execute(store, payload))['status'], 'enqueued')
+                key, row = next(iter(store.rows.items()))
+                self.assertEqual(row['state']['status'], 'paused')
+                self.assertIsNone(row['state']['prompt_id'])
+                task = read_journal(project / 'plan-装配结果.json')['tasks'][0]
+                self.assertEqual(task['uploads'][0]['json-path'], ['videoClips', 0, 'file'])
+                self.assertEqual(task['outputs'][0]['node_id'], '404')
+                self.assertEqual(task['video_plan']['segments'][0]['generation_frames'], [0, 192])
+                remote = {'name': 'renamed.mp4', 'subfolder': 'record', 'type': 'input'}
+                uploaded = dict(remote=remote, input_path='record/renamed.mp4', sha256=sha256(source.read_bytes()).hexdigest())
+                with patch.object(store.client, 'upload', return_value=uploaded) as upload:
+                    bound = await store.prepare(key)
+                    self.assertEqual(await store.prepare(key), bound)
+                upload.assert_called_once()
+                planner = bound['402']['inputs']
+                timeline = json.loads(planner['timeline_data'])
+                self.assertTrue(timeline['videoAudioEnabled'])
+                self.assertEqual((planner['width'], planner['height'], planner['generation_seconds']), (1152, 768, 8))
+                clip, = timeline['videoClips']
+                self.assertEqual(clip, dict(id='video-1', file='record/renamed.mp4', name=source.name,
+                                            start=0, trimStart=1, duration=8, sourceDuration=9,
+                                            hasAudio=True, referenceMode='edit', referenceWidth=768, referenceHeight=512))
+                canvas = json.loads((project / 'record/任务.workflow.json').read_text())
+                self.assertEqual(json.loads(next(node for node in canvas['nodes'] if node['id'] == 402)['widgets_values'][3]),
+                                 timeline)
+                prepared = {**task, 'uploads': [{**task['uploads'][0], 'file': source.name}]}
+                context, = songssx_contexts(project, prepared, bound, task['video_plan']['segments'], lambda _: {'issues': []})
+                self.assertEqual(context['references']['segment'], [
+                    {'name': source.name, 'kind': 'video', 'label': '<Video 1> · <Audio 1>', 'url': source.name},
+                ])
+                data = comfy_tasks.TaskInput(**task, url=endpoint, desktop=desktop, thread_id='test')
+                segment = timeline['segmentConfig']['segments'][0]
+                for field, value, message in (
+                    ('start', 7, '合计不超过 15 秒'),
+                    ('start', 8, 'Picture 参考素材'),
+                    ('trimStart', 2, '源截取区间无效'),
+                    ('referenceMode', 'guide', '须绑定为可编辑参考'),
+                ):
+                    previous = clip[field]
+                    clip[field] = value
+                    planner['timeline_data'] = json.dumps(timeline)
+                    with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, message):
+                        validate(bound, data.video_plan, data.outputs, data.uploads)
+                    clip[field] = previous
+                timeline['videoAudioEnabled'] = False
+                planner['timeline_data'] = json.dumps(timeline)
+                with self.assertRaisesRegex(ValueError, 'Audio 提示词标签'):
+                    validate(bound, data.video_plan, data.outputs, data.uploads)
+                segment['prompt'] = prompt.replace('Reuse <Audio 1>.', 'Silence.')
+                planner['timeline_data'] = json.dumps(timeline)
+                validate(bound, data.video_plan, data.outputs, data.uploads)
+            finally:
+                await store.close()
+
     def test_gen_duration_and_aligned_window_limits(self):
         for seconds, overlap, frames in [(4, 0, 107), (15, 0, 362), (15, 1, 362), (14, 22, 362)]:
             with self.subTest(seconds=seconds, overlap=overlap):
@@ -487,7 +571,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                         validate(invalid, data.video_plan, data.outputs, data.uploads)
                 with self.assertRaisesRegex(ValueError, '逐一绑定实际上传目标'):
                     validate(bound, data.video_plan, data.outputs, data.uploads[:-1])
-                with self.assertRaisesRegex(ValueError, '仅在 gap_repair'):
+                with self.assertRaisesRegex(ValueError, '须绑定为可编辑参考'):
                     validate(bound, {k: v for k, v in data.video_plan.items() if k != 'gap_repair'},
                              data.outputs, data.uploads)
 
