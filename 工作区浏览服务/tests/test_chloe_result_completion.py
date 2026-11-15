@@ -120,15 +120,29 @@ class ResultCompletionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):self.video_finish(plan,ref,{**actual,**change})
             result=self.video_finish(plan,ref,actual);plans.append((plan,ref))
         self.assertTrue(result['adopted']);self.assertIsNotNone(result['handoff'])
-        before=(f.project/'README.md').read_bytes()
+        readme=f.project/'README.md'
+        progress={row['字段']:row['内容'] for row in records.rows(readme.read_text('utf-8'),'定位与当前进度')}
+        self.assertEqual(progress['当前阶段'],'视频制作')
+        self.assertEqual(progress['下一步'],'交付已采用视频')
+        self.assertEqual(result['next_action'],progress['下一步'])
+        before=readme.read_bytes()
         self.video_finish(*plans[-1],actual)
-        self.assertEqual(before,(f.project/'README.md').read_bytes())
+        self.assertEqual(before,readme.read_bytes())
         self.assertEqual(len(records.rows((f.project/'README.md').read_text('utf-8'),'剪映交接')),1)
         self.assertEqual(len(json.loads(Path(result['handoff']).read_text())['media']),2)
         self.assertEqual(len(list((f.project/'资源/视频').rglob('*.mp4'))),6)
         # Late historical completion cannot turn the latest progress back to review.
         result=self.video_finish(self.video_plan('E001','P001',1),first[0]);self.assertTrue(result['historical'])
-        self.assertEqual(before,(f.project/'README.md').read_bytes())
+        self.assertEqual(before,readme.read_bytes())
+
+        # A later retry must preserve an actual manual editing stage.
+        body=readme.read_text('utf-8')
+        for key, value in {'当前阶段':'人工后期','下一步':'用户剪辑'}.items():
+            body=records.put(body,'定位与当前进度',['字段'],{'字段':key,'内容':value},replace=True)
+        records.save(readme,body)
+        before=readme.read_bytes()
+        self.assertEqual(self.video_finish(*plans[-1],actual)['next_action'],'用户剪辑')
+        self.assertEqual(before,readme.read_bytes())
 
     def test_common_dispatch_is_opt_in_and_report_is_reused(self):
         for adapter in ('technical','serial-drama'):

@@ -19,7 +19,7 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 | --- | --- |
 | AI连续短剧及其单集制作 | [连续短剧业务](../nora-serial-drama/SKILL.md) |
 | 商业视频订单 | [Iris商业一级业务](../iris-commercial-video/SKILL.md)，不套短剧目录 |
-| 自营账号AI视频带货、精选联盟选品与单条视频制作 | [Chloe带货一级业务](../chloe-commerce-video/SKILL.md) |
+| 自营账号AI穿搭与带货、精选联盟选品、参考分析、视频制作与剪辑接续 | [Chloe一级业务](../chloe-commerce-video/SKILL.md) |
 | 独立剧情短片或其他视频 | 先确定实际业务及交付范围，已有项目规则优先；不因调用图片工具初始化短剧 |
 
 ## 共用附加能力

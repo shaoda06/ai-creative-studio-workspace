@@ -9,7 +9,7 @@ description: 管理 Chloe 商品参考、模特、发型、服装、配饰、造
 
 创建或更新固定资料前，读取[固定资料写法规范](../chloe-positioning/references/固定资料写法规范.md)及其对应模板；完成后运行其中的检查命令，保持章节、字段和状态写法一致。
 
-收到参考视频文件或链接并需收录时，调用 [Chloe 参考视频收录](../chloe-reference-videos/SKILL.md)。
+收到参考视频文件或链接并需收录时，调用[共用参考片收录](../chloe-reference-videos/SKILL.md#共用参考片收录)。
 
 共用图片资产建档、正式采用图片后或向下游交接前，按[共用图片资产状态](references/资产制作规范.md#共用图片资产状态)核对对象。最后一张必需图正式采用后，Agent 当轮接续「可用」登记确认。
 

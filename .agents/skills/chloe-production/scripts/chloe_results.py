@@ -163,24 +163,28 @@ def finish(owner, plan, report, report_path):
             adopted=True
         ready=all(v['ref'] and v['record']['执行状态']=='已完成' for v in round_row['values'])
         next_action='等待本轮其余分段' if not ready else '整片审阅'
-        phase=next(r['内容'] for r in records.rows(progress,'定位与当前进度') if r['字段']=='当前阶段')
+        current_progress={r['字段']:r['内容'] for r in records.rows(progress,'定位与当前进度')}
+        phase=current_progress['当前阶段']
         if latest and ready and phase not in ('发布阶段','复盘阶段'):
             if stage=='后处理':
                 progress,manifest=handoff(owner,value,round_row,progress,time)
-                next_action='剪映人工后期' if manifest else '确认本轮其余分段采用'
+                next_action='交付已采用视频' if manifest else '确认本轮其余分段采用'
             else:
                 next_action = (f"审阅第{plan['round']}轮整场视频" if stage == production.SCENE_STAGE
                                else f"审阅第{plan['round']}轮整片{stage}")
-            for key,val in {'处理状态':'正常' if manifest else '待用户决定','当前问题':'无' if manifest else next_action,
-                            '下一步':next_action,'当前阶段':'人工后期' if manifest else '视频制作'}.items():
-                before=next(r['内容'] for r in records.rows(progress,'定位与当前进度') if r['字段']==key)
-                if before!=val and key in ('处理状态','当前阶段','视频状态'):
-                    changes=records.rows(progress,'阶段变更')
-                    number=max([int(r['记录编号'][1:]) for r in changes]+[0])+1
-                    progress=records.put(progress,'阶段变更',['记录编号'],{'记录编号':f'B{number:03}',
-                        '记录时间':time,'变更范围':key,'原值或原版本':before,'新值或新版本':val,
-                        '依据':records.report_link(readme,report_path,'本轮结果核对')})
-                progress=records.put(progress,'定位与当前进度',['字段'],{'字段':key,'内容':val},replace=True)
+            if manifest and phase in ('剪映交接','人工后期'):
+                next_action=current_progress['下一步']
+            else:
+                for key,val in {'处理状态':'正常' if manifest else '待用户决定','当前问题':'无' if manifest else next_action,
+                                '下一步':next_action,'当前阶段':'视频制作'}.items():
+                    before=current_progress[key]
+                    if before!=val and key in ('处理状态','当前阶段'):
+                        changes=records.rows(progress,'阶段变更')
+                        number=max([int(r['记录编号'][1:]) for r in changes]+[0])+1
+                        progress=records.put(progress,'阶段变更',['记录编号'],{'记录编号':f'B{number:03}',
+                            '记录时间':time,'变更范围':key,'原值或原版本':before,'新值或新版本':val,
+                            '依据':records.report_link(readme,report_path,'本轮结果核对')})
+                    progress=records.put(progress,'定位与当前进度',['字段'],{'字段':key,'内容':val},replace=True)
         records.save(readme,progress)
         for path in (document,readme):
             checked=records.docs.check_workspace(value['root'],only=path)
