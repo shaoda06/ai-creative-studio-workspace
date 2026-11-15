@@ -1,6 +1,7 @@
 """Reuse read-only workbench views while their source files stay unchanged."""
 from dataclasses import dataclass, field
 from collections import OrderedDict
+from hashlib import sha256
 import os
 from pathlib import Path
 from secrets import token_hex
@@ -48,7 +49,7 @@ class ReadView:
     lock: Lock = field(default_factory=Lock)
     sources: dict | None = None
     data: dict | list | None = None
-    tag: str = ''
+    revision: str = ''
 
 
 class ReadViews:
@@ -70,25 +71,28 @@ class ReadViews:
             if view.sources != sources:
                 with reuse_read_indexes():
                     data = build()
-                tag = '"' + token_hex(16) + '"'
+                revision = token_hex(16)
                 # Keep the response for this request, but never cache a build
                 # across a concurrent change to its source files.
                 if sources == snapshot(roots):
-                    view.sources, view.data, view.tag = sources, data, tag
-                return data, tag
-            return view.data, view.tag
+                    view.sources, view.data, view.revision = sources, data, revision
+                return data, revision
+            return view.data, view.revision
 
 
 views = ReadViews()
 
 
 def respond_view(request, key, roots, build):
-    data, tag = views.read(key, roots, build)
-    return view_response(request, tag, lambda: data)
+    data, revision = views.read(key, roots, build)
+    return view_response(request, revision, lambda: data)
 
 
-def view_response(request, tag, build):
-    headers = {'ETag': tag, 'Cache-Control': 'private, no-cache'}
+def view_response(request, revision, build):
+    # A source revision can serve several pages, filters and candidate contexts.
+    variant = sha256(f'{revision}\0{request.url.path}?{request.url.query}'.encode()).hexdigest()
+    tag = f'"{variant}"'
+    headers = {'ETag': 'W/' + tag, 'Cache-Control': 'private, no-cache'}
     requested = request.headers.get('if-none-match', '').split(',')
     if any(value.strip().removeprefix('W/') in (tag, '*') for value in requested):
         return Response(status_code=304, headers=headers)

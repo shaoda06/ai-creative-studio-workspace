@@ -1,9 +1,41 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
-from backend.chloe_asset_pages import AssetPage, AssetRow, asset_page
+from fastapi import Depends, FastAPI, Request
+from fastapi.testclient import TestClient
+
+from backend.chloe_asset_pages import AssetPage, AssetRow, asset_page, respond_asset_page
 
 
 class ChloeAssetPagesTests(unittest.TestCase):
+    def test_etag_only_revalidates_the_requested_page_and_filters(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            space = SimpleNamespace(api='/example')
+            app = FastAPI()
+            rows = [
+                AssetRow('C001', lambda: {'id': 'C001'}, '制作中'),
+                AssetRow('C002', lambda: {'id': 'C002'}, '可用'),
+            ]
+
+            @app.get('/assets')
+            def listing(request: Request, options: AssetPage = Depends()):
+                return respond_asset_page(request, space, 'assets', options, lambda: rows, folders=[root])
+
+            with TestClient(app) as client:
+                url = '/assets?page=1&page_size=1'
+                first = client.get(url)
+                self.assertEqual(first.json()['items'], [{'id': 'C001'}])
+                headers = {'If-None-Match': first.headers['etag']}
+                self.assertEqual(client.get(url, headers=headers).status_code, 304)
+                for other in ('/assets?page=2&page_size=1', url + '&available=true'):
+                    response = client.get(other, headers=headers)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()['items'], [{'id': 'C002'}])
+                self.assertEqual(client.get('/assets?ids=C002', headers=headers).json(), [{'id': 'C002'}])
+
     def test_filters_count_the_whole_catalog_and_only_build_the_current_page(self):
         built = []
 

@@ -8,7 +8,7 @@ import { MessagePanel } from './MessagePanel';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { TabSelect } from './TabSelect';
-import { candidateLabel, latestVideo, missingVideoState, SegmentVideo } from './SegmentVideo';
+import { candidateLabel, latestVideo, missingVideoState, SegmentVideo, videoPlaybackUrl } from './SegmentVideo';
 import type { SegmentVideoHandle, RepeatPlaybackControl } from './SegmentVideo';
 import { CopyButton } from './CopyButton';
 import { LinkButton } from './LinkButton';
@@ -31,10 +31,10 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   wideVideo: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode;
   repeatControl?: RepeatPlaybackControl;
   plannedScript?: { html: string; url?: string; label: string; shotIds?: string[] }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
-  cachedSources: Record<string, string>;
+  cachedSources?: Record<string, string>;
   onMediaReady?: (url: string) => void;
   onPlaybackStart?: (url: string) => void;
-  retainSource: (source: string) => () => void;
+  retainSource?: (source: string) => () => void;
   scenePlayback?: { player: RefObject<SegmentVideoHandle | null>; start: number; label?: string; videoDescription?: string; onTimeChange: (time: number) => void };
 }) {
   const workMode = useProductionAccess().unitKind === 'work';
@@ -54,7 +54,7 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   const products = current?.products || [];
   const product = products.find(item => productSelection.version === current?.key && item.id === productSelection.id)
     || products.find(item => item.default);
-  const displayVideo = current && product ? { ...current, url: product.previewUrl || product.url,
+  const displayVideo = current && product ? { ...current, url: videoPlaybackUrl(current, product),
     downloadUrl: product.url, previewNote: product.previewNote, reviewFileRevision: current.fileRevision,
     fileRevision: product.fileRevision + ':' + (product.previewRevision || '') } : current;
   const identity = current && `${scope.episode}-${scope.scene}-${segment}-${current.run}-${current.stage}`;
@@ -145,7 +145,11 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
       awaitingGeneration ? { id: 'pending', content: `这版视频还没生成。${plannedScript?.html ? `当前分镜为${plannedScript.label}；` : ''}尚无实际生成时使用的提示词和素材记录。` }
         : context && context.issues.length > 0 && { id: 'issues', tone: 'warning', content: <details className="generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run}：当前候选有 {context.issues.length} 项资料关联问题</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details> },
     ]} />
-    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onMediaReady={onMediaReady} onPlaybackStart={onPlaybackStart} videoDescription={scenePlayback?.videoDescription} onTimeChange={time => {
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources?.[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onMediaReady={onMediaReady && current ? url => {
+      if (url === displayVideo?.url) onMediaReady(current.url);
+    } : undefined} onPlaybackStart={onPlaybackStart && current ? url => {
+      if (url === displayVideo?.url) onPlaybackStart(current.url);
+    } : undefined} videoDescription={scenePlayback?.videoDescription} onTimeChange={time => {
       setPlayback({ key: current!.key, time });
       scenePlayback?.onTimeChange(time);
     }} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>

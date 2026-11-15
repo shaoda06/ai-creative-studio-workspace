@@ -66,7 +66,7 @@ export function useSceneVideoCache(videos: SegmentVideo[], priorityUrls: string[
       cache.current.clear();
     };
   }, []);
-  // Metadata refreshes and priority changes must not restart unchanged downloads.
+  // A metadata refresh alone keeps the same prefetch target.
   const targets = JSON.stringify(videos.map(video => video.url));
   useEffect(() => {
     wanted.current = JSON.parse(targets);
@@ -76,15 +76,12 @@ export function useSceneVideoCache(videos: SegmentVideo[], priorityUrls: string[
       if (!wanted.current.includes(url)) controller.abort();
     }
     releaseUnused();
-    // Let the player's metadata request start before fetching the same cache key.
     const start = window.setTimeout(prepare, 0);
     return () => window.clearTimeout(start);
   }, [targets, prepare, releaseUnused]);
   return {
     sources,
     retainSource,
-    total: videos.length,
-    ready: videos.filter(video => sources[video.url]).length,
     failures: videos.filter(video => failures[video.url]).map(video => failures[video.url]),
   };
 }

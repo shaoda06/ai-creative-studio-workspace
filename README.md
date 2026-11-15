@@ -136,7 +136,7 @@ python3 -B -m unittest discover -s .agents/skills/studio-comfyui/scripts -p 'tes
 # 工作流脚本。
 python3 -B -m unittest discover -s .agents/skills/nora-drama-production/scripts -p 'test_*.py'
 # 项目浏览服务：在该目录执行资料解析、API与同步测试。
-(cd 工作区浏览服务 && python3 -X utf8 -B -m unittest discover -s tests -v)
+(cd 工作区浏览服务 && PYTHONUTF8=1 PYTHONPATH=../.agents/skills/nora-drama-positioning/scripts python3 -B -m unittest discover -s tests -t . -v)
 # 离线检查API结构及执行参数；不读取画布，不访问远端。
 python3 -B .agents/skills/studio-comfyui/scripts/workflow_baselines.py
 # Krea2：临时目录与本机临时端口测试，不联网更新资源。

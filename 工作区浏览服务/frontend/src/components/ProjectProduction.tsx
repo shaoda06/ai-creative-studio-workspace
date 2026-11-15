@@ -5,8 +5,7 @@ import { Result } from '../components';
 import { SegmentWorkspace } from './SegmentWorkspace';
 import { SegmentStageStrip } from './SegmentStageStrip';
 import { TabSelect } from './TabSelect';
-import { latestVideo, selectedRevision } from './SegmentVideo';
-import { useSceneVideoCache } from './useSceneVideoCache';
+import { latestVideo } from './SegmentVideo';
 import { useRevisionNotesExport } from './RevisionNotes';
 import { useRefreshState } from '../refreshPosition';
 import { MessagePanel } from './MessagePanel';
@@ -51,11 +50,9 @@ function BatchProduction({ project, baseUrl, batch, allSegments }: { project: st
   const fixed = batch.segments.find(item => item.id === segment.id)!;
   const selectionKey = batch.id + '/' + segment.id;
   const selection = selections[selectionKey] || { stage: fixed.stage, key: fixed.key };
-  const current = selectedRevision(segment.videos, selection);
   const [tab, setTab] = useRefreshState(baseUrl + '/production/tab', 'script');
   const [wide, setWide] = useRefreshState(baseUrl + '/production/wide', false);
   const [repeat, setRepeat] = useRefreshState(baseUrl + '/production/repeat', false);
-  const cache = useSceneVideoCache(current?.url ? [current] : [], current?.url ? [current.url] : []);
   const scope = { project, episode: '', scene: '', label: '视频制作', notesUrl: baseUrl + '/production-notes' };
   const notes = useRevisionNotesExport(batch.readOnly ? null : scope, segments, { stage: '混合阶段', label: batch.name,
     versions: Object.fromEntries(batch.segments.map(entry => [entry.id, allSegments.find(item => item.id === entry.id)!.videos.find(video => video.key === entry.key) || null])) });
@@ -69,8 +66,7 @@ function BatchProduction({ project, baseUrl, batch, allSegments }: { project: st
         setSelections(previous => ({ ...previous, [selectionKey]: latest ? { stage: latest.stage, key: latest.key } : value }));
       }} tab={batch.readOnly && tab === 'notes' ? 'script' : tab} onTabChange={setTab} wideVideo={wide} onToggleWide={() => setWide(value => !value)} readOnly={batch.readOnly}
       repeatControl={{ checked: repeat, onChange: setRepeat }} notesExportControl={notes.control} segmentNavigation={navigation}
-      autoPlay={false} onVideoEnded={() => {}} onVideoError={() => {}} continuousControl={null}
-      cachedSources={cache.sources} retainSource={cache.retainSource} />
+      autoPlay={false} onVideoEnded={() => {}} onVideoError={() => {}} continuousControl={null} />
     {notes.dialog}
   </>;
 }

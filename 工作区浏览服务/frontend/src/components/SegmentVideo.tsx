@@ -28,6 +28,10 @@ export const selectedRevision = (items: VideoItem[], selection: { stage: string;
     || items.find(item => item.stage === selection.stage && identity(item.key) === identity(selection.key));
 };
 
+export function videoPlaybackUrl(video: VideoItem, product = video.products?.find(item => item.default)) {
+  return product?.previewUrl || product?.url || video.url;
+}
+
 export function missingVideoState(current?: VideoItem, recordedKey = '') {
   // A planned revision has a key too; only a saved media identity or a
   // successful generation/collection record establishes an existing output.
@@ -141,7 +145,7 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
   onPlaybackStart?: (url: string) => void;
   cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode;
   repeatControl?: RepeatPlaybackControl;
-  retainSource: (source: string) => () => void;
+  retainSource?: (source: string) => () => void;
   playerRef: Ref<SegmentVideoHandle>;
   videoDescription?: string;
 }) {
@@ -175,7 +179,7 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
     : current?.url ? '视频已生成，请加载新文件' : missing.message;
   const [loaded, setLoaded] = useState(current);
   const [source, setSource] = useState(cachedSource || current?.url);
-  useLayoutEffect(() => source ? retainSource(source) : undefined, [source, retainSource]);
+  useLayoutEffect(() => source ? retainSource?.(source) : undefined, [source, retainSource]);
   const [playOnLoad, setPlayOnLoad] = useState(autoPlay);
   const video = useRef<HTMLVideoElement>(null);
   const [reloadCount, setReloadCount] = useState(0);

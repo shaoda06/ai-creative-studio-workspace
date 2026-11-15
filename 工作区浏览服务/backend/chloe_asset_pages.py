@@ -43,9 +43,8 @@ class AssetRow:
 
 
 def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None):
-    rows, tag = views.read((space.api, endpoint, scope), folders, build)
-    # The URL identifies the page and filters in the HTTP cache.
-    return view_response(request, tag, partial(asset_page, rows, options))
+    rows, revision = views.read((space.api, endpoint, scope), folders, build)
+    return view_response(request, revision, partial(asset_page, rows, options))
 
 
 def asset_page(rows, options: AssetPage):

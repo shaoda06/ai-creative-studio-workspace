@@ -6,7 +6,7 @@ import { get } from '../api';
 import type { FileItem, RecordData, SceneRound, SegmentVideo as VideoItem } from '../api';
 import { Document, PreviewContext, Result } from '../components';
 import { UnderlineTabs } from './UnderlineTabs';
-import { latestVideo, missingVideoState, selectedRevision, type RepeatPlaybackControl } from './SegmentVideo';
+import { latestVideo, missingVideoState, selectedRevision, type RepeatPlaybackControl, videoPlaybackUrl } from './SegmentVideo';
 import { SegmentWorkspace } from './SegmentWorkspace';
 import { useRevisionNotesExport } from './RevisionNotes';
 import { useSceneVideoCache } from './useSceneVideoCache';
@@ -138,9 +138,9 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
   const following = preparationOrder[preparationOrder.indexOf(segment) + 1];
   const nextVideo = view === 'segments' && !songssx && continuous && following && roundVideo(segment)?.url === playingUrl
     ? roundVideo(following) : undefined;
-  const nextMedia = nextVideo?.url ? [nextVideo] : [];
+  const nextMedia = nextVideo?.url ? [{ ...nextVideo, url: videoPlaybackUrl(nextVideo) }] : [];
   const videoCache = useSceneVideoCache(nextMedia, nextMedia.map(video => video.url));
-  const preparedCount = preparationVideos.filter(video => readyMedia[video.url] || videoCache.sources[video.url]).length;
+  const preparedCount = preparationVideos.filter(video => readyMedia[video.url] || videoCache.sources[videoPlaybackUrl(video)]).length;
   const toggleContinuous = (checked: boolean) => {
     setAutoPlay(false);
     if (!checked) { setContinuous(false); return; }

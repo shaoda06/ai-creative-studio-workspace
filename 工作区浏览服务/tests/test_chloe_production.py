@@ -469,7 +469,10 @@ class ChloeProductionTests(unittest.TestCase):
             candidate = summary.json()['segments']['whole'][0]['videos'][0]
             self.assertNotIn('context', candidate)
             original = detail.json()['segments']['whole'][0]['videos'][0]['context']
-            self.assertEqual(client.get(candidate['contextUrl']).json(), original)
+            context = client.get(candidate['contextUrl'], headers={'If-None-Match': detail.headers['etag']})
+            self.assertEqual(context.status_code, 200, context.text)
+            self.assertEqual(context.json(), original)
+            self.assertEqual(client.get(candidate['contextUrl'], headers={'If-None-Match': context.headers['etag']}).status_code, 304)
             headers = {'If-None-Match': summary.headers['etag']}
             self.assertEqual(client.get(summary_url, headers=headers).status_code, 304)
             self.candidate('P002','E002')

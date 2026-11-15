@@ -1017,11 +1017,11 @@ def workspace_production_works(name: str, request: Request):
 def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None,
                                 summary: bool = False):
     try:
-        detail, tag = read_production_detail(request, name, work, view)
+        detail, revision = read_production_detail(request, name, work, view)
         if summary:
-            return view_response(request, tag[:-1] + '-summary"',
-                                 lambda: production.summary(detail, request.url.path, view, tag.strip('"')))
-        return view_response(request, tag, lambda: detail)
+            return view_response(request, revision,
+                                 lambda: production.summary(detail, request.url.path, view, revision))
+        return view_response(request, revision, lambda: detail)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -1045,9 +1045,9 @@ def workspace_production_context(name: str, work: str, request: Request, scene: 
                                  view: Literal['current', 'archive'] | None = None, key: str = '',
                                  stage: str = '', run: str = '', round_number: int | None = None):
     try:
-        detail, tag = read_production_detail(request, name, work, view)
+        detail, revision = read_production_detail(request, name, work, view)
         context = production.context(detail, scene, segment, key, stage, run, round_number)
-        return view_response(request, tag, lambda: context)
+        return view_response(request, revision, lambda: context)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -1061,8 +1061,8 @@ def workspace_production_downloads(name: str, work: str, request: Request, scene
     space = request.state.workspace_space
     try:
         if packages_only and space.view == 'iris-commercial':
-            values, tag = read_production_detail(request, name, work, view)
-            return view_response(request, tag[:-1] + '-packages"', lambda: production.workbench(space).downloads(
+            values, revision = read_production_detail(request, name, work, view)
+            return view_response(request, revision, lambda: production.workbench(space).downloads(
                 space.projects, name, space.api, work, scene, view, package_view=values))
         if round_number is not None and not hasattr(production.workbench(space), 'download_files'):
             raise HTTPException(404, '当前业务未接入轮次下载')

@@ -28,7 +28,8 @@ try {
     {id:'F003',name:'中英同片',key:'03-作品/F003-中英同片',hasArchive:true},
     {id:'F004',name:'待启动作品',key:'03-作品/F004-待启动作品',status:'待启动'}];
   const saved={F001:{notes:{'P001/一采/R001':{segment:'P001',stage:'一采',run:'R001',text:'产品片原意见',fileRevision:'F001',updatedAt:'2026-11-06'}},rounds:{}},F002:{notes:{},rounds:{}},F003:{notes:{},rounds:{}}};
-  let failWork=true,failSave=true,missing=true;
+  let failWork=true,failSave=true,missing=true,legacyBatch=false,playbackPreview=false;
+  const requestedMedia=[];
   let songssxDetail=false;
   let overviewStatus='待启动';
   saved.F001.notes['round/2/P001/一采/R002']={...saved.F001.notes['P001/一采/R001'],roundNumber:2,run:'R002'};
@@ -38,6 +39,17 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'commercial',name:'Iris',view:'iris-commercial',projects:[{id:'隔离多作品',name:'隔离多作品'}]}]});
+   if(path===base && legacyBatch)return route.fulfill({json:{name:'隔离多作品',productionSection:'06-视频生产',
+    files:[file('README.md'),{kind:'group',key:'06-视频生产',name:'视频生产',children:[]}] }});
+   if(path===base+'/production' && legacyBatch){
+    const video={key:'legacy.webm',url:base+'/files/legacy.webm',run:'R001',stage:'一采',approved:false,
+     candidateNumber:1,fileRevision:'legacy',deliveryStatus:'已取回',context:{scriptHtml:'<p>旧批次分镜</p>',
+      shots:[],prompts:{},references:{common:[],segment:[]},issues:[]}};
+    return route.fulfill({json:{issues:[],segments:[{id:'P001',duration:3,scriptHtml:'',videos:[video]}],
+     batches:[{id:'R001',name:'隔离旧批次',segments:[{id:'P001',stage:'一采',key:video.key}]}]}});
+   }
+   if(path===base+'/production-notes' && legacyBatch && request.method()==='GET')
+    return route.fulfill({json:{notes:{},rounds:{}}});
    if(path===base)return route.fulfill({json:{name:'隔离多作品',
     works:works.map(work=>({...work,statusLabel:work.id==='F001'?overviewStatus:work.status})),
     files:[file('README.md'),file('项目状态.md'),{kind:'group',key:'03-作品',name:'03-作品',children:[]}]}});
@@ -96,6 +108,8 @@ try {
        id:'raw',label:'原版',default:true,key,url:mediaUrl,fileRevision:'raw',
       },{
        id:'repair',label:'修复版',default:false,key:'F002/P001-repair.webm',url:base+'/files/F002-P001-repair.webm',fileRevision:'repair',
+      }]:playbackPreview && identity==='F001' && run==='R002'?[{
+       id:'preview',label:'默认预览',default:true,key,url:mediaUrl,previewUrl:base+'/files/'+id+'-preview.webm',fileRevision:'preview',
       }]:undefined;
       return {key,url:unavailable?'':mediaUrl,run,stage:'一采',approved:identity==='F002'&&n===2,candidateNumber:n,
        fileRevision:unavailable?'':identity+id+run,deliveryStatus:unavailable?'未取回':'已取回',taskStatus:oldFailure?'needs_attention':'completed',products,
@@ -171,6 +185,7 @@ try {
     return route.fulfill({body:'{"nodes":[]}',headers:{'Content-Disposition':'attachment; filename="R002.workflow.json"'}});
    }
    if(path.endsWith('.webm')){
+    requestedMedia.push({path, type:request.resourceType(), range:request.headers().range});
     if(url.searchParams.has('download'))return route.continue();
     const range=/^bytes=(\d+)-(\d*)$/.exec(request.headers().range || '');
     if(!range)return route.fulfill({contentType:'video/webm',body:fixtureVideo});
@@ -468,8 +483,17 @@ try {
   await page.getByText(/连续播放已停在当前分段/).waitFor();
   assert.equal(await page.getByRole('combobox',{name:'版本切换',exact:true}).getAttribute('data-value'),'F001/P001-R002.webm');
   missing=false;
+  playbackPreview=true;
   await page.reload();
   await continuous.check();
+  const nextMedia=base+'/files/P002-preview.webm';
+  assert.equal(requestedMedia.filter(request=>request.path===nextMedia).length,0);
+  const player=page.locator('.segment-video video');
+  const prefetched=page.waitForResponse(response=>decodeURIComponent(new URL(response.url()).pathname)===nextMedia
+    && response.request().resourceType()==='fetch');
+  await player.dispatchEvent('playing');
+  await prefetched;
+  assert.equal(requestedMedia.some(request=>request.path===base+'/files/F001-P002-R002.webm' && request.type==='fetch'),false);
   await page.locator('.segment-video video').dispatchEvent('ended');
   await page.waitForFunction(()=>document.querySelector('[aria-label="版本切换"]').getAttribute('data-value')==='F001/P002-R002.webm');
   await page.getByRole('button',{name:'宽屏显示',exact:true}).click();
@@ -548,6 +572,16 @@ try {
    }),['rgb(37, 113, 99)','22px','600']);
    assert.equal(await page.getByRole('heading',{name:label,exact:true}).count(),0);
   }
+  legacyBatch=true;
+  await page.reload();
+  await tabs.getByRole('button',{name:'视频制作',exact:true}).click();
+  await page.getByRole('button',{name:/隔离旧批次/}).click();
+  await page.waitForFunction(()=>document.querySelector('.segment-video video')?.readyState>=1);
+  const legacyRequests=requestedMedia.filter(request=>request.path.endsWith('/legacy.webm'));
+  assert.ok(legacyRequests.length>0);
+  assert.ok(legacyRequests.every(request=>request.type==='media' && request.range?.startsWith('bytes=')));
+  await page.locator('.segment-video video').evaluate(element=>element.play());
+  await page.waitForFunction(()=>document.querySelector('.segment-video video')?.currentTime>0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

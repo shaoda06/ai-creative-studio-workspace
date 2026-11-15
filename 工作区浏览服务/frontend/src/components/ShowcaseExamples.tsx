@@ -54,7 +54,6 @@ const videoRecord: VideoItem = { key: 'sample-video', url: video.url!, stage: '�
 const segments = [{ id: 'P001', duration: 2, scriptHtml: '', videos: [videoRecord] }, { id: 'P002', duration: 3, scriptHtml: '', videos: [] }];
 const sampleDoc = { html: '<h2 id="sample-text">正文与代码</h2><p>这是一份示例文档。</p><pre><code>可以复制这段示例文字。</code></pre><h2 id="sample-end">附属资料</h2><p>展开下方其他资料查看目录。</p>', headerHtml: '<p>作者：演示</p><p>用途：查看折叠信息</p>', groups: [{ name: '示例附件', files: [{ kind: 'document', name: '附属说明', doc: { html: '<p>仅供演示的附属说明。</p>' } }] }] };
 const liveStatusDoc = { html: '<h2 id="sample-status">示例作品</h2><p>制作状态：作品状态</p>' };
-const retainSample = () => () => {};
 
 export function ShowcaseExamples({ category }: { category: string }) {
   const [text, setText] = useState('');
@@ -256,7 +255,7 @@ export function ShowcaseExamples({ category }: { category: string }) {
       </ComponentExample>
       <ComponentExample fullWidth title="分段播放器" rule="示例使用制作页同一份布局。制作页在同一作品或剧集跨场、换段或换版本时保持播放偏好。重复播放默认关闭，勾选后循环当前视频。开启连续播放时关闭并禁用重复播放，取消后由用户重新开启。宽屏时显示右侧分段导航。切换整场示例可查看 Songssx 的轮次标注和本段参考素材。用分段按钮切换示例参考图。AiMixer 显示公共参考素材和本组参考素材。整场示例可在播放器原生菜单下载当前示例视频。" usage="Nora、Iris、Chloe 的视频制作">
         {!wide && playbackNavigation}
-        <SegmentLayout wide={wide} navigation={playbackNavigation} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} retainSource={retainSample} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} videoDescription={scenePlayback ? '第3轮 · 后处理' : undefined} />}>
+        <SegmentLayout wide={wide} navigation={playbackNavigation} player={<SegmentVideo repeatControl={{ checked: repeat, onChange: setRepeat }} current={videoRecord} onTimeChange={setTime} wide={wide} onToggleWide={() => setWide(!wide)} continuous={continuous} continuousControl={<label className="scene-continuous"><input type="checkbox" checked={continuous} onChange={event => setContinuous(event.target.checked)} />连续播放</label>} playerRef={playerRef} videoDescription={scenePlayback ? '第3轮 · 后处理' : undefined} />}>
           <SegmentReferences segmentOnly={scenePlayback} context={{ issues: [], references: {
             common: [],
             segment: [{ kind: 'image', name: segment + ' 示例参考图', label: '<Picture 1>', url: image.url }],
