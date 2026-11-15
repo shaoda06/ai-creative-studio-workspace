@@ -25,6 +25,7 @@ from chloe_init import initialize_workspace,initialize_project,initialize_asset,
 import sys
 sys.path.insert(0,str(SKILLS/'chloe-assets/scripts'))
 from chloe_resources import import_media
+from chloe_result_records import register_available
 import project_resources as resources
 with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else None) as tmp:
  workspace=initialize_workspace(Path(tmp)/'Chloe Workspace')
@@ -74,6 +75,7 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   append('参考版本',['造型面部三视图',reference,'用户提供','不适用'])
   if index==1:append('当前采用',['造型面部三视图',reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  append('执行记录',['E001','图片生成','不适用','隔离测试','测试','不适用','隔离测试','未取得','未取得','未取得','准备中','未取得'])
+ register_available(root,look,'隔离样例批准登记为可用')
  for index,color in enumerate(['#ee9a70','#336688','#86a173','#b68163','#67618b','#ceba86'],1):
   slot=str(index)
   source=Path(tmp)/('clothing'+slot+'.png');Image.new('RGB',(320,160),color).save(source)
@@ -82,6 +84,9 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   append('输入记录',['E001',slot,'服装参考','不适用',reference])
  clothing=initialize_asset(root,'服装','O001','示例外套')
  initialize_asset(root,'服装','O002','未选图服装')
+ outfit=initialize_asset(root,'服装','O003','示例套装')/'服装说明.md'
+ outfit.write_text(outfit.read_text().replace('| 服装形态 | 待确定 |','| 服装形态 | 套装 |')
+  .replace('| 套装来源 | 不适用 |','| 套装来源 | 合成 |').replace('| 组成与穿法 | 不适用 |','| 组成与穿法 | 外套搭配长裤 |'))
  path=clothing/'服装说明.md'
  path.write_text(path.read_text().replace('| 来源说明 | 待核实 |','| 来源说明 | 不显示的服装来源 |'))
  for index,purpose in enumerate(['服装展示图']*5+['服装参考图']*2):
@@ -181,6 +186,7 @@ try {
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===200);
   assert.equal(await page.locator('.asset-media-card').count(),2);
+  assert.deepEqual(await page.locator('.asset-media-card .status-blue').allTextContents(),['制作中','制作中']);
   assert.equal(await page.locator('.asset-media-card img').count(),1);
   await page.getByText('尚未采用正面面部图',{exact:true}).waitFor();
   const placeholder=page.locator('.asset-media-placeholder');
@@ -321,6 +327,7 @@ try {
   await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
   const lookOriginal=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='全身三视图原图');
   assert.ok((await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).locator('img').getAttribute('src')).includes(lookOriginal.resource));
+  assert.equal(await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).locator('.status-green').textContent(),'可用');
   await assertNaturalImage(page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).locator('.cover'),'造型入口封面');
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).click();
   await page.getByRole('heading',{name:'造型信息',exact:true}).waitFor();
@@ -447,6 +454,7 @@ try {
   const entry=page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true});
   await entry.waitFor();
   assert.equal(await page.locator('.asset-media-card').count(),2);
+  assert.equal(await entry.locator('.status-blue').textContent(),'制作中');
   await assertNaturalImage(entry.locator('.cover'),label+'入口封面');
   await entry.click();
   const clothingInfo=page.getByRole('region',{name:label+'信息',exact:true});
@@ -535,6 +543,9 @@ try {
   await page.getByRole('navigation',{name:'当前位置',exact:true}).getByRole('link',{name:'共用资产',exact:true}).click();
   await page.getByRole('heading',{name:'M001 · 示例模特甲',exact:true}).waitFor();
   }
+  await assetTabs.getByRole('button',{name:'服装',exact:true}).click();
+  await page.getByRole('button',{name:'套装',exact:true}).click();
+  await page.getByRole('link',{name:'O003 · 示例套装',exact:true}).getByText('制作中',{exact:true}).waitFor();
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:'场景',exact:true}).click();
   await page.getByRole('link',{name:'S001 · 示例庭院',exact:true}).waitFor();
   fail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
@@ -560,6 +571,7 @@ try {
   assert.equal(await columns.count(),3);
   assert.deepEqual(await columns.first().locator('h3').allTextContents(),['C001 · 示例小包','C004 · 示例托特包']);
   const shortCard=page.getByRole('link',{name:'C001 · 示例小包',exact:true});
+  assert.equal(await shortCard.locator('.status-blue').textContent(),'制作中');
   const tallCard=page.getByRole('link',{name:'C003 · 示例贝雷帽',exact:true});
   const nextCard=page.getByRole('link',{name:'C004 · 示例托特包',exact:true});
   await assertNaturalImage(shortCard.locator('.cover'),'配饰横图封面');

@@ -367,6 +367,12 @@ try {
     }
     assert.equal(await entryImageCards.locator('img').count(),2);
     assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),2);
+    for (const badge of await entryImageCards.locator('.status-badge').all()) {
+      await contained(badge, `${width}px / 入口图片卡片状态`);
+      assert.ok(await badge.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+    }
+    assert.deepEqual(await entryImageCards.locator('.status-green').allTextContents(), ['可用', '可用']);
+    assert.deepEqual(await entryImageCards.locator('.status-blue').allTextContents(), ['制作中']);
     const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
     assert.equal(await entryLink.getAttribute('href'),'/');
     assert.equal(await entryLink.locator('button,a').count(),0);

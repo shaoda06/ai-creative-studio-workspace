@@ -19,7 +19,6 @@ import type { OpenImage } from './ChloeAssemblyParts';
 import { ChloeVideoAssembly } from './ChloeVideoAssembly';
 import './ChloeAssembly.css';
 
-type AssemblyAsset = ReferenceAssetCard & { status: '制作中' | '可用' };
 type PickerKind = 'models' | 'garments' | 'outfits' | 'hair' | 'accessories';
 const accessoryLimit = 5;
 const garmentLimit = 5;
@@ -28,7 +27,7 @@ const assemblyTabs = [
 ];
 type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
 
-const garmentTitle = (asset: AssemblyAsset) => `${assetTitle(asset)}（${asset.bodyArea}）`;
+const garmentTitle = (asset: ReferenceAssetCard) => `${assetTitle(asset)}（${asset.bodyArea}）`;
 
 function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" className="chloe-assembly-add" aria-label={label} onClick={onClick}>
@@ -37,7 +36,7 @@ function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }
 }
 
 function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
-  kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void;
+  kind: PickerKind; initial: ReferenceAssetCard[]; onConfirm: (assets: ReferenceAssetCard[]) => void; onClose: () => void;
 }) {
   const [page, setPage] = useState(1);
   const [types, setTypes] = useState<string[]>([]);
@@ -50,8 +49,8 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
   const label = isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
   const endpoint = isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
   const filters = { available: true, require_media: true, form: form ?? undefined };
-  const query = useAssetPage<AssemblyAsset>(endpoint, page, filters, types);
-  const draft = useAssetDraft<AssemblyAsset>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
+  const query = useAssetPage<ReferenceAssetCard>(endpoint, page, filters, types);
+  const draft = useAssetDraft<ReferenceAssetCard>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
   const selected = draft.selected;
   const ready = !!query.data && !query.isFetching && !query.error && !draft.initial.isFetching && !draft.initial.error;
   const atLimit = limit > 1 && selected.length >= limit;
@@ -110,12 +109,12 @@ export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) 
 }
 
 function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
-  const [garments, setGarments] = useState<AssemblyAsset[]>([]);
+  const [garments, setGarments] = useState<ReferenceAssetCard[]>([]);
   const [handoff, setHandoff] = useState('');
   const [picking, setPicking] = useState(false);
   const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
 
-  const changeSelection = (assets: AssemblyAsset[]) => {
+  const changeSelection = (assets: ReferenceAssetCard[]) => {
     setGarments(assets);
     setHandoff('');
     setPicking(false);
@@ -161,10 +160,10 @@ function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
 
 function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
   const { api } = useChloeScope();
-  const [model, setModel] = useState<AssemblyAsset | null>(null);
-  const [outfit, setOutfit] = useState<AssemblyAsset | null>(null);
-  const [hair, setHair] = useState<AssemblyAsset | null>(null);
-  const [accessories, setAccessories] = useState<AssemblyAsset[]>([]);
+  const [model, setModel] = useState<ReferenceAssetCard | null>(null);
+  const [outfit, setOutfit] = useState<ReferenceAssetCard | null>(null);
+  const [hair, setHair] = useState<ReferenceAssetCard | null>(null);
+  const [accessories, setAccessories] = useState<ReferenceAssetCard[]>([]);
   const [handoff, setHandoff] = useState('');
   const [picker, setPicker] = useState<PickerKind | null>(null);
   const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
@@ -198,7 +197,7 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
     ].join('\n'));
   };
 
-  const confirm = (assets: AssemblyAsset[]) => {
+  const confirm = (assets: ReferenceAssetCard[]) => {
     if (picker === 'models') setModel(assets[0] ?? null);
     if (picker === 'outfits') setOutfit(assets[0] ?? null);
     if (picker === 'hair') setHair(assets[0] ?? null);

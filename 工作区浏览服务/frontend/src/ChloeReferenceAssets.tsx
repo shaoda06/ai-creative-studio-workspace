@@ -9,7 +9,8 @@ import { AssetMediaCard } from './components/AssetMediaCard';
 import { FullscreenImage } from './components/FullscreenImage';
 import { UnderlineTabs } from './components/UnderlineTabs';
 import { PageCheckStatus } from './components/PageCheckStatus';
-import { assetPaging, useAssetList } from './chloeAssetPages';
+import { assetPaging, chloeAssetStatusBadges, useAssetList } from './chloeAssetPages';
+import type { ChloeAssetStatus } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
@@ -19,7 +20,7 @@ interface ClothingClassification {
   outfitSource?: '提取' | '合成' | null;
 }
 export interface ReferenceAssetCard extends ClothingClassification {
-  id: string; name: string; media: FileItem | null; type?: string | null;
+  id: string; name: string; status: ChloeAssetStatus; media: FileItem | null; type?: string | null;
 }
 export interface ReferenceAssetDetail extends AssetDetail, ClothingClassification {
   description: string; type?: string; composition?: string;
@@ -67,6 +68,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const data = query.isPlaceholderData ? undefined : query.data;
   const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])];
   const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
+    badge={chloeAssetStatusBadges[item.status]}
     to={`${page}?${list}&${parameter}=${encodeURIComponent(item.id)}`}
     item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
   return <>

@@ -214,13 +214,13 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="16:9空图片区域" item={{emptyLabel:'尚未采用图片'}} revision={1} formal hideTitle aspectRatio={16 / 9} />
         <AssetMediaCard title="按原图比例展示" item={imageRecord} revision={1} formal hideTitle aspectRatio="natural" />
       </ComponentExample>
-      <ComponentExample title="入口图片卡片" rule="entry规格只显示单行名称与图片区域，长标题省略并可悬停查看完整名称；隐藏尺寸、版本、说明和底部操作。有缩略图地址时用它展示卡面，预览和下载使用原图。entry传入to时整卡作为链接。" usage="Chloe模特、发型、服装、配饰与场景列表">
-        <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...thumbnailRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry onDetails={() => setPreview(imageDetails)} />
-        <AssetMediaCard title="带声音的入口卡片长标题：试听按钮不会跳转" item={imageRecord} revision={1} entry to="/"
+      <ComponentExample title="入口图片卡片" rule="入口卡显示单行名称和图片。长标题省略，悬停可查看全名。传入 badge 时在标题旁显示状态，制作中用蓝色，可用用绿色。有缩略图时用它展示卡面，预览和下载使用原图。传入 to 时点击卡片进入详情。" usage="Chloe 模特、造型、发型、服装、配饰和场景列表">
+        <AssetMediaCard title="入口卡片长标题：用于检查名称只占一行且不会挤出卡片边界的完整示例名称" item={{ ...thumbnailRecord, scope: '入口规格不显示此说明', version: 'V003', recordUrl: '/component-samples/files/示例生成记录.md' }} revision={1} formal entry badge={{ label: '可用', tone: 'green' }} onDetails={() => setPreview(imageDetails)} />
+        <AssetMediaCard title="带声音的入口卡片长标题：试听按钮不会跳转" item={imageRecord} revision={1} entry to="/" badge={{ label: '可用', tone: 'green' }}
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled playing={sound.playingId==='entry'} progress={sound.currentId==='entry' ? sound.progress : 0} onClick={()=>sound.toggle('entry',audio.url!)} />} />
         <AssetMediaCard title="未关联声音的入口卡片" item={{emptyLabel:'尚未采用图片'}} revision={1} entry to="/"
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
-        <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" />
+        <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" badge={{ label: '制作中', tone: 'blue' }} />
       </ComponentExample>
       <ComponentExample title="资源选择卡片与弹窗" rule="弹窗顶部可确认、关闭和筛选，列表滚动时顶部保持可见。卡片右上角可选择或取消，点击媒体区打开全屏预览。" usage="Chloe 套装装配、造型装配与视频装配">
         <button type="button" onClick={() => { setSelectedImage(''); setOnlyImages(false); setAssetPickerOpen(true); }}>打开资源选择示例</button>

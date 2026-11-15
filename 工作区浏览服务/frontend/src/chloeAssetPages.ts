@@ -5,6 +5,12 @@ import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import { useNotify } from './components/Notifications';
 
+export const chloeAssetStatusBadges = {
+  制作中: { label: '制作中', tone: 'blue' },
+  可用: { label: '可用', tone: 'green' },
+} as const;
+export type ChloeAssetStatus = keyof typeof chloeAssetStatusBadges;
+
 interface AssetPage<T> { items: T[]; total: number; page: number; page_size: number; types: string[] }
 interface AssetFilters { available?: boolean; require_media?: boolean; form?: string }
 

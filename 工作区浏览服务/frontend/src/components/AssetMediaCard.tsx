@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PointerTooltip } from './PointerTooltip';
-import { useContext, useState } from 'react';
+import { useContext, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { FileItem, RecordData } from '../api';
 import { PreviewContext, Rich } from '../components';
@@ -8,8 +8,9 @@ import { FileActions } from './FileActions';
 import { FullscreenImage } from './FullscreenImage';
 import { FullscreenVideo } from './ReleaseFilms';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, showFileActions = true, showVersion = true, aspectRatio, to, badge, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; badge?: { label: string; tone: 'blue' | 'green' }; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
   const preview = useContext(PreviewContext);
+  const badgeId = useId();
   const [dimensions, setDimensions] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
   const recordLink = item.recordUrl ? <a href={item.recordUrl} onClick={event => {
@@ -34,9 +35,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     {selection.selected ? <span aria-hidden="true">✓</span> : '选择'}
   </button>;
   const content = <>
-    {(!hideTitle || selection) && (titleActions || selection ? <div className="asset-media-card-heading">
-      {!hideTitle && <PointerTooltip text={title}><h3>{linkedActions ? <Link to={to!} aria-label={title} className="asset-media-card-title-link">{title}</Link> : title}</h3></PointerTooltip>}
-      <div className="asset-media-card-title-actions">{titleActions}{selectionButton}</div>
+    {(!hideTitle || selection || badge) && (titleActions || selection || badge ? <div className="asset-media-card-heading">
+      {!hideTitle && <PointerTooltip text={title}><h3>{linkedActions ? <Link to={to!} aria-label={title} aria-describedby={badge ? badgeId : undefined} className="asset-media-card-title-link">{title}</Link> : title}</h3></PointerTooltip>}
+      {badge && <span id={badgeId} className={`status-badge status-${badge.tone}`}>{badge.label}</span>}
+      {(titleActions || selection) && <div className="asset-media-card-title-actions">{titleActions}{selectionButton}</div>}
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
       {item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={selection ? isVideo ? `全屏播放${title}` : `查看${title}大图` : undefined}
@@ -61,7 +63,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     </div>
     {children}
   </>;
-  if (linked && !linkedActions) return <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title}>{content}</Link>;
+  if (linked && !linkedActions) return <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title} aria-describedby={badge ? badgeId : undefined}>{content}</Link>;
   return <article className={className} aria-label={hideTitle ? title : undefined}>
     {content}
     {fullscreen && media?.url && (isVideo ? <FullscreenVideo title={title} item={media} close={() => setFullscreen(false)} />

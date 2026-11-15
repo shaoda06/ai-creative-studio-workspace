@@ -8,6 +8,8 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Preview, PreviewContext, Result, Rich } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
+import { chloeAssetStatusBadges } from './chloeAssetPages';
+import type { ChloeAssetStatus } from './chloeAssetPages';
 import { PageCheckStatus } from './components/PageCheckStatus';
 import { UnderlineTabs } from './components/UnderlineTabs';
 
@@ -20,7 +22,7 @@ export interface AssetDetail {
   sections: {heading: string; html: string; empty: boolean}[];
 }
 export interface ModelDetail extends AssetDetail {
-  looks: (AssetDetail & {status: '制作中' | '可用'; media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
+  looks: (AssetDetail & {status: ChloeAssetStatus; media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
 const originalPurpose = '全身三视图原图';
@@ -140,7 +142,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         </div>
       </> : <section className="panel">
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry aspectRatio="natural" revision={0}
-          to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图原图'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
+          badge={chloeAssetStatusBadges[item.status]} to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图原图'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
       {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
       </div>

@@ -1,4 +1,5 @@
-import { assetPaging, useAssetList } from './chloeAssetPages';
+import { assetPaging, chloeAssetStatusBadges, useAssetList } from './chloeAssetPages';
+import type { ChloeAssetStatus } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { useChloeScope } from './chloeScope';
 import { useModelVoices } from './ChloeModelVoices';
@@ -13,6 +14,7 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 interface ModelCard {
   id: string;
   name: string;
+  status: ChloeAssetStatus;
   identity: Record<string, string>;
   features: Record<string, string>;
   media: FileItem | null;
@@ -33,6 +35,7 @@ export function ChloeModels({ workspaceQuery }: { workspaceQuery: UseQueryResult
     <Result loading={false} error={voices.error} retry={voices.refetch} retrying={voices.isFetching} />
     {data && (data.items.length ? <div className="asset-media-grid">
       {data.items.map(model => <AssetMediaCard key={model.id} title={`${model.id} · ${model.name}`} formal entry aspectRatio="natural" revision={0}
+        badge={chloeAssetStatusBadges[model.status]}
         titleActions={voices.data?.filter(voice=>voice.models.includes(model.id)).length
           ? voices.data.filter(voice=>voice.models.includes(model.id)).map(voice=><AudioPreviewButton key={voice.id} name={`${model.name} · ${voice.name}`} enabled={!!voice.media}
               playing={audio.playingId===voice.id} progress={audio.currentId===voice.id ? audio.progress : 0} onClick={()=>audio.toggle(voice.id,voice.media!.url!)} />)
