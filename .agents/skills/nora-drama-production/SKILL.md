@@ -17,8 +17,8 @@ Agent确定实际对象、内容与来源用途，完成语义核对，沿用本
 
 场次确定继续生成或技术后处理后，按[核心执行入口](../studio-video-production/SKILL.md#按业务决定调用执行工具)提供获批来源、目标与授权。制作脚本见scripts，旧命令路径兼容调用同一实现。后台业务适配可使用服务的文档事务和结果事实，内容及采用规则由本阶段维护。
 
-AiMixer 接续按[缓存与返修接续](references/缓存与返修接续规范.md)确定来源和批准。用户明确要求保存场次画布时，按[场次画布留档](references/场次阶段定稿留档规范.md)处理。[交付收尾](../nora-drama-handoff/SKILL.md)在本集交付资料齐备后处理交接与复盘。
+AiMixer 接续按[缓存与返修接续](../studio-h3-aimixer/references/Nora缓存与返修接续规范.md)确定来源和批准。用户明确要求保存场次画布时，按[场次画布留档](../studio-h3-aimixer/references/Nora场次阶段定稿留档规范.md)处理。[交付收尾](../nora-drama-handoff/SKILL.md)在本集交付资料齐备后处理交接与复盘。
 
-局部返修按[原工作流确定返修范围与提交方式](references/视频阶段与返修执行规范.md#同场反馈的返修范围与提交)。AiMixer 兼容任务按[AiMixer 导演台业务接续](references/AiMixer导演台返修与输出业务接续规范.md)核对 P/R、输出归属和实际运行组序。
+局部返修按[原工作流确定返修范围与提交方式](references/视频阶段与返修执行规范.md#同场反馈的返修范围与提交)。AiMixer 兼容任务按[AiMixer 导演台业务接续](../studio-h3-aimixer/references/Nora导演台返修与输出接续.md)核对 P/R、输出归属和实际运行组序。
 
 收到后台结果或恢复原任务时，进入[本阶段结果接续](references/进度查询与结果处理规范.md)，落实待审、后处理采用及完集收尾。

@@ -15,7 +15,7 @@ STAGES = {'video-first-pass': '一采', 'video-second-pass': '二采', 'video-po
 
 def prepare_records(root, skill, spec, api, mapping, record, documents):
     stage = STAGES[spec['task_type']]
-    template = (Path(__file__).resolve().parents[1]/'templates/分段视频工作稿模板.md').read_text('utf-8-sig')
+    template = (Path(__file__).resolve().parents[2] / 'studio-h3-aimixer/templates/分段视频工作稿模板.md').read_text('utf-8-sig')
     template = re.search(r'```markdown\n(.*?)\n```', template, re.S)[1]
     sample = re.search(r'^### R001-一采\s*\n.*?(?=^## 3\.)', template, re.M | re.S)[0]
     directors = [node['inputs'] for node in api.values() if node['class_type']=='MiniMaxH3Director']

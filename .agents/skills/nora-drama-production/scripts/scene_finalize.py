@@ -510,7 +510,7 @@ def finalize(args, *, plan=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅保存场次画布、API和来源记录。路径及请求格式见 nora-drama-production/references/固定脚本接口规范.md。')
+    parser = argparse.ArgumentParser(description=__doc__, epilog='Python 3.11+，标准库。预览离线；--apply 仅保存场次画布、API和来源记录。路径及请求格式见 studio-h3-aimixer/references/Nora逐段任务固定脚本接口规范.md。')
     parser.add_argument('--project', required=True, help='项目根；相对当前工作目录解析')
     parser.add_argument('--plan', required=True, help='阶段留档请求JSON；相对项目根解析')
     parser.add_argument('--apply', action='store_true', help='保存到阶段定稿目录并补齐现有记录；默认只读预览')

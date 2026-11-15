@@ -134,8 +134,6 @@ class SceneRoundTests(unittest.TestCase):
         self.assertEqual(notes.read_scene(self.project, 'EP001', 'C001').notes[value.key()].text, value.text)
         with self.assertRaisesRegex(ValueError, '与本轮不符'):
             notes.save_note(self.project, 'EP001', 'C001', value.model_copy(update={'run': 'R099'}))
-        with self.assertRaisesRegex(ValueError, '同一集的新制作轮次须沿用同一套导演台'):
-            self.create({**self.plan(), 'songssx_execution': None})
         postprocess = self.root + '/其他资料/执行附件/C001-R003'
         processed = self.root + '/其他资料/候选视频/EP001-C001-R003-后处理.mp4'
         self.create({**planned, 'songssx_postprocess': postprocess,

@@ -166,7 +166,7 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
                 if len(shot_blocks(gen['prompt'])) != counts[identity]:
                     raise ValueError(identity + ' 的实际提示词 Shot 数与分镜不一致')
             pairs = [(identity, output) for identity in identities]
-            stage = '一采'
+            stage = '场次生成'
         else:
             stage = STAGES[kind]
             pairs = []
@@ -208,8 +208,15 @@ def register(project, spec, tasks, batch, now, *, write, reprepare=False):
         for identity, output in pairs:
             if identity not in durations or identity in changes:
                 raise ValueError('分段输出重复或分镜未登记：' + identity)
-            changes[identity] = {'id': identity, 'duration': durations[identity], 'stage': stage, 'run': run[1],
-                                 'file': project_file(project, output['path']).relative_to(project).as_posix()}
+            path = project_file(project, output['path']).relative_to(project).as_posix()
+            previous_entry = selected.get(identity)
+            # Older Songssx rounds used the legacy stage label in their saved review notes.
+            entry_stage = previous_entry['stage'] if (
+                kind == SONGSSX_TASK and existing and batch_key in own_batches
+                and previous_entry and previous_entry['run'] == run[1] and previous_entry['file'] == path
+            ) else stage
+            changes[identity] = {'id': identity, 'duration': durations[identity], 'stage': entry_stage,
+                                 'run': run[1], 'file': path}
             if identity in prompts:
                 changes[identity]['prompt'] = prompts[identity]
     if main_playback:

@@ -7,7 +7,7 @@
 
 ### 视频待审登记与网页核验
 
-技术取回、持久重试、报告与通知按[公共结果收尾](../../studio-workspace-browser/references/ComfyUI-任务监控规范.md#后台结果收尾与通知)执行。AiMixer 业务适配按[视频人工审阅区模板](../templates/视频人工审阅区模板.md)维护各P、R、阶段成果与待审区，保留用户反馈、决定、旧版本和采用关系；共同状态归共同入口，各P只维护自身成果与审阅。网页按[交付前同步检查](../../nora-serial-drama/references/项目浏览入口规范.md#交付前同步检查)核对受影响剧集。
+技术取回、持久重试、报告与通知按[公共结果收尾](../../studio-workspace-browser/references/ComfyUI-任务监控规范.md#后台结果收尾与通知)执行。AiMixer 业务适配按[视频人工审阅区模板](../../studio-h3-aimixer/templates/视频人工审阅区模板.md)维护各P、R、阶段成果与待审区，保留用户反馈、决定、旧版本和采用关系；共同状态归共同入口，各P只维护自身成果与审阅。网页按[交付前同步检查](../../nora-serial-drama/references/项目浏览入口规范.md#交付前同步检查)核对受影响剧集。
 
 报告未覆盖的业务摘要按[记录分工](../../nora-serial-drama/references/会话与进度管理规范.md#技术记录与业务记录的分工)接续，生成说明与项目进度的既有分工不变。异常进入[业务恢复](进度查询与结果处理规范.md#异常与恢复)。
 
@@ -25,4 +25,4 @@
 
 ### 5.1 后端故障后的视频接续
 
-按[共用原任务恢复](../../studio-workspace-browser/references/进度查询与结果处理规范.md#后端故障后原任务无法确认)核对原 ID、现有文件及所缺成果。Songssx 按本场原执行轮次核对整场 MP4。AiMixer 需二采或返修时，另核对原导演台节点、获批一采来源和可用缓存，按[原缓存接续](../../studio-h3-aimixer/references/ComfyUI-AiMixer导演台节点使用规范.md#752-获批一采缓存的远端复用)处理。
+按[共用原任务恢复](../../studio-workspace-browser/references/进度查询与结果处理规范.md#后端故障后原任务无法确认)核对原 ID、现有文件及所缺成果。Songssx 按本场原执行轮次核对整场 MP4。AiMixer 接续或返修依赖缓存时，核对原节点、已获批生成来源和可用缓存，按[原缓存接续](../../studio-h3-aimixer/references/ComfyUI-AiMixer导演台节点使用规范.md#approved-cache-resume)处理。

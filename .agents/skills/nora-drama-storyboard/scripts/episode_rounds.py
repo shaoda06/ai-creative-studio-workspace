@@ -111,8 +111,11 @@ def append_round(project, episode, plan, target):
         if change.get('script') and change['script'] != script:
             raise ValueError('同一轮各场须引用相同的本集剧本版本')
         value = {**(base or {}), **change}
-        if 'songssx_execution' in change and 'songssx_postprocess' not in change and change['songssx_execution'] != (base or {}).get('songssx_execution'):
-            value.pop('songssx_postprocess', None)
+        if 'songssx_execution' in change and change['songssx_execution'] != (base or {}).get('songssx_execution'):
+            if 'songssx_postprocess' not in change:
+                value.pop('songssx_postprocess', None)
+            if change['songssx_execution'] is None:
+                value.pop('songssx_execution')
         if 'songssx_postprocess' in change and 'postprocess_source' not in change:
             value.pop('postprocess_source', None)
             if change['songssx_postprocess'] and base:
@@ -147,12 +150,8 @@ def append_round(project, episode, plan, target):
     if not order or set(order) - scenes.keys() or changes.keys() - set(order):
         raise ValueError('修改轮次必须覆盖本集剧本的全部场次，且修改场次须在剧本中定义')
     scenes = {scene: scenes[scene] for scene in order}
-    workflows = {bool(value.get('songssx_execution')) for value in scenes.values()}
-    prior_workflows = {bool(value.get('songssx_execution'))
-                       for item in production_rounds for value in item['scenes'].values()}
-    prior_workflows.update(bool(value.get('songssx_execution')) for value in legacy.values())
-    if len(workflows) > 1 or (not review_only and len(prior_workflows) == 1 and workflows != prior_workflows):
-        raise ValueError('同一集的新制作轮次须沿用同一套导演台')
+    if len({bool(value.get('songssx_execution')) for value in scenes.values()}) > 1:
+        raise ValueError('同一整集轮次须使用同一输出结构；更换工作流须提供该轮全部场次的方案')
     number = maximum + 1
     item = {'number': number, 'created_at': datetime.now().astimezone().isoformat(timespec='seconds'),
             'note': plan.get('note', ''), 'script': script, 'scenes': scenes, 'changed_scenes': list(changes)}

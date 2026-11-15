@@ -9,8 +9,8 @@ description: 在规划 MiniMax H3 生成或原片编辑，或编写、修订与�
 
 ## H3 工作流选择
 
-- 新制作需要 H3 导演台时，推荐 [Songssx SelfLift 导演台](../studio-h3-songssx/SKILL.md)，按实际模式核对 GEN 时间线与参考输入。
-- [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)仅作兼容使用，不列入新制作的常规工作流选项或推荐项。已有明确采用 AiMixer 的任务、依赖原画布和缓存的接续，或用户明确指定使用 AiMixer 时，进入该入口处理运行组、一采、二采和逐段取回。
+- 新的视频生成任务需要 H3 导演台时，推荐 [Songssx SelfLift 导演台](../studio-h3-songssx/SKILL.md)。推荐时向用户说明旧版 AiMixer 的兼容用途，按[共用工作流选择](../studio-video-production/SKILL.md#工作流选择)确认本次方案。选定后按实际模式核对 GEN 时间线与参考输入。
+- 旧版 [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)仅作兼容。已有 AiMixer 任务或依赖原画布、缓存的接续按原记录处理，用户明确指定 AiMixer 时也可使用。新任务的常规选项及推荐均排除 AiMixer。
 - 已有原片并使用 Viggle Remake 换人、换背景或连续完成两项时，进入 [Viggle Remake 视频编辑](../studio-h3-remake/SKILL.md)。
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。
