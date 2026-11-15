@@ -20,6 +20,7 @@ import { PageHeader } from './components/PageHeader';
 import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceAssets';
 import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
+import { ChloePoses } from './ChloePoses';
 import { ChloeReferenceVideos, ChloeReferenceVideoDetail } from './ChloeReferenceVideos';
 import type { ReferenceVideoDetail } from './ChloeReferenceVideos';
 import type { VoiceDetail } from './ChloeVoices';
@@ -35,7 +36,7 @@ import type { ModelDetail } from './ChloeModelDetail';
 const sections = [
   { value: 'overview', label: '账号概况', description: '发布平台、目标人群与内容风格。' },
   { value: 'products', label: '选品与商品', description: '候选选品、商品资料、带货条件与关联视频。' },
-  { value: 'assets', label: '共用资产', description: 'AI模特、发型、服装、配饰、造型、场景、声音和参考视频。' },
+  { value: 'assets', label: '共用资产', description: 'AI模特、发型、服装、配饰、造型、场景、声音、姿态和参考视频。' },
   { value: 'production', label: '视频制作', description: '单条视频的脚本、参考素材、生成审阅与剪映交接。' },
   { value: 'publication', label: '成片与发布', description: '人工成片、封面文案、关联商品与发布记录。' },
   { value: 'review', label: '运营复盘', description: '单条表现、跨视频结论与调整验证。' },
@@ -49,6 +50,7 @@ const assetCategories = [
   { value: 'accessories', label: '配饰' },
   { value: 'scenes', label: '场景' },
   { value: 'voices', label: '声音' },
+  { value: 'poses', label: '姿态' },
   { value: 'reference-videos', label: '参考视频' },
   { value: 'assembly', label: '装配' },
 ];
@@ -125,6 +127,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
         <div className="chloe-assets-content">
           {assetCategory.value === 'models' ? <ChloeModels key={spaceId} workspaceQuery={workspaceQuery} /> :
             referenceKind ? <ChloeReferenceAssets kind={referenceKind} key={`${spaceId}/${referenceKind}`} workspaceQuery={workspaceQuery} /> :
+            assetCategory.value === 'poses' ? <ChloePoses key={api} workspaceQuery={workspaceQuery} /> :
             assetCategory.value === 'reference-videos' ? <ChloeReferenceVideos workspaceQuery={workspaceQuery} /> :
             <ChloeVoices key={spaceId} workspaceQuery={workspaceQuery} />}
         </div>

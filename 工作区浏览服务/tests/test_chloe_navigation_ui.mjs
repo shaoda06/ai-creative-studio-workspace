@@ -21,7 +21,7 @@ const server = await createServer({configFile:false,root:frontend,plugins:[react
 await server.listen();
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const labels = ['账号概况','选品与商品','共用资产','视频制作','成片与发布','运营复盘','资源库'];
-const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','参考视频','装配'];
+const assetLabels = ['AI 模特','发型','服装','配饰','场景','声音','姿态','参考视频','装配'];
 const fixtureImage = name => ({kind:'image',name,key:name,url:'/api/assembly-fixture/'+name});
 const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixtureImage(id)});
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
@@ -38,6 +38,12 @@ const fixtureClothing = [
   fixtureAsset('O010','旧服装'),
 ];
 const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
+const fixturePoses = ['站姿','坐姿'].flatMap(type => Array.from({length:type==='站姿' ? 13 : 1},(_,index)=>{
+  const id = `${type}-${String(index+1).padStart(3,'0')}`;
+  const name = `${id}样例`;
+  const media = {...fixtureImage(name), url:'/api/assembly-fixture/pose-image',thumbnailUrl:'/api/assembly-fixture/pose-thumb'};
+  return {id,name,type,media,description:'双脚平放，躯干直立。'};
+}));
 const fixtureScenes = [fixtureAsset('S001','背景甲'),fixtureAsset('S002','制作中背景','制作中')];
 const fixtureVideo = {id:'RV001',name:'参考视频甲',status:'可用',coverUrl:fixtureImage('RV001').url,videoUrl:'/component-samples/video.webm'};
 const draftVideo = {id:'RV002',name:'待登记参考视频',status:'制作中',coverUrl:fixtureImage('RV002').url};
@@ -110,6 +116,7 @@ try {
       }});
       if (path === '/api/workspaces/account-demo/shared-scenes') return assets(showAssemblyFixtures ? fixtureScenes : []);
       if (path === '/api/workspaces/account-demo/shared-voices') return assets([]);
+      if (path === '/api/workspaces/account-demo/shared-poses') return assets(fixturePoses);
       if (path === '/api/workspaces/account-demo/shared-hair') return assets(showAssemblyFixtures ? fixtureHair : []);
       if (path === '/api/workspaces/account-demo/shared-accessories') return assets(testPaging
         ? [...fixtureAccessories,...moreAccessories].map(item=>item.id===unavailable ? {...item,status:'制作中'} : item)
@@ -191,6 +198,27 @@ try {
     await page.waitForFunction(()=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent==='参考视频');
     await page.getByText('暂无参考视频。', {exact:true}).waitFor();
     assert.equal(await assetNav.locator('[aria-current="page"]').textContent(),'参考视频');
+    await assetNav.getByRole('button',{name:'姿态',exact:true}).click();
+    const poseFilters = page.getByRole('group',{name:'按分类筛选',exact:true});
+    const firstPose = page.locator('article').filter({has:page.getByRole('heading',{name:'站姿-001 · 站姿-001样例',exact:true})});
+    await firstPose.waitFor();
+    const poseImage = firstPose.getByRole('img');
+    assert.equal(await poseImage.getAttribute('src'),'/api/assembly-fixture/pose-thumb');
+    await poseImage.click();
+    const posePreview = page.getByRole('dialog',{name:'站姿-001样例',exact:true});
+    assert.equal(await posePreview.getByRole('img').getAttribute('src'),'/api/assembly-fixture/pose-image');
+    await page.keyboard.press('Escape');
+    await firstPose.getByRole('button',{name:'查看站姿-001定姿文字',exact:true}).click();
+    await page.getByRole('dialog').getByText('双脚平放，躯干直立。',{exact:true}).waitFor();
+    await page.keyboard.press('Escape');
+    const nextPosePage = page.getByRole('button',{name:'下一页',exact:true});
+    await nextPosePage.click();
+    await page.getByRole('heading',{name:'站姿-013 · 站姿-013样例',exact:true}).waitFor();
+    await poseFilters.getByRole('checkbox',{name:'坐姿',exact:true}).check();
+    await page.getByRole('heading',{name:'坐姿-001 · 坐姿-001样例',exact:true}).waitFor();
+    assert.equal(await firstPose.count(),0);
+    assert.equal(await nextPosePage.count(),0);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await assetNav.getByRole('button',{name:'AI 模特',exact:true}).focus();
     await page.keyboard.press('Enter');
     await page.getByText('暂无模特资料。建立模特资料后，每个模特会在这里显示为一张卡片。',{exact:true}).waitFor();
