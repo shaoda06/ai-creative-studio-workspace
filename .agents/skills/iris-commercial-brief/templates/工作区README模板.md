@@ -19,7 +19,7 @@
 
 ## 工作区专用约定
 
-通用约定见[总工作区AGENTS]({{studio}}/AGENTS.md)。本地项目、素材、账号与连接配置不进入公共分发仓库；项目特有约定经确认后写入所属项目。
+通用约定见[总工作区AGENTS]({{studio}}/AGENTS.md)，客户资料及授权见[需求与参考]({{skills}}/iris-commercial-brief/references/流程规则.md#执行要点)，剪辑交接见[按需打包与自动检查]({{skills}}/iris-commercial-handoff/references/流程规则.md#按需打包与自动检查)。
 
 ## 项目接续与相关资料
 

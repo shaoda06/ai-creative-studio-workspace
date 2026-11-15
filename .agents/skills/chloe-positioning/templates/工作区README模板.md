@@ -18,8 +18,8 @@
 
 ## 工作区专用约定
 
-项目之间默认不共享资产、账号资料或复盘记录。技能与公共工具统一维护在总技能库；通用约定见[总工作区AGENTS]({{studio}}/AGENTS.md)。
+项目资料的使用范围见[Chloe业务入口]({{skills}}/chloe-commerce-video/SKILL.md)，通用约定见[总工作区AGENTS]({{studio}}/AGENTS.md)。
 
 ## 项目接续与相关资料
 
-先确定当前项目并读取其README，再进入该项目的账号资料或视频README与当前记录。新建项目须先取得用户明确提供的名称；没有名称时先讨论，不代填占位名称、不先建目录。
+已有项目见[项目专用约定的记录与执行]({{skills}}/chloe-commerce-video/references/会话组织与接续规范.md#项目专用约定的记录与执行)。新建项目见[命名与初始化]({{skills}}/chloe-positioning/references/工作区与初始化规范.md)。
