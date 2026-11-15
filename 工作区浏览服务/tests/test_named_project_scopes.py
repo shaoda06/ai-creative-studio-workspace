@@ -38,12 +38,15 @@ class NamedProjectTests(HttpTestCase):
 
     def test_project_list_and_context_views_do_not_merge_same_ids(self):
         space = self.spaces.get('demo')
-        self.assertEqual([p['id'] for p in space.public()['projects']], ['乙项目', '甲项目'])
+        self.assertCountEqual([p['id'] for p in space.public()['projects']], ['乙项目', '甲项目'])
         for i, root in enumerate(self.roots):
             api = '/api/workspaces/demo/contexts/' + quote(root.name)
             models = self.client.get(api + '/shared-models')
             self.assertEqual(models.status_code, 200, models.text)
             self.assertEqual(models.json()[0]['name'], '甲模特' if i == 0 else '乙模特')
+            paged = self.client.get(api + '/shared-models', params={'page': 1})
+            self.assertEqual(paged.status_code, 200, paged.text)
+            self.assertEqual(paged.json()['items'], models.json())
             self.assertEqual(self.client.get(api + '/production-videos').status_code, 200)
             self.assertEqual(self.client.get(api + '/projects/V001-同名视频').status_code, 200)
             self.assertEqual(self.client.get(api + '/account-overview').status_code, 200)

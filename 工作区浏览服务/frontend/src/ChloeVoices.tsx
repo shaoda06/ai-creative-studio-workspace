@@ -1,10 +1,10 @@
+import { assetPaging, useAssetList } from './chloeAssetPages';
+import { Pagination } from './components/Pagination';
 import { useChloeScope } from './chloeScope';
 import { AudioReferenceCard } from './components/AudioReferenceCard';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { get } from './api';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Preview, PreviewContext, Result, Rich } from './components';
 import { PageCheckStatus } from './components/PageCheckStatus';
@@ -20,20 +20,22 @@ export interface VoiceDetail { id: string; name: string; description: string; mo
 
 export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {spaceId} = useParams();
-  const { api, page } = useChloeScope();
+  const { page } = useChloeScope();
   const navigate = useNavigate();
-  const query = useQuery({queryKey:['chloe-voices',api],queryFn:()=>get<VoiceCard[]>(`${api}/shared-voices`),refetchInterval:5000});
+  const { query, list, changePage } = useAssetList<VoiceCard>('shared-voices');
+  const data = query.isPlaceholderData ? undefined : query.data;
   const audio = useAudioPreview(true, spaceId!, 0);
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
-    <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {audio.player}
-    {query.data && (query.data.length ? <div className="reference-media-list">{query.data.map(item=>{
+    {data && (data.items.length ? <div className="reference-media-list">{data.items.map(item=>{
       const name = `${item.id} · ${item.name}`;
       return <ReferenceMediaCard key={item.id} audio item={{kind:'reference',name,media:item.media ? {...item.media,name} : undefined,approvalHtml:`<span class="status-badge ${item.media ? 'status-green' : 'status-gray'}">${item.media ? '已采用' : '尚未采用声音参考'}</span>`}}
         playing={audio.playingId===item.id} progress={audio.currentId===item.id ? audio.progress : 0}
-        onPlay={()=>audio.toggle(item.id,item.media!.url!)} onSelect={()=>navigate(`${page}?section=assets&asset=voices&voice=${encodeURIComponent(item.id)}`)} />;
+        onPlay={()=>audio.toggle(item.id,item.media!.url!)} onSelect={()=>navigate(`${page}?${list}&voice=${encodeURIComponent(item.id)}`)} />;
     })}</div> : <p className="muted">暂无声音资料。</p>)}
+    {data && <Pagination {...assetPaging(data, changePage)} />}
   </>;
 }
 

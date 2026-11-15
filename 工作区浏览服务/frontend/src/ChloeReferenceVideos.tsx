@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { assetPaging, useAssetList } from './chloeAssetPages';
+import { Pagination } from './components/Pagination';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { get } from './api';
 import type { FileItem, WorkspaceSpace } from './api';
 import { useChloeScope } from './chloeScope';
 import { Result } from './components';
@@ -27,21 +27,19 @@ export type ReferenceVideoDetail = {
 type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
 
 export function ChloeReferenceVideos({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
-  const { api, page } = useChloeScope();
-  const query = useQuery({
-    queryKey: ['chloe-reference-videos', api],
-    queryFn: () => get<ReferenceVideoCard[]>(`${api}/shared-reference-videos`),
-    refetchInterval: 5000,
-  });
+  const { page } = useChloeScope();
+  const { query, list, changePage } = useAssetList<ReferenceVideoCard>('shared-reference-videos');
+  const data = query.isPlaceholderData ? undefined : query.data;
   return <>
     <PageCheckStatus queries={[workspaceQuery, query]} />
-    <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (query.data.length ? <div className="asset-media-grid">
-      {query.data.map(video => <AssetMediaCard key={video.id} title={`${video.id} · ${video.name}`}
+    <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+    {data && (data.items.length ? <div className="asset-media-grid">
+      {data.items.map(video => <AssetMediaCard key={video.id} title={`${video.id} · ${video.name}`}
         entry formal revision={0} aspectRatio="natural"
-        to={`${page}?section=assets&asset=reference-videos&referenceVideo=${encodeURIComponent(video.id)}`}
+        to={`${page}?${list}&referenceVideo=${encodeURIComponent(video.id)}`}
         item={{ media: { kind: 'image', key: video.id, url: video.coverUrl, name: `${video.name}的首帧` } }} />)}
     </div> : <p className="muted">暂无参考视频。</p>)}
+    {data && <Pagination {...assetPaging(data, changePage)} />}
   </>;
 }
 

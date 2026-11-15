@@ -2,12 +2,14 @@
 import html
 import json
 import re
+from functools import partial
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from backend.chloe_asset_pages import AssetPage, AssetRow, respond_asset_page
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
@@ -18,61 +20,83 @@ import project_resources as resources
 router = APIRouter(prefix='/shared-models')
 
 
-def model_documents(root):
+def model_records(root, requested_id=None):
     folder = resources.local(root, '综合资料/共用素材/AI模特')
     if not folder.is_dir():
         raise FileNotFoundError('模特资料目录不存在')
     seen = set()
     for path in sorted(folder.glob('M*-*/模特说明.md')):
+        identity, name = path.parent.name.split('-', 1)
+        if requested_id is not None and identity != requested_id:
+            continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('模特说明越出模特资料目录')
-        identity, name = path.parent.name.split('-', 1)
         if identity in seen:
             raise ValueError('模特编号重复：' + identity)
         seen.add(identity)
         doc = read_document(root, path, template('chloe-assets', '模特说明模板.md'),
                             {'identity': identity, 'title': name})
-        portraits = [row for row in records(doc, '当前采用') if row['用途'] == '正面面部']
-        portrait = media_reference(root, path, portraits[0]['资源引用']) if portraits else None
-        if portrait and Path(portrait['file']).suffix.lower() not in IMAGE_EXTENSIONS:
-            raise ValueError('正面面部采用必须为PNG、JPEG或WebP图片')
-        yield identity, name, path, doc, portrait
+        yield identity, name, path, doc
+
+
+def model_portrait(root, path, adoption):
+    portrait = media_reference(root, path, adoption['资源引用']) if adoption else None
+    if portrait and Path(portrait['file']).suffix.lower() not in IMAGE_EXTENSIONS:
+        raise ValueError('正面面部采用必须为PNG、JPEG或WebP图片')
+    return portrait
+
+
+def model_documents(root, requested_id):
+    for identity, name, path, doc in model_records(root, requested_id):
+        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == '正面面部'), None)
+        yield identity, name, path, doc, model_portrait(root, path, adoption)
 
 
 def portrait_url(base, portrait):
     return f'{base}/portrait/{quote(portrait["resource_id"])}/{quote(portrait["version"])}'
 
 
+def model_card(root, api, path, doc, adoption, metadata):
+    portrait = model_portrait(root, path, adoption)
+    media = None
+    if portrait:
+        key = portrait['resource_id'] + '@' + portrait['version']
+        url = portrait_url(f'{api}/shared-models/{quote(metadata["id"])}', portrait)
+        media = {'kind': 'image', 'name': metadata['name'] + ' · 正面面部', 'key': key,
+                 'url': url, 'thumbnailUrl': thumbnail_url(url)}
+    return {**metadata, 'identity': fields(doc, '资产身份'), 'features': fields(doc, '人物特征'),
+            'media': media, 'version': portrait['version'] if portrait else None}
+
+
+def model_rows(root, api):
+    rows = []
+    for identity, name, path, doc in model_records(root):
+        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == '正面面部'), None)
+        status = asset_status(path, doc)['status']
+        card = partial(model_card, root, api, path, doc, adoption, {'id': identity, 'name': name, 'status': status})
+        rows.append(AssetRow(identity, card, status, bool(adoption)))
+    return rows
+
+
 def model_cards(root, api):
-    cards = []
-    for identity, name, path, doc, portrait in model_documents(root):
-        media = None
-        if portrait:
-            key = portrait['resource_id'] + '@' + portrait['version']
-            url = portrait_url(f'{api}/shared-models/{quote(identity)}', portrait)
-            media = {'kind': 'image', 'name': name + ' · 正面面部', 'key': key,
-                     'url': url, 'thumbnailUrl': thumbnail_url(url)}
-        cards.append({'id': identity, 'name': name, 'identity': fields(doc, '资产身份'),
-                      'features': fields(doc, '人物特征'), 'media': media, 'status': asset_status(path, doc)['status'],
-                      'version': portrait['version'] if portrait else None})
-    return cards
+    return [row.card() for row in model_rows(root, api)]
 
 
 def portrait_file(root, identity, resource_id, version):
-    for model_id, _, _, _, portrait in model_documents(root):
-        if model_id == identity and portrait and portrait['resource_id'] == resource_id and portrait['version'] == version:
+    for _, _, _, _, portrait in model_documents(root, identity):
+        if portrait and portrait['resource_id'] == resource_id and portrait['version'] == version:
             return resources.local(root, portrait['file'])
     raise FileNotFoundError('该模特没有采用这个正面面部版本')
 
 
 @router.get('')
-def listing(request: Request):
+def listing(request: Request, options: AssetPage = Depends()):
     space = request.state.workspace_space
     if space.view != 'chloe-commerce':
         raise HTTPException(404, '该空间未接入带货共用资产')
     try:
-        return respond_view(request, (space.api, 'shared-models'), [space.root / '综合资料'],
-                            lambda: model_cards(space.root, space.api))
+        return respond_asset_page(request, space, 'shared-models', options,
+                                  lambda: model_rows(space.root, space.api), folders=[space.root / '综合资料'])
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -98,9 +122,8 @@ def portrait(identity: str, resource_id: str, version: str, request: Request, do
 
 
 def model_context(root, identity):
-    for model_id, name, path, doc, portrait in model_documents(root):
-        if model_id == identity:
-            return name, path, doc, portrait
+    for _, name, path, doc, portrait in model_documents(root, identity):
+        return name, path, doc, portrait
     raise FileNotFoundError('模特资料不存在：' + identity)
 
 
@@ -161,7 +184,29 @@ def linked_media(base, key, kind, name):
     return media
 
 
-def asset_content(root, path, doc, allowed, base, media_kinds=('image',), *, include_image_dimensions=True):
+def reference_media_kind(ref):
+    suffix = Path(ref['file']).suffix.lower()
+    if suffix in IMAGE_EXTENSIONS:
+        return 'image'
+    if suffix in resources.KINDS['音频']:
+        return 'audio'
+    if suffix in resources.KINDS['视频']:
+        return 'video'
+    return None
+
+
+def adopted_media(root, path, base, row, media_kinds=('image',)):
+    ref = media_reference(root, path, row['资源引用'])
+    kind = reference_media_kind(ref)
+    if kind not in media_kinds:
+        raise ValueError('参考版本媒体类型不符合本资产要求')
+    purpose = row['用途']
+    version = ref['resource_id'] + '@' + ref['version']
+    return {'purpose': purpose, 'resource': ref['resource_id'], 'version': ref['version'], 'adopted': True,
+            'media': linked_media(base, ref['file'], kind, purpose + ' · ' + version)}
+
+
+def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -171,15 +216,14 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',), *, inc
     # Retain candidates and originals even when they are not currently adopted.
     for row in records(doc, '参考版本') + records(doc, '当前采用'):
         ref = media_reference(root, path, row['资源引用'])
-        suffix = Path(ref['file']).suffix.lower()
-        media_kind = 'image' if suffix in IMAGE_EXTENSIONS else 'audio' if suffix in resources.KINDS['音频'] else 'video' if suffix in resources.KINDS['视频'] else None
+        media_kind = reference_media_kind(ref)
         if media_kind not in media_kinds:
             raise ValueError('参考版本媒体类型不符合本资产要求')
         key = ref['resource_id'] + '@' + ref['version']
         slot = (row['用途'], key)
         if slot not in images:
             media = linked_media(base, ref['file'], media_kind, row['用途'] + ' · ' + key)
-            if media_kind == 'image' and slot in adopted and include_image_dimensions:
+            if media_kind == 'image' and slot in adopted:
                 metadata = (root / ref['file']).parent / '版本信息.json'
                 facts = json.loads(metadata.read_text('utf-8'))['facts']
                 media['originalDimensions'] = [facts['width'], facts['height']]
@@ -237,6 +281,42 @@ def model_detail(root, identity, api):
                       'url': base + '/files/' + quote(key, safe='/')})
     return {'id': identity, 'name': name, **content, 'looks': looks,
             'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
+
+
+def assembly_look_card(root, base, path, identity, name, adopted):
+    face = adopted_media(root, path, base, adopted['造型面部三视图'])
+    masked = adopted_media(root, path, base, adopted['全身三视图遮面版'])
+    cover = adopted.get('全身三视图原图')
+    media = adopted_media(root, path, base, cover)['media'] if cover else masked['media']
+    return {'id': identity, 'name': name, 'media': media, 'face': face, 'masked': masked}
+
+
+def assembly_look_rows(root, api, identity):
+    # The second picker step only needs the two adopted views and the card cover.
+    base = f'{api}/shared-models/{quote(identity)}'
+    model = next(model_records(root, identity), None)
+    if not model or asset_status(model[2], model[3])['status'] != '可用':
+        return []
+    rows = []
+    for look_id, name, path, doc in model_looks(root, identity):
+        if asset_status(path, doc)['status'] != '可用':
+            continue
+        adopted = {row['用途']: row for row in records(doc, '当前采用')}
+        if {'造型面部三视图', '全身三视图遮面版'} <= adopted.keys():
+            rows.append(AssetRow(look_id, partial(assembly_look_card, root, base, path, look_id, name, adopted),
+                                 '可用', True))
+    return rows
+
+
+@router.get('/{identity}/assembly-looks')
+def assembly_looks(identity: str, request: Request, options: AssetPage = Depends()):
+    space = request_space(request)
+    try:
+        return respond_asset_page(request, space, 'assembly-looks', options,
+                                  lambda: assembly_look_rows(space.root, space.api, identity),
+                                  folders=[space.root / '综合资料'], scope=identity)
+    except (ValueError, OSError) as error:
+        raise HTTPException(409, str(error)) from error
 
 
 def model_file(root, identity, key):

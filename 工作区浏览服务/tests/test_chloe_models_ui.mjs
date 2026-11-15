@@ -1,3 +1,4 @@
+import { chloeAssetResponse } from './chloe_asset_fixtures.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -150,21 +151,21 @@ try {
    if(path==='/api/service')return route.fulfill({json:{version,ready:true}});
    if(path==='/api/workspaces')return route.fulfill({json:[{id:'chloe',name:'Chloe AI视频带货',view:'chloe-commerce',projects:[]}]});
    if(path==='/api/task-monitor')return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
-   if(path==='/api/workspaces/chloe/shared-voices') return route.fulfill({json:[{id:'A001',name:'声音甲',description:'无',models:['M001'],media:{kind:'audio',name:'声音甲',key:'sample.wav',url:'/component-samples/tone.wav'},reference:{resource:'AUD-SAMPLE',version:'V001',duration:4}}]});
+   if(path==='/api/workspaces/chloe/shared-voices') return route.fulfill({json:chloeAssetResponse(route.request().url(), [{id:'A001',name:'声音甲',description:'无',models:['M001'],media:{kind:'audio',name:'声音甲',key:'sample.wav',url:'/component-samples/tone.wav'},reference:{resource:'AUD-SAMPLE',version:'V001',duration:4}}])});
    if(path==='/api/workspaces/chloe/shared-models') {
     if(fail)return route.fulfill({status:409,json:{detail:'isolated invalid document'}});
     const cards=structuredClone(sample.cards);
     if(long){cards[0].name='LongModelName'.repeat(30);}
-    return route.fulfill({json:cards});
+    return route.fulfill({json:chloeAssetResponse(route.request().url(), cards)});
    }
-   if(path==='/api/workspaces/chloe/shared-hair')return route.fulfill({json:emptyHair ? [] : sample.hairCards});
+   if(path==='/api/workspaces/chloe/shared-hair')return route.fulfill({json:chloeAssetResponse(route.request().url(), emptyHair ? [] : sample.hairCards)});
    const hairstyle=sample.hair.find(item=>path===`/api/workspaces/chloe/shared-hair/${item.id}`);
    if(hairstyle)return route.fulfill({json:hairstyle});
-   if(path==='/api/workspaces/chloe/shared-accessories')return route.fulfill({json:emptyAccessories ? [] : sample.accessoryCards});
+   if(path==='/api/workspaces/chloe/shared-accessories')return route.fulfill({json:chloeAssetResponse(route.request().url(), emptyAccessories ? [] : sample.accessoryCards)});
    const accessory=sample.accessories.find(item=>path===`/api/workspaces/chloe/shared-accessories/${item.id}`);
    if(accessory)return route.fulfill({json:accessory});
-   if(path==='/api/workspaces/chloe/shared-clothing')return route.fulfill({json:sample.clothingCards});
-   if(path==='/api/workspaces/chloe/shared-scenes')return route.fulfill(fail ? {status:409,json:{detail:'isolated invalid scene'}} : {json:emptyScenes ? [] : sample.sceneCards});
+   if(path==='/api/workspaces/chloe/shared-clothing')return route.fulfill({json:chloeAssetResponse(route.request().url(), sample.clothingCards)});
+   if(path==='/api/workspaces/chloe/shared-scenes')return route.fulfill(fail ? {status:409,json:{detail:'isolated invalid scene'}} : {json:chloeAssetResponse(route.request().url(), emptyScenes ? [] : sample.sceneCards)});
    const scene=sample.scenes.find(item=>path===`/api/workspaces/chloe/shared-scenes/${item.id}`);
    if(scene)return route.fulfill({json:scene});
    const garment=sample.clothes.find(item=>path===`/api/workspaces/chloe/shared-clothing/${item.id}`);
@@ -570,13 +571,17 @@ try {
   assert.ok(Math.abs(nextBox.y-shortBox.y-shortBox.height-18)<1,'下一张直接接在本列卡片下方');
   assert.ok(nextBox.y<tallBox.y+tallBox.height,'较短列无需等待较高的并排卡片');
   await bag.check();
+  await accessoryCards.first().waitFor();
   assert.deepEqual(await accessoryCards.locator('h3').allTextContents(),['C001 · 示例小包','C004 · 示例托特包']);
   assert.equal(await columns.first().locator('.asset-media-card').count(),1,'筛选后重新按可见卡片分列');
   await hat.check();
+  await accessoryCards.nth(2).waitFor();
   assert.equal(await accessoryCards.count(),3);
   await bag.uncheck();
+  await accessoryCards.first().waitFor();
   assert.deepEqual(await accessoryCards.locator('h3').allTextContents(),['C003 · 示例贝雷帽']);
   await hat.uncheck();
+  await accessoryCards.nth(3).waitFor();
   assert.equal(await accessoryCards.count(),4);
   await page.getByRole('link',{name:'C001 · 示例小包',exact:true}).click();
   const accessoryInfo=page.getByRole('region',{name:'配饰信息',exact:true});

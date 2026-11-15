@@ -1,3 +1,4 @@
+import { assetListParams } from './chloeAssetPages';
 import { useChloeScope } from './chloeScope';
 import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -16,7 +17,7 @@ import { UnderlineTabs } from './components/UnderlineTabs';
 import { LinkButton } from './components/LinkButton';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
-import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds, referenceAssetListParams } from './ChloeReferenceAssets';
+import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetDetail, ReferenceAssetKind } from './ChloeReferenceAssets';
 import { ChloeVoices, ChloeVoiceDetail } from './ChloeVoices';
 import { ChloeReferenceVideos, ChloeReferenceVideoDetail } from './ChloeReferenceVideos';
@@ -91,9 +92,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     refetchInterval: 5000,
   });
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
-  const assetListParams = referenceKind ? referenceAssetListParams(referenceKind, params.get('clothingTab'))
-    : new URLSearchParams({ section: 'assets', asset: assetCategory.value });
-  const assetList = `${page}?${assetListParams}`;
+  const assetList = `${page}?${assetListParams(params)}`;
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const assetNavigation = (reset?: () => void) => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
     endAction={reset && <LinkButton onClick={reset}>重置</LinkButton>}
@@ -103,7 +102,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
       {current.value === 'assets' && <Breadcrumbs actionsRef={setBreadcrumbActions} items={[
         { label: '共用资产', href: `#${page}?section=assets` },
         { label: assetCategory.label, href: assetDetail ? `#${assetList}` : undefined },
-        ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#${page}?section=assets&asset=models&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
+        ...(modelId ? [{label:modelQuery.data ? `${modelId} · ${modelQuery.data.name}` : modelId, href:currentLook ? `#${assetList}&model=${encodeURIComponent(modelId)}&modelTab=looks` : undefined}] : []),
         ...(referenceId ? [{label:referenceQuery.data ? `${referenceId} · ${referenceQuery.data.name}` : referenceId}] : []),
         ...(voiceId ? [{label:voiceQuery.data ? `${voiceId} · ${voiceQuery.data.name}` : voiceId}] : []),
         ...(referenceVideoId ? [{label: referenceVideoQuery.data ? `${referenceVideoId} · ${referenceVideoQuery.data.name}` : referenceVideoId}] : []),
@@ -112,10 +111,10 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
       {current.value !== 'assets' && <Breadcrumbs items={[{ label: current.label }]} />}
     </PageHeader>}
     {breadcrumbActions && (referenceVideoId || referenceId || currentLook || voiceId) && createPortal(
-      referenceVideoId ? <Link to={`${page}?section=assets&asset=reference-videos`}>返回参考视频列表</Link> :
-      voiceId ? <Link to={`${page}?section=assets&asset=voices`}>返回声音列表</Link> :
+      referenceVideoId ? <Link to={assetList}>返回参考视频列表</Link> :
+      voiceId ? <Link to={assetList}>返回声音列表</Link> :
       referenceId ? <Link to={assetList}>返回{referenceConfig!.label}列表</Link> :
-        <Link to={`${page}?section=assets&asset=models&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
+        <Link to={`${assetList}&model=${encodeURIComponent(modelId!)}&modelTab=looks`}>返回造型列表</Link>, breadcrumbActions)}
     {controls && createPortal(<TabNav wide label="Chloe栏目" items={sections} selected={current.value}
       onChange={value => setParams({ section: value })} />, controls)}
     {current.value === 'publication' ? <ChloePublication title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'publication',video:value} : {section:'publication'})} /> : current.value === 'production' ? <ChloeProduction title={context || space!.name} baseUrl={api} selected={params.get('video')} onSelect={value => setParams(value ? {section:'production',video:value} : {section:'production'})} /> : current.value === 'resources' ? <ChloeResources key={api} workspaceQuery={workspaceQuery} /> : current.value === 'overview' ? <AccountOverview workspaceQuery={workspaceQuery} /> : <section className={assetDetail ? undefined : 'panel'} aria-label={current.label}>

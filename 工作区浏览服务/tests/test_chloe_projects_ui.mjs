@@ -1,12 +1,13 @@
+import { chloeAssetResponse } from './chloe_asset_fixtures.mjs';
 // Existing real UI components with isolated responses; never contacts production APIs.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 const require = createRequire(new URL('../frontend/package.json', import.meta.url));
 const { chromium } = require('playwright');
-const { createServer } = await import(require.resolve('vite'));
-const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
+const { createServer } = await import(pathToFileURL(require.resolve('vite')).href);
+const react = (await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const version = JSON.parse(await readFile(new URL('../frontend/package.json', import.meta.url))).version;
 const server = await createServer({configFile:false,root:fileURLToPath(new URL('../frontend',import.meta.url)),plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
@@ -27,8 +28,9 @@ try {
       if (match) {
         const [,name,endpoint] = match;
         if (endpoint === 'account-overview') return route.fulfill({json:{direction:{发布平台:name+'平台',目标人群:'待确定',内容风格:'待确定'},videos:[]}});
-        if (endpoint === 'shared-voices' || endpoint === 'production-videos' || endpoint === 'publication-videos') return route.fulfill({json:[]});
-        if (endpoint === 'shared-models') return route.fulfill({json:[{id:'M001',name:name+'模特',media:null,version:null,identity:{},features:{}}]});
+        if (endpoint === 'shared-voices') return route.fulfill({json:chloeAssetResponse(route.request().url(), [])});
+        if (endpoint === 'production-videos' || endpoint === 'publication-videos') return route.fulfill({json:[]});
+        if (endpoint === 'shared-models') return route.fulfill({json:chloeAssetResponse(route.request().url(), [{id:'M001',name:name+'模特',media:null,version:null,identity:{},features:{}}])});
       }
       unexpected.push(path); return route.fulfill({status:404,json:{detail:'unexpected fixture request'}});
     });
@@ -42,7 +44,7 @@ try {
     const first = page.getByRole('link').filter({hasText:'M001 · 甲项目模特'});
     assert.ok(decodeURIComponent(await first.getAttribute('href')).includes('/contexts/甲项目?'));
     await page.getByRole('combobox',{name:'切换项目',exact:true}).click();
-    await page.getByRole('option',{name:'乙项目',exact:true}).click();
+    await page.getByRole('option',{name:/^\d+-乙项目$/}).click();
     await page.getByText('乙项目平台',{exact:true}).waitFor();
     await page.getByRole('button',{name:'共用资产',exact:true}).click();
     await page.getByText('M001 · 乙项目模特',{exact:true}).waitFor();

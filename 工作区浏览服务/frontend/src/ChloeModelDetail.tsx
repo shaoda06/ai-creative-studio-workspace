@@ -3,7 +3,7 @@ import { ChloeModelVoices } from './ChloeModelVoices';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import { FullscreenImage } from './components/FullscreenImage';
 import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { FileItem, WorkspaceSpace } from './api';
 import { Preview, PreviewContext, Result, Rich } from './components';
@@ -29,7 +29,6 @@ const originalView = [{value:'original',label:'原图'}];
 const lookViews = [...originalView, {value:'masked',label:'遮面版'}];
 
 export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryResult<ModelDetail>; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
-  const { spaceId } = useParams();
   const { api, page } = useChloeScope();
   const [params, setParams] = useSearchParams();
   const [document, setDocument] = useState<FileItem | null>(null);
@@ -104,7 +103,7 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
       <div className="chloe-model-detail">
       {tab==='info' && <>
         <section className="panel"><h2>人物特征</h2>{section('人物特征')}</section>
-        <ChloeModelVoices key={data.id} spaceId={spaceId!} modelId={data.id} />
+        <ChloeModelVoices key={data.id} modelId={data.id} />
       </>}
       {tab==='images' && <div className="chloe-model-images">
         <section className="panel chloe-model-image-column" aria-label="正面面部图">

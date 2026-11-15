@@ -1,5 +1,8 @@
+import { useRef } from 'react';
+import type { ComponentProps } from 'react';
 import type { FileItem } from './api';
 import { CopyButton } from './components/CopyButton';
+import { Pagination } from './components/Pagination';
 
 export type OpenImage = (title: string, src: string) => void;
 export const assetTitle = (asset: { id: string; name: string }) => `${asset.id} · ${asset.name}`;
@@ -26,4 +29,12 @@ export function AssemblyExport({ label = '导出', canGenerate, generate, handof
     </div>
     <p className="chloe-assembly-export-template" tabIndex={handoff ? 0 : undefined}>{handoff || <span className="muted">{empty}</span>}</p>
   </section>;
+}
+export function AssemblyPagination({ change, pageSize, ...paging }: ComponentProps<typeof Pagination> & { pageSize: number }) {
+  const container = useRef<HTMLDivElement>(null);
+  if (paging.total <= pageSize) return null;
+  return <div ref={container}><Pagination {...paging} pageSize={pageSize} change={page => {
+    container.current?.closest('.dialog-body')?.scrollTo(0, 0);
+    change(page);
+  }} /></div>;
 }

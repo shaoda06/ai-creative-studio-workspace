@@ -8,14 +8,16 @@ import { AudioReferenceCard } from './components/AudioReferenceCard';
 import { useAudioPreview } from './components/AudioPreviewButton';
 import type { VoiceCard } from './ChloeVoices';
 
-export function useModelVoices(spaceId:string) {
+export function useModelVoices(modelIds: string[]) {
   const { api } = useChloeScope();
-  return useQuery({queryKey:['chloe-voices',api],queryFn:()=>get<VoiceCard[]>(`${api}/shared-voices`),refetchInterval:5000});
+  const params = new URLSearchParams(modelIds.map(id => ['models', id]));
+  return useQuery({queryKey:['chloe-model-voices',api,modelIds],enabled:modelIds.length>0,
+    queryFn:()=>get<VoiceCard[]>(`${api}/shared-voices?${params}`),refetchInterval:5000});
 }
 
-export function ChloeModelVoices({spaceId,modelId}: {spaceId:string;modelId:string}) {
+export function ChloeModelVoices({modelId}: {modelId:string}) {
   const { page } = useChloeScope();
-  const query=useModelVoices(spaceId);
+  const query=useModelVoices([modelId]);
   const audio=useAudioPreview(true,modelId,0);
   const voices=query.data?.filter(voice=>voice.models.includes(modelId));
   return <section className="panel" aria-label="声音信息"><h2>声音信息</h2>

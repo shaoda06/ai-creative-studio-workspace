@@ -1,3 +1,4 @@
+import { assetPaging, useAssetDraft, useAssetPage } from './chloeAssetPages';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +13,7 @@ import { AssetSelectionDialog } from './components/AssetSelectionDialog';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
-import { AssemblyExport, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
+import { AssemblyExport, AssemblyPagination, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
 import type { OpenImage } from './ChloeAssemblyParts';
 
 type NamedAsset = { id: string; name: string };
@@ -23,6 +24,7 @@ type Selection =
   | { kind: 'video'; asset: ReferenceVideoCard }
   | { kind: 'look'; asset: Pick<LookAsset, 'id' | 'name' | 'media'>; model: NamedAsset; face: LookImage; masked: LookImage }
   | { kind: 'scene'; asset: ImageAsset };
+type PickerCard = ReferenceVideoCard | ImageAsset | (Pick<LookAsset, 'id' | 'name' | 'media'> & { face: LookImage; masked: LookImage });
 type PickerKind = Selection['kind'];
 const labels = { video: '参考视频', look: '造型图', scene: '背景' };
 const faceLabel = '造型面部三视图';
@@ -31,49 +33,51 @@ const maskedLabel = '全身定装三视图遮面版';
 function VideoAssemblyPicker({ kind, initial, onConfirm, onClose }: {
   kind: PickerKind; initial: Selection | null; onConfirm: (selection: Selection | null) => void; onClose: () => void;
 }) {
-  const { api } = useChloeScope();
-  const [modelId, setModelId] = useState(initial?.kind === 'look' ? initial.model.id : null);
-  const [draftId, setDraftId] = useState(initial?.asset.id ?? null);
-  const videos = useQuery({ queryKey: ['chloe-reference-videos', api],
-    queryFn: () => get<ReferenceVideoCard[]>(`${api}/shared-reference-videos`), enabled: kind === 'video', staleTime: 0 });
-  const scenes = useQuery({ queryKey: ['chloe-reference-assets', 'scenes', api],
-    queryFn: () => get<ImageAsset[]>(`${api}/shared-scenes`), enabled: kind === 'scene', staleTime: 0 });
-  const models = useQuery({ queryKey: ['chloe-models', api],
-    queryFn: () => get<ImageAsset[]>(`${api}/shared-models`), enabled: kind === 'look', staleTime: 0 });
-  const availableModels = models.isFetching || models.error ? [] : (models.data ?? []).filter(asset => asset.status === '可用');
-  const model = availableModels.find(asset => asset.id === modelId);
-  const looks = useQuery({ queryKey: ['chloe-model', api, model?.id],
-    queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(model!.id)}`), enabled: kind === 'look' && !!model, staleTime: 0 });
-  const selectingModel = kind === 'look' && !model;
-  const query = kind === 'video' ? videos : kind === 'scene' ? scenes : selectingModel ? models : looks;
-  const ready = !!query.data && !query.isFetching && !query.error;
-  const label = selectingModel ? '模特' : labels[kind];
+  const [model, setModel] = useState<NamedAsset | null>(initial?.kind === 'look' ? initial.model : null);
+  if (kind === 'look' && !model) {
+    return <VideoAssemblyChoices key="models" endpoint="shared-models" label="模特" onClose={onClose}
+      selectingModel={asset => setModel(asset)} />;
+  }
+  const endpoint = model ? `shared-models/${encodeURIComponent(model.id)}/assembly-looks`
+    : kind === 'video' ? 'shared-reference-videos' : 'shared-scenes';
+  return <VideoAssemblyChoices key={endpoint} endpoint={endpoint} label={labels[kind]} model={model}
+    initialId={initial?.kind !== 'look' || initial.model.id === model?.id ? initial?.asset.id : undefined}
+    back={model ? () => setModel(null) : undefined} onClose={onClose} onConfirm={asset => {
+      if (!asset) onConfirm(null);
+      else if ('face' in asset) onConfirm({kind: 'look', model: model!, asset, face: asset.face, masked: asset.masked});
+      else if ('videoUrl' in asset) onConfirm({kind: 'video', asset});
+      else onConfirm({kind: 'scene', asset});
+    }} />;
+}
 
-  const card = (asset: NamedAsset, media: FileItem | null, onSelect: () => void, selected = false) =>
-    <AssetMediaCard key={asset.id} title={assetTitle(asset)} formal entry aspectRatio={kind === 'video' ? 3 / 4 : 'natural'} revision={0}
-      item={{ media, emptyLabel: '尚未采用正面面部图' }} selection={{ selected, onSelect }} />;
-  const choices: Selection[] = kind === 'video' ? (videos.data ?? []).filter(asset => asset.status === '可用').map(asset => ({ kind: 'video', asset }))
-    : kind === 'scene' ? (scenes.data ?? []).filter(asset => asset.status === '可用' && asset.media?.url).map(asset => ({ kind: 'scene', asset }))
-    : model ? (looks.data?.looks ?? []).filter(asset => asset.status === '可用').flatMap(asset => {
-      const face = asset.images.find(item => item.adopted && item.purpose === faceLabel && item.media.url);
-      const masked = asset.images.find(item => item.adopted && item.purpose === '全身三视图遮面版' && item.media.url);
-      return face && masked ? [{ kind: 'look', model, asset, face, masked }] : [];
-    }) : [];
-  const draft = choices.find(choice => choice.asset.id === draftId);
-  const cards = selectingModel ? availableModels.map(asset => card(asset, asset.media, () => {
-    setDraftId(initial?.kind === 'look' && initial.model.id === asset.id ? initial.asset.id : null);
-    setModelId(asset.id);
-  })) : choices.map(choice => {
-    const media = choice.kind === 'video' ? { kind: 'video', key: choice.asset.id, url: choice.asset.videoUrl, thumbnailUrl: choice.asset.coverUrl, name: choice.asset.name }
-      : choice.asset.media;
-    return card(choice.asset, media, () => setDraftId(id => id === choice.asset.id ? null : choice.asset.id), draft === choice);
-  });
-
-  return <AssetSelectionDialog title={`选择${label} ${ready && draft ? 1 : 0}/1${model ? ` · ${assetTitle(model)}` : ''}`} close={onClose}
-    confirm={selectingModel ? undefined : () => onConfirm(draft ?? null)} confirmDisabled={!ready || (!draft && !initial)}
-    actions={model && <LinkButton onClick={() => setModelId(null)}>返回模特列表</LinkButton>}>
-    <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
+function VideoAssemblyChoices({ endpoint, label, model, initialId, back, onClose, onConfirm, selectingModel }: {
+  endpoint: string; label: string; model?: NamedAsset | null; initialId?: string; back?: () => void;
+  onClose: () => void; onConfirm?: (asset: PickerCard | null) => void; selectingModel?: (asset: NamedAsset) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const filters = { available: true, require_media: true };
+  const query = useAssetPage<PickerCard>(endpoint, page, filters);
+  const draft = useAssetDraft<PickerCard>(endpoint, filters, initialId ? [initialId] : [], items => onConfirm!(items[0] ?? null));
+  const selected = draft.selected[0];
+  const ready = !!query.data && !query.isFetching && !query.error && !draft.initial.isFetching && !draft.initial.error;
+  const failed = query.error ? query : draft.initial;
+  const cards = ready ? query.data!.items.map(asset => {
+    const video = 'videoUrl' in asset;
+    const media: FileItem | null = video ? { kind: 'video', key: asset.id, url: asset.videoUrl, thumbnailUrl: asset.coverUrl, name: asset.name } : asset.media;
+    return <AssetMediaCard key={asset.id} title={assetTitle(asset)} entry formal revision={0} aspectRatio={video ? 3 / 4 : 'natural'}
+      item={{ media, emptyLabel: '尚未采用正面面部图' }}
+      selection={{ selected: selected?.id === asset.id, disabled: draft.confirming, onSelect: () => {
+        if (selectingModel) selectingModel(asset);
+        else draft.setSelected(selected?.id === asset.id ? [] : [asset]);
+      } }} />;
+  }) : [];
+  return <AssetSelectionDialog title={`选择${label} ${selected ? 1 : 0}/1${model ? ` · ${assetTitle(model)}` : ''}`} close={onClose}
+    confirm={onConfirm && draft.confirmSelection}
+    confirmDisabled={!ready || draft.confirming || (!selected && !initialId)}
+    actions={back && <LinkButton onClick={back}>返回模特列表</LinkButton>}>
+    <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />
     {ready && (cards.length ? <div className="asset-media-grid">{cards}</div> : <p className="muted">暂无可选{label}。</p>)}
+    {ready && <AssemblyPagination {...assetPaging(query.data!, setPage)} />}
   </AssetSelectionDialog>;
 }
 

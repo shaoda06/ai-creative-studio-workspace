@@ -1,10 +1,12 @@
 """Read registered Chloe reference videos and their exact playback versions."""
 import json
+from functools import partial
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from backend.chloe_asset_pages import AssetPage, AssetRow, respond_asset_page
 from backend.chloe_models import request_space
 from backend.chloe_overview import fields
 from backend.chloe_reference_assets import AssetKind, asset_context, asset_documents
@@ -40,19 +42,29 @@ def registered_video(root, identity):
     return name, info, ref
 
 
+def video_card(root, api, identity, name, path, info):
+    ref = playback_reference(root, path, info)
+    cover, video = video_urls(api, identity, ref)
+    return {'id': identity, 'name': name, 'coverUrl': cover, 'videoUrl': video, 'status': '可用'}
+
+
+def video_rows(root, api):
+    rows = []
+    for identity, name, path, doc in asset_documents(root, KIND):
+        info = fields(doc, SECTION)
+        if info['播放版本引用'] not in MISSING:
+            rows.append(AssetRow(identity, partial(video_card, root, api, identity, name, path, info), '可用', True))
+    return rows
+
+
 @router.get('')
-def listing(request: Request):
+def listing(request: Request, options: AssetPage = Depends()):
     space = request_space(request)
-    cards = []
     try:
-        for identity, name, path, doc in asset_documents(space.root, KIND):
-            ref = playback_reference(space.root, path, fields(doc, SECTION))
-            if ref:
-                cover, video = video_urls(space.api, identity, ref)
-                cards.append({'id': identity, 'name': name, 'coverUrl': cover, 'videoUrl': video, 'status': '可用'})
+        return respond_asset_page(request, space, KIND.endpoint, options, lambda: video_rows(space.root, space.api),
+                                  folders=[space.root / '综合资料'])
     except (ValueError, OSError) as error:
         raise HTTPException(409, str(error)) from error
-    return cards
 
 
 @router.get('/{identity}')

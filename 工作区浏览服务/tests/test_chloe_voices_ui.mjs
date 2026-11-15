@@ -1,14 +1,17 @@
+import { chloeAssetResponse } from './chloe_asset_fixtures.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { mkdtemp, readFile } from 'node:fs/promises';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
+const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
-const output=await mkdtemp('/private/tmp/chloe-voices-');
+const output=await mkdtemp(join(tmpdir(),'chloe-voices-'));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
@@ -25,9 +28,9 @@ try {
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
    if(route.request().method()!=='GET') unexpected.push(route.request().method()+' '+path);
-   if(path==='/api/workspaces/test/shared-voices') return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:empty?[]:[{id:'A001',name:'声音甲',media},{id:'A002',name:'声音乙',media:null}]});
+   if(path==='/api/workspaces/test/shared-voices') return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:chloeAssetResponse(route.request().url(), empty?[]:[{id:'A001',name:'声音甲',media},{id:'A002',name:'声音乙',media:null}])});
    if(path==='/api/workspaces/test/shared-voices/A001') return route.fulfill({json:noReference ? {...detail,versions:[]} : detail});
-   if(path==='/api/workspaces/test/shared-models') return route.fulfill({json:[]});
+   if(path==='/api/workspaces/test/shared-models') return route.fulfill({json:chloeAssetResponse(route.request().url(), [])});
    if(path==='/api/service') return route.fulfill({json:{version,ready:true}});
    if(path==='/api/task-monitor') return route.fulfill({json:{tasks:[],local_tasks:[],remote_nodes:[],local_counts:{},history_updated_at:{}}});
    if(path==='/api/workspaces') return route.fulfill({json:[{id:'test',name:'Chloe声音隔离验证',view:'chloe-commerce',projects:[]}]});

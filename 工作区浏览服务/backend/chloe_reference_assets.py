@@ -1,13 +1,15 @@
 """Shared read-only asset records; media stay in their original versioned files."""
 import json
 from dataclasses import dataclass
+from functools import partial
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.services.read_views import respond_view
 from fastapi.responses import FileResponse
 
-from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
+from backend.chloe_asset_pages import AssetPage, AssetRow, respond_asset_page
+from backend.chloe_models import adopted_media, asset_content, linked_files, linked_html, model_context, request_space
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
@@ -29,13 +31,15 @@ SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')
 
 
-def asset_documents(root, kind):
+def asset_documents(root, kind, requested_id=None):
     folder = resources.local(root, '综合资料/共用素材/'+kind.label)
     seen = set()
     for path in sorted(folder.glob(f'{kind.prefix}*-*/{kind.label}说明.md')):
+        identity, name = path.parent.name.split('-', 1)
+        if requested_id is not None and identity != requested_id:
+            continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError(kind.label+'说明越出资料目录')
-        identity, name = path.parent.name.split('-', 1)
         if identity in seen:
             raise ValueError(kind.label+'编号重复：' + identity)
         seen.add(identity)
@@ -45,9 +49,8 @@ def asset_documents(root, kind):
 
 
 def asset_context(root, identity, kind):
-    for item in asset_documents(root, kind):
-        if item[0] == identity:
-            return item
+    for item in asset_documents(root, kind, identity):
+        return item
     raise FileNotFoundError(kind.label+'资料不存在：' + identity)
 
 
@@ -83,34 +86,45 @@ def asset_detail(root, identity, api, kind):
             **content, 'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 
-def asset_cards(root, api, kind):
-    cards = []
+def asset_card(root, base, kind, path, metadata, adoption):
+    media_kinds = ('audio', 'video') if kind == VOICES else ('image',)
+    current = adopted_media(root, path, base, adoption, media_kinds) if adoption else None
+    card = {**metadata, 'media': current['media'] if current else None}
+    if kind in (CLOTHING, VOICES):
+        card['reference'] = {'resource': current['resource'], 'version': current['version']} if current else None
+    if kind == VOICES and current:
+        info = json.loads((resources.local(root, current['media']['key']).parent/'版本信息.json').read_text('utf-8'))
+        card['reference']['duration'] = info['facts'].get('duration_seconds')
+    return card
+
+
+def asset_rows(root, api, kind):
+    purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
+    rows = []
     for identity, name, path, doc in asset_documents(root, kind):
-        base = f'{api}/{kind.endpoint}/{quote(identity)}'
-        content = asset_content(root, path, doc, linked_files(root, path, doc), base,
-                                ('audio', 'video') if kind == VOICES else ('image',), include_image_dimensions=False)
-        purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
-        current = next((image for image in content['images']
-                        if image['adopted'] and image['purpose'] == purpose), None)
-        card = {'id': identity, 'name': name, 'media': current['media'] if current else None}
-        if kind != VOICES:
-            card['status'] = asset_status(path, doc)['status']
-        if kind == ACCESSORIES:
-            asset_type = fields(doc, '配饰信息')['配饰类型']
-            card['type'] = asset_type if asset_type and asset_type not in MISSING else None
-        if kind == CLOTHING:
-            card.update(clothing_classification(fields(doc, '服装信息')))
-            card['reference'] = {'resource': current['resource'], 'version': current['version']} if current else None
+        status = '' if kind == VOICES else asset_status(path, doc)['status']
+        info = fields(doc, kind.label+'信息')
+        classification = clothing_classification(info) if kind == CLOTHING else {}
+        asset_type = info['配饰类型'] if kind == ACCESSORIES else classification.get('bodyArea')
+        if asset_type in MISSING:
+            asset_type = None
+        models = tuple(row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特') if kind == VOICES else ()
+        metadata = {'id': identity, 'name': name, **classification}
         if kind == VOICES:
-            card['models'] = [row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特']
-            card['description'] = fields(doc, '声音信息')['声音说明']
-            card['reference'] = None
-            if current:
-                info = json.loads((resources.local(root, current['media']['key']).parent/'版本信息.json').read_text('utf-8'))
-                card['reference'] = {'resource': current['resource'], 'version': current['version'],
-                                     'duration': info['facts'].get('duration_seconds')}
-        cards.append(card)
-    return cards
+            metadata.update(models=list(models), description=info['声音说明'])
+        else:
+            metadata['status'] = status
+        if kind == ACCESSORIES:
+            metadata['type'] = asset_type
+        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == purpose), None)
+        base = f'{api}/{kind.endpoint}/{quote(identity)}'
+        card = partial(asset_card, root, base, kind, path, metadata, adoption)
+        rows.append(AssetRow(identity, card, status, bool(adoption), classification.get('clothingForm'), asset_type, models))
+    return rows
+
+
+def asset_cards(root, api, kind):
+    return [row.card() for row in asset_rows(root, api, kind)]
 
 
 def asset_file(root, identity, key, kind):
@@ -124,11 +138,11 @@ def asset_router(kind):
     router = APIRouter(prefix="/"+kind.endpoint)
 
     @router.get('')
-    def listing(request: Request):
+    def listing(request: Request, options: AssetPage = Depends()):
         space = request_space(request)
         try:
-            return respond_view(request, (space.api, kind.endpoint), [space.root / '综合资料'],
-                                lambda: asset_cards(space.root, space.api, kind))
+            return respond_asset_page(request, space, kind.endpoint, options,
+                                      lambda: asset_rows(space.root, space.api, kind), folders=[space.root / '综合资料'])
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:

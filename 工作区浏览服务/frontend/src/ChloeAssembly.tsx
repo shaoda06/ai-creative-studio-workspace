@@ -1,3 +1,4 @@
+import { assetPaging, useAssetDraft, useAssetPage } from './chloeAssetPages';
 import { Activity, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -5,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
-import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds, useChloeAssetTypeFilter } from './ChloeReferenceAssets';
+import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetCard } from './ChloeReferenceAssets';
 import { PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
@@ -13,7 +14,7 @@ import { AssetSelectionDialog } from './components/AssetSelectionDialog';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
 import { UnderlineTabs } from './components/UnderlineTabs';
-import { AssemblyExport, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
+import { AssemblyExport, AssemblyPagination, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
 import type { OpenImage } from './ChloeAssemblyParts';
 import { ChloeVideoAssembly } from './ChloeVideoAssembly';
 import './ChloeAssembly.css';
@@ -38,8 +39,8 @@ function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }
 function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
   kind: PickerKind; initial: AssemblyAsset[]; onConfirm: (assets: AssemblyAsset[]) => void; onClose: () => void;
 }) {
-  const { api } = useChloeScope();
-  const [draftIds, setDraftIds] = useState(() => initial.map(asset => asset.id));
+  const [page, setPage] = useState(1);
+  const [types, setTypes] = useState<string[]>([]);
   const isModel = kind === 'models';
   const isAccessory = kind === 'accessories';
   const isGarment = kind === 'garments';
@@ -48,44 +49,37 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
   const limit = isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
   const label = isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
   const endpoint = isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
-  const query = useQuery({
-    queryKey: isModel ? ['chloe-models', api] : ['chloe-reference-assets', referenceKind, api],
-    queryFn: () => get<AssemblyAsset[]>(`${api}/${endpoint}`),
-    staleTime: 0,
-  });
-  const available = query.isFetching || query.error ? undefined : query.data?.filter(asset =>
-    asset.status === '可用' && (!form || (asset.clothingForm === form && asset.media?.url)));
-  const filterByType = isAccessory || isGarment;
-  const { visibleCards, ...filter } = useChloeAssetTypeFilter(filterByType ? available ?? [] : [],
-    asset => isAccessory ? asset.type : asset.bodyArea);
-  const selected = draftIds.flatMap(id => {
-    const asset = available?.find(item => item.id === id && item.media?.url);
-    return asset ? [asset] : [];
-  });
+  const filters = { available: true, require_media: true, form: form ?? undefined };
+  const query = useAssetPage<AssemblyAsset>(endpoint, page, filters, types);
+  const draft = useAssetDraft<AssemblyAsset>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
+  const selected = draft.selected;
+  const ready = !!query.data && !query.isFetching && !query.error && !draft.initial.isFetching && !draft.initial.error;
   const atLimit = limit > 1 && selected.length >= limit;
-  const title = `选择${label} ${selected.length}/${limit}`;
-  const canConfirm = !!available && (selected.length > 0 || initial.length > 0);
-  const cards = (filterByType ? visibleCards : available ?? []).map(asset => {
+  const cards = ready ? query.data!.items.map(asset => {
     const checked = selected.some(item => item.id === asset.id);
     return <AssetMediaCard key={asset.id} title={isGarment ? garmentTitle(asset) : assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
       item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
-      selection={{selected: checked, disabled: atLimit && !checked,
-        onSelect: () => {
-          if (checked) {
-            setDraftIds(selected.filter(item => item.id !== asset.id).map(item => item.id));
-          } else {
-            setDraftIds(limit > 1 ? [...selected.map(item => item.id), asset.id] : [asset.id]);
-          }
-        }}} />;
-  });
-
-  return <AssetSelectionDialog title={title} close={onClose} confirm={() => onConfirm(selected)} confirmDisabled={!canConfirm}
-    toolbar={filter.types.length > 0 && <ChloeAssetTypes {...filter} label={isGarment ? '按部位筛选' : undefined} />}>
-    <Result loading={query.isPending || query.isFetching} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {available && (cards.length ? isAccessory
+      selection={{selected: checked, disabled: draft.confirming || (atLimit && !checked),
+        onSelect: () => draft.setSelected(checked ? selected.filter(item => item.id !== asset.id)
+          : limit > 1 ? [...selected, asset] : [asset])}} />;
+  }) : [];
+  const filterTypes = [...new Set([...(query.data?.types ?? []), ...types])];
+  const setTypeChecked = (type: string, checked: boolean) => {
+    setTypes(checked ? [...types, type] : types.filter(value => value !== type));
+    setPage(1);
+  };
+  const failed = query.error ? query : draft.initial;
+  return <AssetSelectionDialog title={`选择${label} ${selected.length}/${limit}`} close={onClose}
+    confirm={draft.confirmSelection}
+    confirmDisabled={!ready || draft.confirming || (!selected.length && !initial.length)}
+    toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types}
+      setTypeChecked={setTypeChecked} label={isGarment ? '按部位筛选' : undefined} />}>
+    <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />
+    {ready && (cards.length ? isAccessory
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className="asset-media-grid">{cards}</div>
       : <p className="muted">暂无可用{label}。</p>)}
+    {ready && <AssemblyPagination {...assetPaging(query.data!, setPage)} />}
   </AssetSelectionDialog>;
 }
 

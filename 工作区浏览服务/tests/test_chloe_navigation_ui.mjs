@@ -1,3 +1,4 @@
+import { chloeAssetResponse } from './chloe_asset_fixtures.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -57,17 +58,28 @@ const fixtureAccessories = Array.from({length:6},(_,i)=>({
   ...fixtureAsset(`C00${i+1}`,`配饰样例${i+1}`), type:i%2 === 0 ? '帽饰' : '包袋',
 }));
 fixtureAccessories.push({...fixtureAsset('C007','制作中配饰','制作中'), type:'首饰'});
+const moreAccessories = Array.from({length:19}, (_, i) => ({
+  ...fixtureAsset(`C${String(i+8).padStart(3,'0')}`, `分页配饰${i+8}`),
+  type:i===5 ? '手表' : '帽饰',
+}));
+const moreVideos = Array.from({length:12}, (_, i) => ({
+  ...fixtureVideo, id:`RV${String(i+3).padStart(3,'0')}`, name:`分页视频${i+3}`,
+}));
 try {
   for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
     const page = await browser.newPage({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
     const errors = [], unexpected = [];
     let showAssemblyFixtures = false;
+    let testPaging = false;
+    let unavailable = '';
     const refreshedAssets = new Map();
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', async route => {
-      const path = new URL(route.request().url()).pathname;
+      const url = route.request().url();
+      const path = new URL(url).pathname;
+      const assets = cards => route.fulfill({json:chloeAssetResponse(url, cards)});
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
-      if (refreshedAssets.has(path)) return route.fulfill({json:await refreshedAssets.get(path)});
+      if (refreshedAssets.has(path)) return assets(await refreshedAssets.get(path));
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
       if (path === '/api/workspaces/account-demo/reviews') return route.fulfill({json:{videos:[],conclusions:[],trials:[]}});
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
@@ -77,21 +89,37 @@ try {
           : path.endsWith('/O006') ? 150 : /\/O00[3-8]$/.test(path) ? 90 : 100;
         return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#edf5ef"/></svg>`});
       }
-      if (path === '/api/workspaces/account-demo/shared-models') return route.fulfill({json:showAssemblyFixtures ? fixtureModels : []});
+      if (path === '/api/workspaces/account-demo/shared-models') return assets(showAssemblyFixtures ? fixtureModels : []);
+      if (path === '/api/workspaces/account-demo/shared-models/M002/assembly-looks') return assets((testPaging
+        ? [...fixtureLooks, ...Array.from({length:12}, (_, i)=>({...fixtureLooks[0],
+          id:`L${String(i+3).padStart(3,'0')}`,name:`分页造型${i+3}`,
+        }))] : fixtureLooks).filter(look=>look.status==='可用').map(look=>({...look,
+          face:look.images.find(image=>image.adopted && image.purpose==='造型面部三视图'),
+          masked:look.images.find(image=>image.adopted && image.purpose==='全身三视图遮面版'),
+        })));
       if (path === '/api/workspaces/account-demo/shared-models/M002') return route.fulfill({json:{id:'M002',name:'模特乙',images:[
         {purpose:'正面面部',adopted:true,resource:'IMG-M002-face',version:'V003',media:fixtureImage('M002-front')},
         {purpose:'全身三视图原图',adopted:false,resource:'IMG-M002-body',version:'V004',media:fixtureImage('M002-candidate')},
         {purpose:'全身三视图原图',adopted:true,resource:'IMG-M002-body',version:'V002',media:fixtureImage('M002-body')},
       ],looks:fixtureLooks}});
-      if (path === '/api/workspaces/account-demo/shared-reference-videos') return route.fulfill({json:showAssemblyFixtures ? [fixtureVideo,draftVideo] : []});
-      if (path === '/api/workspaces/account-demo/shared-reference-videos/RV001') return route.fulfill({json:{
-        ...fixtureVideo,media:{kind:'video',name:fixtureVideo.name,key:'资源/参考视频原件.webm',url:'/component-samples/video.webm'},
+      if (path === '/api/workspaces/account-demo/shared-reference-videos') return assets(testPaging
+        ? [fixtureVideo,draftVideo,...moreVideos] : showAssemblyFixtures ? [fixtureVideo,draftVideo] : []);
+      const video = [fixtureVideo,moreVideos.at(-1)].find(item=>path===`/api/workspaces/account-demo/shared-reference-videos/${item.id}`);
+      if (video) return route.fulfill({json:{
+        ...video,media:{kind:'video',name:video.name,key:'资源/参考视频原件.webm',url:'/component-samples/video.webm'},
       }});
-      if (path === '/api/workspaces/account-demo/shared-scenes') return route.fulfill({json:showAssemblyFixtures ? fixtureScenes : []});
-      if (path === '/api/workspaces/account-demo/shared-voices') return route.fulfill({json:[]});
-      if (path === '/api/workspaces/account-demo/shared-hair') return route.fulfill({json:showAssemblyFixtures ? fixtureHair : []});
-      if (path === '/api/workspaces/account-demo/shared-accessories') return route.fulfill({json:showAssemblyFixtures ? fixtureAccessories : []});
-      if (path === '/api/workspaces/account-demo/shared-clothing') return route.fulfill({json:showAssemblyFixtures ? fixtureClothing : []});
+      if (path === '/api/workspaces/account-demo/shared-scenes') return assets(showAssemblyFixtures ? fixtureScenes : []);
+      if (path === '/api/workspaces/account-demo/shared-voices') return assets([]);
+      if (path === '/api/workspaces/account-demo/shared-hair') return assets(showAssemblyFixtures ? fixtureHair : []);
+      if (path === '/api/workspaces/account-demo/shared-accessories') return assets(testPaging
+        ? [...fixtureAccessories,...moreAccessories].map(item=>item.id===unavailable ? {...item,status:'制作中'} : item)
+        : showAssemblyFixtures ? fixtureAccessories : []);
+      if (path === '/api/workspaces/account-demo/shared-accessories/C024') return route.fulfill({json:{
+        id:'C024',name:'分页配饰24',description:'分页回退验证',type:'帽饰',images:[],
+        sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录']
+          .map(heading=>({heading,empty:true})),
+      }});
+      if (path === '/api/workspaces/account-demo/shared-clothing') return assets(showAssemblyFixtures ? fixtureClothing : []);
       if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
         id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',composition:'开衫叠穿上衣',images:[],
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
@@ -189,6 +217,7 @@ try {
     await libraryFilter.getByRole('checkbox',{name:'组合',exact:true}).check();
     assert.deepEqual(await clothingLinks.getAttribute('aria-label'),'O003 · 单件样例1');
     await libraryFilter.getByRole('checkbox',{name:'裤装',exact:true}).check();
+    await clothingLinks.nth(1).waitFor();
     assert.equal(await clothingLinks.count(),2);
     await outfitTab.click();
     await libraryFilter.waitFor({state:'detached'});
@@ -253,6 +282,7 @@ try {
     await garmentOptions[1].waitFor();
     await pickerCount('单件',1,5).waitFor();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await garmentCount(1).waitFor();
     assert.equal(await outfitInfo.locator('dd').textContent(),'O003 · 单件样例1（组合）');
     const firstGarmentImage = page.locator('.chloe-assembly-garments img').first();
@@ -281,6 +311,7 @@ try {
     await addGarment.click();
     for (const option of garmentOptions.slice(1,5)) await option.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await garmentCount(5).waitFor();
     assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
     await outfitGenerate.click();
@@ -374,6 +405,7 @@ try {
     assert.equal(await modelB.getAttribute('aria-pressed'),'true');
     assert.equal(await summary.locator('dd').first().textContent(),'未选择');
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await page.getByRole('heading',{name:'模特选择 1/1',exact:true}).waitFor();
     assert.notEqual(await page.evaluate(()=>getComputedStyle(document.documentElement).overflowY),'hidden');
     assert.deepEqual(await assetNav.getByRole('button').allTextContents(),[...assetLabels.slice(0,-1),'重置','装配']);
@@ -389,6 +421,7 @@ try {
       assert.equal(await dialog.getByText(label,{exact:false}).count(),0);
     }
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await page.getByRole('heading',{name:'套装选择 1/1',exact:true}).waitFor();
     const clothingImage = page.getByRole('img',{name:'套装图',exact:true});
     assert.equal(await clothingImage.getAttribute('src'),'/api/assembly-fixture/O001');
@@ -440,12 +473,14 @@ try {
     await choose('选择套装').click();
     await clothingA.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     assert.equal(await summary.locator('dd').nth(1).textContent(),'未选择');
     assert.equal(await page.getByRole('img',{name:'套装图',exact:true}).count(),0);
     assert.ok(await generateHandoff.isDisabled());
     await choose('选择套装').click();
     await clothingA.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await generateHandoff.click();
     assert.doesNotMatch(await handoff.textContent(), /^(发型|配饰)：/m);
     assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
@@ -454,6 +489,7 @@ try {
     await hairChoice.click();
     assert.equal(await dialog.getByText('H002 · 制作中发型',{exact:true}).count(),0);
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     assert.equal(await summary.locator('dd').nth(2).textContent(),'H001 · 发型甲');
     await choose('查看发型图大图').click();
     await zoom.waitFor();
@@ -464,11 +500,13 @@ try {
     assert.equal(await hairChoice.getAttribute('aria-pressed'),'true');
     await hairChoice.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     assert.equal(await summary.locator('dd').nth(2).textContent(),'未选择');
     assert.equal(await page.getByRole('img',{name:'发型图',exact:true}).count(),0);
     await choose('选择发型').click();
     await hairChoice.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     const accessories = page.getByRole('region',{name:'配饰选择',exact:true});
     const accessoryChoice = index => dialog.getByRole('button',{name:`选择${fixtureAccessories[index].id} · ${fixtureAccessories[index].name}`,exact:true});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
@@ -505,11 +543,11 @@ try {
     assert.equal(await dialog.locator('header').getByRole('group',{name:'按类型筛选',exact:true}).count(),1);
     assert.equal(await filters.getByRole('checkbox',{name:'首饰',exact:true}).count(),0);
     await bagFilter.check();
+    await accessoryChoice(1).waitFor();
     assert.equal(await accessoryChoice(0).count(),0);
-    assert.equal(await accessoryChoice(1).count(),1);
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 1/5');
     await hatFilter.check();
-    assert.equal(await accessoryChoice(0).count(),1);
+    await accessoryChoice(0).waitFor();
     await hatFilter.uncheck();
     await bagFilter.uncheck();
     for (let index=1; index<5; index++) {
@@ -529,6 +567,7 @@ try {
     assert.equal(await accessoryChoice(0).count(),0);
     assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 5/5');
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 5/5');
     assert.equal(await choose('添加配饰').count(),0);
     assert.deepEqual(await summary.locator('dt').allTextContents(),['模特','套装','发型','配饰 1','配饰 2','配饰 3','配饰 4','配饰 5']);
@@ -564,6 +603,7 @@ try {
     await choose('编辑配饰').click();
     for (const index of [0,1,2,3,5]) await accessoryChoice(index).click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
     assert.equal(await choose('添加配饰').count(),1);
     const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
@@ -581,6 +621,7 @@ try {
     await choose('选择模特').click();
     await dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true}).click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await assemblyNav.getByRole('button',{name:'视频装配'}).click();
     assert.ok(page.url().endsWith('asset=assembly&assemblyTab=video'));
     assert.ok(await generateHandoff.isDisabled());
@@ -625,6 +666,7 @@ try {
     assert.ok(await confirm.isDisabled());
     await videoOption.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     const player = page.locator('video[aria-label="参考视频甲"]');
     await player.waitFor();
     await page.getByRole('heading',{name:'参考视频 1/1',exact:true}).waitFor();
@@ -634,10 +676,12 @@ try {
     await videoOption.click();
     assert.ok(await confirm.isEnabled());
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await player.waitFor({state:'detached'});
     await choose('选择参考视频').click();
     await videoOption.click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await player.waitFor();
     await choose('选择造型图').click();
     await pickerCount('模特',0).waitFor();
@@ -655,6 +699,7 @@ try {
     await dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true}).click();
     await dialog.getByRole('button',{name:'选择L001 · 造型甲',exact:true}).click();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await page.getByRole('heading',{name:'造型图 1/1',exact:true}).waitFor();
     const lookPreviews = page.getByRole('region',{name:'造型图选择'});
     const previewBounds = [];
@@ -678,6 +723,7 @@ try {
     await dialog.getByRole('button',{name:'选择S001 · 背景甲',exact:true}).click();
     await pickerCount('背景',1).waitFor();
     await confirm.click();
+    await dialog.waitFor({state:'hidden'});
     await page.getByRole('heading',{name:'背景 1/1 可选',exact:true}).waitFor();
     const requirements = page.getByRole('textbox',{name:'额外要求（可选）'});
     await requirements.fill('保持开场构图和节奏。\n'.repeat(60));
@@ -730,6 +776,72 @@ try {
     await page.reload();
     await assemblyNav.getByRole('button',{name:'视频装配'}).waitFor();
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'视频装配');
+
+    testPaging = true;
+    await assetNav.getByRole('button',{name:'配饰',exact:true}).click();
+    const firstPageCard = page.getByRole('link',{name:'C001 · 配饰样例1',exact:true});
+    const secondPageCard = page.getByRole('link',{name:'C013 · 分页配饰13',exact:true});
+    await firstPageCard.waitFor();
+    assert.equal(await page.locator('.chloe-accessory-columns .asset-media-card').count(),12);
+    assert.equal(await page.getByRole('checkbox',{name:'手表',exact:true}).count(),1);
+    await page.getByRole('button',{name:'下一页',exact:true}).click();
+    await secondPageCard.waitFor();
+    assert.match(page.url(),/assetPage=2/);
+    const lastPageCard = page.getByRole('link',{name:'C024 · 分页配饰24',exact:true});
+    await lastPageCard.scrollIntoViewIfNeeded();
+    const listScroll = await page.evaluate(()=>window.scrollY);
+    assert.ok(listScroll>0);
+    await lastPageCard.click();
+    const backToAccessories = page.getByRole('link',{name:'返回配饰列表',exact:true});
+    await backToAccessories.click();
+    await secondPageCard.waitFor();
+    assert.match(page.url(),/assetPage=2/);
+    await page.waitForFunction(top=>Math.abs(window.scrollY-top)<5,listScroll);
+    await page.getByRole('checkbox',{name:'手表',exact:true}).check();
+    await secondPageCard.waitFor();
+    assert.doesNotMatch(page.url(),/assetPage=/);
+    assert.equal(await page.getByRole('button',{name:'下一页',exact:true}).count(),0);
+
+    await assetNav.getByRole('button',{name:'装配',exact:true}).click();
+    await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
+    await choose('添加配饰').click();
+    await accessoryChoice(0).click();
+    await dialog.getByRole('button',{name:'下一页',exact:true}).click();
+    const extraChoice = dialog.getByRole('button',{name:'选择C014 · 分页配饰14',exact:true});
+    await extraChoice.click();
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 2/5');
+    await dialog.getByRole('button',{name:'上一页',exact:true}).click();
+    assert.equal(await accessoryChoice(0).getAttribute('aria-pressed'),'true');
+    await accessoryChoice(0).click();
+    await accessoryChoice(1).click();
+    unavailable = 'C014';
+    await confirm.click();
+    await dialog.getByText('部分已选资料已不可用，请重新确认选择。',{exact:true}).waitFor();
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择配饰 1/5');
+    await confirm.click();
+    await dialog.waitFor({state:'hidden'});
+    await choose('编辑配饰').waitFor();
+    assert.ok((await summary.textContent()).includes('C002 · 配饰样例2'));
+    assert.ok(!(await summary.textContent()).includes('C014'));
+
+    await assemblyNav.getByRole('button',{name:'视频装配',exact:true}).click();
+    await choose('选择参考视频').click();
+    await dialog.getByRole('button',{name:'下一页',exact:true}).click();
+    await dialog.getByRole('button',{name:'选择RV014 · 分页视频14',exact:true}).click();
+    await dialog.getByRole('button',{name:'上一页',exact:true}).click();
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择参考视频 1/1');
+    await confirm.click();
+    await dialog.waitFor({state:'hidden'});
+    assert.equal(await choose('选择参考视频').textContent(),'RV014 · 分页视频14');
+    await choose('选择造型图').click();
+    await dialog.getByRole('button',{name:'选择M002 · 模特乙',exact:true}).click();
+    await dialog.getByRole('button',{name:'下一页',exact:true}).click();
+    await dialog.getByRole('button',{name:'选择L014 · 分页造型14',exact:true}).click();
+    await dialog.getByRole('button',{name:'上一页',exact:true}).click();
+    assert.equal(await dialog.getByRole('heading',{level:2}).textContent(),'选择造型图 1/1 · M002 · 模特乙');
+    await confirm.click();
+    await dialog.waitFor({state:'hidden'});
+    assert.equal(await choose('选择造型图').textContent(),'M002 · 模特乙 / L014 · 分页造型14');
 
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
     await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();
