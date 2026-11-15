@@ -1,6 +1,6 @@
 # Viggle Remake 多人换人流程
 
-同一段源片需要替换多位表演者时，使用 Swap 模型和 Swap 采样设置。按 [Viggle 官方目标帧指南](https://huggingface.co/Viggle/Viggle-Remake/blob/main/PROMPTING.md#painted-frames-and-pins)在源片帧上制作换人后的画面，再绑回对应帧号。可对照[官方双人换人提示词](https://huggingface.co/Viggle/Viggle-Remake/blob/main/examples/prompts/swap-card-royals.txt)核对主体定义和目标帧写法。
+同一段源片需要替换多位表演者时，使用 Swap 模型和 Swap 采样设置。按 [Viggle 官方目标帧指南](../../studio-h3-remake/references/upstream/PROMPTING.md#painted-frames-and-pins)在源片帧上制作换人后的画面，再绑回对应帧号。可对照[同一提交的官方双人换人提示词](https://huggingface.co/Viggle/Viggle-Remake/blob/7e5be143702dd53b9154482de673b8519ed2d4d6/examples/prompts/swap-card-royals.txt)核对主体定义和目标帧写法。
 
 ## 选段与人物对应
 
