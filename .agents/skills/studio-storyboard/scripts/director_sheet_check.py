@@ -6,8 +6,11 @@ import re
 from storyboard_fields import read_shots
 
 TEMPLATE = Path(__file__).resolve().parents[1] / 'templates/导演分镜表模板.md'
-COLUMNS = tuple(re.search(r'^\| 镜号 .*$', TEMPLATE.read_text('utf-8'), re.M)[0].strip('|').split(' | '))
-COLUMNS = tuple(value.strip() for value in COLUMNS)
+template_text = TEMPLATE.read_text('utf-8')
+layout = template_text.split('## 画面版式\n\n', 1)[1]
+DRAWING_STYLE, example = layout.split('```markdown\n', 1)
+PAGE_HEADER = '\n'.join(example.splitlines()[:2])
+COLUMNS = tuple(value.strip() for value in re.search(r'^\| 镜号 .*$', example, re.M)[0].strip('|').split('|'))
 
 
 def check_plan(path):

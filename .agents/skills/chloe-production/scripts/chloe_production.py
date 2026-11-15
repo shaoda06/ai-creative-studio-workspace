@@ -101,18 +101,23 @@ def director_slot(value):
     raise ValueError('导演表输出槽位须明确脚本版本、图表版本、候选编号和页码')
 
 
+def director_output_slot(plan, page):
+    return f"导演表/脚本{plan['source_version']}/图表{plan['chart_version']}/候选{plan['candidate']}/第{page}页"
+
+
 def validate_director_versions(sheets):
     versions = {}
     pages = set()
     for sheet in sheets:
         version = sheet['version']
-        page = (version, sheet['page'])
+        number = int(version[1:])
+        page = (number, sheet['page'])
         origin = (sheet['sourceVersion'], sheet.get('candidateNumber'))
-        if version in versions and versions[version] != origin:
+        if number in versions and versions[number] != (version, origin):
             raise ValueError('同一图表版本不能混用来源脚本版本或候选编号：'+version)
         if page in pages:
             raise ValueError(f'同一图表版本的页码重复：{version} 第{sheet["page"]}页')
-        versions[version] = origin
+        versions[number] = (version, origin)
         pages.add(page)
 
 

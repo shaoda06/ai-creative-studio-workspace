@@ -10,11 +10,11 @@ SKILLS = Path(__file__).resolve().parents[2]
 for name in ('chloe-production', 'chloe-assets', 'studio-storyboard', 'studio-imagegen'):
     sys.path.insert(0, str(SKILLS / name / 'scripts'))
 
-from chloe_production import director_slot, document, fields
-from chloe_result_records import link, now, put, rows, save
+from chloe_production import director_output_slot, director_slot, document, fields
+from chloe_result_records import link, put, rows, save
 from chloe_resources import resources, video_root
-from chloe_documents import media_reference
-from director_sheet_check import COLUMNS, validate_plan
+from chloe_documents import MISSING, media_reference
+from director_sheet_check import COLUMNS, DRAWING_STYLE, PAGE_HEADER, validate_plan
 from imagegen_tool import generation_call
 from storyboard_fields import read_shots
 
@@ -67,11 +67,14 @@ def chart_identity(directory, body, source_version, requested):
 
 
 def page_prompt(plan, page, frame, direction, inputs):
-    header = (f"{plan['object']}｜导演分镜表\n脚本 {plan['source_version']}｜图表 {plan['chart_version']}"
-              f"｜第 {page['page']}／{len(plan['pages'])} 页｜" + '、'.join(row['镜号'] for row in page['rows']))
+    shots = [row['镜号'] for row in page['rows']]
+    labels = {'制作对象': plan['object'], '实际版本': plan['source_version'],
+              '图表版本标注': f"｜图表 {plan['chart_version']}", '页码': str(page['page']),
+              '总页数': str(len(plan['pages'])), '镜号范围': shots[0] if len(shots) == 1 else f'{shots[0]}—{shots[-1]}'}
+    header = re.sub(r'{{([^{}]+)}}', lambda m: labels[m[1]], PAGE_HEADER)
     references = '\n'.join(row['输入槽位'] for row in inputs)
     contents = '\n\n'.join('\n'.join(f'{col}：{row[col]}' for col in COLUMNS) for row in page['rows'])
-    return (f'画一张宽横版中文导演分镜表。白底、黑灰铅笔速写、细线、清晰简体中文。逐字保留页头。\n{header}\n\n'
+    return (f'画一张中文导演分镜表。{DRAWING_STYLE.strip()}\n逐字保留页头。\n{header}\n\n'
             f'列顺序为 {"｜".join(COLUMNS)}。一镜一行，分镜图列优先留宽。每格画幅 {frame}。\n'
             f'同一镜号的关键姿态放在同一格。沿用以下逐镜内容和实际参考。\n\n'
             f'{direction.strip()}\n\n{references}\n\n{contents}\n')
@@ -87,6 +90,8 @@ def prepare(project, source, brief, basis, *, page_size=6, chart_version=None):
     if not basis.strip():
         raise ValueError('须填写本轮实际制作授权')
     info = fields(document(project, source.relative_to(project)), '脚本信息')
+    if info['画幅'] in MISSING:
+        raise ValueError('导演表源脚本须填写实际画幅')
     available = {shot['fields']['镜号']: shot['fields']
                  for shot in read_shots(source.read_text('utf-8-sig'), EXTRA_FIELDS)}
     selected = [row['shot'] for row in brief['shots']]
@@ -106,6 +111,8 @@ def prepare(project, source, brief, basis, *, page_size=6, chart_version=None):
         used = [row['执行编号'] for row in rows(body, '执行记录')] + [path.name for path in directory.iterdir()]
         first = max((int(m[1]) for name in used if (m := re.match(r'^E(\d+)', name))), default=0)+1
         plan_path = directory / f'E{first:03d}' / PLAN_FILE
+        for offset, page in enumerate(pages, first):
+            page['execution'] = f'E{offset:03d}'
         plan = {'source': (Path('../..') / source.relative_to(project)).as_posix(),
                 'source_version': info['脚本版本'], 'object': project.name.replace('-', ' ', 1),
                 'chart_version': version, 'candidate': candidate, 'extra_fields': list(EXTRA_FIELDS),
@@ -113,8 +120,8 @@ def prepare(project, source, brief, basis, *, page_size=6, chart_version=None):
         validate_plan(plan, plan_path.parent)
         files = {plan_path: plan}
         prepared = []
-        for offset, page in enumerate(pages):
-            execution = f'E{first+offset:03d}'
+        for page in pages:
+            execution = page['execution']
             folder = directory / execution
             prompt = page_prompt(plan, page, info['画幅'], brief.get('direction', ''), inputs)
             call = generation_call(prompt, paths, f'{project.name}-{execution}-imagegen')
@@ -130,10 +137,10 @@ def prepare(project, source, brief, basis, *, page_size=6, chart_version=None):
             for item in inputs:
                 body = put(body, '输入记录', ['执行编号', '输入槽位'], {'执行编号': execution, **item})
             number = page['page']
-            slot = f"导演表/脚本{plan['source_version']}/图表{version}/候选{candidate}/第{number}页"
+            slot = director_output_slot(plan, number)
             files[prompt_path] = prompt
             files[manifest] = {
-                'tool': 'image_gen', 'mode': 'generate', 'requested_layout': '宽横版',
+                'tool': 'image_gen', 'mode': 'generate',
                 'references': paths, 'prompt_file': PROMPT_FILE,
                 'plan': os.path.relpath(plan_path, folder),
                 'video_project': project.name, 'task_id': '未取得',

@@ -64,6 +64,8 @@ class ResultCompletionTests(unittest.TestCase):
 
     def director_brief(self):
         self.f.plan()
+        script = self.f.project/'脚本.md'
+        script.write_text(script.read_text('utf-8').replace('| 画幅 | 待确定 |','| 画幅 | 9:16 |'), encoding='utf-8')
         _, _, ref = self.f.resource(kind='image', shared=True, key='look')
         bind_reference(self.f.root, self.f.project.name, 'look', ref['resource_id'], ref['version'])
         return {'shots': [{'shot': shot, 'sketch': '人物转身', 'action': '面向镜头'}
@@ -105,7 +107,10 @@ class ResultCompletionTests(unittest.TestCase):
             slot = f'导演表/脚本v01/图表v01/候选1/第{n}页'
             self.assertEqual(params['business_result']['outputs'][0]['slot'], slot)
             self.assertEqual((manifest.parent/params['plan']).resolve(), Path(result['plan']))
-            self.assertIn(f'图表 v01｜第 {n}／2 页', (manifest.parent/params['prompt_file']).read_text('utf-8'))
+            prompt = (manifest.parent/params['prompt_file']).read_text('utf-8')
+            self.assertIn(f'来源分镜版本：v01｜图表 v01｜第{n}／2张｜镜号范围：SH{n:03d}', prompt)
+            self.assertIn('手绘导演分镜表', prompt)
+            self.assertIn('每格画幅 9:16', prompt)
             self.assertEqual(len(params['references']), 1)
             self.assertIn('referenced_image_paths', page['call'])
             source = Path(self.f.temp.name)/f'native-page{n}.png'
@@ -135,6 +140,33 @@ class ResultCompletionTests(unittest.TestCase):
             records.native(self.f.root, manifest, source)
         self.assertEqual(self.f.record.read_bytes(), before)
         self.assertEqual(list((project/'资源/图片').rglob('*.png')), images)
+
+    def test_prepared_director_rejects_missing_frame_and_wrong_execution_page(self):
+        brief = self.director_brief()
+        project = self.f.project
+        script = project/'脚本.md'
+        ready = script.read_text('utf-8')
+        script.write_text(ready.replace('| 画幅 | 9:16 |','| 画幅 | 待确定 |'), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '须填写实际画幅'):
+            prepare(project, '脚本.md', brief, '用户授权')
+        self.assertFalse(list((project/'执行记录').iterdir()))
+        script.write_text(ready, encoding='utf-8')
+        result = prepare(project, '脚本.md', brief, '用户授权', page_size=1)
+        manifest = Path(result['pages'][0]['manifest'])
+        params = json.loads(manifest.read_text('utf-8'))
+        output = params['business_result']['outputs'][0]
+        slot = output['slot']
+        source = Path(self.f.temp.name)/'wrong-page.png'
+        Image.new('RGB',(12,16),'white').save(source)
+        before = self.f.record.read_bytes()
+        for changed in (slot.replace('图表v01','图表v02'), slot.replace('第1页','第2页'), '普通图片'):
+            with self.subTest(slot=changed):
+                output['slot'] = changed
+                manifest.write_text(json.dumps(params), encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, '计划页不一致'):
+                    records.native(self.f.root, manifest, source)
+        self.assertEqual(self.f.record.read_bytes(), before)
+        self.assertFalse(list((project/'资源/图片').rglob('*.png')))
 
     def test_upscale_adopts_once_and_preserves_prior_versions(self):
         doc=self.image_execution();_,first=self.image('first')

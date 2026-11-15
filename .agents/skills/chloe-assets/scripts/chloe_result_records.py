@@ -11,6 +11,7 @@ SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS/'studio-workspace-browser/scripts'))
 sys.path.insert(0, str(SKILLS/'chloe-positioning/scripts'))
 sys.path.insert(0, str(SKILLS/'studio-comfyui/scripts'))
+sys.path.insert(0, str(SKILLS/'chloe-production/scripts'))
 import project_resources as resources
 import chloe_documents as docs
 import execution_records as recordio
@@ -98,7 +99,6 @@ def validate(owner, plan, count):
             if item.get('source'):
                 resource(owner,document,item['source'])
         if any(item['slot'].startswith('导演表/') for item in plan['outputs']):
-            sys.path.insert(0, str(SKILLS/'chloe-production/scripts'))
             from chloe_production import director_slot, validate_director_versions
             existing = {(row['执行编号'], row['输出槽位']) for row in rows(body,'输出记录')}
             proposed = {(plan['execution'], item['slot']) for item in plan['outputs']}
@@ -197,10 +197,20 @@ def native(project, manifest, source):
     owner=project/'projects'/video if video else project/'综合资料'
     if plan.get('adopt'):
         raise ValueError('原生生图只登记候选；用户审阅后单独处理')
-    validate(owner,plan,1)
+    _, _, execution = validate(owner,plan,1)
     if len(plan['outputs'])!=1:
         raise ValueError('一次原生结果对应一个明确输出槽位')
-    result=import_media(project,source,plan['execution']+'/'+plan['document']+'/'+plan['outputs'][0]['slot'],
+    slot=plan['outputs'][0]['slot']
+    if execution['参数记录'].startswith('[导演表制作计划](') or (slot.startswith('导演表/') and spec.get('plan')):
+        from chloe_production import director_output_slot, link_path
+        chart_path = link_path(owner, execution['参数记录'])
+        if spec.get('plan') and resources.local(owner, manifest.parent/spec['plan']) != chart_path:
+            raise ValueError('导演表参数与原执行引用的制作计划不一致')
+        chart = json.loads(chart_path.read_text('utf-8-sig'))
+        if not any(page.get('execution',plan['execution']) == plan['execution']
+                   and director_output_slot(chart,page['page']) == slot for page in chart['pages']):
+            raise ValueError('导演表输出槽位与原执行的计划页不一致')
+    result=import_media(project,source,plan['execution']+'/'+plan['document']+'/'+slot,
         project=video,resource_id=spec.get('resource_id'),origin='generated',
         record=str(manifest.relative_to(owner)),parent=plan['outputs'][0].get('source'))
     facts=json.loads((Path(result['absolute_file']).parent/'版本信息.json').read_text('utf-8'))['facts']
