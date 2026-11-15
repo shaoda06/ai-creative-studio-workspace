@@ -17,6 +17,7 @@
 .chloe-assembly-model-images .chloe-assembly-preview>.muted{display:grid;align-items:center;min-height:190px}
 .chloe-assembly-accessory-heading{display:flex;align-items:baseline;gap:12px}
 .chloe-assembly-accessories{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch}
+.chloe-assembly-card-actions{display:flex;justify-content:flex-end;margin-top:10px}
 .chloe-assembly-garments{--garment-gap:12px;container-type:inline-size;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--garment-gap)}
 .chloe-assembly-add{display:grid;justify-items:center;align-content:center;gap:4px;min-height:140px;border-style:dashed}
 /* Match the expected height of a 4:3 image card, including its title and padding. */

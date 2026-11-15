@@ -35,6 +35,16 @@ function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }
   </button>;
 }
 
+function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove }: {
+  asset: ReferenceAssetCard; title: string; aspectRatio: number | 'natural'; onRemove: () => void;
+}) {
+  return <AssetMediaCard title={title} formal entry aspectRatio={aspectRatio} revision={0} item={{media: asset.media}}>
+    <div className="chloe-assembly-card-actions">
+      <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove}>移除</button>
+    </div>
+  </AssetMediaCard>;
+}
+
 function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
   kind: PickerKind; initial: ReferenceAssetCard[]; onConfirm: (assets: ReferenceAssetCard[]) => void; onClose: () => void;
 }) {
@@ -135,8 +145,8 @@ function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
         <h2>单件选择 {garments.length}/{garmentLimit}</h2>
         <div className="chloe-assembly-accessories chloe-assembly-garments">
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
-            {garments.map(asset => <AssetMediaCard key={asset.id} title={garmentTitle(asset)} formal entry aspectRatio="natural" revision={0}
-              item={{media: asset.media}} />)}
+            {garments.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={garmentTitle(asset)} aspectRatio="natural"
+              onRemove={() => changeSelection(garments.filter(item => item.id !== asset.id))} />)}
           </PreviewContext.Provider>
           <AddAssetCard label={garments.length === garmentLimit ? '编辑单件' : '添加单件'} onClick={() => setPicking(true)} />
         </div>
@@ -205,6 +215,10 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
     setHandoff('');
     setPicker(null);
   };
+  const removeAccessory = (id: string) => {
+    setAccessories(current => current.filter(asset => asset.id !== id));
+    setHandoff('');
+  };
   const reset = () => {
     setModel(null);
     setOutfit(null);
@@ -247,8 +261,8 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
       </div>
       <div className="chloe-assembly-accessories">
         <PreviewContext.Provider value={media => { if (media.url) openImage(media.name, media.url); }}>
-          {accessories.map((asset, index) => <AssetMediaCard key={asset.id} title={`配饰 ${index + 1} · ${assetTitle(asset)}`} formal entry aspectRatio={1} revision={0}
-            item={{media: asset.media}} />)}
+          {accessories.map((asset, index) => <SelectedAssemblyCard key={asset.id} asset={asset} title={`配饰 ${index + 1} · ${assetTitle(asset)}`}
+            aspectRatio={1} onRemove={() => removeAccessory(asset.id)} />)}
         </PreviewContext.Provider>
         {accessories.length < accessoryLimit && <AddAssetCard label="添加配饰" onClick={() => setPicker('accessories')} />}
       </div>
