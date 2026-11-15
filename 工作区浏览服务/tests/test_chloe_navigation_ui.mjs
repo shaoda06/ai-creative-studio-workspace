@@ -91,7 +91,7 @@ try {
       if (path === '/api/workspaces/account-demo/resource-library') return route.fulfill({json:{items:[],owners:[],total:0,page:1,page_size:12}});
       if (path.startsWith('/api/assembly-fixture/')) {
         const width = path.endsWith('-front') ? 90 : 120;
-        const height = /\/(O001|C003)$/.test(path) ? 240 : /-(front|body)$/.test(path) ? 120
+        const height = /\/pose-(thumb|image)$/.test(path) ? 160 : /\/(O001|C003)$/.test(path) ? 240 : /-(front|body)$/.test(path) ? 120
           : path.endsWith('/O006') ? 150 : /\/O00[3-8]$/.test(path) ? 90 : 100;
         return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#edf5ef"/></svg>`});
       }
@@ -215,10 +215,13 @@ try {
     assert.deepEqual(await poseInfo.locator('dd').allTextContents(),['站姿-001','站姿-001样例','站姿']);
     assert.equal(await poseText.locator('.chloe-pose-text').innerText(),'双脚平放，躯干直立。');
     const centeredPose = poseDetails.getByRole('img',{name:'站姿-001样例',exact:true});
+    await centeredPose.evaluate(image=>image.decode());
     const [left, middle, right] = await Promise.all([poseInfo.boundingBox(),centeredPose.boundingBox(),poseText.boundingBox()]);
     assert.ok(left.x+left.width <= middle.x && middle.x+middle.width <= right.x && right.x+right.width <= width+1);
-    assert.ok(Math.abs(left.width-right.width)<1 && Math.abs(middle.width-left.width*4/3)<3);
-    assert.ok(Math.abs(left.height-right.height)<1 && Math.abs(left.height-middle.height)<3);
+    assert.ok(Math.abs(left.width-right.width)<1);
+    assert.ok(Math.abs(left.height-right.height)<1 && Math.abs(left.height-middle.height)<1);
+    assert.ok(Math.abs(middle.width/middle.height-3/4)<0.01);
+    assert.ok(Math.abs((middle.x+middle.width/2)-(left.x+right.x+right.width)/2)<1);
     assert.equal(await poseDetails.evaluate(dialog => {
       const fits = element => element.scrollHeight <= element.clientHeight+1;
       return fits(dialog) && [...dialog.querySelectorAll('.chloe-pose-detail>*,.chloe-pose-text')].every(fits);
@@ -353,10 +356,11 @@ try {
     const nextAdd = await addGarment.boundingBox();
     const firstSelectedGarment = page.locator('.chloe-assembly-garments .asset-media-card').first();
     const firstCard = await firstSelectedGarment.boundingBox();
-    const garmentRemove = firstSelectedGarment.getByRole('button',{name:'移除O003 · 单件样例1',exact:true});
+    const garmentRemove = choose('移除O003 · 单件样例1');
     const garmentRemoveBox = await garmentRemove.boundingBox();
     assert.ok(nextAdd.x > emptyAdd.x && Math.abs(nextAdd.height-firstCard.height) <= 2);
-    assert.ok(garmentRemoveBox.y >= firstCover.y+firstCover.height);
+    assert.ok(garmentRemoveBox.y > firstCard.y+firstCard.height);
+    assert.ok(Math.abs(garmentRemoveBox.x+garmentRemoveBox.width/2-firstCard.x-firstCard.width/2)<1);
     assert.equal(await garmentRemove.getAttribute('class'),'danger-button');
     await outfitGenerate.click();
     assert.match(await outfitHandoff.textContent(),/^1\. O003 · 单件样例1$/m);
@@ -672,8 +676,10 @@ try {
     await page.keyboard.press('Escape');
     await zoom.waitFor({state:'hidden'});
     const accessoryRemove = accessories.getByRole('button',{name:'移除C001 · 配饰样例1',exact:true});
-    const accessoryImageBox = await accessories.getByRole('img',{name:'C001',exact:true}).boundingBox();
-    assert.ok((await accessoryRemove.boundingBox()).y >= accessoryImageBox.y+accessoryImageBox.height);
+    const accessoryCard = accessories.locator('.asset-media-card').filter({has:page.getByRole('img',{name:'C001',exact:true})});
+    const [accessoryCardBox, accessoryRemoveBox] = await Promise.all([accessoryCard.boundingBox(),accessoryRemove.boundingBox()]);
+    assert.ok(accessoryRemoveBox.y > accessoryCardBox.y+accessoryCardBox.height);
+    assert.ok(Math.abs(accessoryRemoveBox.x+accessoryRemoveBox.width/2-accessoryCardBox.x-accessoryCardBox.width/2)<1);
     assert.equal(await accessoryRemove.getAttribute('class'),'danger-button');
     await accessoryRemove.click();
     await accessories.getByRole('heading',{name:'配饰选择 4/5',exact:true}).waitFor();

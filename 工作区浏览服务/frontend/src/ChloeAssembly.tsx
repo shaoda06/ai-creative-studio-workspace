@@ -38,11 +38,10 @@ function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }
 function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove }: {
   asset: ReferenceAssetCard; title: string; aspectRatio: number | 'natural'; onRemove: () => void;
 }) {
-  return <AssetMediaCard title={title} formal entry aspectRatio={aspectRatio} revision={0} item={{media: asset.media}}>
-    <div className="chloe-assembly-card-actions">
-      <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove}>移除</button>
-    </div>
-  </AssetMediaCard>;
+  return <div className="chloe-assembly-selected-card">
+    <AssetMediaCard title={title} formal entry aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
+    <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove}>移除</button>
+  </div>;
 }
 
 function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
