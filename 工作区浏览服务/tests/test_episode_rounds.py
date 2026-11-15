@@ -51,6 +51,22 @@ class EpisodeRoundTests(unittest.TestCase):
         self.assertEqual(episode['episodeRounds'], [{'number': 1, 'scenes': ['C001']}, {'number': 2, 'scenes': ['C001']}])
         self.assertEqual(draft.read_bytes(), before)
 
+    def test_new_production_round_can_switch_workflow_without_changing_earlier_rounds(self):
+        legacy = self.plan()
+        saved = create_episode_round(self.project, 'EP001', {'scenes': {'C001': legacy}})
+        index = Path(saved['file'])
+        first = json.loads(index.read_text())['rounds'][0]
+        scene = {**legacy, 'songssx_execution': self.root + '/其他资料/执行附件/C001-场次生成',
+                 'segments': [{**segment, 'stage': '场次生成', 'run': 'R001'} for segment in legacy['segments']]}
+        create_episode_round(self.project, 'EP001', {'script': legacy['script'], 'scenes': {'C001': scene}})
+        create_episode_round(self.project, 'EP001', {'script': legacy['script'],
+                                                    'scenes': {'C001': {**legacy, 'songssx_execution': None}}})
+        recorded = json.loads(index.read_text())['rounds']
+        self.assertEqual(recorded[0], first)
+        self.assertEqual(recorded[1]['scenes']['C001']['songssx_execution'], scene['songssx_execution'])
+        self.assertNotIn('songssx_execution', recorded[2]['scenes']['C001'])
+        self.assertEqual(rounds.referenced_round(self.project, 'EP001-C001', 1)['segments'], legacy['segments'])
+
     def two_scenes(self):
         self.write(self.script, '# 剧本\n- 文档版本：v1\n## 1. 故事剧本正文\n### EP001-C001\n一。\n### EP001-C002\n二。\n')
         board = self.board.replace('C001', 'C002')

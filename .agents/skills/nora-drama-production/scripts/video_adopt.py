@@ -103,7 +103,7 @@ def field(text, name, value):
 
 
 def render_review(heading, values, decision_time, basis, scope):
-    template = Path(__file__).resolve().parents[1] / 'templates/视频人工审阅区模板.md'
+    template = Path(__file__).resolve().parents[2] / 'studio-h3-aimixer/templates/视频人工审阅区模板.md'
     fenced = re.search(r'```markdown\n(.*?)\n```', template.read_text(encoding='utf-8-sig'), re.S)
     if not fenced:
         raise ValueError('审阅模板缺少固定 Markdown 正文')

@@ -16,9 +16,9 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 | 新建完整分段提示词 | [阶段接续](references/提示词阶段接续规范.md)，依其顺序进入正文制作规则及对应模板 |
 | 按生成结果反馈定位或修订问题 | 先按[问题参考](../nora-serial-drama/references/制作问题与解决方案参考.md)核对现象与条件，再检查受影响正文。针对具体技法的实际反馈按[共用反馈复核](../studio-creative-techniques/references/学习与反馈维护规范.md#实际反馈复核)维护相应参考。项目处理结论按[经验维护](../nora-drama-handoff/references/逐集目录与资产管理规范.md#完集复盘与经验维护)回写既有记录 |
 | H3正文编写或修改 | [Nora H3编写入口](references/H3提示词规范.md)，接续 P 段、采用素材和模板；实际格式及表达规则从[共用H3工具](../studio-h3/SKILL.md)进入 |
-| 正文涉及玄幻法术、法阵、剑气流光、灵力抽丝或粒子，包括已确认动作的转写及效果反馈 | 读取[玄幻法术使用路径](../studio-fantasy-combat/SKILL.md#法术表现的使用路径)，按其方法展开本段可见表现；将[表现核对](../studio-fantasy-combat/references/xuanhuan-elements-vfx.md#表现核对)合并到现有内容核对，不等到用户反馈效果弱才调用 |
-| 表情转写或相关实际反馈 | [表情拆解](../studio-creative-techniques/SKILL.md#表情表达)，按情境写出可见面部变化和必要过程，并落实首次使用告知与反馈更新 |
-| 镜头语言转写或相关实际反馈 | [镜头语言与表达](../studio-creative-techniques/SKILL.md#镜头表达)，将已确认镜头落实为起始关系、必要变化与落点，沿其首次使用提示与反馈复核；不在转写时另改镜头设计或模型格式 |
+| 正文涉及玄幻法术、法阵、剑气流光、灵力抽丝或粒子，包括已确认动作的转写及效果反馈 | 读取[玄幻法术使用路径](../studio-entry/references/能力目录.md#分镜动作与提示词)，按其方法展开本段可见表现；将[表现核对](../studio-fantasy-combat/references/xuanhuan-elements-vfx.md#表现核对)合并到现有内容核对，不等到用户反馈效果弱才调用 |
+| 表情转写或相关实际反馈 | [表情拆解](../studio-entry/references/能力目录.md#分镜动作与提示词)，按情境写出可见面部变化和必要过程，并落实首次使用告知与反馈更新 |
+| 镜头语言转写或相关实际反馈 | [镜头语言与表达](../studio-entry/references/能力目录.md#分镜动作与提示词)，将已确认镜头落实为起始关系、必要变化与落点，沿其首次使用提示与反馈复核；不在转写时另改镜头设计或模型格式 |
 | 连续动作链转写、跨镜头状态或重复／断裂问题 | 按[共用逐镜转写](../studio-video-prompts/references/视频提示词制作规范.md#逐镜转写)调用动作链方法，并入本段内容核对 |
 | 声景、环境音或对白动作同步 | 先按[声景与配乐](../nora-drama-storyboard/references/场次分镜制作规范.md#声景与配乐)确认允许的声源，再按[声源与台词格式转写](references/视频提示词制作规范.md#声源与台词格式转写)落实 |
 | 素材对应、说话者或语言修订 | 制作规范中[项目与模型标签](references/视频提示词制作规范.md#项目引用与模型标签)、[语言规则](references/视频提示词制作规范.md#h3模型正文的语言与命名)及受影响的完整交流 |
@@ -29,7 +29,7 @@ description: 将 Nora 已确认分镜、P段和实际参考素材转写成视频
 
 按[编写与检查顺序](references/视频提示词制作规范.md#提示词编写与检查顺序)：确定依据、建立主体对应、按[逐镜空间转写](references/视频提示词制作规范.md#逐镜空间转写)完成正文、对齐同版中文、核对订正，再进入必要技术准备。identity、space_action、continuity_sound、translation的依据和结论写入既有content_review；工具判断确定性要求，Agent判断内容，具体要求只在制作规范维护。
 
-镜头设计、P段与动作缺项回[分镜](../nora-drama-storyboard/SKILL.md)，剧情和原台词缺项回[写作](../nora-drama-write/SKILL.md)，资产设计或来源缺项回[资产](../nora-drama-assets/SKILL.md)。已确认的动作和法术设计按上表适用方法转写，不能以“不改剧情”为由省略法术视觉细化；细化边界按玄幻使用路径处理。不在转写时另编故事，也不默认重新加载打戏或山音全库。
+镜头设计、P段与动作缺项回[分镜](../nora-drama-storyboard/SKILL.md)，剧情和原台词缺项回[写作](../nora-drama-write/SKILL.md)，资产设计或来源缺项回[资产](../nora-drama-assets/SKILL.md)。已确认的动作和法术设计按上表适用方法转写，不能以“不改剧情”为由省略法术视觉细化；细化边界按玄幻使用路径处理。不在转写时另编故事，创作方法按本次转写问题读取。
 
 画风使用定位文件中已确认的适用视频短版及语言适配，缺少时回[定位](../nora-drama-positioning/references/项目定位与画风规范.md#项目画风展开示例验证与复用)补齐，不临时压缩长版。视觉方法按[视觉表达](../nora-drama-storyboard/references/视觉表达方法规范.md)相关章节读取；画面文字沿[共用边界](../nora-serial-drama/references/画面文字与字幕规范.md)。
 

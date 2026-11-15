@@ -57,7 +57,7 @@ Resolve upstream meaning first; do not polish prompt wording when the shot or as
 
 ## Revision and re-review
 
-Use the [shared revision and re-review method](../../studio-creative-techniques/references/审查与返修方法.md#选择修订与复核). For `REV-14`, report a local issue as a scoped patch. When comparing Nora drafts, list any strong hook, payoff line or comic beat lost in polishing under `## 被删的强钩子`, with its prior location and a short quote. The write owner decides whether to restore it. An explicit re-review applies to the affected findings in the current version.
+Use the [shared revision and re-review method](../../studio-entry/references/能力目录.md#文本审查与制作返修). For `REV-14`, report a local issue as a scoped patch. When comparing Nora drafts, list any strong hook, payoff line or comic beat lost in polishing under `## 被删的强钩子`, with its prior location and a short quote. The write owner decides whether to restore it. An explicit re-review applies to the affected findings in the current version.
 
 ## Anti-template review
 

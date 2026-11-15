@@ -5,12 +5,12 @@ description: 在规划 MiniMax H3 生成或原片编辑，或编写、修订与�
 
 # Studio H3 共用规则
 
-调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式；多参考模式读取完整 `references/ref-en.txt`，涉及镜头、运镜、对白及声音的共用格式同时读取 `references/base-en.txt`。实际素材对应关系按[参考与接续表达规范](references/参考与接续表达规范.md)落实。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
 
 ## H3 工作流选择
 
-- 新制作需要 H3 导演台时，推荐 [Songssx SelfLift 导演台](../studio-h3-songssx/SKILL.md)，按实际模式核对 GEN 时间线与参考输入。
-- [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)仅作兼容使用，不列入新制作的常规工作流选项或推荐项。已有明确采用 AiMixer 的任务、依赖原画布和缓存的接续，或用户明确指定使用 AiMixer 时，进入该入口处理运行组、一采、二采和逐段取回。
+- 新的视频生成任务需要 H3 导演台时，推荐 [Songssx SelfLift 导演台](../studio-h3-songssx/SKILL.md)。推荐时向用户说明旧版 AiMixer 的兼容用途，按[共用工作流选择](../studio-video-production/SKILL.md#工作流选择)确认本次方案。选定后按实际模式核对 GEN 时间线与参考输入。
+- 旧版 [AiMixer 导演台](../studio-h3-aimixer/SKILL.md)仅作兼容。已有 AiMixer 任务或依赖原画布、缓存的接续按原记录处理，用户明确指定 AiMixer 时也可使用。新任务的常规选项及推荐均排除 AiMixer。
 - 已有原片并使用 Viggle Remake 换人、换背景或连续完成两项时，进入 [Viggle Remake 视频编辑](../studio-h3-remake/SKILL.md)。
 
 已登记任务以原请求和画布为准。提交和恢复使用[共用 ComfyUI 工具](../studio-comfyui/SKILL.md)。技术完成与内容采用分别记录。

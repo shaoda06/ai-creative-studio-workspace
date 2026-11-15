@@ -298,6 +298,42 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         path.write_bytes(value)
         self.assertTrue(self.detail()['segments']['whole'][0]['videos'][0]['url'])
 
+    def test_songssx_registration_preserves_old_stage_on_replay_and_uses_scene_stage_for_new_round(self):
+        from iris_rounds import register
+
+        work = self.works['F001']
+        root = work + '/06-视频生产/'
+        board = work + '/04-分镜声音/分镜与声音制作稿-v02.md'
+        fields = Path(__file__).resolve().parents[2] / '.agents/skills/studio-storyboard/templates/逐镜正文模板.md'
+        proof = '\n'.join(line.split('：')[0] + '：测试' for line in fields.read_text().splitlines()
+                          if line.startswith('**'))
+        self.write(board, '| 生成段 | 场次 | 对应镜号 | 请求时长 | 段内Shot及时间 |\n'
+                   '| --- | --- | --- | --- | --- |\n| P001 | S001 | SH001 | 5秒 | Shot 1：0–5秒 |\n\n'
+                   '### 分段 P001\n#### SH001｜第一镜\n' + proof + '\n')
+        index = self.project / (root + '制作轮次.json')
+        prompt = ('subject_definitions: A woman.\nsummary: She turns.\nretention_analysis: None.\n'
+                  'detailed_description: [Shot 1] She turns.\noverall_soundscape: Quiet.\nnon_diegetic_music: None.')
+        for batch, stage in [('R001', '一采'), ('R002', '场次生成')]:
+            record = root + batch + '-生产任务.md'
+            self.write(record, '# 生产任务')
+            directory = root + '执行记录/' + batch + '-场次生成'
+            journal = directory + '/任务清单-装配结果.json'
+            output = root + '候选/' + batch + '-整场.mp4'
+            task = {'task_type': 'video-scene-generation', 'record_dir': directory, 'project': str(self.project),
+                    'video_plan': {'adapter': 'technical', 'segments': [{'p': 'P001', 'planned_seconds': 5}]},
+                    'workflow': {'402': {'inputs': {'timeline_data': json.dumps(
+                        {'segmentConfig': {'segments': [{'prompt': prompt}]}})}}},
+                    'outputs': [{'path': output}]}
+            request = {'work': 'F001', 'record': record, 'storyboard': {'file': board, 'version': 'v02'}}
+            if batch == 'R001':
+                self.write(root + '制作轮次.json', json.dumps({'rounds': [{
+                    'number': 1, 'created_at': '2026-11-06', 'record': record, 'storyboard': request['storyboard'],
+                    'note': '', 'batches': [journal], 'segments': [
+                        {'id': 'P001', 'stage': '一采', 'run': batch, 'duration': 5, 'file': output}]
+                }]}))
+            register(self.project, request, [task], self.project / journal, '2026-11-06', write=True)
+            self.assertEqual(json.loads(index.read_text())['rounds'][-1]['segments'][0]['stage'], stage)
+
     def test_round_history_links_the_script_used_by_the_historical_round(self):
         first = self.register()
         key = self.works['F001']

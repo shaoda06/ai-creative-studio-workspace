@@ -7,6 +7,6 @@ description: 在兼容接续已有 AiMixer 任务，或任务已明确指定 AiM
 
 本入口承接 [H3 工作流选择](../studio-h3/SKILL.md#h3-工作流选择)中的兼容任务。
 
-按[使用规范](references/ComfyUI-AiMixer导演台节点使用规范.md)确认场次分批、运行组、缓存及逐段成果。标准版的确认与装配读[参数与基准](references/参数与基准规范.md)。正文格式和参考语义读[共用 H3](../studio-h3/SKILL.md)。
+按[使用规范](references/ComfyUI-AiMixer导演台节点使用规范.md)确认场次分批、运行组、缓存及逐段成果。标准版的确认与装配读[参数与基准](references/参数与基准规范.md)。正文格式和参考语义读[共用 H3](../studio-h3/SKILL.md)。存量短剧的阶段名、批次来源与采用按[Nora 逐段接续](references/Nora逐段场次制作与登记.md)办理。
 
 装配使用 `scripts/h3_workflow.py`。后台通过本技能解释原生分段报告和核对目标缓存。恢复时读取原任务的输入和产物，按原组序、阶段及缓存身份接续。目录、批准和采用由调用业务负责。

@@ -1,6 +1,6 @@
 ---
 name: studio-social-operations
-description: 在处理社交媒体账号连接、个人页和封面、发布、数据复盘或制作反馈时使用。按调用业务给出的对象和资料入口分流。
+description: 在处理社交媒体账号连接、个人页和封面、发布、数据复盘、运营经验学习或制作反馈时使用。按当前任务分流，涉及项目时沿用业务提供的资料入口。
 ---
 
 # Studio 社交媒体运营
@@ -13,7 +13,7 @@ description: 在处理社交媒体账号连接、个人页和封面、发布、�
 | 头像、主页背景设计与采用 | [02 个人页准备](../studio-profile-images/SKILL.md) |
 | 通用与单作品封面、横竖适配及采用 | [03 封面制作](../studio-cover-images/SKILL.md) |
 | 最终成片核对、发布材料、手动交接或授权代发、发布记录 | [04 发布准备与记录](../studio-publication/SKILL.md) |
-| 后台数据、账号活跃时段、成片分析和运营报告 | [05 作品复盘与管理](../studio-operations-review/SKILL.md) |
+| 后台数据、账号活跃时段、成片分析、运营报告和运营经验学习 | [05 作品复盘与管理](../studio-operations-review/SKILL.md) |
 | 当前制作或发布准备如何参考既有报告 | [06 后续制作参考与指导](../studio-operations-guidance/SKILL.md) |
 
 已有明确对象与阶段时直接接续，不要求重新建档或加载全部阶段。接入信息按[运营项目README规范](../studio-operations-setup/references/运营项目README规范.md)从调用方入口取得，不由公共运营创建另一套项目结构。

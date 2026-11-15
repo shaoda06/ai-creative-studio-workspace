@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 创作与制作总入口"
-  short_description: "统一创作入口，路由共用视频制作核心、各业务和社媒运营等附加能力"
+  short_description: "统一创作入口，识别工作区和阶段，接续共用核心、业务技能及能力目录"
   default_prompt: "使用$studio-entry处理当前任务，先确定输入、授权和实际范围。"

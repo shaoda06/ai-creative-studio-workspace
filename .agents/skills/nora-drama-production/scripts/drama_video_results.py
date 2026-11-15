@@ -46,7 +46,7 @@ def register(store, key):
     if len(outputs) != state['expected']:
         raise ValueError('成果摘要不完整，先核对取回记录')
     from backend.services.comfy_tasks import SKILL
-    template_file = SKILL.parent / 'nora-drama-production/templates/视频人工审阅区模板.md'
+    template_file = SKILL.parent / 'studio-h3-aimixer/templates/视频人工审阅区模板.md'
     template = re.search(r'```markdown\n(.*?)\n```', template_file.read_text('utf-8-sig'), re.S)[1]
     edits, items = {}, []
     probes = previous.get('probes', {})
