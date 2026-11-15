@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import sys
 from urllib.parse import urlsplit
@@ -129,7 +129,8 @@ def media_reference(root, path, value):
     target = resources.version_file(owner, identity, version)
     if not target.is_file() or not (target.parent/'版本信息.json').is_file():
         raise ValueError('资源版本尚未完整保存：'+value)
-    if Path(href).is_absolute() or (path.parent/href).resolve() != target:
+    relative = Path(href.replace('\\', '/'))
+    if relative.is_absolute() or PureWindowsPath(href).drive or (path.parent/relative).resolve() != target:
         raise ValueError('资源链接与准确版本不一致：'+value)
     return {'owner': owner.relative_to(root).as_posix(), 'resource_id': identity, 'version': version,
             'file': target.relative_to(root).as_posix()}

@@ -331,6 +331,10 @@ def prepare_report(store, data, *, at_execution=False, previous=...):
                     if 'business_result' in data.video_plan:
                         from backend.services.business_results import validate as validate_business_result
                         validate_business_result(data)
+                if not at_execution and data.image_plan and data.image_plan.get('business_result', {}).get('adopt'):
+                    # A reused preparation report cannot freeze an approval or an input record.
+                    from backend.services.business_results import validate as validate_business_result
+                    validate_business_result(data)
                 report.update(previous)
                 changed = False
                 if not content_current:

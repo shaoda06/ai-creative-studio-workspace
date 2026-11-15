@@ -172,9 +172,11 @@ class ResultCompletionTests(unittest.TestCase):
         doc=self.image_execution();_,first=self.image('first')
         report,path=self.report(self.owner,first,'E001');records.finish(self.owner,self.image_plan(doc,'E001'),report,path)
         old=records.resource(self.owner,doc,first['file'])
-        fixtures.add_row(doc,'审阅记录',['R001',TIME,old,'通过','无','用户批准'])
+        forward=old.replace('\\','/')
+        backward=forward.replace('/','\\')
+        fixtures.add_row(doc,'审阅记录',['R001',TIME,forward,'通过','无','用户批准'])
         self.image_execution('E002',True)
-        fixtures.add_row(doc,'输入记录',['E002','原图','不适用',old])
+        fixtures.add_row(doc,'输入记录',['E002','原图','不适用',backward])
         _,second=self.image('second',(24,32),first['resource_id'])
         plan=self.image_plan(doc,'E002');plan['outputs'][0].update(source=first['file'],previous='无')
         plan['adopt']={'document':str(doc.relative_to(self.owner)),'review':'R001'}
@@ -185,6 +187,53 @@ class ResultCompletionTests(unittest.TestCase):
         self.assertEqual(len(list((self.owner/'资源/图片').rglob('*.png'))),2)
         doc.write_text(doc.read_text().replace('| 通过 |','| 需修改 |'))
         with self.assertRaisesRegex(ValueError,'已通过'): records.finish(self.owner,plan,report,path)
+
+    def test_upscale_rejects_wrong_version_before_submission(self):
+        doc = self.image_execution('E002', True)
+        _, wrong = self.image('prior')
+        _, approved = self.image('approved', resource_id=wrong['resource_id'])
+        reviewed = records.resource(self.owner, doc, approved['file'])
+        fixtures.add_row(doc, '审阅记录', ['R001', TIME, reviewed, '通过', '无', '用户批准'])
+        fixtures.add_row(doc, '输入记录', ['E002', '2/image', '不适用', reviewed])
+        plan = self.image_plan(doc, 'E002')
+        plan['outputs'][0].update(source=approved['file'], previous='无')
+        plan['adopt'] = {'document': str(doc.relative_to(self.owner)), 'review': 'R001'}
+        upload = {'node': '2', 'input': 'image', 'file': str(self.owner/approved['file'])}
+        target = SimpleNamespace(base_file=approved['file'])
+        data = SimpleNamespace(task_type='image-upscale', project=str(self.owner), segment_plan=None,
+                               image_plan={'adapter': 'technical', 'business_result': plan},
+                               outputs=[target], uploads=[upload])
+        before = doc.read_bytes()
+        business_results.validate(data)
+        self.assertEqual(doc.read_bytes(), before)
+        plan['outputs'][0]['source'] = wrong['file']
+        with self.assertRaisesRegex(ValueError, '批准对象必须'):
+            business_results.validate(data)
+        plan['outputs'][0]['source'] = approved['file']
+        upload['file'] = str(self.owner/wrong['file'])
+        with self.assertRaisesRegex(ValueError, '实际上传必须'):
+            business_results.validate(data)
+        upload['file'] = str(self.owner/approved['file'])
+        target.base_file = wrong['file']
+        with self.assertRaisesRegex(ValueError, '结果的来源版本必须'):
+            business_results.validate(data)
+        target.base_file = approved['file']
+        from backend.services import execution_checks
+        document = doc.read_text('utf-8')
+        data.record_dir = str(doc.parent)
+        data.record_format = 'legacy'
+        data.title = '隔离超分'
+        store = SimpleNamespace(client=SimpleNamespace(now=lambda: TIME, ClientError=RuntimeError),
+                                portable_input=lambda task: {'title': task.title})
+        prepared = {'ok': True, 'prepared_input': execution_checks.basis(store, data),
+                    'sources': execution_checks.sources(data), 'new_task_ready': True, 'segments': {}}
+        self.assertTrue(execution_checks.prepare_report(store, data, previous=prepared)['reused'])
+        other = records.resource(self.owner, doc, wrong['file'])
+        doc.write_text(document.replace(f'| 2/image | 不适用 | {reviewed} |',
+                                        f'| 2/image | 不适用 | {other} |'), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '处理来源未登记'):
+            execution_checks.prepare_report(store, data, previous=prepared)
+        self.assertFalse(records.rows(doc.read_text('utf-8'), '当前采用'))
 
     def video_entry(self,identity,execution,stage,upstream=None):
         self.f.candidate(identity,execution,stage=stage,output=False)

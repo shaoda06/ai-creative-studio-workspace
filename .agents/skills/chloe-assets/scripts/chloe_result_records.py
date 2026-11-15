@@ -82,6 +82,15 @@ def resource(owner, document, filename):
     return link(document, resources.local(owner, ref['file']), f"{prefix}:{ref['resource_id']}@{ref['version']}")
 
 
+def project_root(owner):
+    return owner.parent if owner.name == '综合资料' else owner.parent.parent
+
+
+def resource_path(root, document, value):
+    reference = docs.media_reference(root, document, value)
+    return root/reference['file']
+
+
 def validate(owner, plan, count):
     document = resources.local(owner, plan['document'])
     body = document.read_text('utf-8')
@@ -105,7 +114,20 @@ def validate(owner, plan, count):
             validate_director_versions(
                 sheet for _, slot in sorted(existing | proposed) if (sheet := director_slot(slot)) is not None)
         if plan.get('adopt'):
-            approval(owner, plan, body)
+            review_doc, review = approval(owner, plan, body)
+            if execution[0]['执行类型'] != '图片处理':
+                raise ValueError('自动采用仅用于已批准原图的技术处理')
+            root = project_root(owner)
+            approved = resource_path(root, review_doc, review['对象引用'])
+            inputs = [row for row in rows(body, '输入记录') if row['执行编号'] == plan['execution']]
+            for item in plan['outputs']:
+                if not item.get('source'):
+                    raise ValueError('自动采用须填写处理来源版本')
+                source = resources.resolve_file(owner, item['source'])
+                if approved != source:
+                    raise ValueError('批准对象必须是本次处理的准确来源版本')
+                if not any(resource_path(root, document, row['资源引用']) == source for row in inputs):
+                    raise ValueError('处理来源未登记在原输入记录')
     return document, body, execution[0]
 
 
@@ -119,11 +141,25 @@ def approval(owner, plan, body):
     return review_doc, match
 
 
-def adopt(body, purpose, reference, basis, time, *, expected=None):
+def validate_task(data, plan, _checked):
+    if not plan.get('adopt'):
+        return
+    owner = Path(data.project)
+    source = resources.resolve_file(owner, plan['outputs'][0]['source'])
+    uploads = [Path(item['file']) for item in data.uploads if (item['node'], item['input']) == ('2', 'image')]
+    if uploads != [source]:
+        raise ValueError('RTX 节点 2 的实际上传必须是已批准的原图')
+    for target in data.outputs:
+        if target.base_file and resources.resolve_file(owner, target.base_file) != source:
+            raise ValueError('超分结果的来源版本必须是已批准的原图')
+
+
+def adopt(body, purpose, reference, basis, time, *, expected=None, identity=lambda value: value):
     old = next((r['资源引用'] for r in rows(body,'当前采用') if r['用途']==purpose),'无')
-    if old == reference:
+    current = identity(old)
+    if current == identity(reference):
         return body
-    if expected is not None and old!=expected:
+    if expected is not None and current != identity(expected):
         raise ValueError('当前采用已改变，不覆盖后续决定')
     events=rows(body,'采用变更')
     number=max([int(r['记录编号'][1:]) for r in events]+[0])+1
@@ -145,11 +181,14 @@ def complete_execution(body, execution, task_id, time, proof, started_at=None):
 def finish(owner, plan, report, report_path):
     owner=Path(owner).resolve()
     with resources.index_lock(owner):
-        document, body, execution = validate(owner,plan,len(report['items']))
+        document, body, _ = validate(owner,plan,len(report['items']))
+        root = project_root(owner)
         time=now()
         proof=report_link(document,report_path,'结果收尾报告')
         adopt_doc = resources.local(owner, plan.get('adoption_document',plan['document']))
         adopted_body=body if adopt_doc==document else adopt_doc.read_text('utf-8')
+        if plan.get('adopt'):
+            review_doc = resources.local(owner, plan['adopt']['document'])
         for spec,item in zip(plan['outputs'],report['items'],strict=True):
             reference=resource(owner,document,item['path'])
             body=put(body,'输出记录',['执行编号','输出槽位'],{'执行编号':plan['execution'],'输出槽位':spec['slot'],'资源引用':reference})
@@ -158,20 +197,12 @@ def finish(owner, plan, report, report_path):
                 body=put(body,'参考版本',['用途','资源引用'],{'用途':spec['purpose'],'资源引用':reference,
                     '来源或原图引用':resource(owner,document,spec['source']) if spec.get('source') else '无','执行编号':plan['execution']})
             if plan.get('adopt'):
-                review_doc, review=approval(owner,plan,body)
-                if execution['执行类型']!='图片处理' or not spec.get('source'):
-                    raise ValueError('自动采用仅用于已批准原图的技术处理')
-                source=resource(owner,review_doc,spec['source'])
-                if review['对象引用']!=source:
-                    raise ValueError('批准对象必须是本次处理的准确来源版本')
-                inputs=rows(body,'输入记录')
-                if not any(r['执行编号']==plan['execution'] and r['资源引用']==resource(owner,document,spec['source']) for r in inputs):
-                    raise ValueError('处理来源未登记在原输入记录')
                 if adopt_doc==document:
                     adopted_body=body
                 adopted_body=adopt(adopted_body,spec['purpose'],resource(owner,adopt_doc,item['path']),
                     link(adopt_doc,review_doc,plan['adopt']['review'])+'；'+report_link(adopt_doc,report_path,'尺寸核对'),time,
-                    expected=spec['previous'])
+                    expected=spec['previous'],
+                    identity=lambda value: value if value == '无' else resource_path(root, adopt_doc, value))
                 if adopt_doc==document:
                     body=adopted_body
         body=complete_execution(body,plan['execution'],report['task_id'],report.get('ended_at') or report['recorded_at'],proof,report.get('started_at'))
@@ -179,7 +210,6 @@ def finish(owner, plan, report, report_path):
         if adopt_doc!=document and plan.get('adopt'):
             save(adopt_doc,adopted_body)
         # Fixed-document validation is scoped to the documents written in this operation.
-        root=owner.parent if owner.name=='综合资料' else owner.parent.parent
         for path in {document,adopt_doc} if plan.get('adopt') else {document}:
             result=docs.check_workspace(root,only=path)
             if result['errors']:

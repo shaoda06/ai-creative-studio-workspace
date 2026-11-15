@@ -32,8 +32,7 @@ def validate(data):
     if plan is not None:
         targets = data.segment_plan.targets if data.segment_plan else data.outputs
         checked = module.validate(Path(data.project),plan,len(targets))
-        if plan['adapter']=='chloe-video':
-            module.validate_task(data, plan, checked)
+        module.validate_task(data, plan, checked)
 
 
 def finish(data, report, report_path, state=None):
