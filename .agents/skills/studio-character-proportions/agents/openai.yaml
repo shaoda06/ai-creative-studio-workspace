@@ -1,0 +1,4 @@
+interface:
+  display_name: "人物比例分析"
+  short_description: "分析单张或多张人物图的纵向与横向比例，出具统一标线图和测量记录"
+  default_prompt: "用 $studio-character-proportions 分析这些人物图，输出比例标线图与测量记录。"

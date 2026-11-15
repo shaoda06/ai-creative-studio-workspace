@@ -26,6 +26,8 @@ description: 在启动或接续 Studio 创作、制作、运营或维护任务�
 
 按本轮任务或业务指定的类别进入[能力目录](references/能力目录.md)，查阅全部适用条目，可以组合使用。已确定的工具和原任务从实际入口接续。
 
+单独测量人物身形，或比较多个参考、版本的人物比例时，直达[人物比例分析](../studio-character-proportions/SKILL.md)。
+
 所有业务与公共技能统一在总目录.agents/skills中维护。Nora资料在workspaces/Nora Workspace，Iris资料在workspaces/Iris Workspace，Chloe资料在workspaces/Chloe Workspace；先明确真实项目，读取所属资料区README、项目README和唯一进度或状态文件，再按同库入口接续。用户只需从总工作区新建对话，不要求切换到子目录发现技能。
 
 调用公共脚本时显式传入所属资料空间或实际项目，不以脚本所在总目录判断业务归属。后台查询与通知按[任务空间接续](../studio-workspace-browser/references/浏览服务使用规范.md#项目空间与统一入口)执行。

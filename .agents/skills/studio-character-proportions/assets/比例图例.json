@@ -1,0 +1,12 @@
+[
+  {"id": "crown", "color": "#52646C", "vertical": "头顶"},
+  {"id": "chin", "color": "#007E85", "vertical": "下巴"},
+  {"id": "face", "color": "#007E85", "horizontal": "面宽"},
+  {"id": "shoulder", "color": "#26734F", "vertical": "肩线", "horizontal": "肩宽"},
+  {"id": "bust", "color": "#A13D68", "vertical": "胸线", "horizontal": "胸宽"},
+  {"id": "waist", "color": "#A85D13", "vertical": "腰线", "horizontal": "腰宽"},
+  {"id": "hip", "color": "#28559D", "vertical": "胯线", "horizontal": "胯宽"},
+  {"id": "knee", "color": "#6A4D96", "vertical": "膝线"},
+  {"id": "calf", "color": "#6A4D96", "horizontal": "单侧小腿宽"},
+  {"id": "floor", "color": "#52646C", "vertical": "落地线"}
+]
