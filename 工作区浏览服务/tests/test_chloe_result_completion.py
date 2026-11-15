@@ -13,6 +13,11 @@ sys.path.insert(0,str(business_results.SKILLS/'chloe-assets/scripts'))
 import chloe_result_records as records
 sys.path.insert(0,str(business_results.SKILLS/'chloe-production/scripts'))
 import chloe_results
+sys.path.insert(0,str(business_results.SKILLS/'chloe-creative/scripts'))
+from chloe_director_sheet import prepare
+from chloe_resources import bind_reference
+import chloe_browser_production as browser
+from chloe_production import state
 
 TIME='2026-11-08T20:00:00+08:00'
 
@@ -56,6 +61,80 @@ class ResultCompletionTests(unittest.TestCase):
         self.assertEqual(before,doc.read_bytes());self.assertEqual(files,list((self.owner/'资源/图片').rglob('*.png')))
         self.assertEqual(records.rows(doc.read_text(),'当前采用'),[])
         self.assertTrue(source.exists())
+
+    def director_brief(self):
+        self.f.plan()
+        _, _, ref = self.f.resource(kind='image', shared=True, key='look')
+        bind_reference(self.f.root, self.f.project.name, 'look', ref['resource_id'], ref['version'])
+        return {'shots': [{'shot': shot, 'sketch': '人物转身', 'action': '面向镜头'}
+                          for shot in ('SH001', 'SH002')],
+                'references': [{'slot': '造型', 'key': 'look'}]}
+
+    def test_prepare_director_sheet_rejects_used_and_pending_versions(self):
+        brief = self.director_brief()
+        project = self.f.project
+        script = project/'脚本.md'
+        script.write_text(script.read_text('utf-8').replace('| 脚本版本 | v01 |', '| 脚本版本 | v09 |'), encoding='utf-8')
+        fixtures.add_row(self.f.record, '执行记录', ['E001','图片生成','不适用','Imagegen','不适用',
+            '不适用','用户授权','未取得','未取得','未取得','已完成','无'])
+        _, reference, _ = self.f.resource(kind='image')
+        fixtures.add_row(self.f.record, '输出记录', ['E001','导演表/脚本v08/图表v01/候选1/第1页',reference])
+        before = self.f.record.read_bytes()
+        with self.assertRaisesRegex(ValueError, '已使用或已预留：v01'):
+            prepare(project, '脚本.md', brief, '用户授权', chart_version='v01')
+        self.assertEqual(self.f.record.read_bytes(), before)
+        self.assertEqual(list((project/'执行记录').iterdir()), [])
+        first = prepare(project, '脚本.md', brief, '用户授权')
+        self.assertEqual((first['source_version'], first['chart_version'], first['candidate']), ('v09','v02',1))
+        with self.assertRaisesRegex(ValueError, '已使用或已预留：v02'):
+            prepare(project, '脚本.md', brief, '用户授权', chart_version='v02')
+        second = prepare(project, '脚本.md', brief, '用户授权')
+        self.assertEqual((second['chart_version'], second['candidate']), ('v03',2))
+
+    def test_prepare_director_pages_match_registered_output(self):
+        brief = self.director_brief()
+        project = self.f.project
+        result = prepare(project, '脚本.md', brief, '用户授权', page_size=1)
+        self.assertEqual((result['source_version'],result['chart_version'],result['candidate']), ('v01','v01',1))
+        plan = json.loads(Path(result['plan']).read_text('utf-8'))
+        self.assertEqual(plan['shot_ids'], ['SH001','SH002'])
+        before = (project/'README.md').read_bytes()
+        for n, page in enumerate(result['pages'], 1):
+            manifest = Path(page['manifest'])
+            params = json.loads(manifest.read_text('utf-8'))
+            slot = f'导演表/脚本v01/图表v01/候选1/第{n}页'
+            self.assertEqual(params['business_result']['outputs'][0]['slot'], slot)
+            self.assertEqual((manifest.parent/params['plan']).resolve(), Path(result['plan']))
+            self.assertIn(f'图表 v01｜第 {n}／2 页', (manifest.parent/params['prompt_file']).read_text('utf-8'))
+            self.assertEqual(len(params['references']), 1)
+            self.assertIn('referenced_image_paths', page['call'])
+            source = Path(self.f.temp.name)/f'native-page{n}.png'
+            Image.new('RGB',(12,16),'white').save(source)
+            saved = records.native(self.f.root, manifest, source)
+            self.assertEqual(Path(saved['images'][0]['file']).read_bytes(), source.read_bytes())
+            records.native(self.f.root, manifest, source)
+        sheets = browser.director_sheets(state(project), self.f.api)
+        self.assertEqual([(row['version'],row['page'],row['adopted']) for row in sheets['candidates']],
+                         [('v01',1,False),('v01',2,False)])
+        self.assertEqual((project/'README.md').read_bytes(), before)
+
+    def test_native_rejects_director_slot_collision_before_import(self):
+        brief = self.director_brief()
+        project = self.f.project
+        result = prepare(project, '脚本.md', brief, '用户授权')
+        manifest = Path(result['pages'][0]['manifest'])
+        fixtures.add_row(self.f.record, '执行记录', ['E002','图片生成','不适用','Imagegen','不适用',
+            '不适用','用户授权','未取得','未取得','未取得','已完成','无'])
+        _, reference, _ = self.f.resource(kind='image')
+        fixtures.add_row(self.f.record, '输出记录', ['E002','导演表/脚本v08/图表v01/候选1/第1页',reference])
+        source = Path(self.f.temp.name)/'native-page.png'
+        Image.new('RGB',(12,16),'white').save(source)
+        before = self.f.record.read_bytes()
+        images = list((project/'资源/图片').rglob('*.png'))
+        with self.assertRaisesRegex(ValueError, '同一图表版本不能混用'):
+            records.native(self.f.root, manifest, source)
+        self.assertEqual(self.f.record.read_bytes(), before)
+        self.assertEqual(list((project/'资源/图片').rglob('*.png')), images)
 
     def test_upscale_adopts_once_and_preserves_prior_versions(self):
         doc=self.image_execution();_,first=self.image('first')

@@ -13,12 +13,16 @@ COLUMNS = tuple(value.strip() for value in COLUMNS)
 def check_plan(path):
     path = Path(path)
     plan = json.loads(path.read_text('utf-8-sig'))
+    return validate_plan(plan, path.parent)
+
+
+def validate_plan(plan, directory):
     for key in ('object', 'source', 'source_version', 'chart_version'):
         if not isinstance(plan[key], str) or not plan[key].strip():
             raise ValueError('制作计划缺少实际' + key)
     if type(plan['candidate']) is not int or plan['candidate'] < 1:
         raise ValueError('候选编号须为正整数')
-    source = (path.parent / plan['source']).resolve()
+    source = (directory / plan['source']).resolve()
     shots = read_shots(source.read_text('utf-8-sig'), tuple(plan['extra_fields']))
     ids = [shot['fields']['镜号'] for shot in shots]
     if len(ids) != len(set(ids)):

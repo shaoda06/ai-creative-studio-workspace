@@ -97,6 +97,13 @@ def validate(owner, plan, count):
                 raise ValueError('图片必须明确用途')
             if item.get('source'):
                 resource(owner,document,item['source'])
+        if any(item['slot'].startswith('导演表/') for item in plan['outputs']):
+            sys.path.insert(0, str(SKILLS/'chloe-production/scripts'))
+            from chloe_production import director_slot, validate_director_versions
+            existing = {(row['执行编号'], row['输出槽位']) for row in rows(body,'输出记录')}
+            proposed = {(plan['execution'], item['slot']) for item in plan['outputs']}
+            validate_director_versions(
+                sheet for _, slot in sorted(existing | proposed) if (sheet := director_slot(slot)) is not None)
         if plan.get('adopt'):
             approval(owner, plan, body)
     return document, body, execution[0]

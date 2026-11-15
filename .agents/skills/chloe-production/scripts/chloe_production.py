@@ -101,6 +101,21 @@ def director_slot(value):
     raise ValueError('导演表输出槽位须明确脚本版本、图表版本、候选编号和页码')
 
 
+def validate_director_versions(sheets):
+    versions = {}
+    pages = set()
+    for sheet in sheets:
+        version = sheet['version']
+        page = (version, sheet['page'])
+        origin = (sheet['sourceVersion'], sheet.get('candidateNumber'))
+        if version in versions and versions[version] != origin:
+            raise ValueError('同一图表版本不能混用来源脚本版本或候选编号：'+version)
+        if page in pages:
+            raise ValueError(f'同一图表版本的页码重复：{version} 第{sheet["page"]}页')
+        versions[version] = origin
+        pages.add(page)
+
+
 def state(project):
     project = Path(project).resolve()
     root = project.parent.parent
@@ -108,7 +123,7 @@ def state(project):
     doc = document(project, '制作记录.md')
     executions = {row['执行编号']: row for row in records(doc, '执行记录')}
     outputs = {(row['执行编号'], row['输出槽位']): row for row in records(doc, '输出记录')}
-    director_versions = {}; director_pages = set()
+    sheets = []
     for row in records(doc, '输出记录'):
         sheet = director_slot(row['输出槽位'])
         if sheet is None:
@@ -116,13 +131,8 @@ def state(project):
         reference = media_reference(root, project/'制作记录.md', row['资源引用'])
         if row['执行编号'] not in executions or reference['owner'] != project.relative_to(root).as_posix() or not reference['resource_id'].startswith('IMG-'):
             raise ValueError('导演表须关联原执行及本视频准确图片版本')
-        version = sheet['version']; page = (version, sheet['page'])
-        origin = (sheet['sourceVersion'], sheet.get('candidateNumber'))
-        if version in director_versions and director_versions[version] != origin:
-            raise ValueError('同一图表版本不能混用来源脚本版本或候选编号')
-        if page in director_pages:
-            raise ValueError('同一图表版本的页码重复')
-        director_versions[version] = origin; director_pages.add(page)
+        sheets.append(sheet)
+    validate_director_versions(sheets)
     candidates = {}
     for row in records(doc, '视频分段执行'):
         identity, stage, run, execution, slot = (row[key] for key in ('分段编号','制作阶段','候选版本','执行编号','输出槽位'))
