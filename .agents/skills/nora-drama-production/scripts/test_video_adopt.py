@@ -4,6 +4,7 @@ import hashlib
 import importlib
 import json
 from pathlib import Path
+import stat
 import tempfile
 import sys
 import unittest
@@ -22,7 +23,15 @@ class AdoptionTests(unittest.TestCase):
         canonical = self.root / ref['file']
         store_media(self.root, canonical, source=source)
         resources.finish(self.root, canonical, info={'bytes': source.stat().st_size})
-        source.unlink()
+        canonical_mode = canonical.stat().st_mode
+        if sys.platform == 'win32':
+            # Windows requires clearing the shared read-only attribute before unlinking.
+            source.chmod(canonical_mode | stat.S_IWRITE)
+        try:
+            source.unlink()
+        finally:
+            if sys.platform == 'win32':
+                canonical.chmod(canonical_mode)
         self.run_plan()
         self.assertTrue(canonical.is_file())
         self.assertFalse(source.exists())
@@ -134,7 +143,7 @@ class AdoptionTests(unittest.TestCase):
         self.assertIn('原下载凭据不作为定制文件字节凭据', draft.read_text())
         self.assertIn(item['review_entry'], draft.read_text())
         record = tool.load(Path(item['mapping']))['adoptions'][0]
-        self.assertEqual(record['selected_path'], str(final.relative_to(self.root)))
+        self.assertEqual(record['selected_path'], final.relative_to(self.root).as_posix())
         before = {p: p.read_bytes() for p in (draft, Path(item['mapping']), manifest, final, process)}
         repeat = self.run_plan()
         self.assertEqual(repeat['items'][0]['state'], 'already_adopted')
@@ -215,7 +224,7 @@ class AdoptionTests(unittest.TestCase):
         self.run_plan()
         self.assertFalse(source.exists())
         self.assertTrue(process.exists())
-        self.assertEqual(tool.load(manifest)['products'][1]['file'], str(process.relative_to(self.root)))
+        self.assertEqual(tool.load(manifest)['products'][1]['file'], process.relative_to(self.root).as_posix())
 
     def test_shared_units_adopt_each_stage_without_touching_numbered_episode(self):
         numbered_summary = self.summary

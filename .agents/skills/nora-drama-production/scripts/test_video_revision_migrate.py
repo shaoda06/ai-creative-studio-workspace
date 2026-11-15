@@ -209,9 +209,9 @@ class ExecutionMigrationTests(unittest.TestCase):
             current=json.loads((target/'输入映射.json').read_text())
             self.assertEqual(current['segments'][0]['round'],'R005')
             self.assertEqual(current['generation_contexts'][0]['identity'],new)
-            self.assertEqual(current['identity_migration']['report'],str(report.relative_to(project)))
+            self.assertEqual(current['identity_migration']['report'],report.relative_to(project).as_posix())
             index=json.loads((target/'迁移后来源清单.json').read_text())
-            self.assertEqual(index['tasks'][0]['record_dir'],str(target.relative_to(project)))
+            self.assertEqual(index['tasks'][0]['record_dir'],target.relative_to(project).as_posix())
             self.assertEqual(current['segments'][0]['materials_from']['identity'],old)
             self.assertEqual(json.loads(original.read_text())['adoptions'][0]['identity'],old)
             with closing(sqlite3.connect(database)) as db:
