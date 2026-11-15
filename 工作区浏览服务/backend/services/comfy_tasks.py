@@ -154,7 +154,8 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         return config.connection_key(self.workspace, url)
 
     def public(self, include_history=True):
-        configured_urls = self.remote_urls()
+        observations = self.remote_queues
+        configured_urls = observations.observed_urls if observations.manager is not None else self.remote_urls()
         snapshot = {'tasks': sorted(({**{key: ([{field: item.get(field) for field in ('identity', 'index', 'check', 'path', 'error')}
                                         for item in value.values()] if key == 'segments' else value) for key, value in row['state'].items()
                                  if key not in ('client_id', 'segment_monitor', 'notices', 'prepared_files')},

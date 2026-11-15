@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from backend.services import production
+from backend.chloe_thumbnails import production_thumbnail
 
 router=APIRouter()
 
@@ -24,7 +25,7 @@ def videos(request:Request):
 
 
 @router.get('/production-files/{path:path}')
-def media(path:str,request:Request,download:bool=False):
+def media(path:str,request:Request,download:bool=False,thumbnail:int|None=None):
     space=workspace(request);relative=Path(path)
     if relative.is_absolute() or any(part.startswith('.') for part in relative.parts):
         raise HTTPException(404,'资源不存在')
@@ -34,4 +35,6 @@ def media(path:str,request:Request,download:bool=False):
     # This route serves referenced media only, never workspace configuration or private task records.
     if target.suffix.lower() not in {'.png','.jpg','.jpeg','.webp','.mp4','.mov','.webm','.wav','.mp3','.m4a','.flac'}:
         raise HTTPException(404,'不是媒体文件')
+    if thumbnail is not None and not download:
+        return production_thumbnail(space.runtime, target, thumbnail, request)
     return FileResponse(target,filename=target.name if download else None,content_disposition_type='attachment' if download else 'inline')

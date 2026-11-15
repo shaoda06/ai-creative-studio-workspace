@@ -454,6 +454,8 @@ class ChloeProductionTests(unittest.TestCase):
         app=FastAPI();app.include_router(main.spaces_router, prefix='/api/workspaces/{workspace_id}')
         space=Workspace('chloe','Chloe',self.root,self.root/'runtime','chloe-commerce',self.projects,production_adapter='chloe-production')
         app.state.workspaces=SimpleNamespace(get=lambda identity:space)
+        self.plan()
+        self.candidate('P001','E001')
         with TestClient(app) as client:
             listing=client.get(self.api+'/production-videos')
             self.assertEqual(listing.status_code,200,listing.text)
@@ -461,11 +463,28 @@ class ChloeProductionTests(unittest.TestCase):
             self.assertEqual(client.get(base).status_code,200)
             detail=client.get(base+'/works/V001/production-detail')
             self.assertEqual(detail.status_code,200,detail.text)
+            summary_url = base + '/works/V001/production-detail?summary=1'
+            summary = client.get(summary_url)
+            self.assertEqual(summary.status_code, 200, summary.text)
+            candidate = summary.json()['segments']['whole'][0]['videos'][0]
+            self.assertNotIn('context', candidate)
+            original = detail.json()['segments']['whole'][0]['videos'][0]['context']
+            self.assertEqual(client.get(candidate['contextUrl']).json(), original)
+            headers = {'If-None-Match': summary.headers['etag']}
+            self.assertEqual(client.get(summary_url, headers=headers).status_code, 304)
+            self.candidate('P002','E002')
+            updated = client.get(summary_url, headers=headers)
+            self.assertEqual(updated.status_code, 200, updated.text)
+            self.assertEqual(len(updated.json()['segments']['whole'][1]['videos']), 1)
             self.assertEqual(client.get(base+'/works/V002/production-detail').status_code,404)
             self.assertEqual(client.get(base+'/works/V001/production-downloads').status_code,200)
             self.assertEqual(client.get(base+'/works/V001/production-notes').json(),{'notes':{},'rounds':{}})
             actual,_,_=self.resource(kind='image',shared=True)
-            self.assertEqual(client.get(self.api+'/production-files/'+actual.relative_to(self.root).as_posix()).status_code,200)
+            file_url = self.api+'/production-files/'+actual.relative_to(self.root).as_posix()
+            self.assertEqual(client.get(file_url).content, actual.read_bytes())
+            preview = client.get(file_url+'?thumbnail=768')
+            self.assertEqual(preview.headers['content-type'], 'image/webp')
+            self.assertEqual(client.get(file_url+'?thumbnail=768', headers={'If-None-Match': preview.headers['etag']}).status_code, 304)
             self.assertEqual(client.get(self.api+'/production-files/综合资料/账号定位.md').status_code,404)
             self.assertEqual(client.get(self.api+'/production-files/%2e%2e/secret.png').status_code,404)
 

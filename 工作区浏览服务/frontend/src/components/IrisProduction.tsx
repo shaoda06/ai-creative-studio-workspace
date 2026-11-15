@@ -19,7 +19,7 @@ export function IrisProduction({ project, baseUrl, work, onSelect }: {
     unitKind: 'work',
     storyboard: undefined,
     namespace: () => namespace,
-    detail: (_, unit) => `${baseUrl}/works/${unit}/production-detail?view=${view}`,
+    detail: (_, unit) => `${baseUrl}/works/${unit}/production-detail?view=${view}&summary=1`,
     scope: (_, unit, scene) => ({ project, episode: unit, scene, label: `${unit}整片`,
       notesUrl: `${baseUrl}/works/${unit}/production-notes${view === 'archive' ? '/archive' : hasArchive ? '?view=current' : ''}`,
       stateKey: `scene/${namespace}/${unit}/${scene}`, readOnly: view === 'archive' }),

@@ -108,7 +108,9 @@ class ChloeRoundDownloadTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as error:
                 workspace_production_download(self.case.project.name, 'V001', self.request, number, stage, 'zip')
             self.assertEqual(error.exception.status_code, status)
-        self.originals[1, 'P001'].unlink()
+        original = self.originals[1, 'P001']
+        original.chmod(original.stat().st_mode | 0o200)
+        original.unlink()
         with self.assertRaises(HTTPException) as error:
             workspace_production_download(self.case.project.name, 'V001', self.request, 1, '一采', 'zip')
         self.assertEqual(error.exception.status_code, 409)

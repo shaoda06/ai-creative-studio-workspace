@@ -22,7 +22,7 @@ import { SegmentReferences } from './SegmentReferences';
 import { useProductionAccess } from './ProductionAccess';
 import './LatestSelection.css';
 
-export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false, scenePlayback }: {
+export function SegmentWorkspace({ repeatControl, scope, segment, revision, roundNumber, items, selection: { stage, key: selected }, onSelectionChange, tab, onTabChange, notesExportControl, plannedScript, segmentNavigation, autoPlay, onVideoEnded, onVideoError, onMediaReady, onPlaybackStart, cachedSources, retainSource, wideVideo, onToggleWide, continuous = false, continuousControl, readOnly = false, scenePlayback }: {
   readOnly?: boolean;
   scope: NoteScope; segment: string; roundNumber?: number;
   revision: number;
@@ -32,6 +32,8 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   repeatControl?: RepeatPlaybackControl;
   plannedScript?: { html: string; url?: string; label: string; shotIds?: string[] }; notesExportControl: ReactNode; segmentNavigation: ReactNode; autoPlay: boolean; onVideoEnded: () => void; onVideoError: () => void;
   cachedSources: Record<string, string>;
+  onMediaReady?: (url: string) => void;
+  onPlaybackStart?: (url: string) => void;
   retainSource: (source: string) => () => void;
   scenePlayback?: { player: RefObject<SegmentVideoHandle | null>; start: number; label?: string; videoDescription?: string; onTimeChange: (time: number) => void };
 }) {
@@ -56,11 +58,12 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
     downloadUrl: product.url, previewNote: product.previewNote, reviewFileRevision: current.fileRevision,
     fileRevision: product.fileRevision + ':' + (product.previewRevision || '') } : current;
   const identity = current && `${scope.episode}-${scope.scene}-${segment}-${current.run}-${current.stage}`;
-  const detail = useQuery({ queryKey: ['generation-context', scope.notesUrl || scope.project, identity, revision],
+  const contextAddress = current?.contextUrl;
+  const detail = useQuery({ queryKey: ['generation-context', scope.notesUrl || scope.project, identity, revision, contextAddress],
     queryFn: () => get<GenerationContext>(current?.contextUrl || `${projectUrl(scope.project)}/episodes/${scope.episode}/contexts/${encodeURIComponent(identity!)}`),
     placeholderData: (previous, query) => query?.queryKey[1] === (scope.notesUrl || scope.project) && query.queryKey[2] === identity ? previous : undefined,
-    enabled: !scenePlayback && !!current && !current.context });
-  const context = current?.context || (!scenePlayback && current ? detail.data : undefined);
+    enabled: !!current && !current.context && (Boolean(contextAddress) || !scenePlayback) });
+  const context = current?.context || (current && detail.data);
   const language = preferredLanguage || (context?.prompts.english && !context.prompts.chinese ? 'en' : 'zh');
   const awaitingGeneration = current && !current.url && !missingVideoState(current).unavailable
     && context?.issues.includes('该次生成的资料关联尚未记录。');
@@ -137,12 +140,12 @@ export function SegmentWorkspace({ repeatControl, scope, segment, revision, roun
   return <>
     {!scenePlayback && selectors}
     <MessagePanel key={current?.key || 'empty'} label="当前候选提示" messages={[
-      !scenePlayback && current && !current.context && detail.isPending && { id: 'loading', content: '正在读取当前候选资料…' },
+      (!scenePlayback || Boolean(contextAddress)) && current && !current.context && detail.isPending && { id: 'loading', content: '正在读取当前候选资料…' },
       current && !current.context && detail.error && { id: 'error', tone: 'error', content: '当前候选资料读取失败。', actions: <LinkButton disabled={detail.isFetching} onClick={() => { void detail.refetch(); }}>{detail.isFetching ? '正在读取…' : '重新读取'}</LinkButton> },
       awaitingGeneration ? { id: 'pending', content: `这版视频还没生成。${plannedScript?.html ? `当前分镜为${plannedScript.label}；` : ''}尚无实际生成时使用的提示词和素材记录。` }
         : context && context.issues.length > 0 && { id: 'issues', tone: 'warning', content: <details className="generation-context-issues"><summary>{segment} / {current!.stage} / {current!.run}：当前候选有 {context.issues.length} 项资料关联问题</summary>{context.issues.map(issue => <p key={issue}>{issue}</p>)}</details> },
     ]} />
-    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} videoDescription={scenePlayback?.videoDescription} onTimeChange={time => {
+    <SegmentLayout wide={wideVideo} navigation={segmentNavigation} player={<SegmentVideo repeatControl={repeatControl} playerRef={player} key={`${current?.key || 'empty'}/${scenePlayback ? Boolean(current?.url) : product?.id || ''}`} wide={wideVideo} onToggleWide={onToggleWide} continuous={continuous} continuousControl={continuousControl} current={displayVideo} cachedSource={displayVideo && cachedSources[displayVideo.url]} retainSource={retainSource} autoPlay={autoPlay} onEnded={onVideoEnded} onError={onVideoError} onMediaReady={onMediaReady} onPlaybackStart={onPlaybackStart} videoDescription={scenePlayback?.videoDescription} onTimeChange={time => {
       setPlayback({ key: current!.key, time });
       scenePlayback?.onTimeChange(time);
     }} onFileRevision={revision => setLoadedFile({ key: current!.key, revision })} />}>

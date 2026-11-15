@@ -9,12 +9,13 @@ import type { useSceneVideoCache } from './useSceneVideoCache';
 
 const noop = () => {};
 
-export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatControl, newVideoSegments, scope, tab, onTabChange, revision, notesExportControl, preparationStatus, videoCache, continuous, continuousControl, autoPlay, onEnded, onError }: {
+export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatControl, newVideoSegments, scope, tab, onTabChange, revision, notesExportControl, preparationStatus, videoCache, continuous, continuousControl, autoPlay, onEnded, onError, onMediaReady }: {
   round?: SceneRound; planned: NonNullable<FileItem['segments']>[string]; wide: boolean;
   onToggleWide: () => void; repeatControl: RepeatPlaybackControl; newVideoSegments: Set<string>;
   scope: NoteScope; tab: string; onTabChange: (tab: string) => void; revision: number; notesExportControl: ReactNode;
   preparationStatus: ReactNode; videoCache: ReturnType<typeof useSceneVideoCache>;
   continuous: boolean; continuousControl: ReactNode; autoPlay: boolean; onEnded: () => void; onError: () => void;
+  onMediaReady?: (url: string) => void;
 }) {
   const segments = round ? round.segments.map(segment => ({ ...segment, videos: [] })) : planned.filter(segment => !segment.historical);
   const timings = round?.songssx?.segments || [];
@@ -23,7 +24,7 @@ export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatCo
   const player = useRef<SegmentVideoHandle>(null);
   const segment = segments.find(item => item.id === selection) || segments[0];
   const timing = timings.find(item => item.id === segment?.id);
-  const selectedVideo = video && { ...video, context: timing?.context };
+  const selectedVideo = video && { ...video, context: timing?.context, contextUrl: timing?.contextUrl };
   const choose = (id: string) => {
     setSelection(id);
     const start = timings.find(item => item.id === id)?.start;
@@ -48,7 +49,7 @@ export function SongssxSceneVideo({ round, planned, wide, onToggleWide, repeatCo
       plannedScript={{ html: segment.scriptHtml, url: segment.scriptUrl, label: round ? `第${round.number}轮保存的分镜` : '当前分段计划' }}
       wideVideo={wide} onToggleWide={onToggleWide} repeatControl={repeatControl} segmentNavigation={navigation}
       autoPlay={autoPlay} continuous={continuous} continuousControl={continuousControl}
-      cachedSources={videoCache.sources} retainSource={videoCache.retainSource} onVideoEnded={onEnded} onVideoError={onError}
+      cachedSources={videoCache.sources} retainSource={videoCache.retainSource} onVideoEnded={onEnded} onVideoError={onError} onMediaReady={onMediaReady}
       notesExportControl={notesExportControl}
       scenePlayback={{ player, start: timing?.start ?? 0,
         videoDescription: video && round && `第${round.number}轮 · ${video.stage}`,

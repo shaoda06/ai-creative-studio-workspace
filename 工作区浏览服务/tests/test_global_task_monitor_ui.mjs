@@ -1,13 +1,15 @@
 // Real sidebar, two synthetic spaces and in-memory actions; never reads real tasks.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {mkdtemp} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
-const out=await mkdtemp('/private/tmp/W461-global-tasks-');
+const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
+const out=await mkdtemp(join(tmpdir(),'W461-global-tasks-'));
 const server=await createServer({configFile:false,root:fileURLToPath(new URL('../frontend',import.meta.url)),plugins:[react()],server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});

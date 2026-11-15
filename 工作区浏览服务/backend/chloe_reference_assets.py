@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
+from backend.services.read_views import respond_view
 from fastapi.responses import FileResponse
 
 from backend.chloe_models import asset_content, linked_files, linked_html, model_context, request_space
@@ -126,7 +127,8 @@ def asset_router(kind):
     def listing(request: Request):
         space = request_space(request)
         try:
-            return asset_cards(space.root, space.api, kind)
+            return respond_view(request, (space.api, kind.endpoint), [space.root / '综合资料'],
+                                lambda: asset_cards(space.root, space.api, kind))
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:
@@ -137,7 +139,8 @@ def asset_router(kind):
     def detail(identity: str, request: Request):
         space = request_space(request)
         try:
-            return asset_detail(space.root, identity, space.api, kind)
+            return respond_view(request, (space.api, kind.endpoint, identity), [space.root / '综合资料'],
+                                lambda: asset_detail(space.root, identity, space.api, kind))
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:

@@ -132,12 +132,15 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       return video?.url ? [video] : [];
     }),
   ];
-  const priorityVideos = [segment, preparationOrder[preparationOrder.indexOf(segment) + 1]].flatMap(id => {
-    const video = reviewRound ? roundVideo(id) : id === PREVIOUS_ENDING ? previousVideo
-      : latestVideo(segments.find(item => item.id === id)?.videos || []);
-    return video?.url ? [video.url] : [];
-  });
-  const videoCache = useSceneVideoCache(preparationVideos, priorityVideos);
+  const [readyMedia, setReadyMedia] = useState<Record<string, boolean>>({});
+  const [playingUrl, setPlayingUrl] = useState('');
+  const markReady = (url: string) => setReadyMedia(previous => previous[url] ? previous : { ...previous, [url]: true });
+  const following = preparationOrder[preparationOrder.indexOf(segment) + 1];
+  const nextVideo = view === 'segments' && !songssx && continuous && following && roundVideo(segment)?.url === playingUrl
+    ? roundVideo(following) : undefined;
+  const nextMedia = nextVideo?.url ? [nextVideo] : [];
+  const videoCache = useSceneVideoCache(nextMedia, nextMedia.map(video => video.url));
+  const preparedCount = preparationVideos.filter(video => readyMedia[video.url] || videoCache.sources[video.url]).length;
   const toggleContinuous = (checked: boolean) => {
     setAutoPlay(false);
     if (!checked) { setContinuous(false); return; }
@@ -214,10 +217,9 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     }
     setSelections(previous => ({ ...previous, [segment]: value }));
   };
-  const preparationStatus = !wideVideo && (videoCache.total > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
-      {songssx ? `第${productionRound!.number}轮整场视频已准备 ${videoCache.ready}／1${videoCache.failures.length ? '，准备失败' : !sceneVideo?.url ? '，尚无可播放视频' : ''}`
-        : productionRound ? `第${productionRound.number}轮分段视频已准备 ${videoCache.ready}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : videoCache.failures.length ? `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}，${videoCache.failures.length}个准备失败`
-        : videoCache.ready === videoCache.total ? `${reviewRound ? '本轮' : '最新'}视频已全部准备好` : `${reviewRound ? '本轮' : '最新'}视频已准备 ${videoCache.ready}／${videoCache.total}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
+  const preparationStatus = !wideVideo && (preparationVideos.length > 0 || productionRound) && <PointerTooltip text={videoCache.failures.join('\n')}><p className="scene-video-preparation" role="status">
+      {songssx ? `第${productionRound!.number}轮整场视频已准备 ${preparedCount}／1${!sceneVideo?.url ? '，尚无可播放视频' : ''}`
+        : productionRound ? `第${productionRound.number}轮分段视频已准备 ${preparedCount}／${productionRound.segments.length}${missingRoundVideos ? `，${missingRoundVideos}段尚无可播放视频` : ''}${videoCache.failures.length ? `，${videoCache.failures.length}个准备失败` : ''}` : preparedCount === preparationVideos.length ? '最新视频已全部准备好' : `最新视频已准备 ${preparedCount}／${preparationVideos.length}`}{(reviewRound ? !!roundVideo(PREVIOUS_ENDING)?.url : !!previousVideo) ? '（含上集末段）' : ''}
     </p></PointerTooltip>;
   const continuousControl = <label className="scene-continuous"><input type="checkbox" checked={continuous}
     disabled={songssx ? !sceneVideo?.url || !productionRound : !chosen.stage || !productionRound || !viewingRoundRevision}
@@ -251,7 +253,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
     {view === 'segments' && songssx ? <SongssxSceneVideo round={productionRound} planned={allSegments} wide={wideVideo}
       onToggleWide={onToggleWide} repeatControl={repeatControl} newVideoSegments={newVideoSegments}
       preparationStatus={preparationStatus} videoCache={videoCache} continuous={continuous} continuousControl={continuousControl}
-      autoPlay={autoPlay} onEnded={advance} onError={() => { setAutoPlay(false); setContinuous(false); }}
+      autoPlay={autoPlay} onEnded={advance} onError={() => { setAutoPlay(false); setContinuous(false); }} onMediaReady={markReady}
       scope={scope} tab={segmentTab} onTabChange={onSegmentTabChange} revision={revision} notesExportControl={episodeNotesExportControl} />
     : view === 'segments' ? <>
     {currentSegment && <SegmentWorkspace key={`${displayScope.episode}/${displayScope.scene}/${currentSegment.id}`} scope={displayScope} roundNumber={viewingPrevious || workMode && !viewingRoundRevision ? undefined : productionRound?.number} segment={currentSegment.id} revision={revision} items={currentSegment.videos} selection={chosen} cachedSources={videoCache.sources} retainSource={videoCache.retainSource}
@@ -265,7 +267,7 @@ export function SceneWorkspace({ wideVideo, onToggleWide, repeatControl, segment
       wideVideo={wideVideo} onToggleWide={onToggleWide} repeatControl={repeatControl}
       continuous={continuous}
       continuousControl={continuousControl}
-      autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance}
+      autoPlay={autoPlay} onVideoError={() => setAutoPlay(false)} onVideoEnded={advance} onMediaReady={markReady} onPlaybackStart={setPlayingUrl}
       onSelectionChange={changeSelection}
       notesExportControl={viewingPrevious ? notesExport.control : episodeNotesExportControl || notesExport.control} />}
     {notesExport.dialog}

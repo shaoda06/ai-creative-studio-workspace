@@ -46,7 +46,7 @@ def validate_config(data):
     for item in data['remote-nodes']:
         if not isinstance(item, dict) or set(item) - {'url', 'auth'} or not isinstance(item.get('url'), str):
             raise client.ClientError('invalid_config', '节点只允许url和可选auth字段')
-        url = client.Client(item['url'], 30).url
+        url = client.endpoint_url(item['url'])
         auth = item.get('auth')
         if auth is not None:
             if (not isinstance(auth, dict) or set(auth) != {'type', 'username', 'password'}
@@ -65,7 +65,7 @@ def remote_urls(workspace, *, missing_ok=False):
 
 
 def endpoint(workspace, url):
-    url = client.Client(url, 30).url
+    url = client.endpoint_url(url)
     return next((node for node in load_config(workspace, missing_ok=True) if node['url'] == url), {'url': url})
 
 

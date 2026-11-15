@@ -618,15 +618,15 @@ def add_execution_downloads(project, api, scene_keys, executions, result):
             stage['canvas'].setdefault('messages', []).append(label + '：' + reason)
 
 
-def downloads(projects, name, space_api, work, scene='whole', view=None):
+def downloads(projects, name, space_api, work, scene='whole', view=None, *, package_view=None):
     project = projects.project(name)
     api = space_api + '/projects/' + quote(name, safe='')
     result = {stage: {kind: {'count': 0, 'url': None, 'files': []} for kind in ('videos', 'canvas')}
               for stage in ('一采', '二采', '后处理')}
     executions = []
-    values = detail(projects, name, space_api, work, view, executions=executions)
+    values = package_view if package_view is not None else detail(projects, name, space_api, work, view, executions=executions)
     archive_paths = production.legacy_sources(project, work)
-    if values.get('readOnly'):
+    if package_view is None and values.get('readOnly'):
         if scene == 'whole' and len(values['scenes']) == 1:
             scene = values['scenes'][0]
         if scene not in values['scenes']:
@@ -639,7 +639,7 @@ def downloads(projects, name, space_api, work, scene='whole', view=None):
                 projects.file(name, key)
                 resource['files'].append({'name': path.name, 'url': production.file_url(api, key) + '?download=1'})
                 resource['count'] += 1
-    else:
+    elif package_view is None:
         scene_items = values['segments'].values() if scene == 'whole' else [values['segments'].get(scene, [])]
         scene_keys = {video['key'] for items in scene_items for item in items for video in item['videos']}
         add_execution_downloads(project, api, scene_keys, executions, result)
@@ -672,6 +672,8 @@ def downloads(projects, name, space_api, work, scene='whole', view=None):
         rounds = covered.get(tuple(keys), [])
         if rounds and all(candidates[key]['url'] for key in keys):
             work_packages.append({**base, **file['jianying'], 'rounds': rounds, 'count': len(keys)})
+        if package_view is not None:
+            continue
         stages = {candidates[key]['stage'] for key in keys if key in candidates}
         if len(stages) != 1:
             continue
@@ -681,5 +683,7 @@ def downloads(projects, name, space_api, work, scene='whole', view=None):
         resource.setdefault('packages', []).append(package)
         if len(resource['packages']) == 1:
             resource.update(count=package['count'], url=package['url'])
+    if package_view is not None:
+        return {'workPackages': work_packages}
     result['workPackages'] = work_packages
     return result

@@ -1,5 +1,6 @@
 """Project-owned media families, immutable versions and exact file references."""
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
 from fractions import Fraction
@@ -17,6 +18,7 @@ KINDS = {'图片': {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.
          '音频': {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.opus', '.aac'}}
 PREFIX = {'图片': 'IMG', '视频': 'VID', '音频': 'AUD'}
 _CACHE = {}
+_READ_INDEXES = ContextVar('project_resource_read_indexes', default=None)
 
 
 def now():
@@ -63,7 +65,27 @@ def write_json(path, data):
         temporary.unlink(missing_ok=True)
 
 
+@contextmanager
+def reuse_read_indexes():
+    """Reuse index reads inside one read-only view build."""
+    token = _READ_INDEXES.set({})
+    try:
+        yield
+    finally:
+        _READ_INDEXES.reset(token)
+
+
 def read_index(project):
+    indexes = _READ_INDEXES.get()
+    if indexes is None:
+        return _read_index(project)
+    key = Path(project)
+    if key not in indexes:
+        indexes[key] = _read_index(project)
+    return indexes[key]
+
+
+def _read_index(project):
     path = index_path(project)
     if not path.is_file():
         return None

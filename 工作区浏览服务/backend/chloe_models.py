@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
+from backend.services.read_views import respond_view
 from chloe_documents import LINK, asset_status, media_reference, read_document, records, template
 import project_resources as resources
 
@@ -70,7 +71,8 @@ def listing(request: Request):
     if space.view != 'chloe-commerce':
         raise HTTPException(404, '该空间未接入带货共用资产')
     try:
-        return model_cards(space.root, space.api)
+        return respond_view(request, (space.api, 'shared-models'), [space.root / '综合资料'],
+                            lambda: model_cards(space.root, space.api))
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -255,7 +257,8 @@ def request_space(request):
 def detail(identity: str, request: Request):
     space = request_space(request)
     try:
-        return model_detail(space.root, identity, space.api)
+        return respond_view(request, (space.api, 'shared-models', identity), [space.root / '综合资料'],
+                            lambda: model_detail(space.root, identity, space.api))
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

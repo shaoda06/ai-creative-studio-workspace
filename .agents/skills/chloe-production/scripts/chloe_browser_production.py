@@ -2,6 +2,7 @@
 import json
 from math import isclose
 from pathlib import Path
+from functools import cache
 import re
 from urllib.parse import quote
 
@@ -143,14 +144,12 @@ def context_for(data, api, candidate, active=None, bindings=None):
     return result
 
 
-def video(data,api,value):
+def video(data,api,value,adopted_refs):
     reference=value['ref']; project=data['project']
     path=data['root']/reference['file'] if reference else None
     key=path.relative_to(project).as_posix() if path else 'pending/'+value['execution']+'/'+value['slot']
     info=path.stat() if path else None
-    adopted=records(document(project,'README.md'),'当前采用')
-    approved=any(row['用途']==value['id']+'/'+value['stage'] and reference and
-                 media_reference(data['root'],project/'README.md',row['资源引用'])==reference for row in adopted)
+    approved=bool(reference and adopted_refs.get(value['id']+'/'+value['stage']) == reference)
     task_record=task_for(project,value['record'])
     task_state=read_record(task_record[1]/'后台任务状态.json') if task_record else {}
     return {'key':key,'url':file_url(api,key) if path else '', 'stage':value['stage'],'run':value['run'],
@@ -184,13 +183,25 @@ def script_document(project,api,source):
 
 
 def production_data(project,api,work=None,**kwargs):
-    check_work(project,work); data=state(project)
-    segments={key:{**item,'scriptHtml':script_part(project,'脚本.md',item['shotIds']),
+    check_work(project,work)
+    data=state(project)
+    return segment_data(data, api, adopted_video_refs(data, document(project, 'README.md')),
+                        lambda source, ids: script_part(project, source, ids))
+
+
+def adopted_video_refs(data, readme):
+    return {row['用途']:media_reference(data['root'],data['project']/'README.md',row['资源引用'])
+            for row in records(readme,'当前采用')
+            if VIDEO_PURPOSE.fullmatch(row['用途']) or row['用途'] == SCENE_SLOT}
+
+
+def segment_data(data, api, adopted_refs, part):
+    segments={key:{**item,'scriptHtml':part('脚本.md',item['shotIds']),
                    'scriptUrl':file_url(api,'脚本.md'),'videos':[]} for key,item in data['plan'].items()}
     for value in data['candidates'].values():
         item=segments.setdefault(value['id'],{'id':value['id'],'duration':0,'scriptHtml':'','videos':[]})
         if not scene_source(data['candidates'], value):
-            item['videos'].append(video(data,api,value))
+            item['videos'].append(video(data,api,value,adopted_refs))
     for item in segments.values():
         item['planned']=not item['videos']
     return {'segments':list(segments.values()),'batches':[],'issues':[]}
@@ -198,12 +209,15 @@ def production_data(project,api,work=None,**kwargs):
 
 def items(projects,name,space_api):
     project=projects.project(name)
-    progress=fields(document(project,'README.md'),'定位与当前进度')
+    return [production_item(name, fields(document(project,'README.md'),'定位与当前进度'))]
+
+
+def production_item(name, progress):
     status=progress['视频状态']
     color={'制作中':'blue','待发布':'orange','已发布':'green'}[status]
-    return [{'kind':'group','name':name,'title':progress['视频名称'],'key':'README.md',
+    return {'kind':'group','name':name,'title':progress['视频名称'],'key':'README.md',
              'statusHtml':f'<span class="status-badge status-{color}">{status}</span>',
-             'workStatusLabel':status,'hasArchive':False}]
+             'workStatusLabel':status,'hasArchive':False}
 
 
 def apply_script_timing(context, script_shots, entry):
@@ -241,41 +255,47 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
     if view=='archive':
         raise FileNotFoundError('本视频无独立归档入口')
     data=state(project);api=space_api+'/projects/'+quote(name,safe='')
-    result=items(projects,name,space_api)[0]
-    current=script_document(project,api,'脚本.md')
-    segments=production_data(project,api,work)['segments']
-    by_id={v['id']:v for v in segments};rounds=[]
+    readme = document(project, 'README.md')
+    progress = fields(readme, '定位与当前进度')
+    result = production_item(name, progress)
+    adopted_refs = adopted_video_refs(data, readme)
+    script_view = cache(lambda source: script_document(project, api, source))
+    shot_rows = cache(lambda source: next(section['shots'] for section in document(project, source)['sections']
+                                         if section['heading'] == '镜头与分镜'))
+    render_part = cache(lambda source, ids: script_part(project, source, ids))
+    def part(source, ids):
+        return render_part(source, tuple(ids))
+
+    current=script_view('脚本.md')
+    segments=segment_data(data, api, adopted_refs, part)['segments']
+    videos_by_revision={(row['id'], v['stage'], v['run']): v for row in segments for v in row['videos']}
+    rounds=[]
     standalone_songssx = set()
-    adopted_refs={row['用途']:media_reference(data['root'],project/'README.md',row['资源引用'])
-                  for row in records(document(project,'README.md'),'当前采用')
-                  if VIDEO_PURPOSE.fullmatch(row['用途']) or row['用途'] == SCENE_SLOT}
     for item in data['rounds'].values():
-        script=script_document(project,api,item['script'])
+        script=script_view(item['script'])
         values=[]; contexts={}; issues=[]
         source=item['scene_source']
         for entry in item['values']:
-            candidate=video(data,api,entry) if not source else None
-            html=script_part(project,item['script'],entry['shotIds'])
+            html=part(item['script'],entry['shotIds'])
             values.append({**{key:entry[key] for key in ('id','duration','stage','run','carried','shotIds')},
                            'scriptHtml':html,'scriptUrl':script['url']})
             # Keep original execution context attached to its actual script, never the current draft.
             if source:
                 context=contexts[entry['id']]=empty_context(None)
-                context['shots']=[{'id':identity,'html':script_part(project,item['script'],[identity]),
+                context['shots']=[{'id':identity,'html':part(item['script'],[identity]),
                                    'start':None,'duration':None}
                                   for identity in entry['shotIds']]
             else:
-                values[-1]['key']=candidate['key']
-                target=next(v for v in by_id[entry['id']]['videos'] if v['key']==candidate['key'] and v['run']==entry['run'])
+                target=videos_by_revision[entry['id'],entry['stage'],entry['run']]
+                values[-1]['key']=target['key']
                 context=target['context']
             if source or not entry['carried']:
                 context.update(scriptHtml=html,scriptUrl=script['url'])
                 context['issues']=[issue for issue in context['issues'] if issue!='执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。']
                 if len(context['shots'])==len(entry['shotIds']):
                     for shot,identity in zip(context['shots'],entry['shotIds']):
-                        shot.update(id=identity,html=script_part(project,item['script'],[identity]))
-                script_doc=document(project,item['script'])
-                script_shots=next(section['shots'] for section in script_doc['sections'] if section['heading']=='镜头与分镜')
+                        shot.update(id=identity,html=part(item['script'],[identity]))
+                script_shots=shot_rows(item['script'])
                 apply_script_timing(context, script_shots, entry)
                 context['dialogues']=[]
                 for shot in script_shots:
@@ -347,7 +367,6 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         materials.append({'kind':'image','name':reference['resource_id']+'@'+reference['version'],
                           'url':resource_file(data,api,reference),'materialGroup':'unknown','materialStatus':'实际输入',
                           'materialNote':row['输入槽位'],'materialReview':ref(project,api,project/'制作记录.md')})
-    progress=fields(document(project,'README.md'),'定位与当前进度')
     result.update(scenes=['whole'],segments={'whole':segments},sceneRounds={'whole':rounds},
         episodeRounds=[{'number':v['number'],'scenes':['whole']} for v in rounds],
         script=current,storyboards={'whole':current},materials=materials,materialRecord=ref(project,api,project/'制作记录.md'),

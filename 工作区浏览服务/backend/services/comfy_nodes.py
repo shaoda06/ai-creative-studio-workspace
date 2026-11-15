@@ -25,6 +25,7 @@ class RemoteQueues:
         self.client_for = client_for or client.Client
         self.connection_key = connection_key or (lambda url: url)
         self.connection_keys = {}
+        self.observed_urls = ()
         self.states = {}
         self.workers = {}
         self.manager = None
@@ -50,6 +51,7 @@ class RemoteQueues:
                 self.states[url] = initial_state()
                 self.connection_keys[url] = keys[url]
                 self.workers[url] = asyncio.create_task(self.watch(url))
+        self.observed_urls = tuple(urls)
         self.changed()
 
     async def follow_config(self):

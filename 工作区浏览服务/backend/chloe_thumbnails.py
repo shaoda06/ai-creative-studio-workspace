@@ -1,11 +1,12 @@
 """Build disposable WebP previews from exact shared-image versions."""
 import os
+from hashlib import sha256
 from pathlib import Path
 import subprocess
 from tempfile import NamedTemporaryFile
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
 
 import project_resources as resources
@@ -49,8 +50,25 @@ def thumbnail_response(space, source, edge):
     if not ref or resources.local(owner, ref['file']) != source:
         raise HTTPException(404, '缩略图需要准确的图片资源版本')
     directory = space.runtime / 'thumbnails' / str(edge) / ref['resource_id']
-    cached = directory / f'{ref["version"]}.webp'
+    return image_preview(directory / f'{ref["version"]}.webp', source, edge)
 
+
+def production_thumbnail(runtime, source, edge, request):
+    if edge != THUMBNAIL_EDGE or source.suffix.lower() not in IMAGE_EXTENSIONS:
+        raise HTTPException(404, '没有这种图片缩略图')
+    info = source.stat()
+    identity = sha256(os.fsencode(source)).hexdigest()
+    path = runtime / 'production-thumbnails' / identity / f'{info.st_mtime_ns}-{info.st_size}.webp'
+    response = image_preview(path, source, edge)
+    response.set_stat_headers(path.stat())
+    response.headers['Cache-Control'] = 'private, no-cache'
+    tags = request.headers.get('if-none-match', '').split(',')
+    if any(tag.strip().removeprefix('W/') in (response.headers['etag'], '*') for tag in tags):
+        return Response(status_code=304, headers={key: response.headers[key] for key in ('cache-control', 'etag', 'last-modified')})
+    return response
+
+
+def image_preview(cached, source, edge):
     def render(stream):
         with Image.open(source) as image:
             ImageOps.exif_transpose(image, in_place=True)

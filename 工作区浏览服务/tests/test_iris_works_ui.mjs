@@ -10,6 +10,7 @@ const {chromium}=require('playwright');
 const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
 const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
+const fixtureVideo=await readFile(frontend+'public/component-samples/video.webm');
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
 const out=await mkdtemp(join(tmpdir(),'W489-workbench-'));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -169,7 +170,15 @@ try {
     technicalDownloads.push('canvas');
     return route.fulfill({body:'{"nodes":[]}',headers:{'Content-Disposition':'attachment; filename="R002.workflow.json"'}});
    }
-   if(path.endsWith('.webm'))return url.searchParams.has('download')?route.continue():route.fulfill({contentType:'video/webm',path:frontend+'public/component-samples/video.webm'});
+   if(path.endsWith('.webm')){
+    if(url.searchParams.has('download'))return route.continue();
+    const range=/^bytes=(\d+)-(\d*)$/.exec(request.headers().range || '');
+    if(!range)return route.fulfill({contentType:'video/webm',body:fixtureVideo});
+    const start=Number(range[1]);
+    const end=range[2]?Math.min(Number(range[2]),fixtureVideo.length-1):fixtureVideo.length-1;
+    return route.fulfill({status:206,contentType:'video/webm',body:fixtureVideo.subarray(start,end+1),
+      headers:{'accept-ranges':'bytes','content-range':`bytes ${start}-${end}/${fixtureVideo.length}`}});
+   }
    unexpected.push(request.method()+' '+path);return route.abort();
   });
   const origin=`http://127.0.0.1:${server.httpServer.address().port}`;

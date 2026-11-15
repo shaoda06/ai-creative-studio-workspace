@@ -11,6 +11,7 @@ from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
+from starlette.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, ValidationError
 
 from backend.parsers import project as parser
@@ -29,6 +30,7 @@ from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
+from backend.services.read_views import view_response, views as read_views
 from backend.services import production
 from iris_works import project_works
 from backend.services.iris_presentation import presentation as iris_presentation, work_view as iris_work_view
@@ -48,6 +50,7 @@ from backend.chloe_resource_library import router as chloe_resource_library_rout
 from backend.chloe_clothing import router as chloe_clothing_router
 from backend.chloe_reference_assets import ACCESSORIES, HAIR, SCENES, VOICES, asset_router as chloe_asset_router
 from backend.chloe_reference_videos import router as chloe_reference_videos_router
+from backend.chloe_thumbnails import production_thumbnail
 from backend.services.task_resolution import ResolutionInput, resolve_task
 from backend.services.collection_repair import CollectionRepairInput, repair_collection
 from backend.services.result_summary import summary as result_summary
@@ -114,6 +117,20 @@ async def lifespan(app):
 
 app = FastAPI(title='Nora工作区浏览服务', version=VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(RequestDiagnosticsMiddleware)
+
+
+class StaticAssetCompression:
+    def __init__(self, app):
+        self.app = app
+        self.compressed = GZipMiddleware(app, compresslevel=4)
+
+    async def __call__(self, scope, receive, send):
+        hashed_script = scope['type'] == 'http' and re.fullmatch(r'/assets/[^/]+-[\w-]{8}\.(?:js|css)', scope['path'])
+        backend = self.compressed if hashed_script and not any(name == b'range' for name, _ in scope['headers']) else self.app
+        await backend(scope, receive, send)
+
+
+app.add_middleware(StaticAssetCompression)
 
 
 def task_store(request: Request):
@@ -450,6 +467,8 @@ async def security_headers(request: Request, call_next):
         response.headers.setdefault('Cache-Control', 'no-store')
     elif response.headers.get('content-type', '').startswith('text/html'):
         response.headers['Cache-Control'] = 'no-cache'
+    elif response.status_code in (200, 304) and re.fullmatch(r'/assets/[^/]+-[\w-]{8}\.(?:js|css)', request.url.path):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     return response
 
 
@@ -690,15 +709,17 @@ def document(name: str, path: Annotated[str, Query()]) -> dict[str, Any]:
 
 
 @app.get('/api/projects/{name}/files/{path:path}')
-def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
-    return project_file_response(store, name, path, request, v, download)
+def project_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False, thumbnail: int | None = None):
+    return project_file_response(store, name, path, request, v, download, thumbnail, TOOL / 'runtime')
 
 
-def project_file_response(projects, name, path, request, v=None, download=False):
+def project_file_response(projects, name, path, request, v=None, download=False, thumbnail=None, runtime=None):
     try:
         target = projects.file(name, path, v)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
+    if thumbnail is not None and not download:
+        return production_thumbnail(runtime, target, thumbnail, request)
     if not target.is_file():
         response = Response(recordio.text(target), media_type='application/json',
             headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote(target.name, safe='')} if download else {})
@@ -882,7 +903,7 @@ def workspace_list(request: Request):
         raise HTTPException(409, str(error)) from error
 
 
-async def select_workspace(workspace_id: str, request: Request):
+def select_workspace(workspace_id: str, request: Request):
     try:
         space = request.app.state.workspaces.get(workspace_id)
         if 'context' in request.path_params:
@@ -993,10 +1014,40 @@ def workspace_production_works(name: str, request: Request):
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-detail')
-def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None):
-    space = request.state.workspace_space
+def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None,
+                                summary: bool = False):
     try:
-        return production.workbench(space).detail(space.projects, name, space.api, work, view)
+        detail, tag = read_production_detail(request, name, work, view)
+        if summary:
+            return view_response(request, tag[:-1] + '-summary"',
+                                 lambda: production.summary(detail, request.url.path, view, tag.strip('"')))
+        return view_response(request, tag, lambda: detail)
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except (OSError, ValueError, KeyError) as error:
+        raise HTTPException(409, '作品制作资料读取失败：' + str(error)) from error
+
+
+def read_production_detail(request, name, work, view):
+    space = request.state.workspace_space
+    adapter = production.workbench(space)
+    project = space.projects.project(name)
+    roots = [project]
+    if space.view == 'chloe-commerce':
+        roots.append(space.root / '综合资料')
+    return read_views.read(
+        (space.api, 'production-detail', project, work, view), roots,
+        lambda: adapter.detail(space.projects, name, space.api, work, view))
+
+
+@spaces_router.get('/projects/{name}/works/{work}/production-detail/context')
+def workspace_production_context(name: str, work: str, request: Request, scene: str, segment: str,
+                                 view: Literal['current', 'archive'] | None = None, key: str = '',
+                                 stage: str = '', run: str = '', round_number: int | None = None):
+    try:
+        detail, tag = read_production_detail(request, name, work, view)
+        context = production.context(detail, scene, segment, key, stage, run, round_number)
+        return view_response(request, tag, lambda: context)
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except (OSError, ValueError, KeyError) as error:
@@ -1006,9 +1057,13 @@ def workspace_production_detail(name: str, work: str, request: Request, view: Li
 @spaces_router.get('/projects/{name}/works/{work}/production-downloads')
 def workspace_production_downloads(name: str, work: str, request: Request, scene: str = 'whole',
                                    round_number: Annotated[int | None, Query(alias='round', ge=1)] = None,
-                                   view: Literal['current', 'archive'] | None = None):
+                                   view: Literal['current', 'archive'] | None = None, packages_only: bool = False):
     space = request.state.workspace_space
     try:
+        if packages_only and space.view == 'iris-commercial':
+            values, tag = read_production_detail(request, name, work, view)
+            return view_response(request, tag[:-1] + '-packages"', lambda: production.workbench(space).downloads(
+                space.projects, name, space.api, work, scene, view, package_view=values))
         if round_number is not None and not hasattr(production.workbench(space), 'download_files'):
             raise HTTPException(404, '当前业务未接入轮次下载')
         options = {'round_number': round_number} if round_number is not None else {}
@@ -1175,8 +1230,9 @@ def workspace_package(name: str, path: str, request: Request,
 
 
 @spaces_router.get('/projects/{name}/files/{path:path}')
-def workspace_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False):
-    return project_file_response(request.state.workspace_space.projects, name, path, request, v, download)
+def workspace_file(name: str, path: str, request: Request, v: str | None = None, download: bool = False, thumbnail: int | None = None):
+    space = request.state.workspace_space
+    return project_file_response(space.projects, name, path, request, v, download, thumbnail, space.runtime)
 
 
 spaces_router.include_router(resource_router(lambda request: request.state.workspace_space.projects, queue_write,

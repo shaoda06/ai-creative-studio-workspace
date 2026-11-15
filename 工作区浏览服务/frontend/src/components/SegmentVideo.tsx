@@ -133,10 +133,12 @@ export function watchVideoPlayback(element: HTMLVideoElement, recover: (reason: 
 export interface SegmentVideoHandle { seekTo: (time: number, play?: boolean) => void }
 export interface RepeatPlaybackControl { checked: boolean; onChange: (checked: boolean) => void }
 
-export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, videoDescription }: {
+export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = false, onEnded, onError, onFileRevision, onMediaReady, onPlaybackStart, cachedSource, retainSource, wide, onToggleWide, continuous = false, continuousControl, selectorControl, playerRef, videoDescription }: {
   current?: VideoItem; onTimeChange: (time: number) => void; autoPlay?: boolean;
   onEnded?: () => void; onError?: () => void;
   onFileRevision?: (revision: string) => void;
+  onMediaReady?: (url: string) => void;
+  onPlaybackStart?: (url: string) => void;
   cachedSource?: string; wide: boolean; onToggleWide: () => void; continuous?: boolean; continuousControl: ReactNode; selectorControl?: ReactNode;
   repeatControl?: RepeatPlaybackControl;
   retainSource: (source: string) => () => void;
@@ -220,8 +222,9 @@ export function SegmentVideo({ repeatControl, current, onTimeChange, autoPlay = 
   const description = current && (videoDescription ?? `${current.stage} · ${current.run} · ${candidateLabel(current.candidateNumber, current.approved)}`);
   return <section className="segment-video" aria-label="视频区域">
     {loaded?.url ? <video ref={video} key={`${loaded.fileRevision}:${reloadCount}`} controls loop={repeat && !continuous} autoPlay={playOnLoad} preload="metadata" src={source} aria-label={description}
-      onLoadedMetadata={event => { if (restore.current) { Object.assign(event.currentTarget, restore.current); restore.current = null; } if (pendingSeek.current !== null) seekTo(pendingSeek.current); else onTimeChange(event.currentTarget.currentTime); onFileRevision?.(loaded.reviewFileRevision || loaded.fileRevision); }}
+      onLoadedMetadata={event => { if (restore.current) { Object.assign(event.currentTarget, restore.current); restore.current = null; } if (pendingSeek.current !== null) seekTo(pendingSeek.current); else onTimeChange(event.currentTarget.currentTime); onFileRevision?.(loaded.reviewFileRevision || loaded.fileRevision); onMediaReady?.(loaded.url); }}
       onLoadedData={() => setRecovering(false)}
+      onPlaying={() => onPlaybackStart?.(loaded.url)}
       onTimeUpdate={event => onTimeChange(event.currentTarget.currentTime)}
       onSeeked={event => onTimeChange(event.currentTarget.currentTime)}
       onPause={event => onTimeChange(event.currentTarget.currentTime)}

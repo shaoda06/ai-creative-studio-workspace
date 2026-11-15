@@ -154,9 +154,12 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const recordOptions = selectableRounds.map(item => ({ value: String(item.number), label: `第${item.number}轮` }));
   const openRecordFile = (item: FileItem) => { setRecordNumber(null); preview(item); };
   const downloads = useQuery({
-    queryKey: ['episode-downloads', namespace, current?.name, selectedScene, revision, ...(access.roundDownloads ? [selectedRound] : [])],
-    queryFn: () => get<Downloads>(access.downloads(project, current!.name, selectedScene, access.roundDownloads ? selectedRound : undefined)),
-    enabled: workMode && !wholeScenePlayback && !!current && !!selectedScene,
+    queryKey: ['episode-download-packages', namespace, current?.name, selectedScene, revision],
+    queryFn: () => {
+      const url = access.downloads(project, current!.name, selectedScene);
+      return get<Downloads>(url + (url.includes('?') ? '&' : '?') + 'packages_only=1');
+    },
+    enabled: workMode && showHeadingDownloads && !wholeScenePlayback && !!current && !!selectedScene,
   });
   const handoffs = (!wholeScenePlayback && downloads.data?.workPackages?.filter(item => item.archived || item.rounds.includes(selectedRound!))) || [];
   const handoff = handoffs.find(item => item.key === handoffKey) || handoffs[0];

@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from concurrent.futures import Future
-from functools import partial
+from functools import cached_property, partial
 from threading import Lock
 import execution_records as records
 
@@ -71,15 +71,20 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def endpoint_url(url):
+    parts = urllib.parse.urlsplit(url or "")
+    if (parts.scheme not in ("http", "https") or not parts.hostname or
+            parts.username or parts.password or parts.query or parts.fragment):
+        raise ClientError("invalid_url", "Supply --url or COMFYUI_URL; no credentials/query/fragment in URL")
+    return url.rstrip("/")
+
+
 class Client:
     def __init__(self, url, timeout, *, basic_auth=None):
-        parts = urllib.parse.urlsplit(url or "")
-        if (parts.scheme not in ("http", "https") or not parts.hostname or
-                parts.username or parts.password or parts.query or parts.fragment):
-            raise ClientError("invalid_url", "Supply --url or COMFYUI_URL; no credentials/query/fragment in URL")
+        self.url = endpoint_url(url)
         if not math.isfinite(timeout) or timeout <= 0:
             raise ClientError("invalid_timeout", "Timeout must be a finite positive number")
-        self.url, self.timeout = url.rstrip("/"), timeout
+        self.timeout = timeout
         self.headers = {}
         if basic_auth is not None:
             username, password = basic_auth
@@ -88,7 +93,10 @@ class Client:
                 raise ClientError('invalid_auth', 'Invalid Basic authentication credentials')
             token = base64.b64encode((username + ':' + password).encode('utf-8')).decode('ascii')
             self.headers['Authorization'] = 'Basic ' + token
-        self.opener = urllib.request.build_opener(NoRedirect())
+
+    @cached_property
+    def opener(self):
+        return urllib.request.build_opener(NoRedirect())
 
     def open(self, route, data=None, headers=None):
         if not route.startswith('/') or route.startswith('//'):

@@ -1,12 +1,14 @@
 """Real temporary files exercise Iris's full-page projection and review writes."""
 import json
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
 from tests import test_iris_works as fixtures
 from backend.services import episode_downloads
+import iris_browser_production
 
 
 class IrisWorkbenchTests(fixtures.IrisWorksTests):
@@ -30,6 +32,27 @@ class IrisWorkbenchTests(fixtures.IrisWorksTests):
         response = self.client.get(self.api + '/works/' + identity + '/production-detail')
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
+
+    def test_detail_reuses_unchanged_sources_and_refreshes_on_round_edit(self):
+        self.register()
+        url = self.api + '/works/F001/production-detail?view=current&summary=1'
+        with patch.object(iris_browser_production, 'production_data', wraps=iris_browser_production.production_data) as build:
+            with ThreadPoolExecutor(max_workers=3) as tasks:
+                responses = list(tasks.map(lambda _: self.client.get(url), range(3)))
+            response = responses[0]
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(build.call_count, 1)
+            tag = response.headers['etag']
+            self.assertTrue(all(reply.headers['etag'] == tag for reply in responses))
+            self.assertEqual(self.client.get(url, headers={'If-None-Match': tag}).status_code, 304)
+            source = self.works['F001'] + '/06-视频生产/制作轮次.json'
+            value = json.loads((self.project / source).read_text('utf-8'))
+            value['rounds'][0]['created_at'] = '2026-11-07T12:00:00+08:00'
+            self.write(source, json.dumps(value))
+            fresh = self.client.get(url, headers={'If-None-Match': tag})
+            self.assertEqual(fresh.status_code, 200)
+            self.assertNotEqual(fresh.headers['etag'], tag)
+            self.assertEqual(build.call_count, 2)
 
     def test_whole_postprocess_keeps_segment_candidates_and_requires_collection(self):
         first = self.register()
