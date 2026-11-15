@@ -7,7 +7,7 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 
 媒体原件、上传参考音视频及修改版本统一按[项目资源与版本](../studio-workspace-browser/references/项目资源与版本管理.md)保存；本技能继续维护原业务记录和采用。输入、审核、采用及导出引用准确版本，不因阶段再次复制媒体。
 
-先读取所属工作区README、项目README和当前进度，按实际对象和授权进入当前阶段。一级维护流程、阶段职责和跨阶段约定；实际创作、记录和工具输入由对应阶段负责。
+先读取所属工作区README、项目README和当前进度，按[共用推进顺序](../studio-video-production/SKILL.md#共用推进顺序)定位本次环节，再按实际对象和授权进入下列阶段。一级维护流程、职责和跨阶段约定；阶段负责本次依据、制作和记录，并按任务查[能力目录](../studio-entry/references/能力目录.md)的对应分类。
 
 ## 阶段路由
 
@@ -25,8 +25,8 @@ description: AI连续短剧一级业务入口，管理全剧与逐集流程、�
 | D10 视频制作、返修、采用和留档 | [视频制作](../nora-drama-production/SKILL.md) |
 | D11 本集交接、完成与复盘 | [交付收尾](../nora-drama-handoff/SKILL.md) |
 | D12 专项审查 | [审查](../nora-drama-review/SKILL.md) |
-| 整个项目归档或恢复（不按单集） | [共用项目归档](../studio-archive/SKILL.md)：标记、索引分类及关联 Codex 对话 |
-| 运营及发布 | 先按[本业务运营接入](../nora-drama-positioning/references/社媒运营接入规范.md)提供对象和资料入口，再调用[公共运营](../studio-social-operations/SKILL.md) |
+| 整个项目归档或恢复（不按单集） | [共用项目归档](../studio-entry/references/能力目录.md#任务后台与资料管理)：标记、索引分类及关联 Codex 对话 |
+| 运营及发布 | 先按[本业务运营接入](../nora-drama-positioning/references/社媒运营接入规范.md)提供对象和资料入口，再调用[公共运营](../studio-entry/references/能力目录.md#社媒运营与发布) |
 
 上游、产出和接续关系见[流程表](references/阶段流程与接续规范.md#整体流程)。阶段完成按其实际规则判断，不将阶段路由增加为审批。正式目录、编号和版本按[业务文件规范](references/文件版本与工作稿规范.md)执行。
 

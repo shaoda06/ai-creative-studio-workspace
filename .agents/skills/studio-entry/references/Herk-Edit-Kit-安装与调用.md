@@ -1,6 +1,6 @@
 # Herk-Edit-Kit-安装与调用
 
-Studio 从本工作区的 `.agents/skills/herk-edit-kit/SKILL.md` 进入 Herk Edit Kit，再读取该工具目录里的上游 `.agents/skills/short-form-edit/SKILL.md`。已有可用安装时直接读取入口。执行时按 [Studio 的按需剪辑与动效工具](../SKILL.md#按需剪辑与动效工具)确定调用范围。
+Studio 从本工作区的 `.agents/skills/herk-edit-kit/SKILL.md` 进入 Herk Edit Kit，再读取该工具目录里的上游 `.agents/skills/short-form-edit/SKILL.md`。已有可用安装时直接读取入口。执行时按 [能力目录的剪辑动效与导出](能力目录.md#剪辑动效与导出)确定调用范围。
 
 ## 首次安装
 
@@ -28,7 +28,7 @@ Studio 从本工作区的 `.agents/skills/herk-edit-kit/SKILL.md` 进入 Herk Ed
 
    # Herk Edit Kit
 
-   先按[Studio 的按需剪辑与动效工具](../studio-entry/SKILL.md#按需剪辑与动效工具)确认本次范围，再读上游 [short-form-edit](.agents/skills/short-form-edit/SKILL.md) 中与本次工作相关的段落。配套 HyperFrames 和方法资料按该入口引用读取，路径以本目录为工具根。
+   先按[能力目录的剪辑动效与导出](../studio-entry/references/能力目录.md#剪辑动效与导出)确认本次范围，再读上游 [short-form-edit](.agents/skills/short-form-edit/SKILL.md) 中与本次工作相关的段落。配套 HyperFrames 和方法资料按该入口引用读取，路径以本目录为工具根。
 
    复用实际底片的字级时间轴，按项目确认的样式做字幕或图形层。项目目录、素材、音画改动和交付范围沿用工作区实际授权。根目录示例用作技术验证；AIS 品牌素材遵守[许可证](LICENSE)中的单独条款。
    EOF

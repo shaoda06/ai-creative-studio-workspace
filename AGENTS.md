@@ -1,6 +1,6 @@
 # AI Creative Studio Workspace
 
-这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务与当前环节。Nora连续短剧、Iris商业视频、Chloe视频带货各自组织业务准备和候选返回后的审阅、返修接续、采用与交付。已确认的脚本通过[共用视频制作核心](.agents/skills/studio-video-production/SKILL.md)接续到候选与技术结果。Studio社媒运营等共用附加能力按实际任务接入。已有明确项目和阶段时直接接续。Chloe 业务会话收到执行请求时，先按[会话职责分流](.agents/skills/chloe-commerce-video/references/会话组织与接续规范.md#业务会话职责分流)判断由哪个会话承接。全部技能统一维护在总目录的 `.agents/skills/` 中。
+这是统一的AI创作与制作工作区。日常在本总目录新建Codex对话，使用[统一入口](.agents/skills/studio-entry/SKILL.md)识别业务与当前环节。Nora连续短剧、Iris商业视频、Chloe视频带货各自组织业务准备和候选返回后的审阅、返修接续、采用与交付。各业务沿[共用推进顺序](.agents/skills/studio-video-production/SKILL.md#共用推进顺序)从当前环节接续；确认脚本后的制作进入同一技能的专项流程。阶段按本次问题查[能力目录](.agents/skills/studio-entry/references/能力目录.md)的对应分类，可合用多项能力。已有明确项目和阶段时直接接续。Chloe 业务会话收到执行请求时，先按[会话职责分流](.agents/skills/chloe-commerce-video/references/会话组织与接续规范.md#业务会话职责分流)判断由哪个会话承接。全部技能统一维护在总目录的 `.agents/skills/` 中。
 
 ## 工作区结构
 

@@ -6,7 +6,7 @@
 
 在Codex中选择本总目录。Nora、Iris、Chloe是资料分区；总入口、一级业务、二级阶段和共用工具都在本目录.agents/skills中，不必切换子目录才能使用技能。
 
-统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)。[共用视频制作核心](.agents/skills/studio-video-production/SKILL.md)从已确认脚本接续到视频候选与技术结果，按环节调用共用规则和工具。[Nora 短剧](.agents/skills/nora-serial-drama/SKILL.md)、[Iris 商业视频](.agents/skills/iris-commercial-video/SKILL.md)与[Chloe 带货](.agents/skills/chloe-commerce-video/SKILL.md)分别负责业务准备、审阅、返修接续、采用及交付。[Studio 社媒运营](.agents/skills/studio-social-operations/SKILL.md)等附加能力按实际任务接入。
+统一入口为[AI创作与制作](.agents/skills/studio-entry/SKILL.md)。[共用视频制作核心](.agents/skills/studio-video-production/SKILL.md)维护定位、准备、开展、核对和交回的共用顺序，以及确认脚本到视频候选与技术结果的专项流程。[Nora 短剧](.agents/skills/nora-serial-drama/SKILL.md)、[Iris 商业视频](.agents/skills/iris-commercial-video/SKILL.md)与[Chloe 带货](.agents/skills/chloe-commerce-video/SKILL.md)分别负责业务准备、审阅、返修接续、采用及交付。阶段按实际任务查[能力目录](.agents/skills/studio-entry/references/能力目录.md)的对应分类。
 
 1. 获取整个工作区，使用支持本地文件与技能的agent打开根目录。推荐Codex Desktop；其他平台需自行提供相应的会话和监控能力。
 2. agent先读取根目录 [AGENTS.md](AGENTS.md)，再按任务使用 [统一入口](.agents/skills/studio-entry/SKILL.md) 或 [Krea2技能](.agents/skills/studio-krea2-style-library/SKILL.md)。处理具体业务项目时，继续读取所属业务工作区README、项目README及唯一进度或状态文件；后两层使用README，不另设AGENTS.md。
@@ -63,7 +63,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 
 ### 能力组成与依赖登记
 
-本项目的[独立第三方技能登记](.agents/skills/studio-entry/维护规范.md#独立第三方技能登记)维护直接使用的14项技能的来源、版本、许可与获取入口；这些技能不随模板重复分发。其自带子技能、脚本、运行依赖和安装步骤以该技能自身说明为准，不在本项目重复维护。
+本项目的[独立第三方技能登记](.agents/skills/studio-entry/维护规范.md#独立第三方技能登记)维护按需获取的独立第三方技能及其来源、版本、许可与获取入口。技能各自维护配套子技能、脚本、运行依赖和安装步骤。
 
 已经融入仓库的第三方资源另见[本地适配来源与更新](.agents/skills/studio-entry/维护规范.md#本地适配来源与更新)。保留原始来源与版本，后续按需比较、选择合并并验证，不用上游整包覆盖本地规则。全局技能及平台插件不列入项目安装清单；有实际调用需求时，由调用处说明所需能力并按平台发现。
 
@@ -71,7 +71,7 @@ python3 .agents/skills/chloe-positioning/scripts/chloe_init.py --workspace 'work
 
 ### 本工作区技能与风格资源
 
-[统一入口](.agents/skills/studio-entry/SKILL.md)登记核心流程、各业务入口和共用附加能力。[视频下载](.agents/skills/studio-video-download/SKILL.md)、[视频读取与分析](.agents/skills/studio-video-study/SKILL.md)和[Krea2风格库](.agents/skills/studio-krea2-style-library/SKILL.md)按项目需要选用。第三方适配资源的来源与许可见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。
+[统一入口](.agents/skills/studio-entry/SKILL.md)负责业务分流。[能力目录](.agents/skills/studio-entry/references/能力目录.md)登记视频下载、视频分析、风格库等共用能力的适用情形和实际入口。第三方适配资源的来源与许可见[公共登记](.agents/skills/studio-entry/维护规范.md#6-依赖获取与适配资料)。
 
 | 资源 | 来源与作者 |
 | --- | --- |

@@ -5,7 +5,7 @@ description: 在规划 MiniMax H3 生成或原片编辑，或编写、修订与�
 
 # Studio H3 共用规则
 
-调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式及[参考与接续表达规范](references/参考与接续表达规范.md)。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
+调用方提供实际生成模式、完整正文、参考文件和顺序、时长与授权。编写、修订或核对 H3 原生模式提示词时，按[依赖登记](../studio-entry/维护规范.md#独立第三方技能登记)定位实际安装的 `h3-prompt-writing`，选读对应模式；多参考模式读取完整 `references/ref-en.txt`，涉及镜头、运镜、对白及声音的共用格式同时读取 `references/base-en.txt`。实际素材对应关系按[参考与接续表达规范](references/参考与接续表达规范.md)落实。脚本 `scripts/h3_prompt_format.py` 负责通用正文检查。
 
 ## H3 工作流选择
 

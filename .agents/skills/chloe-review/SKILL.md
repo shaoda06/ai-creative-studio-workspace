@@ -17,7 +17,7 @@ description: 结合用户提供的 Chloe 成片和运营资料复盘内容、商
 
 ## 公共方法与输出映射
 
-分析指标与成片时使用[公共复盘方法](../studio-operations-review/SKILL.md)，筛选建议和核对后续效果时使用[公共制作指导](../studio-operations-guidance/SKILL.md)。按[公共输出映射](../studio-social-operations/references/运营与制作接续规范.md#复盘输出映射)接入；本节是Chloe的固定映射，不从公共技能安装目录推断业务归属。
+分析指标与成片时使用[公共复盘方法](../studio-operations-review/SKILL.md)，筛选建议和核对后续效果时使用[公共制作指导](../studio-entry/references/能力目录.md#社媒运营与发布)。按[公共输出映射](../studio-social-operations/references/运营与制作接续规范.md#复盘输出映射)接入；本节是Chloe的固定映射，不从公共技能安装目录推断业务归属。
 
 | 公共分析内容 | Chloe唯一记录入口 |
 | --- | --- |

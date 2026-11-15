@@ -16,7 +16,7 @@ license: MIT
 
 ## 按问题选读
 
-需要选择或细化拍法时读[镜头表达](../studio-creative-techniques/SKILL.md#镜头表达)。同一事件涉及连续动作或跨镜头接续时读[完整动作链指南](../studio-creative-techniques/references/完整动作链设计与转写指南.md)。其他问题按下表选读，将采用的方法落实到同一份逐镜正文。
+需要选择或细化拍法、处理同一事件的连续动作或跨镜头接续时，查[分镜动作与提示词](../studio-entry/references/能力目录.md#分镜动作与提示词)中的相应方法。其他问题按下表选读，将采用的方法落实到同一份逐镜正文。
 
 | 问题 | 参考 |
 | --- | --- |
@@ -26,7 +26,7 @@ license: MIT
 | 镜头参考、首帧和开场状态 | [镜头参考图与首帧](references/分镜写作规范.md#镜头参考图与首帧) |
 | 光影、关键帧及漫剧视觉表达 | [光线设计](references/lighting-craft.md)、[关键帧方法](references/keyframe-craft.md)、[视觉词表](references/comic-keyframe-lexicon.md)、[转写示例](references/screenplay-to-keyframe-example.md) |
 | 修订关联与连续性核对 | [镜头修订方法](references/shot-revision-identity.md)、[核对示例](references/review-and-fixtures.md) |
-| 打斗、法术或写实格斗 | 按题材使用[通用动作](../studio-combat-methods/SKILL.md)、[玄幻动作](../studio-fantasy-combat/SKILL.md)或[写实格斗](../studio-realistic-combat/SKILL.md) |
+| 打斗、法术或写实格斗 | 按题材使用[通用动作／玄幻动作／写实格斗](../studio-entry/references/能力目录.md#分镜动作与提示词) |
 
 方法资料中的编号和时长示例用于说明表达选择，实际文件和字段沿本模板及调用业务。H3等模型的格式、容量、标签和执行由对应模型工具负责，分镜明确的口型、声音与状态在后续转写中保留。
 
