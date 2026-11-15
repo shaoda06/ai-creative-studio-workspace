@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   return '[共用:'+rid+'@'+version+'](<'+os.path.relpath(file,model)+'>)'
  first=label(target,ref['resource_id'],ref['version'])
  append('参考版本',['正面面部',first,'用户提供','不适用'])
- for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('全身三视图原图','#bbaabb',(600,480),'views'),('全身三视图原图','#aabbaa',(600,600),'views2')]:
+ for purpose,color,size,key in [('正面面部','#95aabb',(200,300),'face2'),('正面面部','#95aacc',(200,300),'face3'),('正面面部','#95aadd',(200,300),'face4'),('正面面部','#95aaee',(200,300),'face5'),('全身三视图原图','#bbaabb',(600,600),'views'),('全身三视图原图','#aabbaa',(600,450),'views2')]:
   source=Path(tmp)/(key+'.png');Image.new('RGB',size,color).save(source)
   result=import_media(root,source,key,resource_id=ref['resource_id'] if key.startswith('face') else None)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version'])
@@ -231,9 +231,9 @@ try {
   assert.equal(await page.getByRole('heading',{name:'人物特征',exact:true}).count(),0);
   const expectedRef=purpose=>{const image=sample.details[0].images.find(image=>image.adopted && image.purpose===purpose);return `${image.resource}@${image.version}`;};
   assert.ok((await page.getByRole('heading',{name:/^正面面部图/}).textContent()).includes(expectedRef('正面面部')));
-  await page.getByRole('heading',{name:'基础全身三视图（1:1） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   await page.reload();
-  await page.getByRole('heading',{name:'基础全身三视图（1:1） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（4:3） · '+expectedRef('全身三视图原图'),exact:true}).waitFor();
   assert.match(page.url(),/modelTab=images/);
   const detailTabs=page.getByRole('navigation',{name:'模特详情分类'});
   assert.deepEqual(await detailTabs.getByRole('button').allTextContents(),['模特信息','模特图片','造型']);
@@ -429,6 +429,9 @@ try {
   await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'模特图片',exact:true}).click();
   await page.getByText('尚未采用全身三视图原图',{exact:true}).waitFor();
+  await page.getByRole('heading',{name:'基础全身三视图（4:3）',exact:true}).waitFor();
+  const bodyPlaceholder=await page.getByRole('region',{name:'基础全身三视图',exact:true}).locator('.asset-media-placeholder').boundingBox();
+  assert.ok(Math.abs(bodyPlaceholder.width/bodyPlaceholder.height-4/3)<.01,'基础全身三视图空态保持 4:3');
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'造型',exact:true}).click();
   await page.getByText('暂无该模特的造型资料。',{exact:true}).waitFor();
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
