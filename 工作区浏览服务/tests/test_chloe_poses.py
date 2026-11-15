@@ -44,7 +44,7 @@ class ChloePosesTests(unittest.TestCase):
         first = self.client.get(self.url, params={'page': 1, 'page_size': 1})
         self.assertEqual(first.json()['types'], ['站姿'])
         pose, = first.json()['items']
-        self.assertEqual((pose['id'], pose['description']), ('站姿-001', '两脚等重。'))
+        self.assertEqual((pose['id'], pose['category'], pose['description']), ('站姿-001', '站姿', '两脚等重。'))
         self.assertEqual(self.client.get(pose['media']['url']).content, self.image.read_bytes())
         thumbnail = self.client.get(pose['media']['thumbnailUrl'])
         self.assertEqual((thumbnail.status_code, thumbnail.headers['content-type']), (200, 'image/webp'))

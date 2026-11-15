@@ -28,7 +28,7 @@ class Pose:
 
     def card(self, api):
         url = f'{api}/{ENDPOINT}/{quote(self.id, safe="")}/image'
-        return {'id': self.id, 'name': self.name, 'description': self.description,
+        return {'id': self.id, 'name': self.name, 'category': self.category, 'description': self.description,
                 'media': {'kind': 'image', 'key': self.id, 'name': self.name,
                           'url': url, 'thumbnailUrl': thumbnail_url(url)}}
 
