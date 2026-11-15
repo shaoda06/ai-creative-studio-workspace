@@ -12,9 +12,11 @@ sys.path.insert(0, str(SKILLS/'studio-workspace-browser/scripts'))
 sys.path.insert(0, str(SKILLS/'chloe-positioning/scripts'))
 sys.path.insert(0, str(SKILLS/'studio-comfyui/scripts'))
 sys.path.insert(0, str(SKILLS/'chloe-production/scripts'))
+sys.path.insert(0, str(SKILLS/'studio-image-processing/scripts'))
 import project_resources as resources
 import chloe_documents as docs
 import execution_records as recordio
+from image_processing import validate_rtx_wiring
 
 
 def now():
@@ -123,6 +125,8 @@ def validate(owner, plan, count):
             for item in plan['outputs']:
                 if not item.get('source'):
                     raise ValueError('自动采用须填写处理来源版本')
+                if not isinstance(item.get('previous'), str):
+                    raise ValueError('超分清单须填写 previous，尚无采用时填写「无」')
                 source = resources.resolve_file(owner, item['source'])
                 if approved != source:
                     raise ValueError('批准对象必须是本次处理的准确来源版本')
@@ -141,21 +145,45 @@ def approval(owner, plan, body):
     return review_doc, match
 
 
-def validate_task(data, plan, _checked):
+def validate_upscale(data, plan):
+    owner = Path(data.project)
+    if len(plan['outputs']) != 1:
+        raise ValueError('一次自动采用的超分任务须对应一张批准原图和一张成果')
+    spec, = plan['outputs']
+    source = resources.resolve_file(owner, spec['source'])
+    validate_rtx_wiring(data, source)
+    rtx = data.workflow['1']['inputs']
+    if (rtx.get('resize_type'), rtx.get('resize_type.scale'), rtx.get('quality')) != ('scale by multiplier', 2, 'ULTRA'):
+        raise ValueError('Chloe 正式图片采用须使用 RTX 2 倍 ULTRA 超分')
+    target, = data.outputs
+    if target.base_file and resources.resolve_file(owner, target.base_file) != source:
+        raise ValueError('超分结果的来源版本必须是已批准的原图')
+
+
+def validate_task(data, plan, checked):
     if not plan.get('adopt'):
         return
+    validate_upscale(data, plan)
     owner = Path(data.project)
-    source = resources.resolve_file(owner, plan['outputs'][0]['source'])
-    uploads = [Path(item['file']) for item in data.uploads if (item['node'], item['input']) == ('2', 'image')]
-    if uploads != [source]:
-        raise ValueError('RTX 节点 2 的实际上传必须是已批准的原图')
-    for target in data.outputs:
-        if target.base_file and resources.resolve_file(owner, target.base_file) != source:
-            raise ValueError('超分结果的来源版本必须是已批准的原图')
+    spec, = plan['outputs']
+    document, body, _ = checked
+    adoption = resources.local(owner, plan.get('adoption_document', plan['document']))
+    current = adopted_reference(body if adoption == document else adoption.read_text('utf-8'), spec['purpose'])
+    root = project_root(owner)
+    if adoption_identity(root, adoption, current) != adoption_identity(root, adoption, spec['previous']):
+        raise ValueError('清单中的当前采用与实际版本不一致，请先核对 previous')
+
+
+def adopted_reference(body, purpose):
+    return next((r['资源引用'] for r in rows(body, '当前采用') if r['用途'] == purpose), '无')
+
+
+def adoption_identity(root, document, value):
+    return value if value == '无' else resource_path(root, document, value)
 
 
 def adopt(body, purpose, reference, basis, time, *, expected=None, identity=lambda value: value):
-    old = next((r['资源引用'] for r in rows(body,'当前采用') if r['用途']==purpose),'无')
+    old = adopted_reference(body, purpose)
     current = identity(old)
     if current == identity(reference):
         return body
@@ -202,7 +230,7 @@ def finish(owner, plan, report, report_path):
                 adopted_body=adopt(adopted_body,spec['purpose'],resource(owner,adopt_doc,item['path']),
                     link(adopt_doc,review_doc,plan['adopt']['review'])+'；'+report_link(adopt_doc,report_path,'尺寸核对'),time,
                     expected=spec['previous'],
-                    identity=lambda value: value if value == '无' else resource_path(root, adopt_doc, value))
+                    identity=lambda value: adoption_identity(root, adopt_doc, value))
                 if adopt_doc==document:
                     body=adopted_body
         body=complete_execution(body,plan['execution'],report['task_id'],report.get('ended_at') or report['recorded_at'],proof,report.get('started_at'))
@@ -316,6 +344,14 @@ def main():
             from chloe_results import finish as complete
         elif plan['adapter']=='chloe-image':
             complete=finish
+            if plan.get('adopt') and report.get('business_sync', {}).get('status') != 'updated':
+                from project_paths import input_file
+                owner = args.owner.resolve()
+                uploads = [{**item, 'file': str(input_file(owner, item['file'], recorded=True))}
+                           for item in task['uploads']]
+                outputs = [argparse.Namespace(**{'base_file': None, **item}) for item in task['outputs']]
+                validate_upscale(argparse.Namespace(project=owner, workflow=task['workflow'],
+                                                    uploads=uploads, outputs=outputs), plan)
         else:
             raise ValueError('未登记的Chloe结果适配')
         result=complete(args.owner.resolve(),plan,report,args.report.resolve())

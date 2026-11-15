@@ -79,6 +79,21 @@ def resize(source, destination, target, crop_anchor, *, project):
     return dict(path=str(destination), tool='Pillow ' + __version__, source_size=[width, height], crop_box=box)
 
 
+def validate_rtx_wiring(data, source):
+    if len(data.uploads) != 1:
+        raise ValueError('超分只接收一张已批准的原图')
+    upload, = data.uploads
+    file = upload.get('file')
+    if not isinstance(file, str) or Path(file) != source or (upload.get('node'), upload.get('input')) != ('2', 'image') or 'json-path' in upload:
+        raise ValueError('RTX 节点 2 的实际上传必须是已批准的原图')
+    source_node, rtx, save = (data.workflow.get(key, {}) for key in ('2', '1', '3'))
+    if (source_node.get('class_type') != 'LoadImage'
+            or rtx.get('class_type') != 'RTXVideoSuperResolution' or rtx.get('inputs', {}).get('images') != ['2', 0]
+            or save.get('class_type') != 'SaveImage' or save.get('inputs', {}).get('images') != ['1', 0]
+            or [(item.node_id, item.output_key, item.index) for item in data.outputs] != [('3', 'images', 0)]):
+        raise ValueError('超分必须为批准原图→RTX节点1→节点3')
+
+
 def validate_processing(data, source, source_size, target, local):
     """Validate explicit processing geometry, bindings and RTX node parameters."""
     if local:
@@ -90,15 +105,9 @@ def validate_processing(data, source, source_size, target, local):
             raise ValueError('crop_anchor须为0到1之间的两个数，表示水平、垂直裁切位置')
     elif any(n < old for n, old in zip(target, source_size)) or target == source_size:
         raise ValueError('RTX不能缩小任意一边或处理同尺寸图片；请使用统一任务清单自动转本地处理')
-    elif len(data.uploads) != 1 or Path(data.uploads[0]['file']) != source or data.uploads[0]['node'] != '2' or data.uploads[0]['input'] != 'image':
-        raise ValueError('超分上传必须绑定获批原图到节点2')
     if not local:
-        workflow = data.workflow
-        if (workflow['1']['class_type'] != 'RTXVideoSuperResolution' or workflow['1']['inputs']['images'] != ['2', 0]
-                or workflow['3']['class_type'] != 'SaveImage' or workflow['3']['inputs']['images'] != ['1', 0]
-                or data.outputs[0].node_id != '3'):
-            raise ValueError('超分必须为批准原图→RTX节点1→节点3')
-        resize = workflow['1']['inputs']
+        validate_rtx_wiring(data, source)
+        resize = data.workflow['1']['inputs']
         if resize['resize_type'] == 'scale by multiplier':
             if resize['resize_type.scale'] != 2:
                 raise ValueError('倍数超分只支持2倍')

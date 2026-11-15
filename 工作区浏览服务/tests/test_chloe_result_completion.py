@@ -11,6 +11,7 @@ from backend.services import business_results
 import sys
 sys.path.insert(0,str(business_results.SKILLS/'chloe-assets/scripts'))
 import chloe_result_records as records
+from image_processing import assemble_rtx
 sys.path.insert(0,str(business_results.SKILLS/'chloe-production/scripts'))
 import chloe_results
 sys.path.insert(0,str(business_results.SKILLS/'chloe-creative/scripts'))
@@ -198,11 +199,12 @@ class ResultCompletionTests(unittest.TestCase):
         plan = self.image_plan(doc, 'E002')
         plan['outputs'][0].update(source=approved['file'], previous='无')
         plan['adopt'] = {'document': str(doc.relative_to(self.owner)), 'review': 'R001'}
-        upload = {'node': '2', 'input': 'image', 'file': str(self.owner/approved['file'])}
-        target = SimpleNamespace(base_file=approved['file'])
+        _, workflow, uploads, node = assemble_rtx(self.owner/approved['file'], prefix='isolated')
+        upload, = uploads
+        target = SimpleNamespace(base_file=approved['file'], node_id=node, output_key='images', index=0)
         data = SimpleNamespace(task_type='image-upscale', project=str(self.owner), segment_plan=None,
                                image_plan={'adapter': 'technical', 'business_result': plan},
-                               outputs=[target], uploads=[upload])
+                               outputs=[target], uploads=uploads, workflow=workflow)
         before = doc.read_bytes()
         business_results.validate(data)
         self.assertEqual(doc.read_bytes(), before)
@@ -218,22 +220,84 @@ class ResultCompletionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '结果的来源版本必须'):
             business_results.validate(data)
         target.base_file = approved['file']
+
+        workflow['4'] = {'class_type': 'LoadImage', 'inputs': {'image': 'prior.png'}}
+        workflow['1']['inputs']['images'] = ['4', 0]
+        with self.assertRaisesRegex(ValueError, '超分必须为批准原图'):
+            business_results.validate(data)
+        workflow['1']['inputs']['images'] = ['2', 0]
+        workflow['3']['inputs']['images'] = ['4', 0]
+        with self.assertRaisesRegex(ValueError, '超分必须为批准原图'):
+            business_results.validate(data)
+        workflow['3']['inputs']['images'] = ['1', 0]
+        workflow.pop('4')
+        workflow['1']['inputs']['resize_type.scale'] = 3
+        with self.assertRaisesRegex(ValueError, 'RTX 2 倍'):
+            business_results.validate(data)
+        workflow['1']['inputs']['resize_type.scale'] = 2
+        with self.assertRaisesRegex(ValueError, '须填写 previous'):
+            plan['outputs'][0].pop('previous')
+            business_results.validate(data)
+        plan['outputs'][0]['previous'] = '无'
+
+        from backend.services.comfy_tasks import TaskStore
         from backend.services import execution_checks
+        import comfyui_client
         document = doc.read_text('utf-8')
         data.record_dir = str(doc.parent)
         data.record_format = 'legacy'
         data.title = '隔离超分'
-        store = SimpleNamespace(client=SimpleNamespace(now=lambda: TIME, ClientError=RuntimeError),
-                                portable_input=lambda task: {'title': task.title})
+        data.thread_id = 'isolated'
+        data.desktop = SimpleNamespace(caller_thread='isolated')
+        data.url = 'http://127.0.0.1:8188'
+        data.timeout = 30
+        data.image_plan['images'] = [{'path': '生成结果/超分.png', 'width': 24, 'height': 32}]
+        store = SimpleNamespace(client=comfyui_client, portable_input=lambda task: {'title': task.title},
+                                remote_urls=lambda: [data.url])
         prepared = {'ok': True, 'prepared_input': execution_checks.basis(store, data),
                     'sources': execution_checks.sources(data), 'new_task_ready': True, 'segments': {}}
         self.assertTrue(execution_checks.prepare_report(store, data, previous=prepared)['reused'])
+        execution_checks.write_report(data, prepared)
+        doc.write_text(document.replace('| 通过 |', '| 需修改 |'), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '已通过的原审阅'):
+            TaskStore.validate_registration(store, data)
+        with self.assertRaisesRegex(ValueError, '已通过的原审阅'):
+            execution_checks.check_prepared(store, data)
+
         other = records.resource(self.owner, doc, wrong['file'])
         doc.write_text(document.replace(f'| 2/image | 不适用 | {reviewed} |',
                                         f'| 2/image | 不适用 | {other} |'), encoding='utf-8')
         with self.assertRaisesRegex(ValueError, '处理来源未登记'):
             execution_checks.prepare_report(store, data, previous=prepared)
         self.assertFalse(records.rows(doc.read_text('utf-8'), '当前采用'))
+
+        changed = records.put(document, '当前采用', ['用途'],
+                              {'用途': '正面面部', '资源引用': other, '采用依据': '隔离前次采用', '采用时间': TIME})
+        doc.write_text(changed, encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '清单中的当前采用'):
+            business_results.validate(data)
+        _, output = self.image('upscaled', (24,32), approved['resource_id'])
+        report, path = self.report(self.owner, output, 'E002')
+        with self.assertRaisesRegex(ValueError, '当前采用已改变'):
+            records.finish(self.owner, plan, report, path)
+        self.assertEqual(doc.read_text('utf-8'), changed)
+        plan['outputs'][0]['previous'] = other.replace('\\','/')
+        business_results.validate(data)
+        target.path = str(self.owner/output['file'])
+        workflow['3']['inputs']['images'] = ['2', 0]
+        with self.assertRaisesRegex(ValueError, '超分必须为批准原图'):
+            business_results.finish(data, report, path)
+        self.assertEqual(doc.read_text('utf-8'), changed)
+        report['status'] = 'registered'
+        path.write_text(json.dumps(report), encoding='utf-8')
+        manifest = doc.parent/'恢复清单.json'
+        manifest.write_text(json.dumps({'tasks': [{'record_dir': '.', 'workflow': workflow,
+            'uploads': uploads, 'outputs': [vars(target)], 'image_plan': data.image_plan}]}), encoding='utf-8')
+        args = ['chloe_result_records', 'finish', '--owner', str(self.owner), '--manifest', str(manifest),
+                '--task-index', '0', '--report', str(path)]
+        with patch.object(sys, 'argv', args), self.assertRaisesRegex(ValueError, '超分必须为批准原图'):
+            records.main()
+        self.assertEqual(doc.read_text('utf-8'), changed)
 
     def video_entry(self,identity,execution,stage,upstream=None):
         self.f.candidate(identity,execution,stage=stage,output=False)

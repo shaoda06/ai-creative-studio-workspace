@@ -35,11 +35,18 @@ def validate(data):
         module.validate_task(data, plan, checked)
 
 
+def validate_image_adoption(data):
+    if (data.image_plan or {}).get('business_result', {}).get('adopt'):
+        validate(data)
+
+
 def finish(data, report, report_path, state=None):
     plan,module=selected(data)
     if plan is None:
         return report
     if report.get('business_sync',{}).get('status')!='updated':
+        if plan['adapter'] == 'chloe-image' and plan.get('adopt'):
+            module.validate_upscale(data, plan)
         from project_paths import project_file
         targets = data.segment_plan.targets if data.segment_plan else data.outputs
         by_path = {project_file(data.project,item['path']):item for item in report['items']}

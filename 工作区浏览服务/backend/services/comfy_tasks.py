@@ -324,7 +324,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
                 upload['file'] = relative(path) if path.is_relative_to(project) else '@shared/' + path.relative_to(project.parent.parent / paths.SHARED_DIRECTORY).as_posix()
         return payload
 
-    def validate_registration(self, data):
+    def validate_registration(self, data, *, preparing=False):
         project = Path(data.project)
         configured = self.remote_urls()
         if client.Client(data.url, data.timeout).url != configured[0]:
@@ -337,6 +337,9 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
             validate_names(project, data.image_plan, required=True)
         if not data.thread_id or not data.desktop.caller_thread:
             raise ValueError('缺少真实会话身份')
+        if not preparing:
+            from backend.services.business_results import validate_image_adoption
+            validate_image_adoption(data)
         return project
 
     async def prepare_only(self, data):
@@ -344,7 +347,7 @@ class TaskStore(LocalQueue, TaskNotifications, TaskGroups):
         self.resolve_input(data)
         existing = next((key for key, row in self.rows.items() if row['input'].record_dir == data.record_dir), None)
         if existing is None:
-            self.validate_registration(data)
+            self.validate_registration(data, preparing=True)
         else:
             row = self.rows[existing]
             if row.get('_repreparing'):

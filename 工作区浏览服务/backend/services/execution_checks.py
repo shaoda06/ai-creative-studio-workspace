@@ -157,6 +157,8 @@ def check_prepared(store, data, *, bound=False, transferred=False, legacy=False,
         write_report(data, report)
     if file_stamps is not None:
         file_stamps.update(observed)
+    from backend.services.business_results import validate_image_adoption
+    validate_image_adoption(data)
     return report
 
 
@@ -331,10 +333,10 @@ def prepare_report(store, data, *, at_execution=False, previous=...):
                     if 'business_result' in data.video_plan:
                         from backend.services.business_results import validate as validate_business_result
                         validate_business_result(data)
-                if not at_execution and data.image_plan and data.image_plan.get('business_result', {}).get('adopt'):
+                if not at_execution:
                     # A reused preparation report cannot freeze an approval or an input record.
-                    from backend.services.business_results import validate as validate_business_result
-                    validate_business_result(data)
+                    from backend.services.business_results import validate_image_adoption
+                    validate_image_adoption(data)
                 report.update(previous)
                 changed = False
                 if not content_current:
