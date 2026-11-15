@@ -195,8 +195,19 @@ def adopted_video_refs(data, readme):
             if VIDEO_PURPOSE.fullmatch(row['用途']) or row['用途'] == SCENE_SLOT}
 
 
+def segment_script(part, source, entry, shot_id=None):
+    ids = [shot_id] if shot_id else entry['shotIds']
+    html = part(source, ids)
+    ranges = [item for item in entry.get('shotRanges', []) if item['id'] in ids]
+    if ranges:
+        labels = '、'.join(f"{x['id']} {x['shotStart']:g}–{x['shotEnd']:g} 秒" for x in ranges)
+        html = documents.markdown('**本段覆盖的镜内时码**　'+labels, source) + html
+    return html
+
+
 def segment_data(data, api, adopted_refs, part):
-    segments={key:{**item,'scriptHtml':part('脚本.md',item['shotIds']),
+    segments={key:{**{name:item[name] for name in ('id','duration','shotIds')},
+                   'scriptHtml':segment_script(part,'脚本.md',item),
                    'scriptUrl':file_url(api,'脚本.md'),'videos':[]} for key,item in data['plan'].items()}
     for value in data['candidates'].values():
         item=segments.setdefault(value['id'],{'id':value['id'],'duration':0,'scriptHtml':'','videos':[]})
@@ -225,28 +236,34 @@ def apply_script_timing(context, script_shots, entry):
     shots = context['shots']
     if context.get('shotTimingSource') == 'recorded' or not shots or len(shots) != len(entry['shotIds']):
         return
-    fields_by_id = {shot['fields']['镜号']: shot['fields'] for shot in script_shots}
-    spans = []
-    for identity in entry['shotIds']:
-        fields = fields_by_id[identity]
-        interval = re.fullmatch(r'\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*[-–—]\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*秒?\s*', fields['时间'])
-        if not interval:
+    if ranges := entry.get('shotRanges'):
+        timing = [(span['start'], span['duration']) for span in ranges]
+    else:
+        fields_by_id = {shot['fields']['镜号']: shot['fields'] for shot in script_shots}
+        if any(identity not in fields_by_id for identity in entry['shotIds']):
             return
-        start, end = (sum(float(part) * 60 ** power for power, part in enumerate(value.split(':')[::-1]))
-                      for value in interval.groups())
-        duration = float(fields['时长'].removesuffix('秒').strip())
-        if end <= start or not isclose(end - start, duration, abs_tol=1e-6) or (spans and not isclose(start, spans[-1][1], abs_tol=1e-6)):
+        spans = []
+        for identity in entry['shotIds']:
+            fields = fields_by_id[identity]
+            interval = re.fullmatch(r'\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*[-–—]\s*((?:\d+:){1,2}\d+(?:\.\d+)?)\s*秒?\s*', fields['时间'])
+            if not interval:
+                return
+            start, end = (sum(float(part) * 60 ** power for power, part in enumerate(value.split(':')[::-1]))
+                          for value in interval.groups())
+            duration = float(fields['时长'].removesuffix('秒').strip())
+            if end <= start or not isclose(end-start, duration, abs_tol=1e-6) or (spans and not isclose(start, spans[-1][1], abs_tol=1e-6)):
+                return
+            spans.append((start, end))
+        origin = spans[0][0]
+        if not isclose(spans[-1][1]-origin, entry['duration'], abs_tol=1e-6):
             return
-        spans.append((start, end))
-    origin = spans[0][0]
-    if not isclose(spans[-1][1] - origin, entry['duration'], abs_tol=1e-6):
-        return
-    for shot, (start, end) in zip(shots, spans):
-        if shot['duration'] is not None and (not isclose(shot['duration'], end - start, abs_tol=1e-6)
-                or not isclose(shot['start'], start - origin, abs_tol=1e-6)):
+        timing = [(start-origin, end-start) for start, end in spans]
+    for shot, (start, duration) in zip(shots, timing):
+        if shot['duration'] is not None and (not isclose(shot['duration'], duration, abs_tol=1e-6)
+                or not isclose(shot['start'], start, abs_tol=1e-6)):
             return
-    for shot, (start, end) in zip(shots, spans):
-        shot.update(start=start - origin, duration=end - start)
+    for shot, (start, duration) in zip(shots, timing):
+        shot.update(start=start, duration=duration)
     context['shotTimingSource'] = 'plan'
 
 
@@ -276,14 +293,13 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         values=[]; contexts={}; issues=[]
         source=item['scene_source']
         for entry in item['values']:
-            html=part(item['script'],entry['shotIds'])
+            html=segment_script(part,item['script'],entry)
             values.append({**{key:entry[key] for key in ('id','duration','stage','run','carried','shotIds')},
                            'scriptHtml':html,'scriptUrl':script['url']})
             # Keep original execution context attached to its actual script, never the current draft.
             if source:
                 context=contexts[entry['id']]=empty_context(None)
-                context['shots']=[{'id':identity,'html':part(item['script'],[identity]),
-                                   'start':None,'duration':None}
+                context['shots']=[{'id':identity,'start':None,'duration':None}
                                   for identity in entry['shotIds']]
             else:
                 target=videos_by_revision[entry['id'],entry['stage'],entry['run']]
@@ -294,7 +310,7 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                 context['issues']=[issue for issue in context['issues'] if issue!='执行记录未关联分镜快照；这里展示当次实际提示词中的镜头描述。']
                 if len(context['shots'])==len(entry['shotIds']):
                     for shot,identity in zip(context['shots'],entry['shotIds']):
-                        shot.update(id=identity,html=part(item['script'],[identity]))
+                        shot.update(id=identity,html=segment_script(part,item['script'],entry,identity))
                 script_shots=shot_rows(item['script'])
                 apply_script_timing(context, script_shots, entry)
                 context['dialogues']=[]
@@ -373,6 +389,8 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         productionTask=ref(project,api,project/'制作记录.md'),roundHistory=ref(project,api,project/'制作轮次.json'),
         directorSheets={'whole':director_sheets(data,api)},productionComplete=False,productionIssues=[],
         workStatus={'label':progress['当前阶段'],'summaryHtml':'','deliverySummary':'','record':ref(project,api,project/'README.md')})
+    if any('shotRanges' in entry for entry in data['plan'].values()):
+        result['segmentPlanHasShotContinuations'] = True
     recorded_segments = {(row['id'], video['stage'], video['run']) for row in segments
                          for video in row['videos'] if video['url'] or video['taskStateUrl']}
     candidate_workflows = set()

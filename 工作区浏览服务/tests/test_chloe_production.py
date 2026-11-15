@@ -165,6 +165,34 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertEqual(check_workspace(self.root,only=script)['errors'],[])
         self.assertEqual(state(self.project)['plan']['P001']['duration'],0.3)
 
+    def test_continuous_shot_covers_two_planned_segments(self):
+        self.plan()
+        script = self.project/'脚本.md'
+        original = script.read_text()
+        text = original.replace('| P001 | SH001 | 5 |\n| P002 | SH002 | 4 |',
+                                '| P001 | SH001 | 10 |\n| P002 | SH001、SH002 | 9 |')
+        text = text.replace('00:00-00:05秒','00:00–00:14').replace('**时长**：5秒','**时长**：14秒')
+        text = text.replace('00:00-00:04秒','00:14–00:19').replace('**时长**：4秒','**时长**：5秒')
+        script.write_text(text.replace('| 计划时长秒 | 待确定 |','| 计划时长秒 | 19 |'))
+        self.assertEqual(check_workspace(self.root, only=script)['errors'], [])
+        planned = state(self.project)['plan']
+        self.assertEqual(planned['P002']['shotIds'], ['SH001','SH002'])
+        self.assertEqual([(r['start'],r['duration'],r['shotStart'],r['shotEnd']) for r in planned['P002']['shotRanges']],
+                         [(0,4,10,14),(4,5,0,5)])
+        detail = browser.detail(self.projects,self.project.name,self.api,'V001')
+        self.assertTrue(detail['segmentPlanHasShotContinuations'])
+        current = detail['segments']['whole']
+        self.assertIn('SH001 0–10 秒',current[0]['scriptHtml'])
+        self.assertIn('SH001 10–14 秒',current[1]['scriptHtml'])
+        self.assertIn('SH002 0–5 秒',current[1]['scriptHtml'])
+        result = {'shots':[{'duration':None},{'duration':None}]}
+        browser.apply_script_timing(result,[],planned['P002'])
+        self.assertEqual([(shot['start'],shot['duration']) for shot in result['shots']],[(0,4),(4,5)])
+        for incorrectly in ('SH002', 'SH001、SH001、SH002', 'SH002、SH001'):
+            script.write_text(text.replace('| P002 | SH001、SH002 |','| P002 | '+incorrectly+' |'))
+            with self.assertRaisesRegex(ValueError,'镜号须按顺序对应本段实际覆盖'):
+                state(self.project)
+
     def test_script_document_before_generation_and_round_source(self):
         self.plan()
         script=self.project/'脚本.md'
@@ -184,6 +212,7 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertIn('当前镜头',current['doc']['html'])
         self.assertEqual(current['doc']['url'],detail['script']['url'])
         self.assertEqual(detail['episodeRounds'],[])
+        self.assertNotIn('segmentPlanHasShotContinuations',detail)
         self.assertTrue(all(not item['videos'] for item in detail['segments']['whole']))
         self.assertEqual(set(self.project.rglob('*')),before)
         self.candidate('P001','E001');self.candidate('P002','E002')

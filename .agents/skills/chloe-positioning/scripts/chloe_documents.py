@@ -439,8 +439,8 @@ def check_relations(root, path, doc):
     script = {r['字段']:r['内容'] for r in records(doc,'脚本信息')}
     if script and script['脚本状态'] == '已确认' and any(script[k] in MISSING for k in ('确认依据','确认时间')):
         raise ValueError('已确认脚本缺少确认依据或时间')
-    if script and records(doc, '分段计划'):
-        check_segment_plan(doc, script['计划时长秒'])
+    if script:
+        doc['segment_plan'] = check_segment_plan(doc, script['计划时长秒'])
     executions = {r['执行编号'] for r in records(doc,'执行记录')}
     if path.name == '场景说明.md':
         for row in records(doc, '执行记录'):
@@ -596,27 +596,61 @@ def check_relations(root, path, doc):
 
 
 def check_segment_plan(doc, total_duration):
+    planned = records(doc, '分段计划')
+    if not planned:
+        return {}
     section = next(section for section in doc['sections'] if section['heading'] == '镜头与分镜')
     shots = [(shot['fields']['镜号'], shot['fields']['时长'].removesuffix('秒').strip()) for shot in section['shots']]
     if section['tables']:
         shots = [(row['镜头编号'], row['时长秒']) for row in records(doc, '镜头与分镜')]
-    planned = records(doc, '分段计划')
+    if any(not re.fullmatch(r'SH\d{3,}', identity) for identity, _ in shots):
+        raise ValueError('分段计划须引用实际镜号')
     segment_ids = [row['分段编号'] for row in planned]
     if len(segment_ids) != len(set(segment_ids)):
         raise ValueError('分段编号重复')
-    covered = [identity for row in planned for identity in row['镜头编号'].split('、')]
-    if covered != [identity for identity, _ in shots]:
-        raise ValueError('分段计划须按脚本顺序完整覆盖每个镜头一次，不得漏镜、重复或乱序')
-    if any(value in MISSING or Decimal(value) <= 0 for _, value in shots):
+    if not shots or any(value in MISSING or Decimal(value) <= 0 for _, value in shots):
         raise ValueError('已分段的镜头须填写大于零的实际计划时长')
-    durations = {identity: Decimal(value) for identity, value in shots}
-    for row in planned:
-        if not re.fullmatch(r'P\d{3,}', row['分段编号']):
-            raise ValueError('分段编号格式错误')
-        if row['时长秒'] in MISSING or Decimal(row['时长秒']) != sum(durations[identity] for identity in row['镜头编号'].split('、')):
-            raise ValueError(row['分段编号']+'计划时长须等于所含镜头时长之和')
-    if total_duration not in MISSING and Decimal(total_duration) != sum(durations.values()):
+    spans = []
+    shot_end = Decimal(0)
+    for identity, value in shots:
+        shot_start = shot_end
+        shot_end += Decimal(value)
+        spans.append((identity, shot_start, shot_end))
+    if total_duration not in MISSING and Decimal(total_duration) != shot_end:
         raise ValueError('脚本计划总时长须等于全部镜头及分段时长之和')
+    result = {}
+    segment_end = Decimal(0)
+    for row in planned:
+        segment = row['分段编号']
+        if not re.fullmatch(r'P\d{3,}', segment):
+            raise ValueError('分段编号格式错误')
+        if row['时长秒'] in MISSING or Decimal(row['时长秒']) <= 0:
+            raise ValueError(segment+'的分段时长必须大于零')
+        duration = Decimal(row['时长秒'])
+        seconds = float(duration)
+        if not 0 < seconds < float('inf'):
+            raise ValueError(segment+'的分段时长必须为有限正数')
+        segment_start = segment_end
+        segment_end += duration
+        if segment_end > shot_end:
+            raise ValueError(segment+'的分段范围超出脚本时长')
+        covered = [(identity, start, end) for identity, start, end in spans
+                   if start < segment_end and segment_start < end]
+        identities = [identity for identity, _, _ in covered]
+        if identities != row['镜头编号'].split('、'):
+            raise ValueError(segment+'的镜号须按顺序对应本段实际覆盖，且每段内只出现一次')
+        entry = {'id': segment, 'duration': seconds, 'shotIds': identities}
+        if any(start < segment_start or end > segment_end for _, start, end in covered):
+            entry['shotRanges'] = []
+            for identity, start, end in covered:
+                lo, hi = max(start, segment_start), min(end, segment_end)
+                entry['shotRanges'].append({'id': identity, 'start': float(lo-segment_start),
+                                            'duration': float(hi-lo), 'shotStart': float(lo-start),
+                                            'shotEnd': float(hi-start)})
+        result[segment] = entry
+    if segment_end != shot_end:
+        raise ValueError('分段计划须覆盖完整脚本时长')
+    return result
 
 
 def check_system(root, owner):

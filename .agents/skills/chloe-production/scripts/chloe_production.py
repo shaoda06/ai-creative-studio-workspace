@@ -4,7 +4,6 @@ from datetime import datetime
 import json
 from pathlib import Path
 import re
-import math
 import sys
 
 SKILLS = Path(__file__).resolve().parents[2]
@@ -70,23 +69,7 @@ def fields(doc, heading):
 
 def plan(project, source='脚本.md'):
     doc = document(project, source)
-    result = {}
-    body=(project/source).read_text('utf-8-sig')
-    available=set(re.findall(r'^#{3,4} (SH\d{3,})(?:｜|\s)',body,re.M))
-    for row in records(doc, '分段计划'):
-        identity = row['分段编号']
-        if not re.fullmatch(r'P\d{3,}', identity) or identity in result:
-            raise ValueError('分段编号无效或重复：'+identity)
-        shots = row['镜头编号'].split('、')
-        if any(not re.fullmatch(r'SH\d{3,}', shot) for shot in shots) or len(shots) != len(set(shots)):
-            raise ValueError('镜头编号须用顿号分隔且不重复')
-        if not set(shots)<=available:
-            raise ValueError('分段计划引用了不存在的镜头')
-        duration = float(row['时长秒'])
-        if not math.isfinite(duration) or duration <= 0:
-            raise ValueError('分段时长必须大于零')
-        result[identity] = {'id': identity, 'duration': duration, 'shotIds': shots}
-    return doc, result
+    return doc, doc['segment_plan']
 
 
 def director_slot(value):

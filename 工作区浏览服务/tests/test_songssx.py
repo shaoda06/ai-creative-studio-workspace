@@ -35,6 +35,14 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
         fixture.candidate('P002', 'E002')
         fixture.rounds([fixture.round(1, [('P001', 'E001'), ('P002', 'E002')])])
         earlier = json.loads((project / '制作轮次.json').read_text())['rounds'][0]
+        continuous = project / '历史版本/脚本-v02.md'
+        text = (project / earlier['script']).read_text()
+        start, finish = text.index('### SH002'), text.index('## 修订记录')
+        text = text[:start] + text[finish:]
+        continuous.write_text(text.replace('| 脚本版本 | v01 |','| 脚本版本 | v02 |')
+                              .replace('| P002 | SH002 | 4 |','| P002 | SH001 | 4 |')
+                              .replace('**时长**：5秒','**时长**：9秒')
+                              .replace('00:00-00:05秒','00:00–00:09'))
         source, _, _ = fixture.resource(kind='image', key='songssx-reference')
         record = project / '执行记录/E003'
         record.mkdir()
@@ -47,7 +55,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                             'segments': [{'p': p, 'duration': duration, 'overlap_frames': overlap,
                                           'images': [key(source)], 'prompt': PROMPT, 'prompt_zh': p+' 中文参考'}
                                          for p, duration, overlap in [('P001', 5, 0), ('P002', 4, 22)]]}}
-        spec = {'script': earlier['script'], 'note': '隔离整场'}
+        spec = {'script': key(continuous), 'note': '隔离整场同镜跨段'}
         (workspace / 'comfyui-config.json').write_text(json.dumps({'remote-urls': ['http://127.0.0.1:1']}))
         payload = SubmissionPlanInput(project=project.name, plan_file=key(plan), thread_id='test',
             desktop=dict(node='test', server='test', pipe='test', caller_thread='test'),
@@ -119,6 +127,10 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([(row['id'], row['gen'], row['start']) for row in scene['segments']],
                              [('P001', 1, 0), ('P002', 2, 124 / 24)])
             self.assertEqual(scene['segments'][1]['context']['prompts']['chinese'], 'P002 中文参考')
+            self.assertEqual([[(shot['id'],shot['start'],shot['duration']) for shot in part['context']['shots']]
+                              for part in scene['segments']], [[('SH001',0,5)],[('SH001',0,4)]])
+            self.assertIn('SH001 5–9 秒', scene['segments'][1]['context']['scriptHtml'])
+            self.assertEqual(newer['segments'][0]['key'], newer['segments'][1]['key'])
             self.assertTrue(scene['video']['url'].startswith(fixture.api + '/projects/'))
             note = NoteChange(segment='P002', stage='场次生成', run='R002', text='隔离意见',
                               fileRevision=scene['video']['fileRevision'], roundNumber=2, expectedText='')
@@ -199,7 +211,7 @@ class SongssxTests(unittest.IsolatedAsyncioTestCase):
                 result, = json.loads(before)['rounds']
                 self.assertEqual(result['storyboard'], spec['storyboard'])
                 self.assertEqual(result['batches'], [key(record / '任务清单-装配结果.json')])
-                self.assertEqual(result['segments'], [{'id': 'P001', 'duration': 5, 'stage': '一采',
+                self.assertEqual(result['segments'], [{'id': 'P001', 'duration': 5, 'stage': '场次生成',
                                                       'run': 'R001', 'file': task['output']}])
                 payload.prepare_only = False
                 board.write_text(approved.replace('**机位/构图**：测试', ''))

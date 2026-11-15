@@ -68,6 +68,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const [handoffKey, setHandoffKey] = useState('');
   const [roundEntry, setRoundEntry] = useState(0);
   const [recordNumber, setRecordNumber] = useState<number | null>(null);
+  const [planSegment, setPlanSegment] = useState<string | null>(null);
   const [viewedWorkflow, setViewedWorkflow] = useState<{ episode: string; workflow: ProductionWorkflow } | null>(null);
   const [playback, setPlayback] = useState<{ episode: string; rounds: Record<string, number | undefined>; start?: EpisodePlayback['start'] } | null>(null);
   const cards = useRef<HTMLDivElement>(null);
@@ -140,6 +141,8 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
       storyboardVersion: round ? round.storyboard?.version || '' : current?.storyboards?.[id]?.version || '' };
   });
   const segments = current?.segments?.[selectedScene] || [];
+  const currentPlan = current?.segmentPlanHasShotContinuations ? segments.filter(item => item.shotIds?.length) : [];
+  const plannedSegment = currentPlan.find(item => item.id === planSegment) || currentPlan[0];
   const sceneRounds = current?.sceneRounds?.[selectedScene] || [];
   const selectableRounds = [...new Map([...episodeRounds, ...sceneRounds.filter(item => !item.episodeRound)]
     .map(item => [item.number, item])).values()].sort((a, b) => b.number - a.number);
@@ -266,8 +269,14 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
           onChange={value => openRound(Number(value))} items={recordOptions.length ? recordOptions : [{ value: '', label: '暂无轮次', disabled: true }]} />
       </div>
       <button className="link episode-script-link" onClick={() => setRecordNumber(selectedRound ?? 0)}>轮次记录</button>
+      {plannedSegment && <button className="link episode-script-link" onClick={() => setPlanSegment(plannedSegment.id)}>当前分段计划</button>}
       </div>
     </div>
+    {planSegment !== null && plannedSegment && <Dialog title="当前分段计划" close={() => setPlanSegment(null)}>
+      <TabNav label="计划分段" selected={plannedSegment.id} onChange={setPlanSegment}
+        items={currentPlan.map(item => ({ value: item.id, label: `${item.id} · ${item.duration} 秒` }))} />
+      <Rich html={plannedSegment.scriptHtml} />
+    </Dialog>}
     {recordNumber !== null && <Dialog title="轮次记录" close={() => setRecordNumber(null)}>
       {recordOptions.length > 0 ? <TabSelect size="toolbar" label="查阅轮次" selected={String(recordNumber)} items={recordOptions} onChange={value => setRecordNumber(Number(value))} />
         : <p className="muted">尚未登记轮次。</p>}
