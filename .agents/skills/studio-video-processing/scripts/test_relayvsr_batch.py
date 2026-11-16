@@ -1,13 +1,18 @@
 """Exercise exact local cuts, one task group, and ordered assembly with offline fixtures."""
 from fractions import Fraction
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
+import relayvsr_batch
 from relayvsr_batch import ffmpeg, join, media, prepare, save_json
 from test_video_workflow import Canvas, Documents, prepare_technical
+from execution_records import write
+from video_metadata import probe
 
 
 def frame_hashes(path):
@@ -40,9 +45,16 @@ class RelayVSRBatchTests(unittest.TestCase):
                 self.assertNotIn('12', request['workflow'])
                 path = root / spec['outputs'][0]['path']
                 ffmpeg('-i', clip, '-vf', 'scale=128:72', '-c:v', 'libx264', path)
-                save_json(path.parent / '结果收尾报告.json', {'items': [{
-                    'identity': path.name, 'path': path.relative_to(root).as_posix()}]})
+                write(path.parent / '结果收尾报告.json', {'items': [{
+                    'identity': path.name, 'path': path.relative_to(root).as_posix(), 'metadata': probe(path)}]},
+                      compact=True)
             self.assertEqual(samples, frame_hashes(source))
+            original = path.stat()
+            os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns + 10**9))
+            with self.assertRaisesRegex(ValueError, '取回文件已变化'):
+                join(root, record)
+            self.assertFalse((record / '超分合片.mp4').exists())
+            os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
             self.assertEqual(join(root, record)['frames'], 2016)
             video, audio = media(record / '超分合片.mp4', count=True)
             self.assertEqual((video['nb_read_frames'], video['duration'], audio[0]['codec_name']), ('2016', '84.000000', 'aac'))
@@ -71,10 +83,37 @@ class RelayVSRBatchTests(unittest.TestCase):
                 result = folder / item['result']
                 ffmpeg('-i', folder / '源片.mp4', '-vf', 'scale=128:72', '-c:v', 'libx264', result)
                 save_json(folder / '结果收尾报告.json', {'items': [{
-                    'identity': result.name, 'path': result.relative_to(root).as_posix()}]})
+                    'identity': result.name, 'path': result.relative_to(root).as_posix(), 'metadata': probe(result)}]})
             self.assertEqual(join(root, record)['frames'], 350)
             merged, _ = media(root / 'output.mp4', count=True)
             self.assertEqual(Fraction(merged['avg_frame_rate']), Fraction(30000, 1001))
+
+    def test_conflicting_output_and_changed_source_cannot_publish_a_plan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'video.mp4'
+            ffmpeg('-f', 'lavfi', '-i', 'testsrc2=s=64x36:r=24', '-frames:v', '241',
+                   '-c:v', 'libx264', source)
+            record = root / 'relay'
+            target = root / 'output.mp4'
+            with self.assertRaisesRegex(ValueError, '中间合片同名'):
+                prepare(root, source, record, record / '超分合片.mp4', '隔离验证', fps=60)
+            with self.assertRaisesRegex(ValueError, '分段文件同名'):
+                prepare(root, source, record, record / '分段-001/源片.mp4', '隔离验证')
+            self.assertFalse(record.exists())
+            original_trim = relayvsr_batch.trim
+
+            def change_source(*args):
+                original_trim(*args)
+                current = source.stat()
+                os.utime(source, ns=(current.st_atime_ns, current.st_mtime_ns + 10**9))
+
+            with patch.object(relayvsr_batch, 'trim', side_effect=change_source):
+                with self.assertRaisesRegex(ValueError, '裁剪期间源片已变化'):
+                    prepare(root, source, record, target, '隔离验证')
+            self.assertFalse(record.exists())
+            self.assertEqual(prepare(root, source, record, target, '隔离验证')['tasks'], 2)
+            self.assertEqual(frame_hashes(record / '分段-002/源片.mp4'), frame_hashes(source)[-1:])
 
 
 if __name__ == '__main__':

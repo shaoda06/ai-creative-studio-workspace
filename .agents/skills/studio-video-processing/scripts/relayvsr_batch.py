@@ -8,7 +8,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 from video_workflow import assemble_relayvsr, plan_output
-from execution_records import read
+from execution_records import read, stamp
 from project_paths import project_file
 
 SEGMENT_SECONDS = 10
@@ -84,8 +84,11 @@ def output(node, key, path, root):
 def prepare(root, source, record, target, authorization, fps=None):
     if not authorization.strip():
         raise ValueError('请提供本次执行授权')
+    if target.suffix.lower() != '.mp4':
+        raise ValueError('最终输出文件须使用 .mp4 扩展名')
     if record.exists() or target.exists() or source == target:
         raise FileExistsError('执行目录和结果文件须为本次未占用的路径')
+    source_stamp = list(stamp(source))
     video, _ = media(source, count=True)
     rate = Fraction(video['avg_frame_rate'])
     frames = int(video.get('nb_read_frames', 0))
@@ -96,6 +99,8 @@ def prepare(root, source, record, target, authorization, fps=None):
                                 'original' if fps is None else fps)
     interpolate = not configuration['reuse']
     stage = record / '超分合片.mp4' if interpolate else target
+    if interpolate and stage == target:
+        raise ValueError('最终输出与插帧使用的中间合片同名，请另选输出路径')
 
     def relative(path):
         return path.relative_to(root).as_posix()
@@ -112,8 +117,10 @@ def prepare(root, source, record, target, authorization, fps=None):
             local.mkdir()
             folder = record / part
             count = min(limit, frames - start)
-            trim(source, local / '源片.mp4', start, count, rate)
             filename = f'{part}-RelayVSR.mp4'
+            if target in (folder / '源片.mp4', folder / filename):
+                raise ValueError('最终输出与分段文件同名，请另选输出路径')
+            trim(source, local / '源片.mp4', start, count, rate)
             placeholder = f'planned/{part}.mp4'
             save_json(local / '内容画布.workflow.json', assemble_relayvsr(placeholder, f'{record.name}/{part}'))
             tasks.append(dict(task_type='video-postprocess', title=f'{target.stem} · RelayVSR {part}',
@@ -123,8 +130,7 @@ def prepare(root, source, record, target, authorization, fps=None):
                               outputs=[output('106', 'images', folder / filename, root)], video_plan=VIDEO_PLAN))
             segments.append(dict(start=start, frames=count, record_dir=relative(folder), result=filename))
         save_json(work / '任务清单.json', dict(group_title=f'{target.stem} · RelayVSR 2倍超分', tasks=tasks))
-        stamp = source.stat()
-        save_json(work / '分段计划.json', dict(source=relative(source), source_stamp=[stamp.st_size, stamp.st_mtime_ns],
+        save_json(work / '分段计划.json', dict(source=relative(source), source_stamp=source_stamp,
                   merged=relative(stage), size=[width, height], fps=str(rate), frames=frames, segments=segments))
         if interpolate:
             folder = record / '整条插帧'
@@ -134,6 +140,8 @@ def prepare(root, source, record, target, authorization, fps=None):
                      references=[dict(file=relative(stage), placeholder='planned/relayvsr-joined.mp4')],
                      video_postprocess=dict(source=relative(stage), resolution='original', fps=fps),
                      outputs=[output('16', 'gifs', target, root)])]))
+        if list(stamp(source)) != source_stamp:
+            raise ValueError('裁剪期间源片已变化，请从实际源片重新准备')
         work.rename(record)
     return dict(status='prepared', tasks=len(tasks), plan=relative(record / '任务清单.json'))
 
@@ -144,8 +152,7 @@ def join(root, record):
     target = project_file(root, plan['merged'])
     if target.exists():
         raise FileExistsError(target)
-    stamp = source.stat()
-    if [stamp.st_size, stamp.st_mtime_ns] != plan['source_stamp']:
+    if list(stamp(source)) != plan['source_stamp']:
         raise ValueError('源片已变化，请核对原始音轨')
     _, source_audio = media(source)
     fps = Fraction(plan['fps'])
@@ -158,6 +165,9 @@ def join(root, record):
             report = read(project_file(root, segment['record_dir']) / '结果收尾报告.json')
             item, = report['items']
             raw = project_file(root, item['path'])
+            received_stamp = item['metadata']['stamp']
+            if list(stamp(raw)) != received_stamp:
+                raise ValueError(f'分段 {index} 的取回文件已变化，请核对原报告')
             video, _ = media(raw)
             actual = (item['identity'], video['width'], video['height'],
                       Fraction(video['avg_frame_rate']), int(video.get('nb_frames', 0)))
@@ -165,6 +175,8 @@ def join(root, record):
                 raise ValueError(f'分段 {index} 的取回身份、分辨率、帧率或帧数不符')
             name = f'{index:04d}.mp4'
             ffmpeg('-i', raw, '-map', '0:V:0', '-an', '-c', 'copy', temporary / name)
+            if list(stamp(raw)) != received_stamp:
+                raise ValueError(f'拼接期间分段 {index} 的取回文件已变化')
             entries.extend([f'file {name}', f'duration {float(Fraction(segment["frames"], fps)):.9f}'])
         listing = temporary / 'segments.ffconcat'
         listing.write_text('\n'.join(entries) + '\n', encoding='ascii')
@@ -172,9 +184,12 @@ def join(root, record):
         ffmpeg('-f', 'concat', '-i', listing, '-i', source, '-map', '0:V:0', '-map', '1:a?',
                '-c', 'copy', '-movflags', '+faststart', merged)
         actual, audio = media(merged, count=True)
-        if (int(actual.get('nb_read_frames', 0)) != plan['frames'] or len(audio) != len(source_audio)
+        if ((actual['width'], actual['height']) != (width, height) or Fraction(actual['avg_frame_rate']) != fps
+                or int(actual.get('nb_read_frames', 0)) != plan['frames'] or len(audio) != len(source_audio)
                 or abs(float(actual['duration']) - plan['frames'] / float(fps)) > 0.5 / float(fps)):
-            raise ValueError('合片帧数、时长或音轨与计划不符')
+            raise ValueError('合片尺寸、帧率、帧数、时长或音轨与计划不符')
+        if list(stamp(source)) != plan['source_stamp']:
+            raise ValueError('拼接期间源片已变化，请核对原始音轨')
         target.hardlink_to(merged)
     return dict(status='joined', path=plan['merged'], frames=plan['frames'])
 
