@@ -14,7 +14,6 @@ import type { ChloeOverviewData } from './ChloeAccountOverview';
 import { HeaderControlsContext } from './components/AppShell';
 import { TabNav } from './components/TabNav';
 import { UnderlineTabs } from './components/UnderlineTabs';
-import { LinkButton } from './components/LinkButton';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageHeader } from './components/PageHeader';
 import { ChloeReferenceAssets, ChloeReferenceAssetDetail, referenceAssetKinds } from './ChloeReferenceAssets';
@@ -96,8 +95,7 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
   const assetList = `${page}?${assetListParams(params)}`;
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
-  const assetNavigation = (reset?: () => void) => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
-    endAction={reset && <LinkButton onClick={reset}>重置</LinkButton>}
+  const assetNavigation = () => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
     onChange={value => setParams({ section: 'assets', asset: value })} />;
   return <>
     {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked actions={<Link to={workspacePage}>返回项目列表</Link>}>

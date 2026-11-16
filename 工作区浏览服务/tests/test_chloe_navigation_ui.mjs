@@ -307,6 +307,8 @@ try {
     const dialog = page.getByRole('dialog');
     const confirm = dialog.getByRole('button',{name:'确认选择',exact:true});
     const assemblyNav = page.getByRole('navigation',{name:'装配分类',exact:true});
+    const assemblyNavigation = page.locator('.chloe-assembly-navigation');
+    const reset = assemblyNavigation.getByRole('button',{name:'重置',exact:true});
     const exportArea = page.getByRole('region',{name:'导出',exact:true});
     const generateHandoff = exportArea.getByRole('button',{name:'生成',exact:true});
     const copyHandoff = exportArea.getByRole('button',{name:'复制',exact:true});
@@ -318,6 +320,12 @@ try {
     await assemblyNav.waitFor();
     assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['套装装配','造型装配','姿态装配','视频装配']);
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'套装装配');
+    const [resetBox, lastTabBox, navBox] = await Promise.all([
+      reset.boundingBox(), assemblyNav.getByRole('button',{name:'视频装配',exact:true}).boundingBox(), assemblyNavigation.boundingBox(),
+    ]);
+    assert.ok(lastTabBox.x+lastTabBox.width<resetBox.x);
+    assert.ok(Math.abs(resetBox.x+resetBox.width-navBox.x-navBox.width)<=1);
+    assert.ok(Math.abs(resetBox.y+resetBox.height/2-lastTabBox.y-lastTabBox.height/2)<=2);
     const garmentCount = count => page.getByRole('heading',{name:`单件选择 ${count}/5`,exact:true});
     const pickerCount = (label,count,limit=1) => page.getByRole('dialog',{name:`选择${label} ${count}/${limit}`,exact:true});
     await garmentCount(0).waitFor();
@@ -417,7 +425,7 @@ try {
     await outfitGenerate.click();
     assert.match(await outfitHandoff.textContent(),/^1\. O004 · 单件样例2$/m);
     assert.doesNotMatch(await outfitHandoff.textContent(),/O003/);
-    for (const asset of fixtureGarments.slice(1,5)) await choose(`移除${asset.id} · ${asset.name}`).click();
+    await reset.click();
     await garmentCount(0).waitFor();
     assert.ok(await outfitGenerate.isDisabled());
     assert.equal(await outfitInfo.locator('dd').textContent(),'未选择');
@@ -510,6 +518,10 @@ try {
     await selectRandom.click();
     await poseSelection.getByRole('heading',{name:'姿态选择 0 项',exact:true}).waitFor();
     assert.ok(await outfitGenerate.isDisabled());
+    await reset.click();
+    assert.equal(await poseCategory.textContent(),'全部');
+    assert.equal(await poseQuantity.inputValue(),'1');
+    assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'姿态装配');
 
     await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
     const checkRefreshedPicker = async (endpoint, button, name, emptyText, assets) => {
@@ -529,10 +541,9 @@ try {
       await dialog.getByText(emptyText,{exact:true}).waitFor();
       await page.keyboard.press('Escape');
     };
-    const reset = assetNav.getByRole('button',{name:'重置',exact:true});
     await summary.waitFor();
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
-    assert.equal(await reset.count(),0);
+    assert.ok(await reset.isEnabled());
     await handoff.waitFor();
     assert.equal((await handoff.boundingBox()).height,emptyExportHeight);
     assert.ok(await generateHandoff.isDisabled());
@@ -577,7 +588,7 @@ try {
     await dialog.waitFor({state:'hidden'});
     await page.getByRole('heading',{name:'模特选择 1/1',exact:true}).waitFor();
     assert.notEqual(await page.evaluate(()=>getComputedStyle(document.documentElement).overflowY),'hidden');
-    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),[...assetLabels.slice(0,-1),'重置','装配']);
+    assert.deepEqual(await assetNav.getByRole('button').allTextContents(),assetLabels);
     await page.getByRole('img',{name:'基础三视图',exact:true}).waitFor();
     assert.equal(await page.getByRole('img',{name:'正面基础图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-front');
     assert.equal(await page.getByRole('img',{name:'基础三视图',exact:true}).getAttribute('src'),'/api/assembly-fixture/M002-body');
@@ -790,15 +801,13 @@ try {
     await dialog.waitFor({state:'hidden'});
     assert.equal(await accessories.getByRole('heading',{level:2}).textContent(),'配饰选择 0/5');
     assert.equal(await choose('添加配饰').count(),1);
-    const [resetBox, assemblyBox, tabBar] = await Promise.all([reset.boundingBox(),assetNav.getByRole('button',{name:'装配',exact:true}).boundingBox(),assetNav.boundingBox()]);
-    assert.ok(resetBox.x+resetBox.width<assemblyBox.x && Math.abs(assemblyBox.x+assemblyBox.width-tabBar.x-tabBar.width)<=1);
     await reset.click();
     assert.equal(await handoff.textContent(),'选定模特和套装后可生成交接词，发型和配饰可选。');
     assert.ok(await copyHandoff.isDisabled());
     assert.deepEqual(await summary.locator('dd').allTextContents(),['未选择','未选择','未选择','未选择']);
     assert.equal(await page.locator('.chloe-assembly-main img').count(),0);
     assert.deepEqual(await accessories.getByRole('button').allTextContents(),['+添加配饰']);
-    assert.equal(await reset.count(),0);
+    assert.ok(await reset.isEnabled());
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth+1),true);
     await checkRefreshedPicker('shared-clothing','选择套装','O001 · 套装甲','暂无可用套装。',fixtureClothing);
 
@@ -957,6 +966,10 @@ try {
     await reset.click();
     assert.ok(await generateHandoff.isDisabled());
     assert.equal(await page.getByRole('textbox',{name:'额外要求（可选）'}).inputValue(),'');
+    await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
+    assert.equal(await summary.locator('dd').first().textContent(),'M002 · 模特乙');
+    await assemblyNav.getByRole('button',{name:'视频装配',exact:true}).click();
+    assert.ok(await generateHandoff.isDisabled());
     await checkRefreshedPicker('shared-scenes','选择背景','S001 · 背景甲','暂无可选背景。',fixtureScenes);
     await page.reload();
     await assemblyNav.getByRole('button',{name:'视频装配'}).waitFor();

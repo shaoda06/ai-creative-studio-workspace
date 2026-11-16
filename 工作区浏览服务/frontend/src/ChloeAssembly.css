@@ -1,4 +1,5 @@
 .chloe-assembly{display:grid;gap:24px}
+.chloe-assembly-navigation{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .chloe-assembly h2{margin:0 0 10px;font-size:18px}
 .chloe-assembly-main,.chloe-assembly-summary{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr);column-gap:20px}
 .chloe-assembly-main{grid-template-rows:repeat(4,auto);row-gap:8px}

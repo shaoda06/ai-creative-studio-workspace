@@ -32,8 +32,6 @@ const assemblyTabs = [
   { value: 'outfit', label: '套装装配' }, { value: 'look', label: '造型装配' },
   { value: 'poses', label: '姿态装配' }, { value: 'video', label: '视频装配' },
 ];
-type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
-
 const garmentTitle = (asset: AssemblyAsset) => `${assetTitle(asset)}（${asset.bodyArea}）`;
 
 function AddAssetCard({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
@@ -125,38 +123,39 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
   </AssetSelectionDialog>;
 }
 
-export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) {
+export function ChloeAssembly({ projectName, renderNavigation }: { projectName: string; renderNavigation: () => ReactNode }) {
   const [params, setParams] = useSearchParams();
+  const [resetVersions, setResetVersions] = useState<Record<string, number>>({});
   const requestedTab = params.get('assemblyTab');
   const tab = assemblyTabs.find(item => item.value === requestedTab)?.value ?? 'outfit';
-  const navigation = (reset?: () => void) => <>
-    {renderNavigation(reset)}
-    <div className="chloe-assets-content">
+  const reset = () => setResetVersions(current => ({ ...current, [tab]: (current[tab] ?? 0) + 1 }));
+  return <>
+    {renderNavigation()}
+    <div className="chloe-assets-content chloe-assembly-navigation">
       <UnderlineTabs label="装配分类" items={assemblyTabs} selected={tab} onChange={value => {
         if (value === tab) return;
         setParams({ section: 'assets', asset: 'assembly', assemblyTab: value });
       }} />
+      <LinkButton onClick={reset}>重置</LinkButton>
     </div>
-  </>;
-  return <>
     <Activity mode={tab === 'outfit' ? 'visible' : 'hidden'}>
-      <OutfitAssembly projectName={projectName} renderNavigation={navigation} />
+      <OutfitAssembly key={resetVersions.outfit} projectName={projectName} />
     </Activity>
     <Activity mode={tab === 'look' ? 'visible' : 'hidden'}>
-      <LookAssembly projectName={projectName} renderNavigation={navigation} />
+      <LookAssembly key={resetVersions.look} projectName={projectName} />
     </Activity>
     <Activity mode={tab === 'poses' ? 'visible' : 'hidden'}>
-      <ListAssembly<AssemblyAsset> kind="poses" renderNavigation={navigation}
+      <ListAssembly<AssemblyAsset> key={resetVersions.poses} kind="poses"
         buildHandoff={poses => poses.map(assetTitle).join('\n')} />
     </Activity>
     <Activity mode={tab === 'video' ? 'visible' : 'hidden'}>
-      <ChloeVideoAssembly projectName={projectName} renderNavigation={navigation} active={tab === 'video'} />
+      <ChloeVideoAssembly key={resetVersions.video} projectName={projectName} active={tab === 'video'} />
     </Activity>
   </>;
 }
 
-function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
-  return <ListAssembly<ReferenceAssetCard> kind="garments" renderNavigation={renderNavigation} buildHandoff={garments => [
+function OutfitAssembly({ projectName }: { projectName: string }) {
+  return <ListAssembly<ReferenceAssetCard> kind="garments" buildHandoff={garments => [
     `请为「${projectName}」用以下单件合成一张套装展示图，套装仅包含服装。`,
     '',
     ...garments.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`),
@@ -175,8 +174,8 @@ function shuffled<T>(items: T[]) {
   return result;
 }
 
-function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHandoff }: {
-  kind: 'garments' | 'poses'; renderNavigation: AssemblyProps['renderNavigation']; buildHandoff: (assets: T[]) => string;
+function ListAssembly<T extends AssemblyAsset>({ kind, buildHandoff }: {
+  kind: 'garments' | 'poses'; buildHandoff: (assets: T[]) => string;
 }) {
   const [selected, setSelected] = useState<T[]>([]);
   const [handoff, setHandoff] = useState('');
@@ -237,8 +236,7 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
     changeSelection(reordered);
   };
 
-  return <>
-    {renderNavigation(selected.length && !selecting ? () => changeSelection([]) : undefined)}
+  return (
     <div className="chloe-assets-content chloe-assembly">
       <section aria-label={`${label}选择`}>
         <div className={isPose ? 'chloe-pose-selection-heading' : undefined}>
@@ -275,10 +273,10 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
       {picking && <AssemblyPicker kind={kind} initial={selected} onConfirm={changeSelection} onClose={() => setPicking(false)} />}
       {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
-  </>;
+  );
 }
 
-function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
+function LookAssembly({ projectName }: { projectName: string }) {
   const { api } = useChloeScope();
   const [model, setModel] = useState<ReferenceAssetCard | null>(null);
   const [outfit, setOutfit] = useState<ReferenceAssetCard | null>(null);
@@ -329,16 +327,7 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
     setAccessories(current => current.filter(asset => asset.id !== id));
     setHandoff('');
   };
-  const reset = () => {
-    setModel(null);
-    setOutfit(null);
-    setHair(null);
-    setAccessories([]);
-    setHandoff('');
-  };
-
-  return <>
-    {renderNavigation(model || outfit || hair || accessories.length ? reset : undefined)}
+  return (
     <div className="chloe-assets-content chloe-assembly">
     <div className="chloe-assembly-main">
       <section className="chloe-assembly-column" aria-label="模特选择">
@@ -395,5 +384,5 @@ function LookAssembly({ projectName, renderNavigation }: AssemblyProps) {
     {picker && <AssemblyPicker kind={picker} initial={initial} onConfirm={confirm} onClose={() => setPicker(null)} />}
     {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
-  </>;
+  );
 }

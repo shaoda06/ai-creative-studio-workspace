@@ -1,6 +1,5 @@
 import { assetPaging, useAssetDraft, useAssetPage } from './chloeAssetPages';
 import { useId, useState } from 'react';
-import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from './api';
 import type { FileItem } from './api';
@@ -81,8 +80,8 @@ function VideoAssemblyChoices({ endpoint, label, model, initialId, back, onClose
   </AssetSelectionDialog>;
 }
 
-export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
-  projectName: string; renderNavigation: (reset?: () => void) => ReactNode; active: boolean;
+export function ChloeVideoAssembly({ projectName, active }: {
+  projectName: string; active: boolean;
 }) {
   const { api } = useChloeScope();
   const [video, setVideo] = useState<Extract<Selection, { kind: 'video' }> | null>(null);
@@ -124,16 +123,7 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
     setHandoff('');
     setPicker(null);
   };
-  const reset = () => {
-    setVideo(null);
-    setLook(null);
-    setScene(null);
-    setRequirements('');
-    setHandoff('');
-  };
-
-  return <>
-    {renderNavigation(video || look || scene || requirements ? reset : undefined)}
+  return (
     <div className="chloe-assets-content chloe-assembly chloe-video-assembly">
       <div className="chloe-video-assembly-inputs">
         <section className="chloe-video-assembly-choice" aria-label="参考视频选择">
@@ -175,5 +165,5 @@ export function ChloeVideoAssembly({ projectName, renderNavigation, active }: {
         onConfirm={confirm} onClose={() => setPicker(null)} />}
       {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
-  </>;
+  );
 }
