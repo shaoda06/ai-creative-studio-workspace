@@ -40,12 +40,13 @@ function AddAssetCard({ label, onClick, disabled }: { label: string; onClick: ()
   </button>;
 }
 
-function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, disabled, onReorder }: {
+function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, disabled, onReorder, floatingRemove }: {
   asset: AssemblyAsset; title: string; aspectRatio: number | 'natural'; onRemove: () => void; compact?: boolean; disabled?: boolean;
-  onReorder?: (sourceId: string, targetId: string) => void;
+  onReorder?: (sourceId: string, targetId: string) => void; floatingRemove?: boolean;
 }) {
   const [dropTarget, setDropTarget] = useState(false);
-  return <div className="chloe-assembly-selected-card" draggable={onReorder ? true : undefined}
+  return <div className={`chloe-assembly-selected-card${floatingRemove ? ' chloe-assembly-with-floating-remove' : ''}`}
+    draggable={onReorder ? true : undefined}
     data-drop-target={dropTarget ? true : undefined}
     onDragStart={onReorder && (event => {
       event.dataTransfer.effectAllowed = 'move';
@@ -71,7 +72,10 @@ function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, di
       onReorder(sourceId, asset.id);
     })}>
     <AssetMediaCard title={title} formal entry compact={compact} aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
-    <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove} disabled={disabled}>移除</button>
+    <button type="button" className={`danger-button${floatingRemove ? ' chloe-assembly-floating-remove' : ''}`}
+      aria-label={`移除${assetTitle(asset)}`} title={floatingRemove ? '移除' : undefined} onClick={onRemove} disabled={disabled}>
+      {floatingRemove ? '×' : '移除'}
+    </button>
   </div>;
 }
 
@@ -254,6 +258,7 @@ function ListAssembly<T extends AssemblyAsset>({ kind, buildHandoff }: {
         <div className={`chloe-assembly-accessories ${isPose ? 'chloe-assembly-poses' : 'chloe-assembly-garments'}`}>
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
             {selected.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={title(asset)} aspectRatio="natural" compact={isPose} disabled={selecting}
+              floatingRemove={!isPose}
               onReorder={isPose && !selecting && selected.length > 1 ? movePose : undefined}
               onRemove={() => changeSelection(selected.filter(item => item.id !== asset.id))} />)}
           </PreviewContext.Provider>
@@ -361,7 +366,7 @@ function LookAssembly({ projectName }: { projectName: string }) {
       </div>
       <div className="chloe-assembly-accessories">
         <PreviewContext.Provider value={media => { if (media.url) openImage(media.name, media.url); }}>
-          {accessories.map((asset, index) => <SelectedAssemblyCard key={asset.id} asset={asset} title={`配饰 ${index + 1} · ${assetTitle(asset)}`}
+          {accessories.map((asset, index) => <SelectedAssemblyCard key={asset.id} asset={asset} title={`配饰 ${index + 1} · ${assetTitle(asset)}`} floatingRemove
             aspectRatio={1} onRemove={() => removeAccessory(asset.id)} />)}
         </PreviewContext.Provider>
         {accessories.length < accessoryLimit && <AddAssetCard label="添加配饰" onClick={() => setPicker('accessories')} />}

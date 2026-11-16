@@ -367,9 +367,10 @@ try {
     const garmentRemove = choose('移除O003 · 单件样例1');
     const garmentRemoveBox = await garmentRemove.boundingBox();
     assert.ok(nextAdd.x > emptyAdd.x && Math.abs(nextAdd.height-firstCard.height) <= 2);
-    assert.ok(garmentRemoveBox.y > firstCard.y+firstCard.height);
-    assert.ok(Math.abs(garmentRemoveBox.x+garmentRemoveBox.width/2-firstCard.x-firstCard.width/2)<1);
-    assert.equal(await garmentRemove.getAttribute('class'),'danger-button');
+    assert.ok(garmentRemoveBox.y < firstCard.y && garmentRemoveBox.y+garmentRemoveBox.height > firstCard.y);
+    assert.ok(garmentRemoveBox.x < firstCard.x+firstCard.width && garmentRemoveBox.x+garmentRemoveBox.width > firstCard.x+firstCard.width);
+    assert.equal(await garmentRemove.textContent(),'×');
+    assert.match(await garmentRemove.getAttribute('class'),/\bdanger-button\b/);
     await outfitGenerate.click();
     assert.match(await outfitHandoff.textContent(),/^1\. O003 · 单件样例1$/m);
     assert.match(await outfitHandoff.textContent(),/按编号和标题找到各单件正式采用的服装展示图。生成前先逐张打开并查看/);
@@ -799,9 +800,10 @@ try {
     const accessoryRemove = accessories.getByRole('button',{name:'移除C001 · 配饰样例1',exact:true});
     const accessoryCard = accessories.locator('.asset-media-card').filter({has:page.getByRole('img',{name:'C001',exact:true})});
     const [accessoryCardBox, accessoryRemoveBox] = await Promise.all([accessoryCard.boundingBox(),accessoryRemove.boundingBox()]);
-    assert.ok(accessoryRemoveBox.y > accessoryCardBox.y+accessoryCardBox.height);
-    assert.ok(Math.abs(accessoryRemoveBox.x+accessoryRemoveBox.width/2-accessoryCardBox.x-accessoryCardBox.width/2)<1);
-    assert.equal(await accessoryRemove.getAttribute('class'),'danger-button');
+    assert.ok(accessoryRemoveBox.y < accessoryCardBox.y && accessoryRemoveBox.y+accessoryRemoveBox.height > accessoryCardBox.y);
+    assert.ok(accessoryRemoveBox.x < accessoryCardBox.x+accessoryCardBox.width && accessoryRemoveBox.x+accessoryRemoveBox.width > accessoryCardBox.x+accessoryCardBox.width);
+    assert.equal(await accessoryRemove.textContent(),'×');
+    assert.match(await accessoryRemove.getAttribute('class'),/\bdanger-button\b/);
     await accessoryRemove.click();
     await accessories.getByRole('heading',{name:'配饰选择 4/5',exact:true}).waitFor();
     assert.equal(await choose('添加配饰').count(),1);
