@@ -17,6 +17,10 @@ FIT = ('format=rgb24,scale=1086:1448:force_original_aspect_ratio=decrease,'
        'setsar=1,pad=1086:1448:(ow-iw)/2:(oh-ih)/2:white')
 
 
+def on_canvas(x, y):
+    return type(x) is int and type(y) is int and 0 <= x < 1086 and 0 <= y < 1448
+
+
 def read_manifest(path):
     data = json.loads(path.read_text(encoding='utf-8-sig'))
     items = data['items']
@@ -42,10 +46,14 @@ def read_manifest(path):
             raise ValueError(f'原帖 {number} 缺图注')
         for label in item['annotations']:
             text = label['text']
-            x, y = label['x'], label['y']
             if (not text.strip() or any(char in text for char in '\r\n；') or
-                    type(x) is not int or type(y) is not int or not (0 <= x < 1086 and 0 <= y < 1448)):
+                    not on_canvas(label['x'], label['y'])):
                 raise ValueError(f'原帖 {number} 图注应为单行短句并标出画布内的整数坐标')
+            if 'leader' in label:
+                points = label['leader']
+                if (not isinstance(points, list) or len(points) != 4 or
+                        not on_canvas(*points[:2]) or not on_canvas(*points[2:])):
+                    raise ValueError(f'原帖 {number} 引线应填写画布内的 [起点X, 起点Y, 终点X, 终点Y]')
     return data.get('title', '人物姿态送审记录'), items
 
 
@@ -74,7 +82,15 @@ def make_pair(folder, item):
     pair = Path('左右对比') / f'{number}.png'
     labels = [text_filter(folder, f'{number}-label-{i}', label['text'], label['x'], label['y'], 36)
               for i, label in enumerate(item['annotations'])]
-    render(folder, [item['lineart']], ','.join([FIT, *labels]), annotated)
+    leaders = []
+    for label in item['annotations']:
+        if 'leader' in label:
+            x1, y1, x2, y2 = label['leader']
+            leaders.extend([
+                f'drawbox=x={min(x1, x2)}:y={y1}:w={abs(x2 - x1) + 1}:h=1:color=0x9AA2AE:t=fill',
+                f'drawbox=x={x2}:y={min(y1, y2)}:w=1:h={abs(y2 - y1) + 1}:color=0x9AA2AE:t=fill',
+            ])
+    render(folder, [item['lineart']], ','.join([FIT, *leaders, *labels]), annotated)
 
     left = FIT
     if item['source'] is None:
