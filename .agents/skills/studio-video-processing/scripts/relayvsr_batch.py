@@ -7,7 +7,7 @@ import struct
 import subprocess
 from tempfile import TemporaryDirectory
 
-from video_workflow import assemble_relayvsr, plan_output
+from video_workflow import assemble_output, assemble_relayvsr, plan_output
 from execution_records import read, stamp
 from project_paths import project_file
 
@@ -101,16 +101,20 @@ def prepare(root, source, record, target, authorization, fps=None):
     if intermediate == target:
         raise ValueError('最终输出与补帧中间片同名，请另选输出路径')
     source_path = source.relative_to(root).as_posix()
+    placeholder = 'planned/rife-source.mp4'
+    canvas = assemble_output(placeholder, f'{record.name}/RIFE', configuration)
     manifest = dict(group_title=f'{target.stem} · RIFE 插帧', tasks=[
         dict(task_type='video-postprocess', title=f'{target.stem} · RIFE 插帧', authorization=authorization,
              record_dir=folder.relative_to(root).as_posix(), output_nodes=['16'], video_plan=VIDEO_PLAN,
-             references=[dict(file=source_path, placeholder='planned/rife-source.mp4')],
-             video_postprocess=dict(source=source_path, resolution='original', fps=fps),
+             canvas=(folder / '内容画布.workflow.json').relative_to(root).as_posix(),
+             references=[dict(file=source_path, placeholder=placeholder)],
              outputs=[output('16', 'gifs', intermediate, root)])])
     record.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='.relayvsr-', dir=record.parent) as temporary:
         work = Path(temporary) / '准备'
         work.mkdir()
+        (work / folder.name).mkdir()
+        save_json(work / folder.name / '内容画布.workflow.json', canvas)
         save_json(work / '插帧任务清单.json', manifest)
         save_json(work / '联动计划.json', dict(
             source=source_path, source_stamp=source_stamp, size=[video['width'], video['height']],
