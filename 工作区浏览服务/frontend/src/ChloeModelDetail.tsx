@@ -131,8 +131,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           </section>
           <div className="chloe-look-image-column">
             <section className="panel chloe-look-images" aria-label={lookFacePurpose}>
-              <h2>{lookFacePurpose}（16:9）{lookFaceImage && <span className="muted"> · {lookFaceImage.resource}@{lookFaceImage.version}</span>}</h2>
-              <div>{imageCard(lookFacePurpose,lookFaceImage,16/9)}</div>
+              <h2>{lookFacePurpose}（21:9）{lookFaceImage && <span className="muted"> · {lookFaceImage.resource}@{lookFaceImage.version}</span>}</h2>
+              <div>{imageCard(lookFacePurpose,lookFaceImage,21/9)}</div>
               {otherVersions(lookFacePurpose).length > 0 && <details><summary>其他版本</summary>
                 <div className="chloe-assets-content">{references(lookFacePurpose)}</div>
               </details>}

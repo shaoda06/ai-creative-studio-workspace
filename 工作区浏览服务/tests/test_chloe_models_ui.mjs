@@ -148,7 +148,7 @@ async function assertNaturalImage(cover, description) {
 try {
  for (const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}}), errors=[], unexpected=[];
-  let fail=false, long=false, emptyScenes=false, emptyHair=false, emptyAccessories=false, manyLookReferences=false;
+  let fail=false, long=false, emptyScenes=false, emptyHair=false, emptyAccessories=false, manyLookReferences=false, emptyLookFace=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -176,8 +176,10 @@ try {
    const garment=sample.clothes.find(item=>path===`/api/workspaces/chloe/shared-clothing/${item.id}`);
    if(garment)return route.fulfill({json:garment});
    const detail=sample.details.find(item=>path===`/api/workspaces/chloe/shared-models/${item.id}`);
-   if(detail)return route.fulfill({json:manyLookReferences ? detail : {...detail,
-     looks:detail.looks.map(look=>({...look,clothing:look.clothing.slice(0,2)}))}});
+   if(detail)return route.fulfill({json:{...detail,looks:detail.looks.map(look=>({...look,
+     clothing:manyLookReferences ? look.clothing : look.clothing.slice(0,2),
+     images:emptyLookFace ? look.images.filter(image=>image.purpose!=='造型面部三视图') : look.images,
+   }))}});
    if(sample.media[path])return route.fulfill({body:Buffer.from(sample.media[path],'base64'),contentType:'image/png'});
    if(path===sample.cards[0].media.url)return route.fulfill({body:Buffer.from(sample.image,'base64'),contentType:'image/png'});
    unexpected.push(path);return route.fulfill({status:404,json:{detail:'unexpected'}});
@@ -349,7 +351,7 @@ try {
   assert.ok(lookFaceBox.y+lookFaceBox.height<lookBodyBox.y);
   assert.ok(Math.abs(infoBox.y+infoBox.height-lookBodyBox.y-lookBodyBox.height)<1);
   const lookFace=sample.details[0].looks[0].images.find(image=>image.adopted && image.purpose==='造型面部三视图');
-  const lookFaceHeading=lookFacePanel.getByRole('heading',{name:`造型面部三视图（16:9） · ${lookFace.resource}@${lookFace.version}`,exact:true});
+  const lookFaceHeading=lookFacePanel.getByRole('heading',{name:`造型面部三视图（21:9） · ${lookFace.resource}@${lookFace.version}`,exact:true});
   await lookFaceHeading.waitFor();
   const faceCover=lookFacePanel.locator(':scope > div > .asset-media-card .cover');
   await assertNaturalImage(faceCover,'造型面部三视图');
@@ -421,7 +423,12 @@ try {
   assert.equal((await description.boundingBox()).y,descriptionY,'滚动参考图时造型信息不移动');
   assert.equal(await page.evaluate(()=>scrollY),pageScrollY,'滚轮只滚动参考图');
   manyLookReferences=false;
+  emptyLookFace=true;
   await page.reload();
+  await lookFacePanel.getByRole('heading',{name:'造型面部三视图（21:9）',exact:true}).waitFor();
+  const facePlaceholder=await lookFacePanel.locator('.asset-media-placeholder').boundingBox();
+  assert.ok(Math.abs(facePlaceholder.width/facePlaceholder.height-21/9)<.01,'造型面部三视图空态保持 21:9');
+  emptyLookFace=false;
   await page.getByRole('link',{name:'返回造型列表',exact:true}).click();
   await page.getByRole('link',{name:'L001 · 通勤造型',exact:true}).waitFor();
   await page.locator('.breadcrumbs').getByRole('link',{name:'AI 模特',exact:true}).click();
