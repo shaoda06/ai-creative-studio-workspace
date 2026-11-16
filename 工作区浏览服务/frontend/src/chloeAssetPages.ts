@@ -12,12 +12,16 @@ export const chloeAssetStatusBadges = {
 export type ChloeAssetStatus = keyof typeof chloeAssetStatusBadges;
 
 interface AssetPage<T> { items: T[]; total: number; page: number; page_size: number; types: string[] }
-interface AssetFilters { available?: boolean; require_media?: boolean; form?: string }
+interface AssetFilters { available?: boolean; require_media?: boolean; form?: string; page_size?: number }
+export const poseAssetPageSize = 15;
 
-export function assetUrl(api: string, endpoint: string, filters: AssetFilters, page?: number, types: string[] = [], ids: string[] = []) {
+export function assetUrl(api: string, endpoint: string, { page_size, ...filters }: AssetFilters, page?: number, types: string[] = [], ids: string[] = []) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) if (value) params.set(key, String(value));
-  if (page) params.set('page', String(page));
+  if (page) {
+    params.set('page', String(page));
+    if (page_size) params.set('page_size', String(page_size));
+  }
   for (const type of types) params.append('types', type);
   for (const id of ids) params.append('ids', id);
   return `${api}/${endpoint}?${params}`;

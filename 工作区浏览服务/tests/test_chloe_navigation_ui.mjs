@@ -38,7 +38,7 @@ const fixtureClothing = [
   fixtureAsset('O010','旧服装'),
 ];
 const fixtureHair = [fixtureAsset('H001','发型甲'),fixtureAsset('H002','制作中发型','制作中')];
-const fixturePoses = ['站姿','坐姿'].flatMap(type => Array.from({length:type==='站姿' ? 13 : 1},(_,index)=>{
+const fixturePoses = ['站姿','坐姿'].flatMap(type => Array.from({length:type==='站姿' ? 16 : 1},(_,index)=>{
   const id = `${type}-${String(index+1).padStart(3,'0')}`;
   const name = `${id}样例`;
   const media = {...fixtureImage(name), url:'/api/assembly-fixture/pose-image',thumbnailUrl:'/api/assembly-fixture/pose-thumb'};
@@ -203,6 +203,7 @@ try {
     const firstPose = page.getByRole('link',{name:'站姿-001 · 站姿-001样例',exact:true});
     await firstPose.waitFor();
     const poseGrid = page.locator('.chloe-pose-grid');
+    assert.equal(await poseGrid.getByRole('link').count(),15);
     const rowTops = await poseGrid.getByRole('link').evaluateAll(cards=>cards.slice(0,6).map(card=>card.getBoundingClientRect().top));
     assert.ok(rowTops.slice(0,5).every(top=>top===rowTops[0]) && rowTops[5]>rowTops[0]);
     const poseImage = firstPose.getByRole('img');
@@ -248,7 +249,7 @@ try {
     await longPose.getByRole('button',{name:'关闭',exact:true}).click();
     const nextPosePage = page.getByRole('button',{name:'下一页',exact:true});
     await nextPosePage.click();
-    await page.getByRole('heading',{name:'站姿-013 · 站姿-013样例',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'站姿-016 · 站姿-016样例',exact:true}).waitFor();
     await poseFilters.getByRole('checkbox',{name:'坐姿',exact:true}).check();
     await page.getByRole('heading',{name:'坐姿-001 · 坐姿-001样例',exact:true}).waitFor();
     assert.equal(await firstPose.count(),0);
@@ -439,16 +440,17 @@ try {
       return dialog.getByRole('button',{name:`选择${id} · ${name}`,exact:true});
     };
     await poseChoice(0).waitFor();
+    assert.equal(await dialog.locator('.asset-media-card').count(),15);
     const pickerRows = await dialog.locator('.asset-media-card').evaluateAll(cards=>cards.slice(0,7).map(card=>card.getBoundingClientRect().top));
     assert.ok(pickerRows.slice(0,6).every(top=>top===pickerRows[0]) && pickerRows[6]>pickerRows[0]);
-    const chosenPoses = [0,2,3,4,5,6,12];
+    const chosenPoses = [0,2,3,4,5,6,15];
     for (const index of chosenPoses.slice(0,6)) await poseChoice(index).click();
     await dialog.getByRole('checkbox',{name:'坐姿',exact:true}).check();
-    await poseChoice(13).waitFor();
+    await poseChoice(16).waitFor();
     await dialog.getByRole('heading',{name:'选择姿态 6 项',exact:true}).waitFor();
     await dialog.getByRole('checkbox',{name:'坐姿',exact:true}).uncheck();
     await dialog.getByRole('button',{name:'下一页',exact:true}).click();
-    await poseChoice(12).click();
+    await poseChoice(15).click();
     await confirm.click();
     await dialog.waitFor({state:'hidden'});
     const poseSelection = page.getByRole('region',{name:'姿态选择',exact:true});
@@ -497,9 +499,9 @@ try {
     assert.ok(await selectRandom.isDisabled());
     await poseQuantity.fill('20');
     await selectRandom.click();
-    await poseSelection.getByRole('heading',{name:'姿态选择 14 项',exact:true}).waitFor();
+    await poseSelection.getByRole('heading',{name:'姿态选择 17 项',exact:true}).waitFor();
     const allPoses = await selectedPoseTitles();
-    assert.equal(new Set(allPoses).size,14);
+    assert.equal(new Set(allPoses).size,17);
     await poseCategory.click();
     await page.getByRole('option',{name:'站姿',exact:true}).click();
     await poseQuantity.fill('3');

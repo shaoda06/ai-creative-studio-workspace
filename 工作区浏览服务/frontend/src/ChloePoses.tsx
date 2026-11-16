@@ -3,7 +3,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type { FileItem, WorkspaceSpace } from './api';
 import { ChloeAssetTypes } from './ChloeReferenceAssets';
-import { assetPaging, useAssetList } from './chloeAssetPages';
+import { assetPaging, poseAssetPageSize, useAssetList } from './chloeAssetPages';
 import { Dialog, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { CopyButton } from './components/CopyButton';
@@ -51,7 +51,7 @@ function PoseDetails({ pose, close }: { pose: PoseCard; close: () => void }) {
 
 export function ChloePoses({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const [params, setParams] = useSearchParams();
-  const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<PoseCard>('shared-poses');
+  const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<PoseCard>('shared-poses', { page_size: poseAssetPageSize });
   const data = query.isPlaceholderData ? undefined : query.data;
   const selected = data?.items.find(pose => pose.id === params.get('pose'));
   const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])];

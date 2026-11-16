@@ -1,4 +1,4 @@
-import { assetPaging, assetUrl, useAssetDraft, useAssetPage } from './chloeAssetPages';
+import { assetPaging, assetUrl, poseAssetPageSize, useAssetDraft, useAssetPage } from './chloeAssetPages';
 import { Activity, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -90,7 +90,7 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
   const limit = isPose ? undefined : isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
   const label = isPose ? '姿态' : isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
   const endpoint = isPose ? poseEndpoint : isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
-  const filters = { ...selectableAssets, form: form ?? undefined };
+  const filters = { ...selectableAssets, form: form ?? undefined, page_size: isPose ? poseAssetPageSize : undefined };
   const query = useAssetPage<T>(endpoint, page, filters, types);
   const draft = useAssetDraft<T>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
   const selected = draft.selected;
@@ -187,7 +187,7 @@ function ListAssembly<T extends AssemblyAsset>({ kind, buildHandoff }: {
   const { api } = useChloeScope();
   const notify = useNotify();
   const isPose = kind === 'poses';
-  const poseCatalog = useAssetPage<T>(isPose ? poseEndpoint : '', 1, selectableAssets);
+  const poseCatalog = useAssetPage<T>(isPose ? poseEndpoint : '', 1, { ...selectableAssets, page_size: poseAssetPageSize });
   const categories = poseCatalog.data?.types ?? [];
   const label = isPose ? '姿态' : '单件';
   const title = isPose ? assetTitle : garmentTitle;

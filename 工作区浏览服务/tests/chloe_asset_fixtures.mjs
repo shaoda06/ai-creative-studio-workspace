@@ -14,7 +14,7 @@ export function chloeAssetResponse(url, cards) {
   if (!params.has('page')) return filtered;
   const types = [...new Set(eligible.map(type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-CN'));
   const total = filtered.length;
-  const page_size = 12;
+  const page_size = Number(params.get('page_size') ?? 12);
   const page = Math.min(Number(params.get('page')), Math.max(1, Math.ceil(total / page_size)));
   return {items:filtered.slice((page-1)*page_size,page*page_size),total,page,page_size,types};
 }
