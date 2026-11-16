@@ -325,7 +325,7 @@ try {
       assert.equal(await hoverPreview.getAttribute('src'),`/api/assembly-fixture/${assetId}?hover=1`);
       const [row, popup, preview] = await Promise.all([result.boundingBox(),searchResults.boundingBox(),hoverPreview.boundingBox()]);
       assert.ok(Math.abs(preview.y-row.y)<=1 && preview.x>popup.x+popup.width && preview.x+preview.width<=width+1);
-      assert.ok(Math.abs(preview.width-searchBounds.width)<=1);
+      assert.ok(Math.abs(searchBounds.width-popup.width)<=1 && Math.abs(preview.width-popup.width)<=1);
       const ratio = await hoverPreview.evaluate(image=>image.naturalWidth/image.naturalHeight);
       assert.ok(Math.abs(preview.height-preview.width/ratio)<=1);
     }
