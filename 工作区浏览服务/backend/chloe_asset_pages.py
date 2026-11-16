@@ -60,10 +60,10 @@ def asset_page(rows, options: AssetPage):
         if options.ids is not None:
             by_id = {row.id: row for row in eligible}
             return [by_id[key].card() for key in options.ids if key in by_id]
-        if options.page is None:
-            return [row.card() for row in eligible]
-        types = sorted({row.type for row in eligible if row.type})
         filtered = [row for row in eligible if not options.types or row.type in options.types]
+        if options.page is None:
+            return [row.card() for row in filtered]
+        types = sorted({row.type for row in eligible if row.type})
         total = len(filtered)
         size = options.page_size
         page = min(options.page, max(1, (total + size - 1) // size))

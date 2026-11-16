@@ -1,7 +1,7 @@
-import { assetPaging, useAssetDraft, useAssetPage } from './chloeAssetPages';
+import { assetPaging, assetUrl, useAssetDraft, useAssetPage } from './chloeAssetPages';
 import { Activity, useState } from 'react';
-import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import type { FormEvent, ReactNode } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
@@ -13,6 +13,8 @@ import { AssetMediaCard } from './components/AssetMediaCard';
 import { AssetSelectionDialog } from './components/AssetSelectionDialog';
 import { FullscreenImage } from './components/FullscreenImage';
 import { LinkButton } from './components/LinkButton';
+import { useNotify } from './components/Notifications';
+import { TabSelect } from './components/TabSelect';
 import { UnderlineTabs } from './components/UnderlineTabs';
 import { AssemblyExport, AssemblyPagination, AssemblyPreview, assetTitle } from './ChloeAssemblyParts';
 import type { OpenImage } from './ChloeAssemblyParts';
@@ -23,6 +25,8 @@ type PickerKind = 'models' | 'garments' | 'outfits' | 'hair' | 'accessories' | '
 type AssemblyAsset = Pick<ReferenceAssetCard, 'id' | 'name' | 'media' | 'bodyArea'>;
 const accessoryLimit = 5;
 const garmentLimit = 5;
+const poseEndpoint = 'shared-poses';
+const selectableAssets = { available: true, require_media: true };
 const assemblyTabs = [
   { value: 'outfit', label: '套装装配' }, { value: 'look', label: '造型装配' },
   { value: 'poses', label: '姿态装配' }, { value: 'video', label: '视频装配' },
@@ -31,18 +35,18 @@ type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => voi
 
 const garmentTitle = (asset: AssemblyAsset) => `${assetTitle(asset)}（${asset.bodyArea}）`;
 
-function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className="chloe-assembly-add" aria-label={label} onClick={onClick}>
+function AddAssetCard({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return <button type="button" className="chloe-assembly-add" aria-label={label} onClick={onClick} disabled={disabled}>
     <span aria-hidden="true">+</span>{label}
   </button>;
 }
 
-function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact }: {
-  asset: AssemblyAsset; title: string; aspectRatio: number | 'natural'; onRemove: () => void; compact?: boolean;
+function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, disabled }: {
+  asset: AssemblyAsset; title: string; aspectRatio: number | 'natural'; onRemove: () => void; compact?: boolean; disabled?: boolean;
 }) {
   return <div className="chloe-assembly-selected-card">
     <AssetMediaCard title={title} formal entry compact={compact} aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
-    <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove}>移除</button>
+    <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove} disabled={disabled}>移除</button>
   </div>;
 }
 
@@ -59,8 +63,8 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
   const referenceKind = kind === 'hair' || kind === 'accessories' ? kind : 'clothing';
   const limit = isPose ? undefined : isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
   const label = isPose ? '姿态' : isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
-  const endpoint = isPose ? 'shared-poses' : isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
-  const filters = { available: true, require_media: true, form: form ?? undefined };
+  const endpoint = isPose ? poseEndpoint : isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
+  const filters = { ...selectableAssets, form: form ?? undefined };
   const query = useAssetPage<T>(endpoint, page, filters, types);
   const draft = useAssetDraft<T>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
   const selected = draft.selected;
@@ -135,6 +139,15 @@ function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
   ].join('\n')} />;
 }
 
+function shuffled<T>(items: T[]) {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
+  }
+  return result;
+}
+
 function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHandoff }: {
   kind: 'garments' | 'poses'; renderNavigation: AssemblyProps['renderNavigation']; buildHandoff: (assets: T[]) => string;
 }) {
@@ -142,7 +155,13 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
   const [handoff, setHandoff] = useState('');
   const [picking, setPicking] = useState(false);
   const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
+  const [poseCategory, setPoseCategory] = useState('');
+  const [poseQuantity, setPoseQuantity] = useState('1');
+  const { api } = useChloeScope();
+  const notify = useNotify();
   const isPose = kind === 'poses';
+  const poseCatalog = useAssetPage<T>(isPose ? poseEndpoint : '', 1, selectableAssets);
+  const categories = poseCatalog.data?.types ?? [];
   const label = isPose ? '姿态' : '单件';
   const title = isPose ? assetTitle : garmentTitle;
   const count = isPose ? `${selected.length} 项` : `${selected.length}/${garmentLimit}`;
@@ -155,18 +174,53 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
     setHandoff('');
     setPicking(false);
   };
+  const randomSelection = useMutation({
+    mutationFn: async ({ category, quantity }: { category: string; quantity: number }) => {
+      const url = assetUrl(api, poseEndpoint, selectableAssets, undefined, category ? [category] : []);
+      const assets = await get<T[]>(url);
+      return shuffled(assets).slice(0, quantity);
+    },
+    onSuccess: changeSelection,
+    onError: () => notify('无法读取可用姿态，请重试。', 'error'),
+  });
+  const selecting = randomSelection.isPending;
+  const quantity = Number(poseQuantity);
+  const validQuantity = poseQuantity !== '' && Number.isInteger(quantity) && quantity >= 0;
+  const selectRandomPoses = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (selecting || !validQuantity) return;
+    if (quantity === 0) changeSelection([]);
+    else randomSelection.mutate({ category: poseCategory, quantity });
+  };
+  const shuffleSelection = () => {
+    const reordered = shuffled(selected);
+    if (reordered.every((asset, index) => asset === selected[index])) {
+      [reordered[0], reordered[1]] = [reordered[1], reordered[0]];
+    }
+    changeSelection(reordered);
+  };
 
   return <>
-    {renderNavigation(selected.length ? () => changeSelection([]) : undefined)}
+    {renderNavigation(selected.length && !selecting ? () => changeSelection([]) : undefined)}
     <div className="chloe-assets-content chloe-assembly">
       <section aria-label={`${label}选择`}>
-        <h2>{label}选择 {count}</h2>
+        <div className={isPose ? 'chloe-pose-selection-heading' : undefined}>
+          <h2>{label}选择 {count}</h2>
+          {isPose && <form className="chloe-pose-random-controls" onSubmit={selectRandomPoses}>
+            <TabSelect label="姿态分类" selected={poseCategory} onChange={setPoseCategory} disabled={selecting}
+              items={[{ value: '', label: '全部' }, ...categories.map(category => ({ value: category, label: category }))]} />
+            <input className="chloe-pose-random-count" aria-label="随机姿态数量" type="number" min={0} step={1} required
+              value={poseQuantity} disabled={selecting} onChange={event => setPoseQuantity(event.target.value)} />
+            <button type="submit" disabled={selecting || !validQuantity}>{selecting ? '选择中…' : '随机选择'}</button>
+            <button type="button" disabled={selecting || selected.length < 2} onClick={shuffleSelection}>随机排序</button>
+          </form>}
+        </div>
         <div className={`chloe-assembly-accessories ${isPose ? 'chloe-assembly-poses' : 'chloe-assembly-garments'}`}>
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
-            {selected.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={title(asset)} aspectRatio="natural" compact={isPose}
+            {selected.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={title(asset)} aspectRatio="natural" compact={isPose} disabled={selecting}
               onRemove={() => changeSelection(selected.filter(item => item.id !== asset.id))} />)}
           </PreviewContext.Provider>
-          <AddAssetCard label={`${editing ? '编辑' : '添加'}${label}`} onClick={() => setPicking(true)} />
+          <AddAssetCard label={`${editing ? '编辑' : '添加'}${label}`} onClick={() => setPicking(true)} disabled={selecting} />
         </div>
       </section>
       <div className="chloe-assembly-summary chloe-assembly-summary-equal">
@@ -177,7 +231,7 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
               : <div><dt>{label}</dt><dd>未选择</dd></div>}
           </dl>
         </section>
-        <AssemblyExport label="导出文字" canGenerate={selected.length > 0} generate={() => setHandoff(buildHandoff(selected))} handoff={handoff}
+        <AssemblyExport label="导出文字" canGenerate={!selecting && selected.length > 0} generate={() => setHandoff(buildHandoff(selected))} handoff={selecting ? '' : handoff}
           empty={selected.length ? readyHint : emptyHint} />
       </div>
       {picking && <AssemblyPicker kind={kind} initial={selected} onConfirm={changeSelection} onClose={() => setPicking(false)} />}

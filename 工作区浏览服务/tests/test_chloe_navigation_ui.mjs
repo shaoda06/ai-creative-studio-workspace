@@ -461,6 +461,47 @@ try {
     await poseSelection.getByRole('heading',{name:'姿态选择 6 项',exact:true}).waitFor();
     assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
 
+    const poseCategory = poseSelection.getByRole('combobox',{name:'姿态分类',exact:true});
+    const poseQuantity = poseSelection.getByRole('spinbutton',{name:'随机姿态数量',exact:true});
+    const selectRandom = poseSelection.getByRole('button',{name:'随机选择',exact:true});
+    const shufflePoses = poseSelection.getByRole('button',{name:'随机排序',exact:true});
+    const selectedPoseTitles = () => poseSelection.getByRole('heading',{level:3}).allTextContents();
+    assert.equal(await poseCategory.textContent(),'全部');
+    await poseQuantity.fill('-1');
+    assert.ok(await selectRandom.isDisabled());
+    await poseQuantity.fill('1.5');
+    assert.ok(await selectRandom.isDisabled());
+    await poseQuantity.fill('20');
+    await selectRandom.click();
+    await poseSelection.getByRole('heading',{name:'姿态选择 14 项',exact:true}).waitFor();
+    const allPoses = await selectedPoseTitles();
+    assert.equal(new Set(allPoses).size,14);
+    await poseCategory.click();
+    await page.getByRole('option',{name:'站姿',exact:true}).click();
+    await poseQuantity.fill('3');
+    await selectRandom.click();
+    await poseSelection.getByRole('heading',{name:'姿态选择 3 项',exact:true}).waitFor();
+    const originalOrder = await selectedPoseTitles();
+    assert.ok(originalOrder.every(title=>title.startsWith('站姿-')));
+    await outfitGenerate.click();
+    await shufflePoses.click();
+    const shuffledOrder = await selectedPoseTitles();
+    assert.notDeepEqual(shuffledOrder,originalOrder);
+    assert.deepEqual([...shuffledOrder].sort(),[...originalOrder].sort());
+    assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
+    await outfitGenerate.click();
+    assert.equal(await outfitHandoff.textContent(),shuffledOrder.join('\n'));
+    await poseCategory.click();
+    await page.getByRole('option',{name:'坐姿',exact:true}).click();
+    await selectRandom.click();
+    await poseSelection.getByRole('heading',{name:'姿态选择 1 项',exact:true}).waitFor();
+    assert.deepEqual(await selectedPoseTitles(),['坐姿-001 · 坐姿-001样例']);
+    assert.ok(await shufflePoses.isDisabled());
+    await poseQuantity.fill('0');
+    await selectRandom.click();
+    await poseSelection.getByRole('heading',{name:'姿态选择 0 项',exact:true}).waitFor();
+    assert.ok(await outfitGenerate.isDisabled());
+
     await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
     const checkRefreshedPicker = async (endpoint, button, name, emptyText, assets) => {
       const path = `/api/workspaces/account-demo/${endpoint}`;

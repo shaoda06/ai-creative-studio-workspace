@@ -14,7 +14,7 @@ export type ChloeAssetStatus = keyof typeof chloeAssetStatusBadges;
 interface AssetPage<T> { items: T[]; total: number; page: number; page_size: number; types: string[] }
 interface AssetFilters { available?: boolean; require_media?: boolean; form?: string }
 
-function assetUrl(api: string, endpoint: string, filters: AssetFilters, page?: number, types: string[] = [], ids: string[] = []) {
+export function assetUrl(api: string, endpoint: string, filters: AssetFilters, page?: number, types: string[] = [], ids: string[] = []) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) if (value) params.set(key, String(value));
   if (page) params.set('page', String(page));

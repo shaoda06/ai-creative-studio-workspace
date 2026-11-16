@@ -61,3 +61,7 @@ class ChloePosesTests(unittest.TestCase):
         filtered = self.client.get(self.url, params={'page': 2, 'types': '坐姿'}).json()
         self.assertEqual((filtered['page'], filtered['total']), (1, 1))
         self.assertEqual(filtered['items'][0]['description'], '双脚平放。')
+        entire_category = self.client.get(self.url, params={
+            'types': '坐姿', 'available': True, 'require_media': True,
+        }).json()
+        self.assertEqual([pose['id'] for pose in entire_category], ['坐姿-001'])
