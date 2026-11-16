@@ -42,7 +42,7 @@ const fixturePoses = ['站姿','坐姿'].flatMap(type => Array.from({length:type
   const id = `${type}-${String(index+1).padStart(3,'0')}`;
   const name = `${id}样例`;
   const media = {...fixtureImage(name), url:'/api/assembly-fixture/pose-image',thumbnailUrl:'/api/assembly-fixture/pose-thumb'};
-  return {id,name,type,category:type,media,description:'双脚平放，躯干直立。'.repeat(index===1 ? 500 : 1)};
+  return {id,name,type,category:type,status:'可用',media,description:'双脚平放，躯干直立。'.repeat(index===1 ? 500 : 1)};
 }));
 const fixtureScenes = [fixtureAsset('S001','背景甲'),fixtureAsset('S002','制作中背景','制作中')];
 const fixtureVideo = {id:'RV001',name:'参考视频甲',status:'可用',coverUrl:fixtureImage('RV001').url,videoUrl:'/component-samples/video.webm'};
@@ -316,7 +316,7 @@ try {
     const outfitGenerate = outfitExport.getByRole('button',{name:'生成',exact:true});
     const outfitHandoff = outfitExport.locator('.chloe-assembly-export-template');
     await assemblyNav.waitFor();
-    assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['套装装配','造型装配','视频装配']);
+    assert.deepEqual(await assemblyNav.getByRole('button').allTextContents(),['套装装配','造型装配','姿态装配','视频装配']);
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'套装装配');
     const garmentCount = count => page.getByRole('heading',{name:`单件选择 ${count}/5`,exact:true});
     const pickerCount = (label,count,limit=1) => page.getByRole('dialog',{name:`选择${label} ${count}/${limit}`,exact:true});
@@ -421,6 +421,46 @@ try {
     await garmentCount(0).waitFor();
     assert.ok(await outfitGenerate.isDisabled());
     assert.equal(await outfitInfo.locator('dd').textContent(),'未选择');
+
+    await assemblyNav.getByRole('button',{name:'姿态装配',exact:true}).click();
+    assert.match(page.url(),/assemblyTab=poses/);
+    await choose('添加姿态').click();
+    const poseChoice = index => {
+      const {id,name} = fixturePoses[index];
+      return dialog.getByRole('button',{name:`选择${id} · ${name}`,exact:true});
+    };
+    await poseChoice(0).waitFor();
+    const pickerRows = await dialog.locator('.asset-media-card').evaluateAll(cards=>cards.slice(0,6).map(card=>card.getBoundingClientRect().top));
+    assert.ok(pickerRows.slice(0,5).every(top=>top===pickerRows[0]) && pickerRows[5]>pickerRows[0]);
+    const chosenPoses = [0,2,3,4,5,12];
+    for (const index of chosenPoses.slice(0,5)) await poseChoice(index).click();
+    await dialog.getByRole('checkbox',{name:'坐姿',exact:true}).check();
+    await poseChoice(13).waitFor();
+    await dialog.getByRole('heading',{name:'选择姿态 5 项',exact:true}).waitFor();
+    await dialog.getByRole('checkbox',{name:'坐姿',exact:true}).uncheck();
+    await dialog.getByRole('button',{name:'下一页',exact:true}).click();
+    await poseChoice(12).click();
+    await confirm.click();
+    await dialog.waitFor({state:'hidden'});
+    const poseSelection = page.getByRole('region',{name:'姿态选择',exact:true});
+    await poseSelection.getByRole('heading',{name:'姿态选择 6 项',exact:true}).waitFor();
+    const selectedPoseRows = await poseSelection.locator('.asset-media-card').evaluateAll(cards=>cards.map(card=>card.getBoundingClientRect().top));
+    assert.equal(selectedPoseRows.length,6);
+    assert.ok(selectedPoseRows.slice(0,5).every(top=>top===selectedPoseRows[0]) && selectedPoseRows[5]>selectedPoseRows[0]);
+    await outfitGenerate.click();
+    const poseExportText = chosenPoses.map((index, selectedIndex) => {
+      const {id,name,description} = fixturePoses[index];
+      return `${selectedIndex+1}. ${id} · ${name}\n${description}`;
+    }).join('\n\n');
+    assert.equal(await outfitHandoff.textContent(),poseExportText);
+    await poseSelection.getByRole('img',{name:'站姿-001样例',exact:true}).click();
+    assert.equal(await dialog.getByRole('img').getAttribute('src'),'/api/assembly-fixture/pose-image');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({state:'hidden'});
+    await poseSelection.getByRole('button',{name:'移除站姿-001 · 站姿-001样例',exact:true}).click();
+    await poseSelection.getByRole('heading',{name:'姿态选择 5 项',exact:true}).waitFor();
+    assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
+
     await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
     const checkRefreshedPicker = async (endpoint, button, name, emptyText, assets) => {
       const path = `/api/workspaces/account-demo/${endpoint}`;

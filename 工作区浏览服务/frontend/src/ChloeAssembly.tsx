@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
+import type { PoseCard } from './ChloePoses';
 import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetCard } from './ChloeReferenceAssets';
 import { PreviewContext, Result } from './components';
@@ -19,15 +20,17 @@ import type { OpenImage } from './ChloeAssemblyParts';
 import { ChloeVideoAssembly } from './ChloeVideoAssembly';
 import './ChloeAssembly.css';
 
-type PickerKind = 'models' | 'garments' | 'outfits' | 'hair' | 'accessories';
+type PickerKind = 'models' | 'garments' | 'outfits' | 'hair' | 'accessories' | 'poses';
+type AssemblyAsset = Pick<ReferenceAssetCard, 'id' | 'name' | 'media' | 'bodyArea'>;
 const accessoryLimit = 5;
 const garmentLimit = 5;
 const assemblyTabs = [
-  { value: 'outfit', label: '套装装配' }, { value: 'look', label: '造型装配' }, { value: 'video', label: '视频装配' },
+  { value: 'outfit', label: '套装装配' }, { value: 'look', label: '造型装配' },
+  { value: 'poses', label: '姿态装配' }, { value: 'video', label: '视频装配' },
 ];
 type AssemblyProps = { projectName: string; renderNavigation: (reset?: () => void) => ReactNode };
 
-const garmentTitle = (asset: ReferenceAssetCard) => `${assetTitle(asset)}（${asset.bodyArea}）`;
+const garmentTitle = (asset: AssemblyAsset) => `${assetTitle(asset)}（${asset.bodyArea}）`;
 
 function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }) {
   return <button type="button" className="chloe-assembly-add" aria-label={label} onClick={onClick}>
@@ -35,41 +38,42 @@ function AddAssetCard({ label, onClick }: { label: string; onClick: () => void }
   </button>;
 }
 
-function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove }: {
-  asset: ReferenceAssetCard; title: string; aspectRatio: number | 'natural'; onRemove: () => void;
+function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact }: {
+  asset: AssemblyAsset; title: string; aspectRatio: number | 'natural'; onRemove: () => void; compact?: boolean;
 }) {
   return <div className="chloe-assembly-selected-card">
-    <AssetMediaCard title={title} formal entry aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
+    <AssetMediaCard title={title} formal entry compact={compact} aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
     <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove}>移除</button>
   </div>;
 }
 
-function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
-  kind: PickerKind; initial: ReferenceAssetCard[]; onConfirm: (assets: ReferenceAssetCard[]) => void; onClose: () => void;
+function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onClose }: {
+  kind: PickerKind; initial: T[]; onConfirm: (assets: T[]) => void; onClose: () => void;
 }) {
   const [page, setPage] = useState(1);
   const [types, setTypes] = useState<string[]>([]);
   const isModel = kind === 'models';
   const isAccessory = kind === 'accessories';
   const isGarment = kind === 'garments';
+  const isPose = kind === 'poses';
   const form = isGarment ? '单件' : kind === 'outfits' ? '套装' : null;
   const referenceKind = kind === 'hair' || kind === 'accessories' ? kind : 'clothing';
-  const limit = isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
-  const label = isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
-  const endpoint = isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
+  const limit = isPose ? undefined : isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
+  const label = isPose ? '姿态' : isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
+  const endpoint = isPose ? 'shared-poses' : isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
   const filters = { available: true, require_media: true, form: form ?? undefined };
-  const query = useAssetPage<ReferenceAssetCard>(endpoint, page, filters, types);
-  const draft = useAssetDraft<ReferenceAssetCard>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
+  const query = useAssetPage<T>(endpoint, page, filters, types);
+  const draft = useAssetDraft<T>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
   const selected = draft.selected;
   const ready = !!query.data && !query.isFetching && !query.error && !draft.initial.isFetching && !draft.initial.error;
-  const atLimit = limit > 1 && selected.length >= limit;
+  const atLimit = limit !== undefined && limit > 1 && selected.length >= limit;
   const cards = ready ? query.data!.items.map(asset => {
     const checked = selected.some(item => item.id === asset.id);
-    return <AssetMediaCard key={asset.id} title={isGarment ? garmentTitle(asset) : assetTitle(asset)} formal entry aspectRatio="natural" revision={0}
+    return <AssetMediaCard key={asset.id} title={isGarment ? garmentTitle(asset) : assetTitle(asset)} formal entry compact={isPose} aspectRatio="natural" revision={0}
       item={{media: asset.media, emptyLabel: isModel ? '尚未采用正面面部图' : `尚未采用${label}展示图`}}
       selection={{selected: checked, disabled: draft.confirming || (atLimit && !checked),
         onSelect: () => draft.setSelected(checked ? selected.filter(item => item.id !== asset.id)
-          : limit > 1 ? [...selected, asset] : [asset])}} />;
+          : limit === 1 ? [asset] : [...selected, asset])}} />;
   }) : [];
   const filterTypes = [...new Set([...(query.data?.types ?? []), ...types])];
   const setTypeChecked = (type: string, checked: boolean) => {
@@ -77,15 +81,15 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
     setPage(1);
   };
   const failed = query.error ? query : draft.initial;
-  return <AssetSelectionDialog title={`选择${label} ${selected.length}/${limit}`} close={onClose}
+  return <AssetSelectionDialog title={`选择${label} ${selected.length}${limit === undefined ? ' 项' : `/${limit}`}`} close={onClose}
     confirm={draft.confirmSelection}
     confirmDisabled={!ready || draft.confirming || (!selected.length && !initial.length)}
     toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types}
-      setTypeChecked={setTypeChecked} label={isGarment ? '按部位筛选' : undefined} />}>
+      setTypeChecked={setTypeChecked} label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : undefined} />}>
     <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />
     {ready && (cards.length ? isAccessory
       ? <ChloeAccessoryColumns cards={cards} />
-      : <div className="asset-media-grid">{cards}</div>
+      : <div className={isPose ? 'asset-media-grid chloe-assembly-poses' : 'asset-media-grid'}>{cards}</div>
       : <p className="muted">暂无可用{label}。</p>)}
     {ready && <AssemblyPagination {...assetPaging(query.data!, setPage)} />}
   </AssetSelectionDialog>;
@@ -94,7 +98,7 @@ function AssemblyPicker({ kind, initial, onConfirm, onClose }: {
 export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) {
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get('assemblyTab');
-  const tab = requestedTab === 'video' || requestedTab === 'look' ? requestedTab : 'outfit';
+  const tab = assemblyTabs.find(item => item.value === requestedTab)?.value ?? 'outfit';
   const navigation = (reset?: () => void) => <>
     {renderNavigation(reset)}
     <div className="chloe-assets-content">
@@ -111,6 +115,11 @@ export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) 
     <Activity mode={tab === 'look' ? 'visible' : 'hidden'}>
       <LookAssembly projectName={projectName} renderNavigation={navigation} />
     </Activity>
+    <Activity mode={tab === 'poses' ? 'visible' : 'hidden'}>
+      <ListAssembly<PoseCard> kind="poses" renderNavigation={navigation}
+        buildHandoff={poses => poses.map((pose, index) =>
+          `${index + 1}. ${assetTitle(pose)}\n${pose.description}`).join('\n\n')} />
+    </Activity>
     <Activity mode={tab === 'video' ? 'visible' : 'hidden'}>
       <ChloeVideoAssembly projectName={projectName} renderNavigation={navigation} active={tab === 'video'} />
     </Activity>
@@ -118,50 +127,62 @@ export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) 
 }
 
 function OutfitAssembly({ projectName, renderNavigation }: AssemblyProps) {
-  const [garments, setGarments] = useState<ReferenceAssetCard[]>([]);
-  const [handoff, setHandoff] = useState('');
-  const [picking, setPicking] = useState(false);
-  const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
-
-  const changeSelection = (assets: ReferenceAssetCard[]) => {
-    setGarments(assets);
-    setHandoff('');
-    setPicking(false);
-  };
-  const generate = () => setHandoff([
+  return <ListAssembly<ReferenceAssetCard> kind="garments" renderNavigation={renderNavigation} buildHandoff={garments => [
     `请为「${projectName}」用以下单件合成一张套装展示图，套装仅包含服装。`,
     '',
     ...garments.map((asset, index) => `${index + 1}. ${assetTitle(asset)}`),
     '',
     '按编号和标题找到各单件正式采用的服装展示图。生成前先逐张打开并查看，核对部位重复、叠穿顺序、缺少的衣物及看不清的结构，给出具体搭配建议。若需要更换单件或调整保留范围，先确认方案再生成。',
     '按 Chloe 服装展示图流程制作与送审。登记时将服装形态填为套装，套装来源填为合成，记录各单件的准确输入版本、实际组成和穿法。',
-  ].join('\n'));
+  ].join('\n')} />;
+}
+
+function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHandoff }: {
+  kind: 'garments' | 'poses'; renderNavigation: AssemblyProps['renderNavigation']; buildHandoff: (assets: T[]) => string;
+}) {
+  const [selected, setSelected] = useState<T[]>([]);
+  const [handoff, setHandoff] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [preview, setPreview] = useState<{title: string; src: string} | null>(null);
+  const isPose = kind === 'poses';
+  const label = isPose ? '姿态' : '单件';
+  const title = isPose ? assetTitle : garmentTitle;
+  const count = isPose ? `${selected.length} 项` : `${selected.length}/${garmentLimit}`;
+  const editing = isPose ? selected.length > 0 : selected.length === garmentLimit;
+  const readyHint = isPose ? '点击「生成」，整理所选姿态的定姿文字。' : '点击「生成」，整理套装制作交接词。';
+  const emptyHint = isPose ? '选定姿态后可生成定姿文字。' : '选定 1–5 项单件后可生成交接词。';
+
+  const changeSelection = (assets: T[]) => {
+    setSelected(assets);
+    setHandoff('');
+    setPicking(false);
+  };
 
   return <>
-    {renderNavigation(garments.length ? () => changeSelection([]) : undefined)}
+    {renderNavigation(selected.length ? () => changeSelection([]) : undefined)}
     <div className="chloe-assets-content chloe-assembly">
-      <section aria-label="单件选择">
-        <h2>单件选择 {garments.length}/{garmentLimit}</h2>
-        <div className="chloe-assembly-accessories chloe-assembly-garments">
+      <section aria-label={`${label}选择`}>
+        <h2>{label}选择 {count}</h2>
+        <div className={`chloe-assembly-accessories ${isPose ? 'chloe-assembly-poses' : 'chloe-assembly-garments'}`}>
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
-            {garments.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={garmentTitle(asset)} aspectRatio="natural"
-              onRemove={() => changeSelection(garments.filter(item => item.id !== asset.id))} />)}
+            {selected.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={title(asset)} aspectRatio="natural" compact={isPose}
+              onRemove={() => changeSelection(selected.filter(item => item.id !== asset.id))} />)}
           </PreviewContext.Provider>
-          <AddAssetCard label={garments.length === garmentLimit ? '编辑单件' : '添加单件'} onClick={() => setPicking(true)} />
+          <AddAssetCard label={`${editing ? '编辑' : '添加'}${label}`} onClick={() => setPicking(true)} />
         </div>
       </section>
       <div className="chloe-assembly-summary chloe-assembly-summary-equal">
         <section aria-label="导出信息">
           <h2>导出信息</h2>
           <dl className="chloe-overview-fields" aria-live="polite">
-            {garments.length ? garments.map((asset, index) => <div key={asset.id}><dt>单件 {index + 1}</dt><dd>{garmentTitle(asset)}</dd></div>)
-              : <div><dt>单件</dt><dd>未选择</dd></div>}
+            {selected.length ? selected.map((asset, index) => <div key={asset.id}><dt>{label} {index + 1}</dt><dd>{title(asset)}</dd></div>)
+              : <div><dt>{label}</dt><dd>未选择</dd></div>}
           </dl>
         </section>
-        <AssemblyExport label="导出文字" canGenerate={garments.length > 0} generate={generate} handoff={handoff}
-          empty={garments.length ? '点击「生成」，整理套装制作交接词。' : '选定 1–5 项单件后可生成交接词。'} />
+        <AssemblyExport label="导出文字" canGenerate={selected.length > 0} generate={() => setHandoff(buildHandoff(selected))} handoff={handoff}
+          empty={selected.length ? readyHint : emptyHint} />
       </div>
-      {picking && <AssemblyPicker kind="garments" initial={garments} onConfirm={changeSelection} onClose={() => setPicking(false)} />}
+      {picking && <AssemblyPicker kind={kind} initial={selected} onConfirm={changeSelection} onClose={() => setPicking(false)} />}
       {preview && <FullscreenImage title={preview.title} src={preview.src} alt={preview.title} close={() => setPreview(null)} />}
     </div>
   </>;
