@@ -49,7 +49,7 @@ def parser():
     p.add_argument('--project', required=True, help='Task root: workspace/projects/<project> or workspace/综合资料; uses workspace comfyui-config.json')
     p.add_argument('--plan', help='Default submission: one task-group JSON for all ready tasks in this authorization, not one call per scene/segment; project-relative or absolute: optional group_title plus tasks (one or more); checks all members, atomically registers one group, returns group_id and child IDs; Iris F video plans include iris_round; --prepare-only never queues')
     p.add_argument('--songssx-scene', action='append', metavar='P001,P002',
-                   help='List the planned P segments for one Songssx scene in playback order, taken from the production plan. Repeat in task order for independent scenes. Required for new shared-scope plans with multiple full-scene Songssx tasks.')
+                   help='List the planned P segments for one Songssx scene in playback order, taken from the production plan. Repeat in task order for independent scenes. Required when preparing new or revised full-scene Songssx tasks in a shared scope.')
     p.add_argument('--record-repairs', help='Existing local image results only: JSON object from record_dir to reason/expected_updates/updates; never runs image processing or queues tasks')
     p.add_argument('--task-type', choices=TASK_TYPES, help='Compatibility for existing tasks or an explicitly independent single task; use --plan for grouped submissions')
     p.add_argument('--workflow', help='Legacy prepared-input mode only: prepared API JSON')

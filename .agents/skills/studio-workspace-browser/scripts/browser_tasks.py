@@ -30,28 +30,36 @@ def connection(args):
 
 
 def submit_plan(args):
-    from project_paths import scope_name
+    from project_paths import SHARED_SCOPE, scope_name
     project, config, thread, desktop = connection(args)
     plan = Path(args.plan)
     # The one plan parameter is project-relative, like all files inside its task entries.
     plan = plan.resolve() if plan.is_absolute() else (project / plan).resolve()
     relative_plan = plan.relative_to(project).as_posix()
     scope = scope_name(project, config['workspace'])
+    shared = scope.rsplit('::', 1)[-1] == SHARED_SCOPE
     expected = getattr(args, 'songssx_scene', None)
-    if expected is not None or scope == '@shared':
+    reprepare = getattr(args, 'reprepare', False)
+    if expected is not None or shared:
         source = json.loads(plan.read_text('utf-8-sig'))
-        scenes = [[segment['p'] for segment in task['songssx']['segments']]
-                  for task in source['tasks']
-                  if task['task_type'] == 'video-scene-generation' and 'gap_repair' not in task['songssx']]
+        try:
+            full_scenes = [task['songssx'] for task in source['tasks']
+                           if task['task_type'] == 'video-scene-generation' and 'gap_repair' not in task['songssx']]
+        except (KeyError, TypeError) as error:
+            raise ValueError('任务清单须提供 tasks、task_type 及 Songssx 任务的 songssx 配置') from error
         if expected is not None:
+            try:
+                scenes = [[segment['p'] for segment in scene['segments']] for scene in full_scenes]
+            except (KeyError, TypeError) as error:
+                raise ValueError('Songssx 场次核对需要 songssx.segments 及各段的 p 编号') from error
             planned = [[part.strip() for part in scene.split(',')] for scene in expected]
             if planned != scenes:
                 raise ValueError(f'Songssx 场次和 GEN 不匹配：制作计划为 {planned}，任务清单为 {scenes}。每场的全部 P 段须按顺序写进同一 task 的 songssx.segments。')
-        elif len(scenes) > 1 and not plan.with_name(plan.stem + '-装配结果.json').is_file():
-            raise ValueError('综合资料的新清单包含多条 Songssx 整场任务。请按制作计划为每个独立场次填写一组 --songssx-scene，声明场内全部 P 段。')
+        elif full_scenes and (reprepare or not plan.with_name(plan.stem + '-装配结果.json').is_file()):
+            raise ValueError('综合资料的新装配包含 Songssx 整场任务。请按制作计划为每场填写一组 --songssx-scene，声明场内全部 P 段。')
     payload = dict(project=scope, plan_file=relative_plan, thread_id=thread,
                    desktop=desktop, timeout=args.timeout, prepare_only=args.prepare_only,
-                   reprepare=getattr(args, 'reprepare', False), start_paused=args.start_paused)
+                   reprepare=reprepare, start_paused=args.start_paused)
     if getattr(args, 'record_repairs', None):
         payload['record_repairs'] = json.loads(Path(args.record_repairs).read_text('utf-8-sig'))
         if not isinstance(payload['record_repairs'], dict) or not payload['record_repairs']:
