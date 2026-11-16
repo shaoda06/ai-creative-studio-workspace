@@ -152,15 +152,22 @@ def shortened(draw, text, font, width):
     return text + "…"
 
 
-def chart(subjects, axis, fonts):
+def chart(subjects, axis, fonts, *, frame_axis=None):
     vertical = axis == "vertical"
     left, right = (165, 162) if vertical else (12, 176)
-    scales = [BODY_HEIGHT / (data["height_px"] or view.height) for data, view in subjects]
+    if frame_axis == "width":
+        height_to_width = max(view.height / view.width for _, view in subjects)
+        frame_width = round(BODY_HEIGHT / height_to_width)
+        scales = [frame_width / view.width for _, view in subjects]
+    elif frame_axis == "height":
+        scales = [BODY_HEIGHT / view.height for _, view in subjects]
+    else:
+        scales = [BODY_HEIGHT / (data["height_px"] or view.height) for data, view in subjects]
     sizes = [(max(1, round(view.width * scale)), max(1, round(view.height * scale)))
              for (_, view), scale in zip(subjects, scales)]
     picture_width = max(286, *(width for width, _ in sizes))
     crown_offsets = [
-        round((data["vertical"][0]["y"] - data["crop"][1]) * scale) if data["height_px"] else 0
+        round((data["vertical"][0]["y"] - data["crop"][1]) * scale) if not frame_axis and data["height_px"] else 0
         for (data, _), scale in zip(subjects, scales)
     ]
     body_top = 57 + max(crown_offsets)
