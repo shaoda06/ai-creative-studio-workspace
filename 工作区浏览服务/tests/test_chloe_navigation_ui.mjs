@@ -463,6 +463,11 @@ try {
     }).join('\n');
     assert.equal(await outfitHandoff.textContent(),poseExportText);
     const poseCards = poseSelection.locator('.chloe-assembly-selected-card');
+    const poseRemove = poseSelection.getByRole('button',{name:'移除站姿-001 · 站姿-001样例',exact:true});
+    const [poseCardBox, poseRemoveBox] = await Promise.all([poseCards.first().boundingBox(),poseRemove.boundingBox()]);
+    assert.ok(poseRemoveBox.y < poseCardBox.y && poseRemoveBox.y+poseRemoveBox.height > poseCardBox.y);
+    assert.ok(poseRemoveBox.x < poseCardBox.x+poseCardBox.width && poseRemoveBox.x+poseRemoveBox.width > poseCardBox.x+poseCardBox.width);
+    assert.equal(await poseRemove.textContent(),'×');
     await poseCards.first().getByRole('img').dragTo(poseCards.last(), {targetPosition:{x:24,y:55}});
     const draggedPoseTitles = poseExportText.split('\n');
     draggedPoseTitles.push(draggedPoseTitles.shift());
@@ -474,9 +479,11 @@ try {
     assert.equal(await dialog.getByRole('img').getAttribute('src'),'/api/assembly-fixture/pose-image');
     await page.keyboard.press('Escape');
     await dialog.waitFor({state:'hidden'});
-    await poseSelection.getByRole('button',{name:'移除站姿-001 · 站姿-001样例',exact:true}).click();
+    await poseRemove.click();
     await poseSelection.getByRole('heading',{name:'姿态选择 6 项',exact:true}).waitFor();
     assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
+    await outfitGenerate.click();
+    assert.equal(await outfitHandoff.textContent(),draggedPoseTitles.slice(0,-1).join('\n'));
 
     const poseCategory = poseSelection.getByRole('combobox',{name:'姿态分类',exact:true});
     const poseQuantity = poseSelection.getByRole('spinbutton',{name:'随机姿态数量',exact:true});

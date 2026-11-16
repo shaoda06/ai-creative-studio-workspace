@@ -18,9 +18,7 @@
 .chloe-assembly-model-images .chloe-assembly-preview>.muted{display:grid;align-items:center;min-height:190px}
 .chloe-assembly-accessory-heading{display:flex;align-items:baseline;gap:12px}
 .chloe-assembly-accessories{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch}
-.chloe-assembly-selected-card{display:grid;grid-row:span 2;grid-template-rows:subgrid;min-width:0}
-.chloe-assembly-selected-card>button{justify-self:center}
-.chloe-assembly-with-floating-remove{position:relative;grid-row:auto;grid-template-rows:auto}
+.chloe-assembly-selected-card{position:relative;display:grid;min-width:0}
 .chloe-assembly-floating-remove{position:absolute;z-index:1;inset-block-start:-6px;inset-inline-end:-6px;display:grid;place-items:center;width:28px;height:28px;padding:0;border-radius:50%;font-size:20px;line-height:1}
 .chloe-assembly-selected-card[draggable=true]{cursor:grab}
 .chloe-assembly-selected-card[data-drop-target]{outline:2px solid var(--green);outline-offset:2px;border-radius:8px}
