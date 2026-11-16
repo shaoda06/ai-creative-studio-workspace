@@ -21,4 +21,6 @@ Agent与脚本按[业务与工具分工](../iris-commercial-video/references/流
 
 涉及社媒运营或已有运营报告时，按[商业与运营接续](../iris-commercial-video/references/流程与交接.md#社媒运营接续)确定实际对象和适用建议；当前阶段仍维护原有内容、采用及状态，不因运营入口创建发布任务。
 
+用户确认作品的视频已完成时，按[成片确认后的封面与结束页](../studio-video-production/SKILL.md#成片确认后的封面与结束页)询问所需物料。
+
 收到返修或处理任务通知时，按[本业务结果接续](../iris-commercial-production/references/任务服务接入.md#后台结果接续)恢复原批次事实，再回到本阶段的采用组合与实际交接。
