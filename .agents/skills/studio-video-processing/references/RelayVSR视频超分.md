@@ -4,7 +4,7 @@
 
 ## 参数确认
 
-倍率只显示「2 倍放大」，随方案展示实际输出宽高，按原片宽高分别乘 2。只选 RelayVSR 时沿用源帧率，与补帧组合时按 [RIFE 参数确认](RIFE视频插帧.md#参数确认)补齐目标帧率。
+倍率只显示「2 倍放大」，随方案展示实际输出宽高，按原片宽高分别乘 2。RelayVSR 放大阶段沿用源帧率。
 
 ## 分段装配与拼接
 
@@ -26,6 +26,6 @@ python .agents/skills/studio-video-processing/scripts/relayvsr_batch.py prepare 
 python .agents/skills/studio-video-processing/scripts/relayvsr_batch.py join --project "/实际项目" --record-dir "执行记录/本次RelayVSR"
 ```
 
-需要 RIFE 时，合片成功后按[整条插帧的实际资源](RIFE视频插帧.md)核对条件，再按原授权准备并提交 `插帧任务清单.json`。由调用方核对合片的分段接点，完成技术核对后按业务约定交回。
+需要后续插帧时按[共用装配](视频技术处理规范.md#实际装配)接续。由调用方核对合片的分段接点，完成技术核对后按业务约定交回。
 
 回归使用 `python -B -m unittest discover -s .agents/skills/studio-video-processing/scripts -p test_relayvsr_batch.py -v`。测试在临时目录验证分段、任务装配、取回合片和原声，不调用生成服务。

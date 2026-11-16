@@ -8,4 +8,4 @@
 
 目标比例和原片不同时，在同一问题链提供「保留完整画面」和「裁切到目标画幅」。通过[共用尺寸计算](视频技术处理规范.md#画面尺寸与适配)展示实际输出尺寸及各边裁切量。目标比例一致时沿用完整画面。
 
-`RTXVideoSuperResolution` 使用 `target dimensions` 和 `quality=ULTRA`，沿用 [RTX 共用必填参数](../../studio-image-processing/references/ComfyUI-图片超分执行规范.md#rtx节点共用必填输入)。单独使用时沿用源帧率。需要插帧时按[共用装配](视频技术处理规范.md#实际装配)把 RTX 接在 RIFE 之后。输出技术核对也按共用装配执行。
+`RTXVideoSuperResolution` 使用 `target dimensions` 和 `quality=ULTRA`，沿用 [RTX 共用必填参数](../../studio-image-processing/references/ComfyUI-图片超分执行规范.md#rtx节点共用必填输入)。单独使用时沿用源帧率。装配及结果核对见[共用装配](视频技术处理规范.md#实际装配)。
