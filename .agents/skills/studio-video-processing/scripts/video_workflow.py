@@ -3,35 +3,26 @@ from pathlib import Path
 import json
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-comfyui/scripts'))
-from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_file
+from workflow_paths import VIDEO_RELAYVSR, VIDEO_RIFE, VIDEO_RTX, workflow_file
 
 
-def _set_crop(node, size, offset):
-    values = node['widgets_values_named']
-    values.update(width=size[0], height=size[1], x=offset[0], y=offset[1])
-    node['widgets_values'] = list(values.values())
-    node['mode'] = 0
+def load_workflow(name):
+    return json.loads(workflow_file(name).read_text('utf-8-sig'))
+
+
+def assemble_relayvsr(source, prefix):
+    canvas = load_workflow(VIDEO_RELAYVSR)
+    nodes = {node['id']: node for node in canvas['nodes']}
+    nodes[1]['widgets_values_named']['file'] = nodes[1]['widgets_values'][0] = source
+    nodes[106]['widgets_values_named']['filename_prefix'] = nodes[106]['widgets_values'][0] = prefix
+    return canvas
 
 
 def assemble(method, source, prefix, size, crop_offset=(0, 0)):
-    canvas = json.loads(workflow_file(VIDEO_POSTPROCESS_BASELINE).read_text('utf-8-sig'))
-    nodes = {node['id']: node for node in canvas['nodes']}
-    loader, rtx, crop, saver = (nodes[key] for key in (6, 1, 25, 16))
-    loader['widgets_values_named']['file'] = source
-    loader['widgets_values'] = list(loader['widgets_values_named'].values())
-    saver['widgets_values_named']['filename_prefix'] = prefix
-    saver['widgets_values']['filename_prefix'] = prefix
-    width, height = size
-    if method == 'crop':
-        rtx['mode'] = 4
-        _set_crop(crop, size, crop_offset)
-    elif method == 'upscale':
-        values = rtx['widgets_values_named']
-        values.update({'resize_type.width': width, 'resize_type.height': height})
-        rtx['widgets_values'] = list(values.values())
-    else:
+    if method not in ('crop', 'upscale'):
         raise ValueError(f'未知固定后处理方式：{method}')
-    return canvas
+    return _assemble_standard(source, prefix, 30, True, method if method == 'upscale' else 'none', size,
+                              (*size, *crop_offset) if method == 'crop' else None)
 
 
 def plan_output(metadata, resolution, fps, fit=None):
@@ -98,44 +89,61 @@ def assemble_output(source, prefix, plan):
     """Return a canvas or None when the original file already satisfies the choices."""
     if plan['reuse']:
         return None
-    canvas = assemble('upscale', source, prefix, plan['resize_size'])
+    crop = plan['crop']
+    box = (*plan['output_size'], crop['left'], crop['top']) if any(crop.values()) else None
+    return _assemble_standard(source, prefix, plan['fps'], plan['fps'] != plan['source_fps'],
+                              plan['resize_method'], plan['resize_size'], box)
+
+
+def _assemble_standard(source, prefix, fps, interpolate, method, size, box):
+    canvas = load_workflow(VIDEO_RTX)
     nodes = {n['id']: n for n in canvas['nodes']}
+    loader = nodes[6]
+    loader['widgets_values_named']['file'] = source
+    loader['widgets_values'] = list(loader['widgets_values_named'].values())
     active = [nodes[6], nodes[7]]
     edges = [(6, 0, 7, 0, 'VIDEO')]
     image, fps_link = (7, 0), (7, 2)
-    if plan['fps'] != plan['source_fps']:
-        rife = nodes[12]
-        rife['widgets_values_named']['target_fps'] = plan['fps']
+    if interpolate:
+        rife = next(node for node in load_workflow(VIDEO_RIFE)['nodes'] if node['id'] == 12)
+        rife['widgets_values_named']['target_fps'] = fps
         rife['widgets_values'] = list(rife['widgets_values_named'].values())
-        rife['title'] = f"切镜保护插帧｜目标{plan['fps']:g}fps"
+        rife['title'] = f"切镜保护插帧｜目标{fps:g}fps"
         active.append(rife)
         edges.extend([(7, 0, 12, 0, 'IMAGE'), (7, 2, 12, 1, 'FLOAT')])
         image, fps_link = (12, 0), (12, 1)
-    method = plan['resize_method']
     if method != 'none':
+        w, h = size
         if method == 'upscale':
             resize = nodes[1]
+            values = resize['widgets_values_named']
+            values.update({'resize_type.width': w, 'resize_type.height': h})
+            resize['widgets_values'] = list(values.values())
         else:
-            w, h = plan['resize_size']
             values = dict(upscale_method='lanczos', width=w, height=h, crop='disabled')
             resize = dict(id=1, type='ImageScale', pos=[1210, 290], size=[280, 180], flags={}, mode=0,
                           properties={'Node name for S&R': 'ImageScale'},
                           inputs=[dict(name='image', type='IMAGE', link=None)],
                           outputs=[dict(name='IMAGE', type='IMAGE', links=[])],
                           widgets_values_named=values, widgets_values=list(values.values()))
-        resize['title'] = f"尺寸处理｜{plan['resize_size'][0]}×{plan['resize_size'][1]}"
+        resize['title'] = f"尺寸处理｜{w}×{h}"
         active.append(resize)
         edges.append((*image, 1, 0, 'IMAGE'))
         image = (1, 0)
-    if any(plan['crop'].values()):
-        crop = nodes[25]
-        _set_crop(crop, plan['output_size'], (plan['crop']['left'], plan['crop']['top']))
+    if box is not None:
+        values = dict(zip(('width', 'height', 'x', 'y'), box))
+        crop = dict(id=25, type='ImageCrop', pos=[1530, 290], size=[280, 180], flags={}, mode=0,
+                    properties={'Node name for S&R': 'ImageCrop'},
+                    inputs=[dict(name='image', type='IMAGE', link=None)],
+                    outputs=[dict(name='IMAGE', type='IMAGE', links=[])],
+                    widgets_values_named=values, widgets_values=list(values.values()))
         active.append(crop)
         edges.append((*image, 25, 0, 'IMAGE'))
         image = (25, 0)
     saver = nodes[16]
-    saver['widgets_values_named']['frame_rate'] = plan['fps']
-    saver['widgets_values']['frame_rate'] = plan['fps']
+    values = dict(frame_rate=fps, filename_prefix=prefix)
+    saver['widgets_values_named'].update(values)
+    saver['widgets_values'].update(values)
     active.append(saver)
     edges.extend([(*image, 16, 0, 'IMAGE'), (*fps_link, 16, 4, 'FLOAT'), (7, 1, 16, 1, 'AUDIO')])
     canvas['nodes'], canvas['links'] = active, []

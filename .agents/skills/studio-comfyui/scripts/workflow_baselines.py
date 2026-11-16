@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "studio-comfyui/scripts"))
 from workflow_graph import Canvas, is_link, link_tuple
-from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_directories, workflow_root, SKILL_ROOT
+from workflow_paths import VIDEO_RELAYVSR, VIDEO_RIFE, VIDEO_RTX, workflow_directories, workflow_root, SKILL_ROOT
 UI_FIELDS={'control_after_generate','upload','choose video to upload','videopreview','image_upload','audioUI','preview'}
 UI_NODES={'Note','MarkdownNote','SetNode','GetNode','Reroute'}
 
@@ -22,23 +22,39 @@ def validate_rife_package(path):
    if name.endswith('.py'):ast.parse(package.read(name).decode('utf-8'),filename=name)
 
 def validate_postprocess(api):
- interpolation=api['12'];resize=api['1']['inputs'];encode=api['16']['inputs']
- assert api['1']['class_type']=='RTXVideoSuperResolution', 'Postprocess image processing node mismatch'
- assert interpolation['class_type']=='NoraRIFEInterpolationCutTest', 'Postprocess interpolation node mismatch'
- assert {'scale','scene_cut_threshold'}<=set(interpolation['inputs']), 'Missing required RIFE inputs'
- assert interpolation['inputs']['images']==['7',0], 'Postprocess source images mismatch'
- assert interpolation['inputs']['source_fps']==['7',2], 'Postprocess source FPS mismatch'
- assert resize['images']==['12',0], 'Postprocess must interpolate before upscaling'
- width,height=resize['resize_type.width'],resize['resize_type.height']
- assert encode['images']==['1',0], 'Postprocess encoder must use processed images'
- assert encode['frame_rate']==['12',1], 'Postprocess output FPS must follow interpolation'
+ encode=api['16']['inputs']
+ image,fps=['7',0],['7',2]
+ details={'format':encode['format'],'crf':encode['crf']}
+ if '12' in api:
+  interpolation=api['12']
+  assert interpolation['class_type']=='NoraRIFEInterpolationCutTest', 'Postprocess interpolation node mismatch'
+  values=interpolation['inputs']
+  assert {'scale','scene_cut_threshold'}<=set(values), 'Missing required RIFE inputs'
+  assert values['images']==image and values['source_fps']==fps, 'Postprocess source images/FPS mismatch'
+  details['target_fps']=values['target_fps']
+  image,fps=['12',0],['12',1]
+ if '1' in api:
+  resize=api['1']['inputs']
+  assert api['1']['class_type']=='RTXVideoSuperResolution', 'Postprocess image processing node mismatch'
+  assert resize['images']==image, 'Postprocess RTX inputs must follow any interpolation'
+  details.update(width=resize['resize_type.width'],height=resize['resize_type.height'])
+  image=['1',0]
+ assert image!=['7',0] and encode['images']==image, 'Postprocess encoder must use processed images'
+ assert encode['frame_rate']==fps, 'Postprocess output FPS must follow frame source'
  assert encode['audio']==['7',1] and encode['trim_to_audio'] is False, 'Postprocess original audio/timing mismatch'
- fps=interpolation['inputs']['target_fps']
  notes=[]
- if min(width,height)<1080:notes.append('低于推荐1080P；按本次选定交付依据核对，不因此拒绝本次交付配置')
- if fps<30:notes.append('低于推荐30fps；按本次选定交付依据核对，不因此拒绝本次交付配置')
- return {'width':width,'height':height,'target_fps':fps,'format':encode['format'],
-         'crf':encode['crf'],'recommendation_notes':notes}
+ if 'width' in details and min(details['width'],details['height'])<1080:notes.append('低于推荐1080P；按本次选定交付依据核对')
+ if 'target_fps' in details and details['target_fps']<30:notes.append('低于推荐30fps；按本次选定交付依据核对')
+ return dict(details,recommendation_notes=notes)
+
+def validate_relayvsr(api):
+ assert api['4']['inputs']['unet_name'].endswith('relayvsr_x2_lightx2v_int8_convrot.safetensors')
+ assert api['7']['inputs']['vae_name'].endswith('relayvsr_flash_vae_x2_fp32.safetensors')
+ assert api['6']['inputs']['steps']==api['6']['inputs']['cfg']==1
+ assert api['104']['inputs']=={'detail':0.5,'vae':['7',0],'samples':['6',0],'images':['2',0]}
+ assert api['105']['inputs']['images']==['104',0]
+ assert api['105']['inputs']['fps']==['2',2] and api['105']['inputs']['audio']==['2',1]
+ assert api['106']['inputs']['video']==['105',0]
 
 def semantic(api):return {k:{'class_type':v['class_type'],'inputs':v['inputs']} for k,v in api.items()}
 
@@ -56,6 +72,7 @@ def validate_rtx_inputs(api):
    raise ValueError(f'RTXVideoSuperResolution {key} image_encoding is unsupported')
 
 def output_for(name):
+ if name==VIDEO_RELAYVSR:return 106
  if name in ('Viggle-Remake-单人换人-双参考图', 'Viggle-Remake-换背景-目标参考帧'):return 65
  return 404 if name=='MiniMax-H3-Songssx导演台-Selflift-标准版' else [403,504,506] if name=='Minimax-H3-导演台-视频生成-标准版' else 3 if name=='RTX-图片2倍超分' else 508 if name=='Qwen2.1-文生图-普通版' else 487 if name=='Qwen2.1-图生图-普通版' else 461 if name.startswith('Qwen') else 16
 
@@ -128,12 +145,13 @@ def verify(directory):
         if is_link(v):assert v[0] in task
       count+=1
   result={'workflow':stem,'nodes':len(actual),'optional_references':len(refs),'reference_combinations':count}
-  if stem==VIDEO_POSTPROCESS_BASELINE:
+  if stem in (VIDEO_RIFE, VIDEO_RTX):
    result['postprocess_delivery']=validate_postprocess(actual)
-   if actual['12']['class_type']=='NoraRIFEInterpolationCutTest':
+   if stem==VIDEO_RIFE:
     package=Path(__file__).resolve().parents[1]/'dependencies/ComfyUI节点资源/ComfyUI-Nora-RIFE-CutTest.zip'
     validate_rife_package(package)
     result['node_package']=package.name
+  if stem==VIDEO_RELAYVSR:validate_relayvsr(actual)
   results.append(result)
  return results
 if __name__=='__main__':

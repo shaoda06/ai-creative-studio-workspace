@@ -59,6 +59,7 @@ class OutputTests(unittest.TestCase):
         for source, target, offset in [((640, 480), [1920, 1080], (0, 180)), ((480, 640), [1080, 1920], (180, 0))]:
             api = self.api(self.meta(*source), target, 30, 'crop')
             self.assertEqual(api['1']['class_type'], 'RTXVideoSuperResolution')
+            self.assertEqual(api['1']['inputs']['images'], ['12', 0])
             self.assertEqual(api['25']['inputs']['image'], ['1', 0])
             self.assertEqual((api['25']['inputs']['x'], api['25']['inputs']['y']), offset)
             self.assertEqual(api['16']['inputs']['images'], ['25', 0])

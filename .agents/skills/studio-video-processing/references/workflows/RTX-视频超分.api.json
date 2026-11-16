@@ -1,0 +1,70 @@
+{
+  "6": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "source.mp4"
+    },
+    "_meta": {
+      "title": "输入视频"
+    }
+  },
+  "7": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "02 分离画面、原音轨和实际帧率"
+    }
+  },
+  "1": {
+    "class_type": "RTXVideoSuperResolution",
+    "inputs": {
+      "resize_type": "target dimensions",
+      "resize_type.width": 1920,
+      "resize_type.height": 1080,
+      "quality": "ULTRA",
+      "strength": 1.0,
+      "image_encoding": "8-bit RGB",
+      "images": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "RTX 视频超分"
+    }
+  },
+  "16": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": [
+        "7",
+        2
+      ],
+      "loop_count": 0,
+      "filename_prefix": "RTX-视频超分",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "1",
+        0
+      ],
+      "audio": [
+        "7",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "06 输出｜实际帧率与原音轨"
+    }
+  }
+}

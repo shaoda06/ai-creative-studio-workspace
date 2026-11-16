@@ -1,6 +1,6 @@
 ---
 name: studio-video-processing
-description: 在已有视频需要核对媒体规格、插帧、缩放、裁切或 RTX 后处理时使用。按明确源片、目标帧率和画幅装配并核对技术结果。
+description: 在已有视频需要核对规格、裁切、RTX 或 RelayVSR 超分、RIFE 插帧时使用。按源片、目标规格和实际选择装配并核对技术结果。
 ---
 
 # Studio 视频处理
@@ -13,4 +13,12 @@ description: 在已有视频需要核对媒体规格、插帧、缩放、裁切�
 
 媒体核对调用[scripts/video_metadata.py](scripts/video_metadata.py)的`probe(path)`，只读ffprobe的轨道与容器信息，不抽帧、转写或审片。缺少依赖或格式异常如实失败；不将推荐规格填写为实测值。
 
-视频后处理使用[统一基准与实际装配](references/视频技术处理规范.md#实际装配)，按源片与目标规格选择插帧、尺寸处理和裁切。任务字段与原规格复用按[调用接口](references/视频技术处理规范.md#调用接口)，通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务填写 `video_plan.adapter:"technical"`。业务维护源版本、候选、采用与正式位置。
+视频后处理使用[共用装配](references/视频技术处理规范.md#实际装配)，按本次选择读取专项指南。
+
+| 工作流 | 调用条件 |
+| --- | --- |
+| [RTX 视频超分](references/RTX视频超分.md) | 按交付尺寸放大，或接在 RIFE 后面 |
+| [RelayVSR 视频超分](references/RelayVSR视频超分.md) | 用 RelayVSR 做 2 倍放大，按指南本地裁段、成组提交和拼接，可接 RIFE |
+| [RIFE 自动切镜保护插帧](references/RIFE视频插帧.md) | 按目标帧率重采样并保护真实切镜 |
+
+普通任务字段与原规格复用按[调用接口](references/视频技术处理规范.md#调用接口)，通信与排队调用[ComfyUI](../studio-comfyui/SKILL.md)和[后台](../studio-workspace-browser/SKILL.md)。技术任务填写 `video_plan.adapter:"technical"`。业务维护源版本、候选、采用与正式位置。

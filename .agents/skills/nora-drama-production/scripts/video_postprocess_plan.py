@@ -13,7 +13,6 @@ for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-v
 import video_approve
 from episode_rounds import episode_manifest_key, validate_episode_manifest
 from project_paths import project_file
-from workflow_paths import VIDEO_POSTPROCESS_BASELINE, workflow_file
 from video_workflow import assemble, plan_output, assemble_output
 from video_metadata import probe
 
@@ -60,7 +59,6 @@ def build(project, request, output):
                 raise ValueError('重复来源二采身份：' + identity)
             sources[identity] = (source, report_path.relative_to(root).as_posix())
     if choice is None:
-        baseline = workflow_file(VIDEO_POSTPROCESS_BASELINE)
         width, height = (1920, 1080) if orientation == 'landscape' else (1080, 1920)
     tasks, canvases, reused = [], {}, []
     for scene, data in composition['scenes'].items():
@@ -111,7 +109,7 @@ def build(project, request, output):
                                                     'duration_seconds': segment['duration'],
                                                     'local_execution_dir': directory.as_posix()}],
                                       'source_video': video.relative_to(root).as_posix(),
-                                      'baseline': str(baseline) if choice is None else 'studio-video-processing', 'approval_basis': approval}})
+                                      'baseline': 'studio-video-processing', 'approval_basis': approval}})
             if choice is not None:
                 tasks[-1]['video_postprocess'] = dict(choice, source=video.relative_to(root).as_posix())
                 tasks[-1]['mapping']['postprocess_configuration'] = configuration

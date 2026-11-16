@@ -10,7 +10,7 @@ import unittest
 import zipfile
 from unittest.mock import patch
 import workflow_baselines as wb
-from workflow_paths import workflow_file, workflow_root, workflow_directories
+from workflow_paths import VIDEO_RELAYVSR, VIDEO_RIFE, VIDEO_RTX, workflow_file, workflow_root, workflow_directories
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINES = workflow_root()
@@ -18,50 +18,46 @@ BASELINES = workflow_root()
 class BaselineTests(unittest.TestCase):
     def test_formal_rife_is_checked(self):
         results = {item['workflow']: item for item in wb.verify(BASELINES)}
-        formal = 'RTX-RIFE-自动切镜保护超分插帧'
+        formal = VIDEO_RIFE
         self.assertTrue(workflow_file(formal, 'api').is_file())
         self.assertEqual(results[formal]['node_package'], 'ComfyUI-Nora-RIFE-CutTest.zip')
         self.assertEqual(results[formal]['postprocess_delivery']['target_fps'], 30)
 
-    def test_postprocess_rejects_bypassed_processing_and_wrong_timing(self):
-        name = 'RTX-RIFE-自动切镜保护超分插帧'
-        original = json.loads((workflow_file(name, 'api')).read_text(encoding='utf-8'))
+    def test_postprocess_rejects_wrong_input_and_timing(self):
+        for name, fields in (
+            (VIDEO_RIFE, [('12', 'source_fps', 24), ('12', 'images', ['7', 2]),
+                          ('16', 'images', ['7', 0]), ('16', 'frame_rate', ['7', 2])]),
+            (VIDEO_RTX, [('1', 'images', ['7', 1]), ('16', 'images', ['7', 0]),
+                         ('16', 'audio', None), ('16', 'trim_to_audio', True)]),
+        ):
+            original = json.loads(workflow_file(name, 'api').read_text(encoding='utf-8'))
+            for node_id, field, value in fields:
+                with self.subTest(name=name, node_id=node_id, field=field):
+                    changed = copy.deepcopy(original)
+                    changed[node_id]['inputs'][field] = value
+                    with self.assertRaises(AssertionError):
+                        wb.validate_postprocess(changed)
+        original = json.loads(workflow_file(VIDEO_RIFE, 'api').read_text(encoding='utf-8'))
         for field in ('scale', 'scene_cut_threshold'):
             changed = copy.deepcopy(original)
             del changed['12']['inputs'][field]
             with self.assertRaisesRegex(AssertionError, 'required RIFE inputs'):
                 wb.validate_postprocess(changed)
-        for node_id, field, value in [('12', 'source_fps', 24), ('1', 'images', ['7', 0]),
-                                      ('16', 'images', ['12', 0]), ('16', 'frame_rate', ['7', 2]),
-                                      ('16', 'audio', None), ('16', 'trim_to_audio', True)]:
-            with self.subTest(node_id=node_id, field=field):
-                changed = copy.deepcopy(original)
-                changed[node_id]['inputs'][field] = value
-                with self.assertRaises(AssertionError):
-                    wb.validate_postprocess(changed)
-        original['12']['class_type'] = 'RIFEInterpolation'
-        with self.assertRaisesRegex(AssertionError, 'interpolation node'):
-            wb.validate_postprocess(original)
 
-    def test_postprocess_canvas_can_bypass_each_optional_step(self):
-        name = 'RTX-RIFE-自动切镜保护超分插帧'
-        canvas = json.loads(workflow_file(name).read_text(encoding='utf-8'))
-        graph = wb.Canvas(canvas)
-        self.assertNotIn('25', graph.api(16))
-        graph.nodes[25]['mode'] = 0
-        api = graph.api(16)
-        self.assertEqual(api['25']['inputs']['image'], ['1', 0])
-        self.assertEqual(api['16']['inputs']['images'], ['25', 0])
-        graph.nodes[1]['mode'] = 4
-        api = graph.api(16)
-        self.assertNotIn('1', api)
-        self.assertEqual(api['25']['inputs']['image'], ['12', 0])
-        graph.nodes[12]['mode'] = 4
-        api = graph.api(16)
-        self.assertNotIn('12', api)
-        self.assertEqual(api['25']['inputs']['image'], ['7', 0])
-        self.assertEqual(api['16']['inputs']['frame_rate'], ['7', 2])
-        self.assertEqual(api['16']['inputs']['audio'], ['7', 1])
+    def test_independent_postprocess_canvases_match_their_api(self):
+        for name, output, processing in ((VIDEO_RTX, 16, '1'), (VIDEO_RIFE, 16, '12'), (VIDEO_RELAYVSR, 106, '104')):
+            with self.subTest(name=name):
+                canvas = json.loads(workflow_file(name).read_text(encoding='utf-8'))
+                actual = wb.Canvas(canvas).api(output)
+                self.assertEqual(wb.semantic(actual), wb.semantic(json.loads(workflow_file(name, 'api').read_text(encoding='utf-8'))))
+                self.assertIn(processing, actual)
+                if name != VIDEO_RELAYVSR:
+                    self.assertNotIn('12' if name == VIDEO_RTX else '1', actual)
+                else:
+                    wb.validate_relayvsr(actual)
+                    actual['104']['inputs']['detail'] = 1
+                    with self.assertRaises(AssertionError):
+                        wb.validate_relayvsr(actual)
 
     def test_rife_package_requires_complete_installable_contents(self):
         package = ROOT / 'dependencies/ComfyUI节点资源/ComfyUI-Nora-RIFE-CutTest.zip'
@@ -76,31 +72,20 @@ class BaselineTests(unittest.TestCase):
                 wb.validate_rife_package(broken)
 
     def test_postprocess_delivery_recommendations_do_not_gate_other_paired_targets(self):
-        stem = 'RTX-RIFE-自动切镜保护超分插帧'
-        for width, height, fps, note_count in ((1920, 1080, 30, 0), (1080, 1920, 30, 0),
-                                             (3840, 2160, 60, 0), (1280, 720, 24, 2)):
-            with self.subTest(width=width, height=height, fps=fps), tempfile.TemporaryDirectory() as tmp:
-                api = json.loads((workflow_file(stem, 'api')).read_text(encoding='utf-8'))
-                canvas = json.loads((workflow_file(stem, 'workflow')).read_text(encoding='utf-8'))
-                api['1']['inputs'].update({'resize_type.width': width, 'resize_type.height': height})
-                api['12']['inputs']['target_fps'] = fps
-                for node in canvas['nodes']:
-                    if node['id'] in (1, 12):
-                        values = node['widgets_values_named']
-                        if node['id'] == 1:
-                            values.update({'resize_type.width': width, 'resize_type.height': height})
-                        else:
-                            values['target_fps'] = fps
-                        node['widgets_values'] = list(values.values())
-                Path(tmp, f'{stem}.api.json').write_text(json.dumps(api), encoding='utf-8')
-                Path(tmp, f'{stem}.workflow.json').write_text(json.dumps(canvas), encoding='utf-8')
-                report = wb.verify(tmp)[0]['postprocess_delivery']
-                self.assertEqual((report['width'], report['height'], report['target_fps']), (width, height, fps))
-                self.assertEqual(len(report['recommendation_notes']), note_count)
+        for name, node, fields, expected in (
+            (VIDEO_RTX, '1', {'resize_type.width': 1280, 'resize_type.height': 720}, {'width': 1280, 'height': 720}),
+            (VIDEO_RIFE, '12', {'target_fps': 24}, {'target_fps': 24}),
+        ):
+            with self.subTest(name=name):
+                api = json.loads(workflow_file(name, 'api').read_text(encoding='utf-8'))
+                api[node]['inputs'].update(fields)
+                report = wb.validate_postprocess(api)
+                self.assertEqual({key: report[key] for key in expected}, expected)
+                self.assertEqual(len(report['recommendation_notes']), 1)
                 self.assertEqual(report['crf'], 19)
 
     def test_postprocess_default_uses_30fps_and_preserves_audio_and_output_timing(self):
-        stem = 'RTX-RIFE-自动切镜保护超分插帧'
+        stem = VIDEO_RIFE
         api = json.loads((workflow_file(stem, 'api')).read_text(encoding='utf-8'))
         graph = wb.Canvas(json.loads((workflow_file(stem, 'workflow')).read_text(encoding='utf-8')))
         self.assertEqual(api['12']['inputs']['target_fps'], 30)
@@ -113,7 +98,7 @@ class BaselineTests(unittest.TestCase):
         self.assertFalse(api['16']['inputs']['trim_to_audio'])
 
     def test_rtx_baselines_explicit_required_parameters(self):
-        for stem in ('RTX-图片2倍超分', 'RTX-RIFE-自动切镜保护超分插帧'):
+        for stem in ('RTX-图片2倍超分', VIDEO_RTX):
             with self.subTest(stem=stem):
                 api = json.loads((workflow_file(stem, 'api')).read_text(encoding='utf-8'))
                 graph = wb.Canvas(json.loads((workflow_file(stem, 'workflow')).read_text(encoding='utf-8')))
@@ -123,7 +108,7 @@ class BaselineTests(unittest.TestCase):
                 wb.validate_rtx_inputs(api)
 
     def test_pair_check_rejects_rtx_fields_missing_from_both_representations(self):
-        stem = 'RTX-RIFE-自动切镜保护超分插帧'
+        stem = VIDEO_RTX
         for field in ('strength', 'image_encoding'):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
                 api = json.loads((workflow_file(stem, 'api')).read_text(encoding='utf-8'))
@@ -214,7 +199,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_all_bundled_apis_and_reference_branches(self):
         results = wb.verify(BASELINES)
-        self.assertEqual(len(results), 8)
+        self.assertEqual(len(results), 10)
         for folder, group in workflow_directories(BASELINES):
             self.assertEqual(len(wb.verify(folder)), len(list(folder.glob('*.api.json'))))
         h3 = [r for r in results if r["optional_references"]]

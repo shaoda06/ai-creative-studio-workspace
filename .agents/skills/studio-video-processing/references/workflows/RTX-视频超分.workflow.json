@@ -1,90 +1,8 @@
 {
-  "id": "c5386777-92fd-43db-8890-a0418a656da2",
   "revision": 1,
-  "last_node_id": 25,
-  "last_link_id": 8,
+  "last_node_id": 16,
+  "last_link_id": 5,
   "nodes": [
-    {
-      "id": 7,
-      "type": "GetVideoComponents",
-      "pos": [
-        460,
-        290
-      ],
-      "size": [
-        220,
-        150
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [
-        {
-          "label": "video",
-          "localized_name": "视频",
-          "name": "video",
-          "type": "VIDEO",
-          "link": 1
-        }
-      ],
-      "outputs": [
-        {
-          "label": "images",
-          "localized_name": "图像",
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            3
-          ]
-        },
-        {
-          "label": "audio",
-          "localized_name": "音频",
-          "name": "audio",
-          "type": "AUDIO",
-          "links": [
-            7
-          ]
-        },
-        {
-          "label": "fps",
-          "localized_name": "帧率",
-          "name": "fps",
-          "type": "FLOAT",
-          "links": [
-            4
-          ]
-        },
-        {
-          "label": "bit_depth",
-          "localized_name": "bit_depth",
-          "name": "bit_depth",
-          "type": "COMBO",
-          "links": []
-        },
-        {
-          "label": "color_space",
-          "localized_name": "color_space",
-          "name": "color_space",
-          "type": "COMBO",
-          "links": []
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "GetVideoComponents",
-        "cnr_id": "comfy-core",
-        "hasSecondTab": false,
-        "ver": "0.16.4",
-        "widget_ue_connectable": {},
-        "secondTabText": "Send Back",
-        "enableTabs": false,
-        "secondTabOffset": 80,
-        "tabWidth": 65,
-        "secondTabWidth": 65,
-        "tabXOffset": 10
-      },
-      "title": "02 分离画面、原音轨和实际帧率"
-    },
     {
       "id": 6,
       "type": "LoadVideo",
@@ -145,14 +63,95 @@
         "tabXOffset": 10
       },
       "widgets_values": [
-        "{已获批二采分段文件}.mp4",
+        "source.mp4",
         true
       ],
       "widgets_values_named": {
-        "file": "{已获批二采分段文件}.mp4",
+        "file": "source.mp4",
         "upload": true
       },
-      "title": "01 输入｜获批二采分段（执行前替换）"
+      "title": "输入视频"
+    },
+    {
+      "id": 7,
+      "type": "GetVideoComponents",
+      "pos": [
+        460,
+        290
+      ],
+      "size": [
+        220,
+        150
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "video",
+          "localized_name": "视频",
+          "name": "video",
+          "type": "VIDEO",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "label": "images",
+          "localized_name": "图像",
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        },
+        {
+          "label": "audio",
+          "localized_name": "音频",
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            5
+          ]
+        },
+        {
+          "label": "fps",
+          "localized_name": "帧率",
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            4
+          ]
+        },
+        {
+          "label": "bit_depth",
+          "localized_name": "bit_depth",
+          "name": "bit_depth",
+          "type": "COMBO",
+          "links": []
+        },
+        {
+          "label": "color_space",
+          "localized_name": "color_space",
+          "name": "color_space",
+          "type": "COMBO",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "GetVideoComponents",
+        "cnr_id": "comfy-core",
+        "hasSecondTab": false,
+        "ver": "0.16.4",
+        "widget_ue_connectable": {},
+        "secondTabText": "Send Back",
+        "enableTabs": false,
+        "secondTabOffset": 80,
+        "tabWidth": 65,
+        "secondTabWidth": 65,
+        "tabXOffset": 10
+      },
+      "title": "02 分离画面、原音轨和实际帧率"
     },
     {
       "id": 1,
@@ -168,7 +167,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
@@ -224,7 +223,7 @@
           "name": "upscaled_images",
           "type": "IMAGE",
           "links": [
-            6
+            3
           ]
         }
       ],
@@ -257,89 +256,7 @@
         "strength": 1.0,
         "image_encoding": "8-bit RGB"
       },
-      "title": "04 RTX超分｜1920×1080 · ULTRA"
-    },
-    {
-      "id": 25,
-      "type": "ImageCrop",
-      "pos": [
-        1510,
-        290
-      ],
-      "size": [
-        280,
-        180
-      ],
-      "flags": {
-        "collapsed": false
-      },
-      "order": 4,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 6
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "widget": {
-            "name": "width"
-          },
-          "link": null
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "widget": {
-            "name": "height"
-          },
-          "link": null
-        },
-        {
-          "name": "x",
-          "type": "INT",
-          "widget": {
-            "name": "x"
-          },
-          "link": null
-        },
-        {
-          "name": "y",
-          "type": "INT",
-          "widget": {
-            "name": "y"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            8
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ImageCrop",
-        "cnr_id": "comfy-core"
-      },
-      "widgets_values": [
-        1920,
-        1080,
-        0,
-        4
-      ],
-      "widgets_values_named": {
-        "width": 1920,
-        "height": 1080,
-        "x": 0,
-        "y": 4
-      },
-      "title": "05 可选裁切｜ImageCrop"
+      "title": "RTX 视频超分"
     },
     {
       "id": 16,
@@ -353,7 +270,7 @@
         540
       ],
       "flags": {},
-      "order": 5,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -361,7 +278,7 @@
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 8
+          "link": 3
         },
         {
           "label": "audio",
@@ -369,7 +286,7 @@
           "name": "audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 7
+          "link": 5
         },
         {
           "label": "meta_batch",
@@ -395,7 +312,7 @@
           "widget": {
             "name": "frame_rate"
           },
-          "link": 5
+          "link": 4
         },
         {
           "label": "loop_count",
@@ -497,9 +414,9 @@
         "widget_ue_connectable": {}
       },
       "widgets_values": {
-        "frame_rate": 30.0,
+        "frame_rate": 24,
         "loop_count": 0,
-        "filename_prefix": "{EP编号}-{C编号}-{P编号}-{R编号}-后处理",
+        "filename_prefix": "RTX-视频超分",
         "format": "video/h264-mp4",
         "pix_fmt": "yuv420p",
         "crf": 19,
@@ -509,9 +426,9 @@
         "save_output": true
       },
       "widgets_values_named": {
-        "frame_rate": 30.0,
+        "frame_rate": 24,
         "loop_count": 0,
-        "filename_prefix": "{EP编号}-{C编号}-{P编号}-{R编号}-后处理",
+        "filename_prefix": "RTX-视频超分",
         "format": "video/h264-mp4",
         "pix_fmt": "yuv420p",
         "crf": 19,
@@ -521,151 +438,6 @@
         "save_output": true
       },
       "title": "06 输出｜实际帧率与原音轨"
-    },
-    {
-      "id": 12,
-      "type": "NoraRIFEInterpolationCutTest",
-      "title": "03 RIFE自动切镜保护｜目标30fps",
-      "pos": [
-        740,
-        290
-      ],
-      "size": [
-        410,
-        270
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 3
-        },
-        {
-          "name": "source_fps",
-          "type": "FLOAT",
-          "widget": {
-            "name": "source_fps"
-          },
-          "link": 4
-        },
-        {
-          "name": "target_fps",
-          "type": "FLOAT",
-          "widget": {
-            "name": "target_fps"
-          },
-          "link": null
-        },
-        {
-          "name": "scale",
-          "type": "FLOAT",
-          "widget": {
-            "name": "scale"
-          },
-          "link": null
-        },
-        {
-          "name": "scene_cut_threshold",
-          "type": "FLOAT",
-          "widget": {
-            "name": "scene_cut_threshold"
-          },
-          "link": null
-        },
-        {
-          "name": "model_name",
-          "type": "COMBO",
-          "widget": {
-            "name": "model_name"
-          },
-          "link": null
-        },
-        {
-          "name": "batch_size",
-          "type": "INT",
-          "widget": {
-            "name": "batch_size"
-          },
-          "link": null
-        },
-        {
-          "name": "use_fp16",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "use_fp16"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            2
-          ]
-        },
-        {
-          "name": "fps",
-          "type": "FLOAT",
-          "links": [
-            5
-          ]
-        },
-        {
-          "name": "cut_report",
-          "type": "STRING",
-          "links": []
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "NoraRIFEInterpolationCutTest"
-      },
-      "widgets_values": [
-        24.0,
-        30.0,
-        1.0,
-        0.15,
-        "flownet.pkl",
-        1,
-        true
-      ],
-      "widgets_values_named": {
-        "source_fps": 24.0,
-        "target_fps": 30.0,
-        "scale": 1.0,
-        "scene_cut_threshold": 0.15,
-        "model_name": "flownet.pkl",
-        "batch_size": 1,
-        "use_fp16": true
-      }
-    },
-    {
-      "id": 24,
-      "type": "Note",
-      "pos": [
-        0,
-        0
-      ],
-      "size": [
-        1490,
-        240
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {},
-      "widgets_values": [
-        "按 studio-video-processing 的后处理分步询问确定输出分辨率、帧率及画面适配。任务装配按源片及目标启用插帧、尺寸处理与裁切，保留原音轨和播放时长。本基准默认 RIFE 插帧至 30 fps、RTX 超分至 1920×1080，裁切节点默认旁路。手动使用时填写实际输入、输出与各节点参数。仅裁切时旁路 RTX。保持源帧率时旁路 RIFE。"
-      ],
-      "title": "后处理基准｜按实际输出规格装配",
-      "color": "#432",
-      "bgcolor": "#653"
     }
   ],
   "links": [
@@ -679,7 +451,7 @@
     ],
     [
       2,
-      12,
+      7,
       0,
       1,
       0,
@@ -687,9 +459,9 @@
     ],
     [
       3,
-      7,
+      1,
       0,
-      12,
+      16,
       0,
       "IMAGE"
     ],
@@ -697,69 +469,21 @@
       4,
       7,
       2,
-      12,
-      1,
-      "FLOAT"
-    ],
-    [
-      5,
-      12,
-      1,
       16,
       4,
       "FLOAT"
     ],
     [
-      6,
-      1,
-      0,
-      25,
-      0,
-      "IMAGE"
-    ],
-    [
-      7,
+      5,
       7,
       1,
       16,
       1,
       "AUDIO"
-    ],
-    [
-      8,
-      25,
-      0,
-      16,
-      0,
-      "IMAGE"
     ]
   ],
   "groups": [],
   "config": {},
-  "extra": {
-    "VHS_KeepIntermediate": true,
-    "links_added_by_ue": [],
-    "VHS_MetadataImage": true,
-    "ue_links": [],
-    "0246.VERSION": [
-      0,
-      0,
-      4
-    ],
-    "workflowRendererVersion": "LG",
-    "VHS_latentpreviewrate": 0,
-    "frontendVersion": "1.23.0",
-    "VHS_latentpreview": false,
-    "ds": {
-      "scale": 0.65,
-      "offset": [
-        80,
-        80
-      ]
-    },
-    "pixaromaGroups": [],
-    "KKvideo_latentpreview": false,
-    "KKvideo_latentpreviewrate": 0
-  },
+  "extra": {},
   "version": 0.4
 }
