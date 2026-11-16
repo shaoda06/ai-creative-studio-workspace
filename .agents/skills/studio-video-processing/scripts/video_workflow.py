@@ -52,32 +52,6 @@ def plan_output(metadata, resolution, fps, fit=None):
                 reuse=output == [sw, sh] and not any(crop.values()) and target_fps == sf)
 
 
-def questions(metadata, resolution=None):
-    """Popup arguments; supply resolution after step 1 for the conditional step 3."""
-    sw, sh, sf = metadata['width'], metadata['height'], metadata['frame_rate']
-    default = '1920×1080' if sw >= sh else '1080×1920'
-    result = [dict(title='第1步：输出分辨率｜请选择输出分辨率，或输入宽×高。',
-                   options=[f'保持原分辨率（{sw}×{sh}）', f'{default}（默认）']),
-              dict(title='第2步：输出帧率｜请选择输出帧率，或输入数值。',
-                   options=[f'保持原帧率（{sf:g}fps）', '30fps（默认）', '60fps'])]
-    if resolution is not None:
-        keep = plan_output(metadata, resolution, 'original', 'contain')
-        if keep['needs_fit']:
-            cut = plan_output(metadata, resolution, 'original', 'crop')
-            c = cut['crop']
-            details = []
-            for a, b, label in [('left', 'right', '左右'), ('top', 'bottom', '上下')]:
-                if c[a] or c[b]:
-                    details.append(f'{label}各裁{c[a]}像素' if c[a] == c[b] else f'{label[0]}裁{c[a]}、{label[1]}裁{c[b]}像素')
-            w, h = keep['output_size']
-            tw, th = cut['output_size']
-            rw, rh = cut['resize_size']
-            resize = '' if cut['resize_method'] == 'none' else f'先缩放至{rw}×{rh}，'
-            result.append(dict(title='第3步：画面适配｜源视频与目标比例不同，请选择处理方式。',
-                               options=[f'保留比例（输出{w}×{h}）', f'裁切至{tw}×{th}（{resize}{"，".join(details)}）']))
-    return result
-
-
 def assemble_output(source, prefix, plan):
     """Return a canvas or None when the original file already satisfies the choices."""
     if plan['reuse']:

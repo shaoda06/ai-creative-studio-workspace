@@ -1,6 +1,10 @@
 # RelayVSR 视频超分
 
-使用 [独立画布](workflows/RelayVSR-视频2倍超分.workflow.json) 或 [默认 API](workflows/RelayVSR-视频2倍超分.api.json)。送入原尺寸视频，输出宽高各 2 倍、沿用源帧率。104 节点 `detail` 固定为 0.5。模型与 Flash VAE 使用基准列出的 x2 配对。将来接入 x4 时，须成套验证对应模型和 VAE，并重新验证分段时长和资源占用。
+使用 [独立画布](workflows/RelayVSR-视频2倍超分.workflow.json) 或 [默认 API](workflows/RelayVSR-视频2倍超分.api.json)。模型与 Flash VAE 使用基准中的配对。104 节点 `detail` 固定为 0.5。
+
+## 参数确认
+
+倍率只显示「2 倍放大」，随方案展示实际输出宽高，按原片宽高分别乘 2。只选 RelayVSR 时沿用源帧率，与补帧组合时按 [RIFE 参数确认](RIFE视频插帧.md#参数确认)补齐目标帧率。
 
 ## 分段装配与拼接
 

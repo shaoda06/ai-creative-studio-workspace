@@ -11,7 +11,7 @@ SKILLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SKILLS.parent.parent / '工作区浏览服务'))
 for name in ('studio-h3', 'studio-h3-aimixer', 'studio-comfyui', 'studio-workspace-browser', 'nora-drama-production'):
     sys.path.insert(0, str(SKILLS / name / 'scripts'))
-from video_workflow import plan_output, questions, assemble_output
+from video_workflow import plan_output, assemble_output
 from video_metadata import probe
 from workflow_graph import Canvas
 from h3_workflow import prepare_technical
@@ -26,15 +26,20 @@ class OutputTests(unittest.TestCase):
     def api(self, meta, size, fps, fit=None):
         return Canvas(assemble_output('planned/video.mp4', 'isolated', plan_output(meta, size, fps, fit))).api('16')
 
-    def test_dynamic_options_and_ratio_condition(self):
-        q = questions(self.meta(), [1920, 1080])
-        self.assertIn('1920×1088', q[0]['options'][0])
-        self.assertIn('24fps', q[1]['options'][0])
-        self.assertEqual(q[2]['options'], ['保留比例（输出1906×1080）', '裁切至1920×1080（上下各裁4像素）'])
-        self.assertEqual(len(questions(self.meta(1536, 864), [1920, 1080])), 2)
-        self.assertEqual(len(questions(self.meta(), 'original')), 2)
-        self.assertIn('左右各裁4像素', questions(self.meta(1088, 1920), [1080, 1920])[2]['options'][1])
-        self.assertIn('先缩放至1920×1440，', questions(self.meta(640, 480), [1920, 1080])[2]['options'][1])
+    def test_fit_preview_uses_actual_output_and_crop(self):
+        keep = plan_output(self.meta(), [1920, 1080], 'original', 'contain')
+        self.assertTrue(keep['needs_fit'])
+        self.assertEqual(keep['output_size'], [1906, 1080])
+        self.assertEqual(keep['fps'], 24)
+        cut = plan_output(self.meta(), [1920, 1080], 'original', 'crop')
+        self.assertEqual(cut['output_size'], [1920, 1080])
+        self.assertEqual((cut['crop']['top'], cut['crop']['bottom']), (4, 4))
+        self.assertFalse(plan_output(self.meta(1536, 864), [1920, 1080], 'original')['needs_fit'])
+        self.assertFalse(plan_output(self.meta(), 'original', 'original')['needs_fit'])
+        portrait = plan_output(self.meta(1088, 1920), [1080, 1920], 'original', 'crop')
+        self.assertEqual((portrait['crop']['left'], portrait['crop']['right']), (4, 4))
+        enlarged = plan_output(self.meta(640, 480), [1920, 1080], 'original', 'crop')
+        self.assertEqual(enlarged['resize_size'], [1920, 1440])
 
     def test_same_size_fps_reuses_source_and_unchanged_rate_skips_rife(self):
         self.assertIsNone(assemble_output('source', 'out', plan_output(self.meta(), 'original', 'original')))
