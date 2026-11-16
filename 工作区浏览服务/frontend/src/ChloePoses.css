@@ -1,5 +1,8 @@
 .chloe-pose-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-top:18px}
-.chloe-pose-detail{--pose-height:min(68dvh,640px);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:var(--pose-height);gap:20px;overflow-wrap:anywhere}
+.chloe-pose-detail{--pose-height:min(68dvh,640px);display:grid;grid-template-columns:minmax(0,1fr) 1px auto 1px minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:var(--pose-height);column-gap:14px;overflow-wrap:anywhere}
+.chloe-pose-detail::before,.chloe-pose-detail::after{content:"";grid-row:1;background:var(--line)}
+.chloe-pose-detail::before{grid-column:2}
+.chloe-pose-detail::after{grid-column:4}
 .chloe-pose-detail>section{min-height:0;display:flex;flex-direction:column}
 .chloe-pose-detail>section:first-child{overflow-y:auto}
 .chloe-pose-detail h3{margin:0}
