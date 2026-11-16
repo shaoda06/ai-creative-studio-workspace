@@ -17,7 +17,7 @@ import execution_records as recordio
 from project_paths import input_file
 from h3_browser_context import request_context, empty_context
 from prepared_documents import read_journal
-from songssx_browser import songssx_contexts, songssx_scene, set_scene_playback
+from songssx_browser import playback_video, songssx_contexts, songssx_scene, set_scene_playback
 from songssx_workflow import PLANNER, WORKFLOW
 
 
@@ -289,6 +289,37 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
     rounds=[]
     standalone_songssx = set()
     for item in data['rounds'].values():
+        review_outputs=[]
+        for output in item.get('review_outputs',[]):
+            if 'playback' in output:
+                continue
+            if 'postprocess' in output:
+                review_outputs.append(review_output(project, output, lambda key: file_url(api, key)))
+                continue
+            reference=media_reference(data['root'],project/'制作记录.md',output['resource'])
+            review_outputs.append({'kind':'video','name':output['label'],'url':resource_file(data,api,reference)})
+        record = ref(project, api, project/'制作记录.md')
+        if 'postproduction' in item:
+            base = item['base_round']
+            source_view = rounds[base-1]
+            value, = item['values']
+            kind = item['postproduction']['kind']
+            path = (data['root']/value['ref']['file']).relative_to(project).as_posix()
+            main = playback_video(project, {'file':path, 'playback':{'run':value['run'], 'stage':value['stage']}})
+            if main['url']:
+                main['url'] = api+'/files/'+main['url']
+            main['previewNote'] = f'{kind} · 来源第{base}轮'
+            description = f'{kind} · 来源第{base}轮。{item["note"]}'
+            segments_view = [{**{key:value[key] for key in ('id', 'duration', 'run', 'stage')},
+                              'key':main['key'], 'label':'整片', 'outputDuration':value['duration'],
+                              'videos':[], 'shotIds':[], 'scriptHtml':documents.markdown(description, project/'制作记录.md'),
+                              'scriptUrl':record['url']}]
+            workflow = source_view.get('workflow', 'songssx' if source_view.get('songssx') else 'aimixer')
+            rounds.append({'number':item['number'], 'created_at':item['created_at'], 'note':description,
+                           'episodeRound':True, 'script':source_view['script'], 'storyboard':source_view['storyboard'],
+                           'segments':segments_view, 'record':record, 'issues':[], 'reviewOutputs':review_outputs,
+                           'workflow':workflow, 'songssx':{'recorded':True, 'video':main, 'segments':[]}})
+            continue
         script=script_view(item['script'])
         values=[]; contexts={}; issues=[]
         source=item['scene_source']
@@ -321,18 +352,9 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
                         speaker,separator,original=line.partition('：')
                         if separator and original.strip():
                             context['dialogues'].append({'shot':identity,'index':len(context['dialogues']),'speaker':speaker.strip(),'original':original.strip()})
-        review_outputs=[]
-        for output in item.get('review_outputs',[]):
-            if 'playback' in output:
-                continue
-            if 'postprocess' in output:
-                review_outputs.append(review_output(project, output, lambda key: file_url(api, key)))
-                continue
-            reference=media_reference(data['root'],project/'制作记录.md',output['resource'])
-            review_outputs.append({'kind':'video','name':output['label'],'url':resource_file(data,api,reference)})
         round_view={'number':item['number'],'created_at':item['created_at'],'note':item['note'],
                        'episodeRound':True,'script':script,'storyboard':script,'segments':values,
-                       'record':ref(project,api,project/'制作记录.md'),'issues':issues,'reviewOutputs':review_outputs}
+                       'record':record,'issues':issues,'reviewOutputs':review_outputs}
         if not source:
             generation = [upstream_candidate(data['candidates'], entry) if entry['stage'] == '后处理' else entry
                           for entry in item['values']]
@@ -403,8 +425,8 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         if ((value['id'], value['stage'], value['run']) in recorded_segments
                 or value['record']['任务ID'] not in MISSING):
             recorded_workflows.add(workflow)
-    if any(round_.get('songssx', {}).get('recorded') for round_ in rounds):
-        recorded_workflows.add('songssx')
+    recorded_workflows.update(round_.get('workflow', 'songssx') for round_ in rounds
+                              if round_.get('songssx', {}).get('recorded'))
     result['productionWorkflows'] = [workflow for workflow in ('aimixer', 'songssx') if workflow in recorded_workflows]
     if not result['productionWorkflows']:
         result['productionWorkflow'] = 'aimixer' if 'aimixer' in candidate_workflows else 'songssx'

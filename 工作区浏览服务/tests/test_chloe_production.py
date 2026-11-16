@@ -82,6 +82,52 @@ class ChloeProductionTests(unittest.TestCase):
         initialize_video(self.root,'V001','隔离演示')
         self.assertEqual(state(self.project)['rounds'],{})
 
+    def test_local_edit_and_grade_play_exact_outputs_on_their_own_timeline(self):
+        self.plan()
+        self.candidate('P001','E001')
+        self.candidate('P002','E002')
+        source = self.round(1,[('P001','E001'),('P002','E002')])
+        paths = []
+        for number, kind in [(2, '剪辑'), (3, '调色')]:
+            execution = f'E{number+1:03d}'
+            path, reference, _ = self.resource(key=execution)
+            paths.append(path)
+            metadata = path.parent/'版本信息.json'
+            version = json.loads(metadata.read_text('utf-8'))
+            version['facts']['duration_seconds'] = 5
+            metadata.write_text(json.dumps(version, ensure_ascii=False), encoding='utf-8')
+            add_row(self.record, '执行记录', [execution,'视频处理','E001' if number==2 else 'E003','FFmpeg',
+                '不适用','不适用','隔离授权','未取得','未取得','2026-11-07T12:00:00+08:00','已完成','送审'])
+            add_row(self.record, '输出记录', [execution, '整场视频', reference])
+            entry = {'number':number,'created_at':source['created_at'],'note':'隔离送审','base_round':number-1,
+                     'postproduction':{'kind':kind,'execution':execution,'slot':'整场视频'}}
+            if number == 2:
+                edit = entry
+            else:
+                grade = entry
+        _, comparison, _ = self.resource(key='compare')
+        grade['review_outputs'] = [{'label':'调色前后对照','resource':comparison}]
+        self.rounds([source, edit, grade])
+        detail = browser.detail(self.projects,self.project.name,self.api,'V001')
+        original, edited, graded = detail['sceneRounds']['whole']
+        self.assertNotIn('songssx',original)
+        self.assertEqual(detail['productionWorkflows'],['aimixer'])
+        for item, path in zip([edited, graded], paths, strict=True):
+            self.assertEqual(item['songssx']['video']['key'],path.relative_to(self.project).as_posix())
+            self.assertEqual(item['songssx']['segments'],[])
+            self.assertEqual(item['segments'][0]['duration'],5)
+            self.assertEqual(item['segments'][0]['videos'],[])
+            self.assertEqual(browser.round_videos(state(self.project),item['number'])[0][0],path)
+            self.assertEqual(item['script'],original['script'])
+        self.assertIn('来源第2轮', graded['note'])
+        self.assertEqual([v['name'] for v in graded['reviewOutputs']],['调色前后对照'])
+        self.assertEqual(edited['reviewOutputs'],[])
+        for change, message in [({'base_round':3},'来源轮次'),
+                                ({'postproduction':edit['postproduction']},'已登记轮次')]:
+            self.rounds([source, edit, {**grade, **change}])
+            with self.assertRaisesRegex(ValueError,message):
+                state(self.project)
+
     def published_record(self):
         (self.project/'成片/隔离成片.webm').write_bytes((Path(__file__).parents[1]/'frontend/public/component-samples/video.webm').read_bytes())
         add_row(self.project/'README.md','发布记录',['P001','[成片](<成片/隔离成片.webm>)','不适用','不适用','隔离发布文案','无','不适用','不适用',

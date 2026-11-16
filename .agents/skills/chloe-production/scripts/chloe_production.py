@@ -16,6 +16,8 @@ from songssx_browser import scene_playbacks
 SCENE_STAGE = '场次生成'
 SCENE_SLOT = '整场视频'
 STAGES = ('一采', '二采', SCENE_STAGE, '后处理')
+POSTPRODUCTION_KINDS = ('剪辑', '调色')
+WHOLE_REVIEW_SEGMENT = 'P000'
 VIDEO_PURPOSE = re.compile(r'(P\d{3,})/(' + '|'.join(STAGES) + ')')
 
 
@@ -104,6 +106,48 @@ def validate_director_versions(sheets):
         pages.add(page)
 
 
+def review_outputs(project, root, item):
+    for output in item.get('review_outputs', []):
+        if 'playback' in output:
+            continue
+        if set(output) == {'label', 'postprocess', 'source'}:
+            local(project, output['postprocess'])
+            local(project, output['source'])
+        elif set(output) == {'label', 'resource'}:
+            media_reference(root, project/'制作记录.md', output['resource'])
+        else:
+            raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
+
+
+def postproduction_round(project, root, item, rounds, executions, outputs):
+    field = item['postproduction']
+    if set(item)-{'review_outputs'} != {'number', 'created_at', 'note', 'base_round', 'postproduction'}:
+        raise ValueError('剪辑或调色轮次须登记来源轮次及整片输出')
+    if (not isinstance(field, dict) or set(field) != {'kind', 'execution', 'slot'}
+            or field['kind'] not in POSTPRODUCTION_KINDS):
+        raise ValueError('整片后期须填写剪辑或调色、执行编号及输出槽位')
+    base = item['base_round']
+    if type(base) is not int or base not in rounds:
+        raise ValueError('整片后期须引用既有来源轮次')
+    execution, slot = field['execution'], field['slot']
+    record, output = executions.get(execution), outputs.get((execution, slot))
+    if not record or record['执行类型'] != '视频处理' or record['执行状态'] != '已完成' or not output:
+        raise ValueError('整片后期须引用已完成的视频处理及实际输出')
+    reference = media_reference(root, project/'制作记录.md', output['资源引用'])
+    if (reference['owner'] != project.relative_to(root).as_posix() or not reference['resource_id'].startswith('VID-')
+            or (root/reference['file']).suffix.lower() != '.mp4'):
+        raise ValueError('整片后期须引用本视频的准确 MP4 版本')
+    if any(round_.get('postproduction') and round_['values'][0]['ref'] == reference for round_ in rounds.values()):
+        raise ValueError('同一整片后期输出已登记轮次')
+    if any(set(output) != {'label', 'resource'} for output in item.get('review_outputs', [])):
+        raise ValueError('整片后期的对照只作为审阅产出引用准确资源')
+    review_outputs(project, root, item)
+    duration = video_version(root, reference)['facts']['duration_seconds']
+    value = {'id': WHOLE_REVIEW_SEGMENT, 'stage': '后处理', 'run': f"R{item['number']:03d}",
+             'execution': execution, 'slot': slot, 'ref': reference, 'record': record, 'duration': duration}
+    return {**item, 'values': [value], 'scene_source': None}
+
+
 def state(project):
     project = Path(project).resolve()
     root = project.parent.parent
@@ -142,14 +186,19 @@ def state(project):
         raise ValueError('制作轮次必须使用 format 1 和 rounds')
     rounds = {}; seen = set()
     for item in spec['rounds']:
-        required = {'number','created_at','note','script','segments'}
-        if not required <= item.keys() or set(item)-required-{'base_round','changed_segments','review_outputs'}:
+        if not {'number', 'created_at', 'note'} <= item.keys():
             raise ValueError('制作轮次字段不符合规范')
         number = item['number']
         if type(number) is not int or number != len(rounds)+1:
             raise ValueError('整片轮次从1起连续递增且不可重复')
         if datetime.fromisoformat(item['created_at']).tzinfo is None:
             raise ValueError('轮次时间须包含时区')
+        if 'postproduction' in item:
+            rounds[number] = postproduction_round(project, root, item, rounds, executions, outputs)
+            continue
+        required = {'number','created_at','note','script','segments'}
+        if not required <= item.keys() or set(item)-required-{'base_round','changed_segments','review_outputs'}:
+            raise ValueError('制作轮次字段不符合规范')
         source = local(project, item['script'])
         if source.parent != project/'历史版本' or not source.is_file():
             raise ValueError('轮次脚本须引用历史版本中的准确稿件')
@@ -197,16 +246,7 @@ def state(project):
             original = video_version(root, upstream['ref'])
             if abs(info['facts']['duration_seconds']-original['facts']['duration_seconds']) > 1/info['facts']['fps']+0.001:
                 raise ValueError('派生整片须保留原片时长及分段时间轴')
-        for output in item.get('review_outputs', []):
-            if 'playback' in output:
-                continue
-            if set(output) == {'label', 'postprocess', 'source'}:
-                local(project, output['postprocess'])
-                local(project, output['source'])
-                continue
-            if set(output) != {'label','resource'}:
-                raise ValueError('审阅附加输出须为 label 和准确 resource 引用')
-            media_reference(root, project/'制作记录.md', output['resource'])
+        review_outputs(project, root, item)
         seen.update((v['id'],v['execution'],v['slot']) for v in values)
         rounds[number] = {**item, 'values':values, 'scene_source':scene, 'playback':playbacks.get('whole')}
     for value in candidates.values():
@@ -346,6 +386,9 @@ def check(project):
     notes=ProjectReviewNotes().read(value['project']/'视频修改意见.json')
     identities={(v['id'],v['stage'],v['run']) for v in value['candidates'].values()}
     rounds={n:{(v['id'],v['stage'],v['run']) for v in row['values']} for n,row in value['rounds'].items()}
+    for row in value['rounds'].values():
+        if 'postproduction' in row:
+            identities.update(rounds[row['number']])
     if any(note.number not in rounds for note in notes.rounds.values()) or any(
             (note.segment,note.stage,note.run) not in identities or note.roundNumber is not None and
             (note.segment,note.stage,note.run) not in rounds.get(note.roundNumber,set()) for note in notes.notes.values()):
