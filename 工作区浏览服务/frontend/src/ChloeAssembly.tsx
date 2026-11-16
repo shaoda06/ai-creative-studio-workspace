@@ -207,7 +207,6 @@ function ListAssembly<T extends AssemblyAsset>({ kind, buildHandoff }: {
       return shuffled(assets).slice(0, quantity);
     },
     onSuccess: changeSelection,
-    onError: () => notify('无法读取可用姿态，请重试。', 'error'),
   });
   const selecting = randomSelection.isPending;
   const quantity = Number(poseQuantity);
@@ -216,7 +215,9 @@ function ListAssembly<T extends AssemblyAsset>({ kind, buildHandoff }: {
     event.preventDefault();
     if (selecting || !validQuantity) return;
     if (quantity === 0) changeSelection([]);
-    else randomSelection.mutate({ category: poseCategory, quantity });
+    else randomSelection.mutate({ category: poseCategory, quantity }, {
+      onError: () => notify('无法读取可用姿态，请重试。', 'error'),
+    });
   };
   const shuffleSelection = () => {
     const reordered = shuffled(selected);

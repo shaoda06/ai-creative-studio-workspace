@@ -523,6 +523,26 @@ try {
     assert.equal(await poseQuantity.inputValue(),'1');
     assert.equal(await assemblyNav.locator('[aria-current="page"]').textContent(),'姿态装配');
 
+    const randomPoseUrl = /\/shared-poses\?available=true&require_media=true$/;
+    await page.route(randomPoseUrl, route=>route.fulfill({status:503,json:{detail:'隔离测试读取失败'}}), {times:1});
+    await selectRandom.click();
+    const randomReadError = page.getByRole('alert').filter({hasText:'无法读取可用姿态，请重试。'});
+    await randomReadError.getByRole('button',{name:'关闭通知',exact:true}).click();
+    const lateRead = Promise.withResolvers();
+    await page.route(randomPoseUrl, async route => {
+      await lateRead.promise;
+      await route.fulfill({status:503,json:{detail:'隔离测试读取失败'}});
+    }, {times:1});
+    const queuedRandomRead = page.waitForRequest(request=>randomPoseUrl.test(request.url()));
+    await selectRandom.click();
+    await queuedRandomRead;
+    await reset.click();
+    const failedRandomRead = page.waitForResponse(response=>randomPoseUrl.test(response.url()) && response.status()===503);
+    lateRead.resolve();
+    await (await failedRandomRead).finished();
+    await assert.rejects(randomReadError.waitFor({timeout:650}),{name:'TimeoutError'});
+    assert.ok(await poseSelection.getByRole('heading',{name:'姿态选择 0 项',exact:true}).isVisible());
+
     await assemblyNav.getByRole('button',{name:'造型装配',exact:true}).click();
     const checkRefreshedPicker = async (endpoint, button, name, emptyText, assets) => {
       const path = `/api/workspaces/account-demo/${endpoint}`;
