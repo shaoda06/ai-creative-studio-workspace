@@ -1,4 +1,4 @@
-"""Prepare one RelayVSR task group and join its returned clips without re-encoding."""
+"""Prepare RIFE first when selected, then split and join the RelayVSR task group."""
 import argparse
 from fractions import Fraction
 import json
@@ -89,18 +89,77 @@ def prepare(root, source, record, target, authorization, fps=None):
     if record.exists() or target.exists() or source == target:
         raise FileExistsError('执行目录和结果文件须为本次未占用的路径')
     source_stamp = list(stamp(source))
+    video, rate, frames = read_source(source)
+    if fps is None:
+        return prepare_segments(root, source, record, target, authorization, video, rate, frames, source, source_stamp)
+    configuration = plan_output(dict(width=video['width'], height=video['height'], frame_rate=float(rate)), 'original', fps)
+    if configuration['reuse']:
+        return prepare_segments(root, source, record, target, authorization, video, rate, frames, source, source_stamp)
+
+    folder = record / '整条插帧'
+    intermediate = folder / '补帧中间片.mp4'
+    if intermediate == target:
+        raise ValueError('最终输出与补帧中间片同名，请另选输出路径')
+    source_path = source.relative_to(root).as_posix()
+    manifest = dict(group_title=f'{target.stem} · RIFE 插帧', tasks=[
+        dict(task_type='video-postprocess', title=f'{target.stem} · RIFE 插帧', authorization=authorization,
+             record_dir=folder.relative_to(root).as_posix(), output_nodes=['16'], video_plan=VIDEO_PLAN,
+             references=[dict(file=source_path, placeholder='planned/rife-source.mp4')],
+             video_postprocess=dict(source=source_path, resolution='original', fps=fps),
+             outputs=[output('16', 'gifs', intermediate, root)])])
+    record.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix='.relayvsr-', dir=record.parent) as temporary:
+        work = Path(temporary) / '准备'
+        work.mkdir()
+        save_json(work / '插帧任务清单.json', manifest)
+        save_json(work / '联动计划.json', dict(
+            source=source_path, source_stamp=source_stamp, size=[video['width'], video['height']],
+            duration=str(Fraction(frames, rate)), fps=fps, output=target.relative_to(root).as_posix(),
+            authorization=authorization, rife_record=folder.relative_to(root).as_posix(),
+            rife_output=intermediate.name))
+        work.rename(record)
+    return dict(status='prepared', stage='rife', tasks=1, plan=(record / '插帧任务清单.json').relative_to(root).as_posix())
+
+
+def read_source(source):
     video, _ = media(source, count=True)
     rate = Fraction(video['avg_frame_rate'])
     frames = int(video.get('nb_read_frames', 0))
     if not frames or rate < 1 or rate != Fraction(video['r_frame_rate']):
         raise ValueError('RelayVSR 分段输入须为可读的恒定帧率视频')
+    return video, rate, frames
+
+
+def prepare_after_rife(root, record):
+    plan = read(record / '联动计划.json')
+    original = project_file(root, plan['source'])
+    target = project_file(root, plan['output'])
+    segments = record / '超分分段'
+    if segments.exists() or target.exists():
+        raise FileExistsError('超分分段或最终输出已存在，请使用原任务清单接续')
+    report = read(project_file(root, plan['rife_record']) / '结果收尾报告.json')
+    item, = report['items']
+    source = project_file(root, item['path'])
+    source_stamp = item['metadata']['stamp']
+    if item['identity'] != plan['rife_output'] or list(stamp(source)) != source_stamp:
+        raise ValueError('补帧取回文件与原报告不符')
+    video, rate, frames = read_source(source)
+    expected_fps = Fraction(str(plan['fps']))
+    duration = Fraction(plan['duration'])
+    if ([video['width'], video['height']] != plan['size'] or rate != expected_fps
+            or abs(Fraction(frames, rate) - duration) >= Fraction(1, rate)):
+        raise ValueError('补帧结果的尺寸、帧率或时长与联动计划不符')
+    return prepare_segments(root, source, segments, target, plan['authorization'], video, rate, frames,
+                            original, plan['source_stamp'], source_stamp)
+
+
+def prepare_segments(root, source, record, target, authorization, video, rate, frames, original,
+                     original_stamp, source_stamp=None):
+    if source_stamp is None:
+        source_stamp = original_stamp
+    if list(stamp(original)) != original_stamp:
+        raise ValueError('原片已变化，请核对音轨来源')
     width, height = 2 * video['width'], 2 * video['height']
-    configuration = plan_output(dict(width=width, height=height, frame_rate=float(rate)), 'original',
-                                'original' if fps is None else fps)
-    interpolate = not configuration['reuse']
-    stage = record / '超分合片.mp4' if interpolate else target
-    if interpolate and stage == target:
-        raise ValueError('最终输出与插帧使用的中间合片同名，请另选输出路径')
 
     def relative(path):
         return path.relative_to(root).as_posix()
@@ -130,20 +189,13 @@ def prepare(root, source, record, target, authorization, fps=None):
                               outputs=[output('106', 'images', folder / filename, root)], video_plan=VIDEO_PLAN))
             segments.append(dict(start=start, frames=count, record_dir=relative(folder), result=filename))
         save_json(work / '任务清单.json', dict(group_title=f'{target.stem} · RelayVSR 2倍超分', tasks=tasks))
-        save_json(work / '分段计划.json', dict(source=relative(source), source_stamp=source_stamp,
-                  merged=relative(stage), size=[width, height], fps=str(rate), frames=frames, segments=segments))
-        if interpolate:
-            folder = record / '整条插帧'
-            save_json(work / '插帧任务清单.json', dict(group_title=f'{target.stem} · RIFE 插帧', tasks=[
-                dict(task_type='video-postprocess', title=f'{target.stem} · RIFE 插帧', authorization=authorization,
-                     record_dir=relative(folder), output_nodes=['16'], video_plan=VIDEO_PLAN,
-                     references=[dict(file=relative(stage), placeholder='planned/relayvsr-joined.mp4')],
-                     video_postprocess=dict(source=relative(stage), resolution='original', fps=fps),
-                     outputs=[output('16', 'gifs', target, root)])]))
+        save_json(work / '分段计划.json', dict(source=relative(original), source_stamp=original_stamp,
+                  picture_source=relative(source), merged=relative(target),
+                  size=[width, height], fps=str(rate), frames=frames, segments=segments))
         if list(stamp(source)) != source_stamp:
             raise ValueError('裁剪期间源片已变化，请从实际源片重新准备')
         work.rename(record)
-    return dict(status='prepared', tasks=len(tasks), plan=relative(record / '任务清单.json'))
+    return dict(status='prepared', stage='relayvsr', tasks=len(tasks), plan=relative(record / '任务清单.json'))
 
 
 def join(root, record):
@@ -197,21 +249,24 @@ def join(root, record):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    planning = commands.add_parser('prepare', help='本地裁片并写出 10 秒分段任务清单，不上传')
+    planning = commands.add_parser('prepare', help='准备首阶段任务清单，不上传')
+    continuation = commands.add_parser('after-rife', help='按已取回补帧结果裁片并准备 RelayVSR 任务组')
     merging = commands.add_parser('join', help='组取回完成后按原顺序无转码拼接并封回原声')
-    for command in (planning, merging):
+    for command in (planning, continuation, merging):
         command.add_argument('--project', type=Path, required=True, help='实际项目根目录')
         command.add_argument('--record-dir', required=True, help='项目相对执行目录')
     planning.add_argument('--source', required=True, help='项目相对源视频')
     planning.add_argument('--output', required=True, help='项目相对最终 MP4 位置')
     planning.add_argument('--authorization', required=True, help='本次业务执行授权记录')
-    planning.add_argument('--fps', type=float, help='可选最终插帧帧率；省略沿用源帧率')
+    planning.add_argument('--fps', type=float, help='可选补帧目标，先在源尺寸补帧；省略沿用源帧率')
     args = parser.parse_args()
     root = args.project.resolve(strict=True)
     record = project_file(root, args.record_dir)
     if args.command == 'prepare':
         result = prepare(root, project_file(root, args.source), record, project_file(root, args.output),
                          args.authorization, args.fps)
+    elif args.command == 'after-rife':
+        result = prepare_after_rife(root, record)
     else:
         result = join(root, record)
     print(json.dumps(result, ensure_ascii=False))
