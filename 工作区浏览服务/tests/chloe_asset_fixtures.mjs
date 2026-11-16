@@ -8,7 +8,7 @@ export function chloeAssetResponse(url, cards) {
       params.has('available') ? card.clothingForm === '单件' : card.clothingForm !== '套装')) &&
     (!models.length || models.some(id => card.models.includes(id))));
   if (params.has('ids')) return params.getAll('ids').flatMap(id => eligible.filter(card => card.id === id));
-  const type = card => card.type || card.bodyArea;
+  const type = card => card.type || card.outfitStyle || card.bodyArea;
   const active = params.getAll('types');
   const filtered = active.length ? eligible.filter(card => active.includes(type(card))) : eligible;
   if (!params.has('page')) return filtered;

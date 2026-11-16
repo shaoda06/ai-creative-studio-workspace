@@ -14,10 +14,12 @@ import type { ChloeAssetStatus } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
+import { AddOutfitStyleDialog, OutfitStyleSelect, useOutfitStyles } from './ChloeOutfitStyles';
 
 interface ClothingClassification {
   clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
   outfitSource?: '提取' | '合成' | null;
+  outfitStyle?: string | null;
 }
 export interface ReferenceAssetCard extends ClothingClassification {
   id: string; name: string; status: ChloeAssetStatus; media: FileItem | null; type?: string | null;
@@ -57,20 +59,27 @@ export function ChloeAccessoryColumns({ cards }: { cards: ReactNode[] }) {
 
 export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: ReferenceAssetKind; workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
-  const { api, page } = useChloeScope();
+  const { page } = useChloeScope();
   const [params, setParams] = useSearchParams();
+  const [addingStyle, setAddingStyle] = useState(false);
   const isClothing = kind === 'clothing';
   const isOutfit = isClothing && params.get('clothingTab') === 'outfits';
   const clothingTab = isOutfit ? 'outfits' : 'garments';
   const isAccessory = kind === 'accessories';
   const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<ReferenceAssetCard>(endpoint,
     { form: isClothing ? (isOutfit ? '套装' : '单件') : undefined });
+  const styles = useOutfitStyles(isOutfit);
   const data = query.isPlaceholderData ? undefined : query.data;
-  const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])];
-  const renderCard = (item: ReferenceAssetCard) => <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
-    badge={chloeAssetStatusBadges[item.status]}
-    to={`${page}?${list}&${parameter}=${encodeURIComponent(item.id)}`}
-    item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
+  const types = [...new Set([...(isOutfit ? styles.data ?? [] : []), ...(query.data?.types ?? []), ...activeTypes])];
+  const renderCard = (item: ReferenceAssetCard) => {
+    const card = <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
+      badge={chloeAssetStatusBadges[item.status]}
+      to={`${page}?${list}&${parameter}=${encodeURIComponent(item.id)}`}
+      item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
+    return isOutfit && item.outfitStyle ? <div className="chloe-outfit-style-card" key={item.id}>
+      {card}<OutfitStyleSelect id={item.id} current={item.outfitStyle} styles={styles.data ?? []} />
+    </div> : card;
+  };
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     {isClothing && <div className="chloe-clothing-tabs">
@@ -79,11 +88,18 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
       }} />
     </div>}
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label={isClothing ? '按部位筛选' : undefined} />}
+    {isOutfit ? <>
+      <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />
+      <div className="chloe-outfit-style-toolbar">
+        {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label="按风格筛选" />}
+        <button type="button" disabled={!styles.data} onClick={() => setAddingStyle(true)}>新增风格</button>
+      </div>
+      {addingStyle && <AddOutfitStyleDialog close={() => setAddingStyle(false)} />}
+    </> : types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label={isClothing ? '按部位筛选' : undefined} />}
     {data && (data.items.length ? isAccessory
       ? <ChloeAccessoryColumns cards={data.items.map(renderCard)} />
       : <div className="asset-media-grid">{data.items.map(renderCard)}</div>
-      : <p className="muted">暂无{isClothing ? (isOutfit ? '套装' : '单件') : label}资料。</p>)}
+      : <p className="muted">{isOutfit && activeTypes.length ? '暂无符合所选风格的套装。' : `暂无${isClothing ? (isOutfit ? '套装' : '单件') : label}资料。`}</p>)}
     {data && <Pagination {...assetPaging(data, changePage)} />}
   </>;
 }
@@ -122,6 +138,7 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
               {data.clothingForm && <div><dt>服装形态</dt><dd>{data.clothingForm}</dd></div>}
               {data.bodyArea && <div><dt>部位</dt><dd>{data.bodyArea}</dd></div>}
               {data.outfitSource && <div><dt>套装来源</dt><dd>{data.outfitSource}</dd></div>}
+              {data.outfitStyle && <div><dt>风格</dt><dd>{data.outfitStyle}</dd></div>}
               <div><dt>{label}说明</dt><dd>{data.description}</dd></div>
               {data.composition && <div><dt>组成与穿法</dt><dd>{data.composition}</dd></div>}
             </dl>

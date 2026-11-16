@@ -27,6 +27,7 @@ const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixture
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothingAsset = (id,name,clothingForm,bodyArea,status) => ({
   ...fixtureAsset(id,name,status), clothingForm, bodyArea, reference:{resource:`IMG-${id}`,version:'V002'},
+  ...(clothingForm === '套装' ? {outfitStyle:'未分类'} : {}),
 });
 const fixtureGarments = ['组合','裤装','裙装','上装','外套','连身装'].map((area,index) =>
   fixtureClothingAsset(`O00${index+3}`,`单件样例${index+1}`,'单件',area));
@@ -78,12 +79,23 @@ try {
     let showAssemblyFixtures = false;
     let testPaging = false;
     let unavailable = '';
+    const clothing = fixtureClothing.map(card => ({...card}));
+    const outfitStyles = ['未分类'];
     const refreshedAssets = new Map();
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', async route => {
       const url = route.request().url();
       const path = new URL(url).pathname;
       const assets = cards => route.fulfill({json:chloeAssetResponse(url, cards)});
+      const method = route.request().method();
+      if (path === '/api/workspaces/account-demo/shared-clothing/styles') {
+        if (method === 'POST') outfitStyles.push(route.request().postDataJSON().style);
+        return route.fulfill({json:outfitStyles,status:method === 'POST' ? 201 : 200});
+      }
+      if (path === '/api/workspaces/account-demo/shared-clothing/O001/style' && method === 'PUT') {
+        clothing[0].outfitStyle = route.request().postDataJSON().style;
+        return route.fulfill({json:{outfitStyle:clothing[0].outfitStyle}});
+      }
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
       if (refreshedAssets.has(path)) return assets(await refreshedAssets.get(path));
       if (['/api/workspaces/account-demo/production-videos','/api/workspaces/account-demo/publication-videos'].includes(path)) return route.fulfill({json:[]});
@@ -126,9 +138,9 @@ try {
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录']
           .map(heading=>({heading,empty:true})),
       }});
-      if (path === '/api/workspaces/account-demo/shared-clothing') return assets(showAssemblyFixtures ? fixtureClothing : []);
+      if (path === '/api/workspaces/account-demo/shared-clothing') return assets(showAssemblyFixtures ? clothing : []);
       if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
-        id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',composition:'开衫叠穿上衣',images:[],
+        id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',outfitStyle:clothing[0].outfitStyle,composition:'开衫叠穿上衣',images:[],
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
       }});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
@@ -285,18 +297,43 @@ try {
     assert.equal(await clothingLinks.count(),2);
     await outfitTab.click();
     await libraryFilter.waitFor({state:'detached'});
+    const styleFilter = page.getByRole('group',{name:'按风格筛选',exact:true});
+    const selectStyle = page.getByRole('combobox',{name:'修改 O001 的风格',exact:true});
+    const styleForm = page.getByRole('dialog',{name:'新增风格',exact:true});
+    await selectStyle.getByText('未分类',{exact:true}).waitFor();
     assert.equal(await clothingLinks.count(),2);
+    await page.getByRole('button',{name:'新增风格',exact:true}).click();
+    await styleForm.getByLabel('风格名称').fill('通勤');
+    await styleForm.getByRole('button',{name:'新增',exact:true}).click();
+    await styleForm.waitFor({state:'hidden'});
+    const commute = styleFilter.getByRole('checkbox',{name:'通勤',exact:true});
+    const unclassified = styleFilter.getByRole('checkbox',{name:'未分类',exact:true});
+    await commute.check();
+    await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
+    await commute.uncheck();
+    await selectStyle.click();
+    await page.getByRole('option',{name:'通勤',exact:true}).click();
+    await selectStyle.getByText('通勤',{exact:true}).waitFor();
+    await commute.check();
+    await clothingLinks.nth(1).waitFor({state:'detached'});
+    assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
+    await unclassified.check();
+    await clothingLinks.nth(1).waitFor();
+    await commute.uncheck();
+    await unclassified.uncheck();
+    await clothingLinks.nth(1).waitFor();
     await page.getByRole('link',{name:'O001 · 套装甲',exact:true}).click();
     await page.getByText('隔离测试套装',{exact:true}).waitFor();
     const clothingInfo = page.getByRole('region',{name:'服装信息',exact:true});
-    assert.deepEqual(await clothingInfo.locator('dt').allTextContents(),['服装名称','服装形态','套装来源','服装说明','组成与穿法']);
-    assert.deepEqual(await clothingInfo.locator('dd').allTextContents(),['套装甲','套装','合成','隔离测试套装','开衫叠穿上衣']);
+    assert.deepEqual(await clothingInfo.locator('dt').allTextContents(),['服装名称','服装形态','套装来源','风格','服装说明','组成与穿法']);
+    assert.deepEqual(await clothingInfo.locator('dd').allTextContents(),['套装甲','套装','合成','通勤','隔离测试套装','开衫叠穿上衣']);
     await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
     assert.ok(page.url().endsWith('asset=clothing&clothingTab=outfits'));
     await outfitTab.waitFor();
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     await page.reload();
     await outfitTab.waitFor();
+    await selectStyle.getByText('通勤',{exact:true}).waitFor();
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     await garmentsTab.click();
     await libraryFilter.waitFor();
@@ -625,6 +662,13 @@ try {
     await choose('选择套装').click();
     const clothingA = dialog.getByRole('button',{name:'选择O001 · 套装甲',exact:true});
     await pickerCount('套装',0).waitFor();
+    const pickerStyles = dialog.getByRole('group',{name:'按风格筛选',exact:true});
+    const pickerUnclassified = pickerStyles.getByRole('checkbox',{name:'未分类',exact:true});
+    await pickerUnclassified.check();
+    await dialog.getByText('暂无符合所选风格的可用套装。',{exact:true}).waitFor();
+    await pickerStyles.getByRole('checkbox',{name:'通勤',exact:true}).check();
+    await clothingA.waitFor();
+    await pickerUnclassified.uncheck();
     await clothingA.click();
     await pickerCount('套装',1).waitFor();
     for (const label of ['制作中套装','单件样例1','旧服装']) {

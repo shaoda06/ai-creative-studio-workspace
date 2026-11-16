@@ -14,6 +14,7 @@ sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
 from storyboard_fields import read_shots
 
 MISSING = {'待确定', '待核实', '未取得', '不适用', '无'}
+DEFAULT_OUTFIT_STYLE = '未分类'
 DISPLAY_IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp'}
 LINK = re.compile(r'\[([^\]\n]+)\]\(<([^>\n]+)>\)')
 MEDIA = re.compile(r'\[(共用|本视频):((?:IMG|VID|AUD)-[a-zA-Z0-9-]+)@(V[0-9]{3,})\]\(<([^>\n]+)>\)')
@@ -158,6 +159,14 @@ def value_check(field, value, choices):
         raise ValueError('脚本版本须为v01等格式')
 
 
+def outfit_style_name(value):
+    value = value.strip()
+    if (not value or value in MISSING or not value.isprintable()
+            or any(char in value for char in '|<>[]') or value in {'-', '—', 'TODO', '同上'} or '{{' in value):
+        raise ValueError('请输入有效的风格名称，名称须为一行文字且不能含 |、<、>、[、]')
+    return value
+
+
 def read_document(root, path, source, substitutions, *, body=None):
     text = source.read_text('utf-8')
     for key, value in substitutions.items():
@@ -196,8 +205,11 @@ def read_document(root, path, source, substitutions, *, body=None):
                 expected_names = [r[0] for r in base['rows']]
                 if path.name in REQUIRED_ASSET_IMAGES and section['heading'] == '资产身份' and '资产状态' not in names:
                     expected_names.remove('资产状态')  # Existing records default to 制作中.
-                if path.name == '服装说明.md' and section['heading'] == '服装信息' and names == ['服装说明']:
-                    expected_names = names  # Older records remain readable without classification.
+                if path.name == '服装说明.md' and section['heading'] == '服装信息':
+                    if names == ['服装说明']:
+                        expected_names = names  # Older records remain readable without a clothing form.
+                    elif '风格' not in names:
+                        expected_names.remove('风格')  # Existing outfits default to 未分类.
                 if names != expected_names:
                     raise ValueError(section['heading']+'：固定字段缺失、重复、改名或顺序改变')
             seen = set()
@@ -350,6 +362,8 @@ def check_relations(root, path, doc):
             raise ValueError('单件须填写部位，套装来源填不适用')
         if form == '套装' and (info['套装来源'] in MISSING or info['组成与穿法'] in MISSING or info['部位'] != '不适用'):
             raise ValueError('套装须填写来源及组成与穿法，部位填不适用')
+        if form == '套装' and '风格' in info:
+            outfit_style_name(info['风格'])
     if path.name == ASSETS['参考视频'][2]:
         info = {row['字段']: row['内容'] for row in records(doc, '参考视频信息')}
         if info['播放版本引用'] not in MISSING:

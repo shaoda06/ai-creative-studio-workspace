@@ -13,7 +13,7 @@ from backend.chloe_models import adopted_media, asset_content, linked_files, lin
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
-from chloe_documents import MISSING, asset_status, read_document, records, template
+from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, asset_status, read_document, records, template
 from chloe_init import asset_template_skill
 import project_resources as resources
 
@@ -60,6 +60,7 @@ def clothing_classification(info):
         'clothingForm': form if form not in MISSING else None,
         'bodyArea': info['部位'] if form == '单件' else None,
         'outfitSource': info['套装来源'] if form == '套装' else None,
+        'outfitStyle': info.get('风格', DEFAULT_OUTFIT_STYLE) if form == '套装' else None,
     }
 
 
@@ -105,7 +106,7 @@ def asset_rows(root, api, kind):
         status = '' if kind == VOICES else asset_status(path, doc)['status']
         info = fields(doc, kind.label+'信息')
         classification = clothing_classification(info) if kind == CLOTHING else {}
-        asset_type = info['配饰类型'] if kind == ACCESSORIES else classification.get('bodyArea')
+        asset_type = info['配饰类型'] if kind == ACCESSORIES else classification.get('outfitStyle') or classification.get('bodyArea')
         if asset_type in MISSING:
             asset_type = None
         models = tuple(row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特') if kind == VOICES else ()

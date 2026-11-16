@@ -76,11 +76,13 @@ class ChloeClothingTests(unittest.TestCase):
                 (fields.replace('待确定', '套装').replace('| 套装来源 | 不适用 |', '| 套装来源 | 合成 |')
                  .replace('| 组成与穿法 | 不适用 |', '| 组成与穿法 | 开衫叠穿上衣 |'), ('套装', None, '合成')),
             ):
-                self.path.write_text(original.replace(fields, metadata), encoding='utf-8')
+                legacy = original.replace('| 风格 | 未分类 |\n', '')
+                self.path.write_text(legacy.replace(fields, metadata), encoding='utf-8')
                 updated = self.cards(self.root, self.api)[0]
                 self.assertEqual(tuple(updated[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
                 updated_detail = self.detail(self.root, self.identity, self.api)
                 self.assertEqual(tuple(updated_detail[key] for key in ('clothingForm', 'bodyArea', 'outfitSource')), expected)
+                self.assertEqual(updated_detail['outfitStyle'], '未分类' if expected[0] == '套装' else None)
                 self.assertEqual(updated_detail.get('composition'), '开衫叠穿上衣' if expected[0] == '套装' else None)
                 self.assertEqual(updated['reference'], card['reference'])
                 self.assertEqual(updated['media'], card['media'])
@@ -166,6 +168,72 @@ class ChloeClothingTests(unittest.TestCase):
         self.append('当前采用', [self.kind.label+'参考图', ref, '错误采用', '2026-11-07T12:00:00+08:00'])
         with self.assertRaisesRegex(ValueError, '当前采用只登记'):
             self.detail(self.root, self.identity, self.api)
+
+
+class ChloeOutfitStyleTests(unittest.TestCase):
+    def test_shared_catalog_and_paged_filters_round_trip(self):
+        from backend.chloe_clothing import style_path, style_router, write_router
+        from backend.main import queue_write
+
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = initialize_workspace(Path(directory)/'Chloe Workspace')
+            root = initialize_project(workspace, '隔离样例')
+            other = initialize_project(workspace, '另一个项目')
+            outfit_path = initialize_asset(root, '服装', 'O001', '旧套装')/'服装说明.md'
+            new_outfit_path = initialize_asset(root, '服装', 'O003', '新套装')/'服装说明.md'
+            garment_path = initialize_asset(root, '服装', 'O002', '单件')/'服装说明.md'
+            garment_path.write_text(garment_path.read_text('utf-8').replace('服装形态 | 待确定', '服装形态 | 单件')
+                                    .replace('部位 | 不适用', '部位 | 上装'), 'utf-8')
+            for path in (outfit_path, new_outfit_path):
+                text = (path.read_text('utf-8').replace('服装形态 | 待确定', '服装形态 | 套装')
+                        .replace('套装来源 | 不适用', '套装来源 | 提取').replace('组成与穿法 | 不适用', '组成与穿法 | 示例搭配'))
+                if path == outfit_path:
+                    text = text.replace('| 风格 | 未分类 |\n', '')
+                path.write_bytes(text.replace('\n', '\r\n').encode('utf-8'))
+
+            def select(scope: str, request: Request):
+                request.state.workspace_space = SimpleNamespace(
+                    root={'first': root, 'second': other}[scope], api=f'/{scope}', view='chloe-commerce')
+
+            app = FastAPI()
+            app.include_router(style_router, prefix='/{scope}', dependencies=[Depends(select)])
+            app.include_router(write_router, prefix='/{scope}', dependencies=[Depends(select), Depends(queue_write)])
+            app.include_router(asset_router(CLOTHING), prefix='/{scope}', dependencies=[Depends(select)])
+            api = '/first/shared-clothing'
+            catalog = api + '/styles'
+            original = outfit_path.read_bytes()
+            with TestClient(app, base_url='http://127.0.0.1:8782') as client:
+                origin = {'Origin': 'http://127.0.0.1:8782'}
+                params = {'form': '套装', 'page': 1, 'page_size': 1, 'types': '未分类'}
+                initial = client.get(api, params=params)
+                self.assertEqual(initial.json()['total'], 2)
+                self.assertEqual(initial.json()['items'][0]['outfitStyle'], '未分类')
+                self.assertEqual(client.get(catalog).json(), ['未分类'])
+                self.assertFalse(style_path(root).exists())
+                self.assertIn('| 风格 | 未分类 |', new_outfit_path.read_text('utf-8'))
+                self.assertEqual(client.post(catalog, json={'style': '韩系'}).status_code, 403)
+                self.assertEqual(client.post(catalog, headers=origin, json={'style': '坏|值'}).status_code, 422)
+                added = client.post(catalog, headers=origin, json={'style': ' 韩系 '})
+                self.assertEqual(added.status_code, 201)
+                self.assertEqual(added.json(), ['未分类', '韩系'])
+                self.assertEqual(client.post(catalog, headers=origin, json={'style': '韩系'}).status_code, 409)
+                self.assertEqual(client.get('/second/shared-clothing/styles').json(), ['未分类'])
+                self.assertEqual(client.get(catalog).json(), ['未分类', '韩系'])
+                self.assertEqual(client.put(api+'/O002/style', headers=origin, json={'style': '韩系'}).status_code, 409)
+                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'style': '未登记'}).status_code, 409)
+                self.assertEqual(outfit_path.read_bytes(), original)
+                updated = client.put(api+'/O001/style', headers=origin, json={'style': '韩系'})
+                self.assertEqual(updated.json(), {'outfitStyle': '韩系'})
+                self.assertEqual(outfit_path.read_bytes(), original.replace(
+                    '| 组成与穿法'.encode(), '| 风格 | 韩系 |\r\n| 组成与穿法'.encode(), 1))
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyle'], '韩系')
+                self.assertEqual(client.get(api, params=params, headers={'If-None-Match': initial.headers['etag']}).json()['total'], 1)
+                combined = client.get(api, params={**params, 'page': 2, 'types': ['未分类', '韩系']}).json()
+                self.assertEqual((combined['total'], combined['items'][0]['id']), (2, 'O003'))
+                self.assertEqual(client.get(api, params={**params, 'types': '韩系', 'available': True, 'require_media': True}).json()['total'], 0)
+                self.assertEqual(client.get(api, params={**params, 'form': '单件', 'types': '上装'}).json()['items'][0]['id'], 'O002')
+                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'style': '未分类'}).status_code, 200)
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyle'], '未分类')
 
 
 class ChloeHairTests(ChloeClothingTests):

@@ -8,6 +8,7 @@ import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
 import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetCard } from './ChloeReferenceAssets';
+import { useOutfitStyles } from './ChloeOutfitStyles';
 import { PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { AssetSelectionDialog } from './components/AssetSelectionDialog';
@@ -84,14 +85,16 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
   const isModel = kind === 'models';
   const isAccessory = kind === 'accessories';
   const isGarment = kind === 'garments';
+  const isOutfit = kind === 'outfits';
   const isPose = kind === 'poses';
-  const form = isGarment ? '单件' : kind === 'outfits' ? '套装' : null;
+  const form = isGarment ? '单件' : isOutfit ? '套装' : null;
   const referenceKind = kind === 'hair' || kind === 'accessories' ? kind : 'clothing';
   const limit = isPose ? undefined : isGarment ? garmentLimit : isAccessory ? accessoryLimit : 1;
   const label = isPose ? '姿态' : isModel ? '模特' : form ?? referenceAssetKinds[referenceKind].label;
   const endpoint = isPose ? poseEndpoint : isModel ? 'shared-models' : referenceAssetKinds[referenceKind].endpoint;
   const filters = { ...selectableAssets, form: form ?? undefined, page_size: isPose ? poseAssetPageSize : undefined };
   const query = useAssetPage<T>(endpoint, page, filters, types);
+  const styles = useOutfitStyles(isOutfit);
   const draft = useAssetDraft<T>(endpoint, filters, initial.map(asset => asset.id), onConfirm);
   const selected = draft.selected;
   const ready = !!query.data && !query.isFetching && !query.error && !draft.initial.isFetching && !draft.initial.error;
@@ -104,7 +107,7 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
         onSelect: () => draft.setSelected(checked ? selected.filter(item => item.id !== asset.id)
           : limit === 1 ? [asset] : [...selected, asset])}} />;
   }) : [];
-  const filterTypes = [...new Set([...(query.data?.types ?? []), ...types])];
+  const filterTypes = [...new Set([...(isOutfit ? styles.data ?? [] : []), ...(query.data?.types ?? []), ...types])];
   const setTypeChecked = (type: string, checked: boolean) => {
     setTypes(checked ? [...types, type] : types.filter(value => value !== type));
     setPage(1);
@@ -114,12 +117,13 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
     confirm={draft.confirmSelection}
     confirmDisabled={!ready || draft.confirming || (!selected.length && !initial.length)}
     toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types}
-      setTypeChecked={setTypeChecked} label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : undefined} />}>
+      setTypeChecked={setTypeChecked} label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : isOutfit ? '按风格筛选' : undefined} />}>
+    {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
     <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />
     {ready && (cards.length ? isAccessory
       ? <ChloeAccessoryColumns cards={cards} />
       : <div className={isPose ? 'asset-media-grid chloe-assembly-poses' : 'asset-media-grid'}>{cards}</div>
-      : <p className="muted">暂无可用{label}。</p>)}
+      : <p className="muted">{isOutfit && types.length ? '暂无符合所选风格的可用套装。' : `暂无可用${label}。`}</p>)}
     {ready && <AssemblyPagination {...assetPaging(query.data!, setPage)} />}
   </AssetSelectionDialog>;
 }
