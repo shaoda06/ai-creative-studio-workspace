@@ -19,6 +19,8 @@
 .chloe-assembly-accessories{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-items:stretch}
 .chloe-assembly-selected-card{display:grid;grid-row:span 2;grid-template-rows:subgrid;min-width:0}
 .chloe-assembly-selected-card>button{justify-self:center}
+.chloe-assembly-selected-card[draggable=true]{cursor:grab}
+.chloe-assembly-selected-card[data-drop-target]{outline:2px solid var(--green);outline-offset:2px;border-radius:8px}
 .chloe-assembly-garments{--garment-gap:12px;container-type:inline-size;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--garment-gap)}
 .chloe-assembly-accessories.chloe-assembly-poses,.asset-media-grid.chloe-assembly-poses{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 .chloe-pose-selection-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px}

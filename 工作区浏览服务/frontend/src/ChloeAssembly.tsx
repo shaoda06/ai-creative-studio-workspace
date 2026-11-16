@@ -26,6 +26,7 @@ type AssemblyAsset = Pick<ReferenceAssetCard, 'id' | 'name' | 'media' | 'bodyAre
 const accessoryLimit = 5;
 const garmentLimit = 5;
 const poseEndpoint = 'shared-poses';
+const poseDragType = 'application/x-chloe-pose-id';
 const selectableAssets = { available: true, require_media: true };
 const assemblyTabs = [
   { value: 'outfit', label: '套装装配' }, { value: 'look', label: '造型装配' },
@@ -41,10 +42,36 @@ function AddAssetCard({ label, onClick, disabled }: { label: string; onClick: ()
   </button>;
 }
 
-function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, disabled }: {
+function SelectedAssemblyCard({ asset, title, aspectRatio, onRemove, compact, disabled, onReorder }: {
   asset: AssemblyAsset; title: string; aspectRatio: number | 'natural'; onRemove: () => void; compact?: boolean; disabled?: boolean;
+  onReorder?: (sourceId: string, targetId: string) => void;
 }) {
-  return <div className="chloe-assembly-selected-card">
+  const [dropTarget, setDropTarget] = useState(false);
+  return <div className="chloe-assembly-selected-card" draggable={onReorder ? true : undefined}
+    data-drop-target={dropTarget ? true : undefined}
+    onDragStart={onReorder && (event => {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData(poseDragType, asset.id);
+      const card = event.currentTarget.getBoundingClientRect();
+      event.dataTransfer.setDragImage(event.currentTarget, event.clientX - card.left, event.clientY - card.top);
+    })}
+    onDragOver={onReorder && (event => {
+      if (!event.dataTransfer.types.includes(poseDragType)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDropTarget(true);
+    })}
+    onDragLeave={onReorder && (event => {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTarget(false);
+    })}
+    onDragEnd={onReorder && (() => setDropTarget(false))}
+    onDrop={onReorder && (event => {
+      const sourceId = event.dataTransfer.getData(poseDragType);
+      if (!sourceId) return;
+      event.preventDefault();
+      setDropTarget(false);
+      onReorder(sourceId, asset.id);
+    })}>
     <AssetMediaCard title={title} formal entry compact={compact} aspectRatio={aspectRatio} revision={0} item={{media: asset.media}} />
     <button type="button" className="danger-button" aria-label={`移除${assetTitle(asset)}`} onClick={onRemove} disabled={disabled}>移除</button>
   </div>;
@@ -199,6 +226,16 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
     }
     changeSelection(reordered);
   };
+  const movePose = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const sourceIndex = selected.findIndex(asset => asset.id === sourceId);
+    const targetIndex = selected.findIndex(asset => asset.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const reordered = [...selected];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    changeSelection(reordered);
+  };
 
   return <>
     {renderNavigation(selected.length && !selecting ? () => changeSelection([]) : undefined)}
@@ -218,6 +255,7 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
         <div className={`chloe-assembly-accessories ${isPose ? 'chloe-assembly-poses' : 'chloe-assembly-garments'}`}>
           <PreviewContext.Provider value={media => { if (media.url) setPreview({title: media.name, src: media.url}); }}>
             {selected.map(asset => <SelectedAssemblyCard key={asset.id} asset={asset} title={title(asset)} aspectRatio="natural" compact={isPose} disabled={selecting}
+              onReorder={isPose && !selecting && selected.length > 1 ? movePose : undefined}
               onRemove={() => changeSelection(selected.filter(item => item.id !== asset.id))} />)}
           </PreviewContext.Provider>
           <AddAssetCard label={`${editing ? '编辑' : '添加'}${label}`} onClick={() => setPicking(true)} disabled={selecting} />

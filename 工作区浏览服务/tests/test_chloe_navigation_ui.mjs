@@ -453,6 +453,14 @@ try {
       return `${id} · ${name}`;
     }).join('\n');
     assert.equal(await outfitHandoff.textContent(),poseExportText);
+    const poseCards = poseSelection.locator('.chloe-assembly-selected-card');
+    await poseCards.first().getByRole('img').dragTo(poseCards.last(), {targetPosition:{x:24,y:55}});
+    const draggedPoseTitles = poseExportText.split('\n');
+    draggedPoseTitles.push(draggedPoseTitles.shift());
+    assert.deepEqual(await poseCards.getByRole('heading',{level:3}).allTextContents(),draggedPoseTitles);
+    assert.ok(await outfitExport.getByRole('button',{name:'复制',exact:true}).isDisabled());
+    await outfitGenerate.click();
+    assert.equal(await outfitHandoff.textContent(),draggedPoseTitles.join('\n'));
     await poseSelection.getByRole('img',{name:'站姿-001样例',exact:true}).click();
     assert.equal(await dialog.getByRole('img').getAttribute('src'),'/api/assembly-fixture/pose-image');
     await page.keyboard.press('Escape');
@@ -497,6 +505,7 @@ try {
     await poseSelection.getByRole('heading',{name:'姿态选择 1 项',exact:true}).waitFor();
     assert.deepEqual(await selectedPoseTitles(),['坐姿-001 · 坐姿-001样例']);
     assert.ok(await shufflePoses.isDisabled());
+    assert.equal(await poseCards.first().getAttribute('draggable'),null);
     await poseQuantity.fill('0');
     await selectRandom.click();
     await poseSelection.getByRole('heading',{name:'姿态选择 0 项',exact:true}).waitFor();
