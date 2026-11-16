@@ -1,4 +1,5 @@
 """Clothing records and the named project's outfit styles."""
+import json
 import re
 from functools import partial
 from pathlib import Path
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 from backend.chloe_models import request_space
 from backend.chloe_overview import fields
 from backend.chloe_reference_assets import CLOTHING, asset_cards, asset_context, asset_detail, asset_file, asset_router
-from chloe_documents import DEFAULT_OUTFIT_STYLE, outfit_style_name, read_document, template
+from chloe_documents import DEFAULT_OUTFIT_STYLE, outfit_style_name, outfit_styles, read_document, template
 import project_resources as resources
 
 
@@ -27,6 +28,10 @@ style_heading = '# 套装风格分类'
 
 class StyleChange(BaseModel):
     style: str
+
+
+class StylesChange(BaseModel):
+    styles: list[str]
 
 
 def style_path(root):
@@ -91,7 +96,7 @@ def add_style(change: StyleChange, request: Request):
 
 
 @write_router.put('/{identity}/style')
-def change_style(identity: str, change: StyleChange, request: Request):
+def change_style(identity: str, change: StylesChange | StyleChange, request: Request):
     space = request_space(request)
     try:
         with style_write_lock:
@@ -99,14 +104,17 @@ def change_style(identity: str, change: StyleChange, request: Request):
             info = fields(doc, '服装信息')
             if info.get('服装形态') != '套装':
                 raise ValueError('只有套装可以修改风格')
-            if change.style not in read_styles(style_path(space.root)):
+            styles = outfit_styles(change.styles if isinstance(change, StylesChange) else [change.style])
+            catalog = read_styles(style_path(space.root))
+            if any(name not in catalog for name in styles):
                 raise ValueError('请选择已登记的风格')
-            if info.get('风格') != change.style:
+            value = styles[0] if len(styles) == 1 else json.dumps(styles, ensure_ascii=False)
+            if info.get('风格') != value:
                 body = path.read_bytes().decode('utf-8')
                 match = re.search(r'^[ \t]*## 服装信息[ \t]*\r?\n(.*?)(?=^[ \t]*## |\Z)', body, re.S | re.M)
                 section = match[1]
                 newline = '\r\n' if '\r\n' in section else '\n'
-                row = f'| 风格 | {change.style} |'
+                row = f'| 风格 | {value} |'
                 if '风格' in info:
                     edited = re.sub(r'(?m)^[ \t]*\|[ \t]*风格[ \t]*\|[^\r\n]*', lambda _: row, section, count=1)
                 else:
@@ -115,7 +123,7 @@ def change_style(identity: str, change: StyleChange, request: Request):
                 read_document(space.root, path, template('chloe-assets', '服装说明模板.md'),
                               {'identity': identity, 'title': title}, body=body)
                 save_text(path, body)
-        return {'outfitStyle': change.style}
+        return {'outfitStyles': styles} if isinstance(change, StylesChange) else {'outfitStyle': styles[0]}
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

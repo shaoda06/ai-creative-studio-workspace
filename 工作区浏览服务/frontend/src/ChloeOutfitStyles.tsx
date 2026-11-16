@@ -4,7 +4,10 @@ import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import { Dialog } from './components';
 import { useNotify } from './components/Notifications';
-import { SearchCreateSelect } from './components/TabSelect';
+import { SearchCreateSelect } from './components/SearchCreateSelect';
+
+const unclassified = '未分类';
+const styleTones = ['blue', 'green', 'purple', 'orange', 'teal', 'rose', 'red', 'indigo'] as const;
 
 const stylesKey = (api: string) => ['chloe-outfit-styles', api];
 const clothingUrl = (api: string) => `${api}/shared-clothing`;
@@ -18,9 +21,9 @@ export function useOutfitStyles(enabled: boolean) {
   });
 }
 
-async function writeStyle<T>(url: string, method: 'POST' | 'PUT', style: string): Promise<T> {
+async function writeStyle<T>(url: string, method: 'POST' | 'PUT', payload: { style: string } | { styles: string[] }): Promise<T> {
   const response = await fetch(url, {
-    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
@@ -30,7 +33,7 @@ async function writeStyle<T>(url: string, method: 'POST' | 'PUT', style: string)
 }
 
 async function addStyle(api: string, client: QueryClient, style: string) {
-  const styles = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', style);
+  const styles = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style });
   await client.cancelQueries({ queryKey: stylesKey(api) });
   client.setQueryData(stylesKey(api), styles);
 }
@@ -61,15 +64,15 @@ export function AddOutfitStyleDialog({ close }: { close: () => void }) {
   </Dialog>;
 }
 
-export function OutfitStyleSelect({ id, current, styles }: { id: string; current: string; styles: string[] }) {
+export function OutfitStyleSelect({ id, current, styles }: { id: string; current: string[]; styles: string[] }) {
   const { api } = useChloeScope();
   const client = useQueryClient();
   const notify = useNotify();
   const mutation = useMutation({
-    mutationFn: async ({ style, create }: { style: string; create?: boolean }) => {
-      if (create) await addStyle(api, client, style);
+    mutationFn: async ({ selected, create }: { selected: string[]; create?: string }) => {
+      if (create) await addStyle(api, client, create);
       try {
-        await writeStyle<{ outfitStyle: string }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', style);
+        await writeStyle<{ outfitStyles: string[] }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', { styles: selected });
       } catch (error) {
         if (create && error instanceof Error) throw new Error(`已新增风格。应用到套装失败：${error.message}`);
         throw error;
@@ -87,11 +90,19 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
     },
     onError: error => notify(error.message, 'error'),
   });
-  const items = [...new Set([current, ...styles])];
+  const items = [...new Set([...styles, ...current])];
+  const catalog = styles.filter(style => style !== unclassified);
   return <div className="chloe-outfit-style-select">
-    <div className="chloe-outfit-style-current">风格 <strong>{current}</strong></div>
+    <div className="chloe-outfit-style-current">
+      {current.map(style => {
+        const index = catalog.indexOf(style);
+        const tone = index < 0 ? 'gray' : styleTones[index % styleTones.length];
+        return <span className={`status-badge status-${tone}`} key={style}>{style}</span>;
+      })}
+    </div>
     <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"
       searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
-      onChange={style => mutation.mutate({ style })} onCreate={style => mutation.mutate({ style, create: true })} />
+      exclusive={unclassified} onChange={selected => mutation.mutate({ selected })}
+      onCreate={(create, selected) => mutation.mutate({ selected, create })} />
   </div>;
 }

@@ -27,7 +27,7 @@ const fixtureAsset = (id,name,status='可用') => ({id,name,status,media:fixture
 const fixtureModels = [fixtureAsset('M001','模特甲'),fixtureAsset('M002','模特乙'),fixtureAsset('M003','制作中模特','制作中')];
 const fixtureClothingAsset = (id,name,clothingForm,bodyArea,status) => ({
   ...fixtureAsset(id,name,status), clothingForm, bodyArea, reference:{resource:`IMG-${id}`,version:'V002'},
-  ...(clothingForm === '套装' ? {outfitStyle:'未分类'} : {}),
+  ...(clothingForm === '套装' ? {outfitStyles:['未分类']} : {}),
 });
 const fixtureGarments = ['组合','裤装','裙装','上装','外套','连身装'].map((area,index) =>
   fixtureClothingAsset(`O00${index+3}`,`单件样例${index+1}`,'单件',area));
@@ -80,7 +80,7 @@ try {
     let testPaging = false;
     let unavailable = '';
     const clothing = fixtureClothing.map(card => ({...card}));
-    const outfitStyles = ['未分类'];
+    const outfitStyles = ['未分类', ...Array.from({length:7}, (_, i)=>`备选${i+1}`)];
     const refreshedAssets = new Map();
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', async route => {
@@ -107,8 +107,8 @@ try {
         return route.fulfill({json:outfitStyles,status:method === 'POST' ? 201 : 200});
       }
       if (path === '/api/workspaces/account-demo/shared-clothing/O001/style' && method === 'PUT') {
-        clothing[0].outfitStyle = route.request().postDataJSON().style;
-        return route.fulfill({json:{outfitStyle:clothing[0].outfitStyle}});
+        clothing[0].outfitStyles = route.request().postDataJSON().styles;
+        return route.fulfill({json:{outfitStyles:clothing[0].outfitStyles}});
       }
       if (route.request().method() !== 'GET') unexpected.push(route.request().method()+' '+path);
       if (refreshedAssets.has(path)) return assets(await refreshedAssets.get(path));
@@ -154,7 +154,7 @@ try {
       }});
       if (path === '/api/workspaces/account-demo/shared-clothing') return assets(showAssemblyFixtures ? clothing : []);
       if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
-        id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',outfitStyle:clothing[0].outfitStyle,composition:'开衫叠穿上衣',images:[],
+        id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',outfitStyles:clothing[0].outfitStyles,composition:'开衫叠穿上衣',images:[],
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
       }});
       if (path === '/api/workspaces/account-demo/shared-clothing/O003') return route.fulfill({json:{
@@ -361,7 +361,7 @@ try {
     await libraryFilter.waitFor({state:'detached'});
     const selectStyle = page.getByRole('button',{name:'修改 O001 的风格',exact:true});
     const styleCard = page.locator('article.asset-media-card').filter({has:selectStyle});
-    const currentStyle = styleCard.locator('.chloe-outfit-style-current strong');
+    const currentStyle = styleCard.locator('.chloe-outfit-style-current .status-badge');
     const styleMenu = page.getByRole('group',{name:'修改 O001 的风格',exact:true});
     const findStyle = styleMenu.getByRole('searchbox',{name:'输入风格名称',exact:true});
     const styleForm = page.getByRole('dialog',{name:'新增风格',exact:true});
@@ -384,17 +384,30 @@ try {
     await commute.uncheck();
     await selectStyle.click();
     await findStyle.fill('通勤');
-    assert.equal(await styleMenu.getByRole('option').count(),1);
+    assert.equal(await styleMenu.getByRole('checkbox').count(),1);
     assert.equal(await styleMenu.getByRole('button',{name:/^新建/}).count(),0);
+    await styleMenu.getByRole('checkbox',{name:'通勤',exact:true}).check();
+    await findStyle.fill('备选1');
+    await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).check();
     await findStyle.fill('简约');
-    assert.equal(await styleMenu.getByRole('option').count(),0);
-    await styleMenu.getByRole('button',{name:'新建「简约」',exact:true}).click();
+    assert.equal(await styleMenu.getByRole('checkbox').count(),0);
+    await styleMenu.getByRole('button',{name:'新建并应用「简约」',exact:true}).click();
     await currentStyle.filter({hasText:/^简约$/}).waitFor();
-    await styleFilter.getByRole('checkbox',{name:'简约',exact:true}).waitFor();
+    assert.deepEqual(await currentStyle.allTextContents(),['通勤','备选1','简约']);
+    assert.equal(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),
+      await currentStyle.filter({hasText:/^备选1$/}).getAttribute('class'));
+    assert.notEqual(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),
+      await currentStyle.filter({hasText:/^通勤$/}).getAttribute('class'));
+    const simple = styleFilter.getByRole('checkbox',{name:'简约',exact:true});
+    await simple.check();
+    await clothingLinks.nth(1).waitFor({state:'detached'});
+    assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
+    await simple.uncheck();
     await selectStyle.click();
-    await findStyle.fill('通');
-    await styleMenu.getByRole('option',{name:'通勤',exact:true}).click();
-    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
+    await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).uncheck();
+    await styleMenu.getByRole('checkbox',{name:'简约',exact:true}).uncheck();
+    await styleMenu.getByRole('button',{name:'应用',exact:true}).click();
+    await currentStyle.filter({hasText:/^简约$/}).waitFor({state:'detached'});
     await commute.check();
     await clothingLinks.nth(1).waitFor({state:'detached'});
     assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');

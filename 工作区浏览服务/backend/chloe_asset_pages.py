@@ -40,6 +40,11 @@ class AssetRow:
     form: str | None = None
     type: str | None = None
     models: tuple = ()
+    types: tuple[str, ...] = ()
+
+    @property
+    def filter_types(self):
+        return self.types or ((self.type,) if self.type else ())
 
 
 def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None):
@@ -60,10 +65,10 @@ def asset_page(rows, options: AssetPage):
         if options.ids is not None:
             by_id = {row.id: row for row in eligible}
             return [by_id[key].card() for key in options.ids if key in by_id]
-        filtered = [row for row in eligible if not options.types or row.type in options.types]
+        filtered = [row for row in eligible if not options.types or options.types.intersection(row.filter_types)]
         if options.page is None:
             return [row.card() for row in filtered]
-        types = sorted({row.type for row in eligible if row.type})
+        types = sorted({kind for row in eligible for kind in row.filter_types})
         total = len(filtered)
         size = options.page_size
         page = min(options.page, max(1, (total + size - 1) // size))

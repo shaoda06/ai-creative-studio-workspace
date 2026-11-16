@@ -8,11 +8,11 @@ export function chloeAssetResponse(url, cards) {
       params.has('available') ? card.clothingForm === '单件' : card.clothingForm !== '套装')) &&
     (!models.length || models.some(id => card.models.includes(id))));
   if (params.has('ids')) return params.getAll('ids').flatMap(id => eligible.filter(card => card.id === id));
-  const type = card => card.type || card.outfitStyle || card.bodyArea;
+  const typesOf = card => card.outfitStyles ?? [card.type || card.bodyArea].filter(Boolean);
   const active = params.getAll('types');
-  const filtered = active.length ? eligible.filter(card => active.includes(type(card))) : eligible;
+  const filtered = active.length ? eligible.filter(card => typesOf(card).some(type => active.includes(type))) : eligible;
   if (!params.has('page')) return filtered;
-  const types = [...new Set(eligible.map(type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-CN'));
+  const types = [...new Set(eligible.flatMap(typesOf))].sort((a,b)=>a.localeCompare(b,'zh-CN'));
   const total = filtered.length;
   const page_size = Number(params.get('page_size') ?? 12);
   const page = Math.min(Number(params.get('page')), Math.max(1, Math.ceil(total / page_size)));

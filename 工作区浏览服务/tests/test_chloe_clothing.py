@@ -232,8 +232,21 @@ class ChloeOutfitStyleTests(unittest.TestCase):
                 self.assertEqual((combined['total'], combined['items'][0]['id']), (2, 'O003'))
                 self.assertEqual(client.get(api, params={**params, 'types': '韩系', 'available': True, 'require_media': True}).json()['total'], 0)
                 self.assertEqual(client.get(api, params={**params, 'form': '单件', 'types': '上装'}).json()['items'][0]['id'], 'O002')
-                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'style': '未分类'}).status_code, 200)
-                self.assertEqual(client.get(api+'/O001').json()['outfitStyle'], '未分类')
+                second = '学院、复古'
+                self.assertEqual(client.post(catalog, headers=origin, json={'style': second}).status_code, 201)
+                selected = ['韩系', second]
+                updated = client.put(api+'/O001/style', headers=origin, json={'styles': ['未分类', *selected, '韩系']})
+                self.assertEqual(updated.json(), {'outfitStyles': selected})
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyles'], selected)
+                self.assertIn('| 风格 | ["韩系", "学院、复古"] |', outfit_path.read_text('utf-8'))
+                for filters in (['韩系'], [second], selected):
+                    filtered = client.get(api, params={**params, 'types': filters}).json()
+                    self.assertEqual((filtered['total'], filtered['items'][0]['id']), (1, 'O001'))
+                before_invalid = outfit_path.read_bytes()
+                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'styles': ['韩系','未登记']}).status_code, 409)
+                self.assertEqual(outfit_path.read_bytes(), before_invalid)
+                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'styles': []}).json(), {'outfitStyles': ['未分类']})
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyles'], ['未分类'])
 
 
 class ChloeHairTests(ChloeClothingTests):

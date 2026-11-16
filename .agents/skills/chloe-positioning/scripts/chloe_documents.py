@@ -167,6 +167,15 @@ def outfit_style_name(value):
     return value
 
 
+def outfit_styles(value):
+    if isinstance(value, str):
+        value = json.loads(value) if value.startswith('[') else [value]
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError('风格须为名称或名称列表')
+    names = list(dict.fromkeys(outfit_style_name(item) for item in value))
+    return [name for name in names if name != DEFAULT_OUTFIT_STYLE] or [DEFAULT_OUTFIT_STYLE]
+
+
 def read_document(root, path, source, substitutions, *, body=None):
     text = source.read_text('utf-8')
     for key, value in substitutions.items():
@@ -363,7 +372,7 @@ def check_relations(root, path, doc):
         if form == '套装' and (info['套装来源'] in MISSING or info['组成与穿法'] in MISSING or info['部位'] != '不适用'):
             raise ValueError('套装须填写来源及组成与穿法，部位填不适用')
         if form == '套装' and '风格' in info:
-            outfit_style_name(info['风格'])
+            outfit_styles(info['风格'])
     if path.name == ASSETS['参考视频'][2]:
         info = {row['字段']: row['内容'] for row in records(doc, '参考视频信息')}
         if info['播放版本引用'] not in MISSING:

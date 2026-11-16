@@ -19,7 +19,7 @@ import { AddOutfitStyleDialog, OutfitStyleSelect, useOutfitStyles } from './Chlo
 interface ClothingClassification {
   clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
   outfitSource?: '提取' | '合成' | null;
-  outfitStyle?: string | null;
+  outfitStyles?: string[];
 }
 export interface ReferenceAssetCard extends ClothingClassification {
   id: string; name: string; status: ChloeAssetStatus; media: FileItem | null; type?: string | null;
@@ -76,7 +76,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
       badge={chloeAssetStatusBadges[item.status]}
       to={`${page}?${list}&${parameter}=${encodeURIComponent(item.id)}`}
       item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}}>
-      {isOutfit && item.outfitStyle && <OutfitStyleSelect id={item.id} current={item.outfitStyle} styles={styles.data ?? []} />}
+      {isOutfit && !!item.outfitStyles?.length && <OutfitStyleSelect id={item.id} current={item.outfitStyles} styles={styles.data ?? []} />}
     </AssetMediaCard>;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
@@ -136,7 +136,7 @@ export function ChloeReferenceAssetDetail({ kind, query, workspaceQuery }: { kin
               {data.clothingForm && <div><dt>服装形态</dt><dd>{data.clothingForm}</dd></div>}
               {data.bodyArea && <div><dt>部位</dt><dd>{data.bodyArea}</dd></div>}
               {data.outfitSource && <div><dt>套装来源</dt><dd>{data.outfitSource}</dd></div>}
-              {data.outfitStyle && <div><dt>风格</dt><dd>{data.outfitStyle}</dd></div>}
+              {!!data.outfitStyles?.length && <div><dt>风格</dt><dd>{data.outfitStyles.join('、')}</dd></div>}
               <div><dt>{label}说明</dt><dd>{data.description}</dd></div>
               {data.composition && <div><dt>组成与穿法</dt><dd>{data.composition}</dd></div>}
             </dl>

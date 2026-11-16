@@ -16,8 +16,3 @@ button.tab-select.tab-select-marked[data-active]{background-image:none}
 .tab-select-status{display:inline-block;margin-left:6px;padding:0 4px;border:1px solid currentColor;border-radius:3px;font-size:10px;line-height:1.4;vertical-align:middle}
 
 .tab-select.tab-select-marked.tab-select-toolbar{font-size:13px;line-height:22px;height:36px;min-height:36px;padding:6px 10px}
-
-.tab-select-menu-search{width:min(300px,calc(100vw - 16px));overscroll-behavior:contain}
-.tab-select-menu-search > input{flex:none}
-.tab-select-menu-search > button{flex:none;text-align:left;overflow-wrap:anywhere}
-.tab-select-menu-search [role=listbox]{display:grid;gap:2px}

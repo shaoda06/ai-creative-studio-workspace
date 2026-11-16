@@ -129,7 +129,7 @@ dialog header:has(.revision-export-close-actions){flex-wrap:wrap}.revision-expor
 
 
 
-.scene-round-selector{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%;margin-left:auto}.scene-round-selector>.tab-select{max-width:100%}.tab-select-marked{display:inline-flex;align-items:center;justify-content:space-between;gap:14px;text-align:left}.tab-select-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tab-select-marked svg{flex:none}.tab-select-menu{position:fixed;inset:auto;margin:0;padding:4px;border:1px solid var(--line);border-radius:8px;background:white;box-shadow:0 8px 24px #25352f24;overflow:auto;max-width:calc(100vw - 16px)}.tab-select-menu:popover-open{display:flex;flex-direction:column;gap:2px}.tab-select-menu [role=option]{display:flex;align-items:center;gap:16px;flex-shrink:0;width:100%;border:0;text-align:left;color:#25352f;padding:9px 12px}.tab-select-menu [role=option][data-active=true]{background:#edf3ee}.tab-select-menu [role=option][aria-selected=true]{font-weight:600}.tab-select-badge{margin-left:auto;flex:none;font-size:12px;font-weight:600;white-space:nowrap;color:var(--green);background:#edf3ee;border-radius:4px;padding:1px 7px}
+.scene-round-selector{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%;margin-left:auto}.scene-round-selector>.tab-select{max-width:100%}.tab-select-marked{display:inline-flex;align-items:center;justify-content:space-between;gap:14px;text-align:left}.tab-select-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tab-select-marked svg{flex:none}.tab-select-menu,.search-create-menu{position:fixed;inset:auto;margin:0;padding:4px;border:1px solid var(--line);border-radius:8px;background:white;box-shadow:0 8px 24px #25352f24;overflow:auto;max-width:calc(100vw - 16px)}.tab-select-menu:popover-open,.search-create-menu:popover-open{display:flex;flex-direction:column;gap:2px}.tab-select-menu [role=option]{display:flex;align-items:center;gap:16px;flex-shrink:0;width:100%;border:0;text-align:left;color:#25352f;padding:9px 12px}.tab-select-menu [role=option][data-active=true]{background:#edf3ee}.tab-select-menu [role=option][aria-selected=true]{font-weight:600}.tab-select-badge{margin-left:auto;flex:none;font-size:12px;font-weight:600;white-space:nowrap;color:var(--green);background:#edf3ee;border-radius:4px;padding:1px 7px}
 
 .revision-export-structured{position:relative}
 .revision-export-toolbar{display:contents}
@@ -222,7 +222,12 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-outfit-style-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px}
 .chloe-outfit-style-toolbar .chloe-asset-types{flex:1 1 280px}
 .chloe-outfit-style-select{display:grid;justify-items:start;gap:6px;min-width:0;margin-top:12px}
-.chloe-outfit-style-current{overflow-wrap:anywhere}
+.chloe-outfit-style-current{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.chloe-outfit-style-current .status-badge{cursor:default;white-space:normal;overflow-wrap:anywhere}
+.status-purple{background:#eee4f9;color:#684291}
+.status-teal{background:#dff4f1;color:#206e67}
+.status-rose{background:#fbe5ee;color:#91335e}
+.status-indigo{background:#e7e9fb;color:#464c91}
 .chloe-outfit-style-form{display:grid;gap:10px}
 .chloe-outfit-style-form button{justify-self:end}
 .chloe-accessory-columns{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
