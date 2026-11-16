@@ -22,6 +22,7 @@ export interface AssetDetail {
   sections: {heading: string; html: string; empty: boolean}[];
 }
 export interface ModelDetail extends AssetDetail {
+  headShoulderBase: (Pick<ModelImage, 'resource' | 'version' | 'media'> & {sourceVersion: string}) | null;
   looks: (AssetDetail & {status: ChloeAssetStatus; media: FileItem | null; description: string; clothing: {reference: string; executions: string[]; media: FileItem}[]})[];
 }
 const tabs = [{value:'info',label:'模特信息'},{value:'images',label:'模特图片'},{value:'looks',label:'造型'}];
@@ -54,9 +55,11 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   };
   const look = tab==='looks' ? data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const asset = look || data;
-  const preview = asset?.images.find(image => `${image.resource}@${image.version}` === params.get('ref'))?.media || look?.clothing.find(item=>item.reference===params.get('ref'))?.media;
+  const headBase = tab==='images' ? data?.headShoulderBase : undefined;
+  const images = [...(asset?.images ?? []), ...(headBase ? [headBase] : [])];
+  const preview = images.find(image => `${image.resource}@${image.version}` === params.get('ref'))?.media || look?.clothing.find(item=>item.reference===params.get('ref'))?.media;
   const open = (item: FileItem) => {
-    const image = asset?.images.find(image => image.media.url === item.url);
+    const image = images.find(image => image.media.url === item.url);
     const clothing = look?.clothing.find(reference=>reference.media.url===item.url);
     if (image) select('ref', `${image.resource}@${image.version}`); else if (clothing) select('ref',clothing.reference); else setDocument(item);
   };
@@ -70,8 +73,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
   const lookFaceImage = look && adopted(lookFacePurpose);
   const bodyPurpose = look && view==='masked' ? maskedPurpose : originalPurpose;
   const bodyImage = data && adopted(bodyPurpose);
-  const imageCard = (purpose: string, image?: ModelImage, placeholderRatio?: number) => <AssetMediaCard aspectRatio={image ? 'natural' : placeholderRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
-    item={{ media: image?.media, version: image?.version, emptyLabel: `尚未采用${purpose}` }} />;
+  const imageCard = (purpose: string, image?: Pick<ModelImage, 'resource' | 'version' | 'media'> | null, placeholderRatio?: number, emptyLabel = `尚未采用${purpose}`) => <AssetMediaCard aspectRatio={image ? 'natural' : placeholderRatio} title={image ? `${purpose} · ${image.resource}@${image.version}` : purpose} formal hideTitle revision={0} showFileActions={false} showVersion={false}
+    item={{ media: image?.media, version: image?.version, emptyLabel }} />;
   const otherVersions = (purpose: string) => asset!.images
     .filter(image=>!image.adopted && image.purpose.split('/')[0]===purpose)
     .reverse().sort((a,b)=>b.version.localeCompare(a.version,undefined,{numeric:true}));
@@ -114,9 +117,15 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
           <div>{imageCard('正面面部',faceImage)}</div>
           <div>{otherVersions('正面面部').length > 0 && <details><summary>其他版本</summary>{references('正面面部')}</details>}</div>
         </section>
-        <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
-          {bodyImages()}
-        </section>
+        <div className="chloe-model-image-stack">
+          <section className="panel chloe-model-image-column" aria-label="头肩编辑底图">
+            <h2>头肩编辑底图（21:9）{headBase && <span className="muted"> · 底图 {headBase.version} · 来源 {data.id} {headBase.sourceVersion}</span>}</h2>
+            <div>{imageCard('头肩编辑底图',headBase,21/9,bodyImage ? '当前全身版本待裁排头肩编辑底图' : '基础全身三视图采用后裁排')}</div>
+          </section>
+          <section className="panel chloe-model-image-column" aria-label="基础全身三视图">
+            {bodyImages()}
+          </section>
+        </div>
       </div>}
       {tab==='looks' && (look ? <>
         <div className="chloe-look-detail">

@@ -244,11 +244,49 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
     return {'images': list(images.values()), 'sections': sections}
 
 
+def head_shoulder_base(root, identity, path, doc, images, base):
+    source = next((image for image in images if image['adopted'] and image['purpose'] == '全身三视图原图'), None)
+    if source is None:
+        return None
+    use = f"{identity} {source['version']} 现行头肩编辑底图"
+    links = [row['说明文件'] for row in records(doc, '关联资料') if row['用途'] == use]
+    if not links:
+        return None
+    match = LINK.fullmatch(links[0])
+    if len(links) != 1 or not match:
+        raise ValueError('现行头肩编辑底图须有唯一的裁排参数引用')
+    record = resources.local(path.parent, match.group(2))
+    if not record.is_file():
+        raise ValueError('现行头肩编辑底图裁排参数不存在')
+    parameters = json.loads(record.read_text('utf-8-sig'))
+    if parameters.get('source_version') != f"{source['resource']}@{source['version']}":
+        raise ValueError('头肩编辑底图的源版本与当前采用全身图不一致')
+    outputs = [row for row in records(doc, '输出记录') if row['执行编号'] == parameters.get('execution')]
+    if len(outputs) != 1:
+        raise ValueError('头肩编辑底图裁排须有唯一的资源输出')
+    ref = media_reference(root, path, outputs[0]['资源引用'])
+    owner = root / '综合资料'
+    output = resources.local(root, ref['file'])
+    resource = resources.reference(owner, output)
+    parent = resource['parent'] if resource else None
+    version = f"{ref['resource_id']}@{ref['version']}"
+    if (reference_media_kind(ref) != 'image' or not parent
+            or output != resources.local(owner, parameters.get('actual_result', ''))
+            or version != parameters.get('output_version')
+            or resources.local(owner, parent['file']) != resources.local(root, source['media']['key'])):
+        raise ValueError('头肩编辑底图输出或资源来源与裁排记录不一致')
+    facts = json.loads((output.parent / '版本信息.json').read_text('utf-8'))['facts']
+    media = linked_media(base, ref['file'], 'image', '头肩编辑底图 · ' + version)
+    media['originalDimensions'] = [facts['width'], facts['height']]
+    return {'resource': ref['resource_id'], 'version': ref['version'], 'sourceVersion': source['version'], 'media': media}
+
+
 def model_detail(root, identity, api):
     name, path, doc, portrait = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
     allowed = model_files(root, identity, path, doc)
     content = asset_content(root, path, doc, allowed, base)
+    head_base = head_shoulder_base(root, identity, path, doc, content['images'], base)
     if portrait:
         url = thumbnail_url(portrait_url(base, portrait))
         for image in content['images']:
@@ -279,7 +317,7 @@ def model_detail(root, identity, api):
                       **asset_content(root, look_path, look_doc, allowed, base),
                       'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
                       'url': base + '/files/' + quote(key, safe='/')})
-    return {'id': identity, 'name': name, **content, 'looks': looks,
+    return {'id': identity, 'name': name, **content, 'looks': looks, 'headShoulderBase': head_base,
             'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 

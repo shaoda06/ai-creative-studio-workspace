@@ -54,7 +54,20 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
   result=import_media(root,source,key,resource_id=ref['resource_id'] if key.startswith('face') else None)
   reference=label(Path(result['absolute_file']),result['resource_id'],result['version'])
   append('参考版本',[purpose,reference,first,'不适用'])
-  if key=='views':append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+  if key=='views':
+   body_source=result
+   append('当前采用',[purpose,reference,'隔离采用','2026-11-07T12:00:00+08:00'])
+ record=model/'执行记录/头肩底图.json'
+ record.parent.mkdir(exist_ok=True)
+ record.write_text('{}',encoding='utf-8')
+ source=Path(tmp)/'head-base.png'
+ Image.new('RGB',(1540,660),'#ede7df').save(source)
+ head=import_media(root,source,'head-base',origin='process',parent=body_source['file'],record=record.relative_to(root/'综合资料').as_posix())
+ record.write_text(json.dumps({'execution':'E001','source_version':body_source['resource_id']+'@'+body_source['version'],
+                               'actual_result':head['file'],'output_version':head['resource_id']+'@'+head['version']}),encoding='utf-8')
+ append('关联资料',['制作参考','不适用','[裁排参数](<执行记录/头肩底图.json>)','M001 '+body_source['version']+' 现行头肩编辑底图'])
+ append('执行记录',['E001','图片处理','不适用','Pillow','不适用','[裁排参数](<执行记录/头肩底图.json>)','隔离测试','不适用','未取得','未取得','已完成','隔离结果'])
+ append('输出记录',['E001','1',label(Path(head['absolute_file']),head['resource_id'],head['version'])])
  look=initialize_asset(root,'造型','L001','通勤造型')/'造型说明.md'
  text=look.read_text().replace('| 模特编号 | 待确定 |','| 模特编号 | M001 |')
  start=text.index('## 关联资料');end=text.index('\\n\\n',text.index('| ---',start))
@@ -125,7 +138,7 @@ with tempfile.TemporaryDirectory(dir=SKILLS.parents[1] if os.name=='nt' else Non
  append('当前采用',['配饰展示图',reference,'隔离采用','2026-11-07T12:00:00+08:00'])
  accessories.append(asset_detail(root,'C003','/api/workspaces/chloe',ACCESSORIES))
  detail=model_detail(root,'M001' ,'/api/workspaces/chloe')
- media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in hair+clothes+scenes+accessories for image in item['images']]}
+ media={item['media']['url']:base64.b64encode((root/item['media']['key']).read_bytes()).decode() for item in detail['images']+[detail['headShoulderBase']]+[image for look in detail['looks'] for image in look['images']+look['clothing']]+[image for item in hair+clothes+scenes+accessories for image in item['images']]}
  print(json.dumps({'hairCards':asset_cards(root,'/api/workspaces/chloe',HAIR),'hair':hair,'sceneCards':asset_cards(root,'/api/workspaces/chloe',SCENES),'scenes':scenes,'accessoryCards':asset_cards(root,'/api/workspaces/chloe',ACCESSORIES),'accessories':accessories,'clothingCards':clothing_cards(root,'/api/workspaces/chloe'),'clothes':clothes,'cards':model_cards(root,'/api/workspaces/chloe'),'details':[detail,model_detail(root,'M002','/api/workspaces/chloe')],'media':media,'image':base64.b64encode(image.read_bytes()).decode()}))
 `],{cwd:tool,encoding:'utf8'}));
 const output = await mkdtemp(join(tmpdir(),'chloe-models-'));
@@ -244,7 +257,17 @@ try {
   assert.equal(await page.getByText('不应显示的来源文字',{exact:true}).count(),0);
   assert.equal(await page.getByRole('heading',{name:'资产身份',exact:true}).count(),0);
   const faceColumn=page.getByRole('region',{name:'正面面部图',exact:true});
+  const headColumn=page.getByRole('region',{name:'头肩编辑底图',exact:true});
   const bodyColumn=page.getByRole('region',{name:'基础全身三视图',exact:true});
+  const head=sample.details[0].headShoulderBase;
+  await headColumn.getByRole('heading',{name:`头肩编辑底图（21:9） · 底图 ${head.version} · 来源 M001 ${head.sourceVersion}`,exact:true}).waitFor();
+  const headCover=headColumn.locator('.cover');
+  await assertNaturalImage(headCover,'头肩编辑底图');
+  await headCover.click();
+  await page.getByRole('dialog').waitFor();
+  assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'),head.media.url);
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({state:'detached'});
   assert.equal(await page.getByRole('region',{name:'面部三视图',exact:true}).count(),0);
   assert.deepEqual(await bodyColumn.getByRole('navigation').getByRole('button').allTextContents(),['原图']);
   await bodyColumn.locator('.cover').first().click();
@@ -264,18 +287,15 @@ try {
   const faceView=faceColumn.getByRole('navigation',{name:'正面面部图视图'});
   assert.deepEqual(await faceView.getByRole('button').allTextContents(),['原图']);
   assert.equal(await faceView.locator('[aria-current="page"]').textContent(),'原图');
-  const faceBox=await faceColumn.boundingBox(),bodyBox=await bodyColumn.boundingBox();
-  assert.ok(faceBox.x+faceBox.width<bodyBox.x && Math.abs(faceBox.y-bodyBox.y)<1,'正面面部图在左，基础全身三视图在右');
+  const [faceBox,headBox,bodyBox]=await Promise.all([faceColumn.boundingBox(),headColumn.boundingBox(),bodyColumn.boundingBox()]);
+  assert.ok(faceBox.x+faceBox.width<headBox.x && Math.abs(faceBox.y-headBox.y)<1,'正面面部图与头肩编辑底图左右对齐');
+  assert.ok(Math.abs(headBox.x-bodyBox.x)<1 && Math.abs(headBox.width-bodyBox.width)<1 && headBox.y+headBox.height<bodyBox.y,
+    '头肩编辑底图与基础全身三视图在右栏上下排列');
   assert.ok(bodyBox.x+bodyBox.width<=width+1);
-  assert.ok(Math.abs(faceBox.height-bodyBox.height)<1,'模特图片左右框等高');
   await assertNaturalImage(bodyColumn.locator(':scope > div > .asset-media-card .cover'),'基础全身三视图');
   const portraitCover=faceColumn.locator(':scope > div > .asset-media-card .cover');
   await assertNaturalImage(portraitCover,'正面面部图');
   await page.screenshot({path:output+`/${width}-images.png`,fullPage:true});
-  for (const selector of [':scope > h2',':scope > div > nav',':scope > div > .asset-media-card',':scope > div > .asset-media-card .cover']) {
-    const left=await faceColumn.locator(selector).boundingBox(),right=await bodyColumn.locator(selector).boundingBox();
-    assert.ok(Math.abs(left.y-right.y)<1,`左右对齐：${selector}`);
-  }
   assert.equal(await page.locator('.chloe-model-image-column > div > .asset-media-card h3').count(),0);
   const refs=faceColumn.locator(':scope > div > details');
   assert.equal(await refs.getAttribute('open'),null);
@@ -323,7 +343,7 @@ try {
   assert.deepEqual(await records.locator(':scope > details > summary').allTextContents(),['关联资料','采用依据与时间','采用变更','执行记录']);
   assert.equal(await records.locator(':scope > details[open]').count(),0);
   await page.getByText('执行记录',{exact:true}).click();
-  await page.getByText('暂无执行记录。',{exact:true}).waitFor();
+  await records.getByText('隔离结果',{exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:output+`/${width}-detail.png`,fullPage:true});
   await detailTabs.getByRole('button',{name:'造型',exact:true}).click();
@@ -436,6 +456,9 @@ try {
   await page.getByRole('heading',{name:'人物特征',exact:true}).waitFor();
   await page.getByRole('navigation',{name:'模特详情分类'}).getByRole('button',{name:'模特图片',exact:true}).click();
   await page.getByText('尚未采用全身三视图原图',{exact:true}).waitFor();
+  await page.getByText('基础全身三视图采用后裁排',{exact:true}).waitFor();
+  const headPlaceholder=await headColumn.locator('.asset-media-placeholder').boundingBox();
+  assert.ok(Math.abs(headPlaceholder.width/headPlaceholder.height-21/9)<.01,'头肩编辑底图空态保持 21:9');
   await page.getByRole('heading',{name:'基础全身三视图（4:3）',exact:true}).waitFor();
   const bodyPlaceholder=await page.getByRole('region',{name:'基础全身三视图',exact:true}).locator('.asset-media-placeholder').boundingBox();
   assert.ok(Math.abs(bodyPlaceholder.width/bodyPlaceholder.height-4/3)<.01,'基础全身三视图空态保持 4:3');

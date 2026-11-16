@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -107,6 +108,38 @@ class ChloeModelsTests(unittest.TestCase):
         self.assertNotIn('/outside.md', str(value))
         with self.assertRaises(FileNotFoundError):
             model_file(self.root, 'M001', linked.relative_to(self.root).as_posix())
+
+    def test_head_shoulder_base_matches_adopted_full_body_version(self):
+        original, original_label = self.add_image('green', 'original')
+        self.append('当前采用', ['全身三视图原图', original_label, '隔离采用', '2026-11-07T12:00:00+08:00'])
+        self.assertIsNone(model_detail(self.root, 'M001', self.api)['headShoulderBase'])
+
+        record = self.model / '执行记录/头肩底图.json'
+        record.parent.mkdir(exist_ok=True)
+        record.write_text('{}', encoding='utf-8')
+        head_file = self.base / 'head-base.png'
+        Image.new('RGB', (1540, 660), 'white').save(head_file)
+        head = import_media(self.root, head_file, 'head-base', origin='process',
+                            parent=original['file'], record=record.relative_to(self.root / '综合资料').as_posix())
+        record.write_text(json.dumps({
+            'execution': 'E001', 'source_version': f"{original['resource_id']}@{original['version']}",
+            'actual_result': head['file'], 'output_version': f"{head['resource_id']}@{head['version']}",
+        }), encoding='utf-8')
+        self.append('关联资料', ['制作参考', '不适用', '[裁排参数](<执行记录/头肩底图.json>)',
+                             f"M001 {original['version']} 现行头肩编辑底图"])
+        self.append('执行记录', ['E001', '图片处理', '不适用', 'Pillow', '不适用', '[裁排参数](<执行记录/头肩底图.json>)',
+                             '隔离测试', '不适用', '未取得', '未取得', '已完成', '隔离结果'])
+        rel = Path(os.path.relpath(head['absolute_file'], self.model)).as_posix()
+        self.append('输出记录', ['E001', '1', f"[共用:{head['resource_id']}@{head['version']}](<{rel}>)"])
+        value = model_detail(self.root, 'M001', self.api)['headShoulderBase']
+        self.assertEqual((value['resource'], value['version'], value['sourceVersion']),
+                         (head['resource_id'], head['version'], original['version']))
+        self.assertEqual(value['media']['originalDimensions'], [1540, 660])
+        self.assertEqual(model_file(self.root, 'M001', value['media']['key']), Path(head['absolute_file']))
+
+        _, newer_label = self.add_image('blue', 'newer', original['resource_id'])
+        self.path.write_text(self.path.read_text().replace(original_label, newer_label))
+        self.assertIsNone(model_detail(self.root, 'M001', self.api)['headShoulderBase'])
 
     def test_model_looks_are_scoped_without_copying_or_showing_identity(self):
         initialize_asset(self.root, '模特', 'M002', '另一模特')
