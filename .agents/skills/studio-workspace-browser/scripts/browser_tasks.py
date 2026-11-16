@@ -35,7 +35,21 @@ def submit_plan(args):
     plan = Path(args.plan)
     # The one plan parameter is project-relative, like all files inside its task entries.
     plan = plan.resolve() if plan.is_absolute() else (project / plan).resolve()
-    payload = dict(project=scope_name(project, config['workspace']), plan_file=plan.relative_to(project).as_posix(), thread_id=thread,
+    relative_plan = plan.relative_to(project).as_posix()
+    scope = scope_name(project, config['workspace'])
+    expected = getattr(args, 'songssx_scene', None)
+    if expected is not None or scope == '@shared':
+        source = json.loads(plan.read_text('utf-8-sig'))
+        scenes = [[segment['p'] for segment in task['songssx']['segments']]
+                  for task in source['tasks']
+                  if task['task_type'] == 'video-scene-generation' and 'gap_repair' not in task['songssx']]
+        if expected is not None:
+            planned = [[part.strip() for part in scene.split(',')] for scene in expected]
+            if planned != scenes:
+                raise ValueError(f'Songssx 场次和 GEN 不匹配：制作计划为 {planned}，任务清单为 {scenes}。每场的全部 P 段须按顺序写进同一 task 的 songssx.segments。')
+        elif len(scenes) > 1 and not plan.with_name(plan.stem + '-装配结果.json').is_file():
+            raise ValueError('综合资料的新清单包含多条 Songssx 整场任务。请按制作计划为每个独立场次填写一组 --songssx-scene，声明场内全部 P 段。')
+    payload = dict(project=scope, plan_file=relative_plan, thread_id=thread,
                    desktop=desktop, timeout=args.timeout, prepare_only=args.prepare_only,
                    reprepare=getattr(args, 'reprepare', False), start_paused=args.start_paused)
     if getattr(args, 'record_repairs', None):

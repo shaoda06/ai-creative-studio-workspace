@@ -148,6 +148,57 @@ class DispatchTests(unittest.TestCase):
         self.assertTrue(post.call_args.args[2]['reprepare'])
         self.assertTrue(post.call_args.args[2]['prepare_only'])
 
+    def test_shared_songssx_checks_the_planned_scenes_before_handoff(self):
+        project = self.workspace.resolve() / '综合资料'
+        project.mkdir()
+        plan = project / '任务清单.json'
+        six_parts = [f'P{i:03}' for i in range(1, 7)]
+        cases = [
+            ([[part] for part in six_parts], [','.join(six_parts)], '场次和 GEN 不匹配'),
+            ([[part] for part in six_parts], [], '填写一组 --songssx-scene'),
+            ([six_parts], [','.join(reversed(six_parts))], '场次和 GEN 不匹配'),
+            ([six_parts], [','.join(six_parts)], None),
+            ([['P001', 'P002'], ['P003']], ['P001,P002', 'P003'], None),
+            ([['P001']], [], None),
+        ]
+        for actual, expected, failure in cases:
+            plan.write_text(json.dumps({'tasks': [
+                {'task_type': 'video-scene-generation',
+                 'songssx': {'segments': [{'p': p} for p in scene]}}
+                for scene in actual
+            ]}), encoding='utf-8')
+            args = ['--project', str(project), '--plan', plan.name, '--prepare-only']
+            for scene in expected:
+                args.extend(['--songssx-scene', scene])
+            with self.subTest(actual=actual, expected=expected), \
+                    patch.object(d.browser_tasks, 'connection', return_value=(project, {'workspace': str(self.workspace)}, 'caller', {})), \
+                    patch.object(d.browser_tasks, 'local_post', return_value={'status': 'prepared'}) as post:
+                if failure:
+                    with self.assertRaisesRegex(ValueError, failure):
+                        d.dispatch(d.parser().parse_args(args))
+                    post.assert_not_called()
+                else:
+                    d.dispatch(d.parser().parse_args(args))
+                    post.assert_called_once()
+
+    def test_songssx_scene_check_preserves_reuse_and_excludes_gap_repair(self):
+        project = self.workspace.resolve() / '综合资料'
+        project.mkdir()
+        plan = project / '任务清单.json'
+        args = d.parser().parse_args(['--project', str(project), '--plan', plan.name])
+        normal = {'task_type': 'video-scene-generation', 'songssx': {'segments': [{'p': 'P001'}]}}
+        repair = {'task_type': 'video-scene-generation', 'songssx': {'gap_repair': {}, 'segments': [{'p': 'P002'}]}}
+        with patch.object(d.browser_tasks, 'connection', return_value=(project, {'workspace': str(self.workspace)}, 'caller', {})), \
+                patch.object(d.browser_tasks, 'local_post', return_value={'status': 'enqueued'}) as post:
+            plan.write_text(json.dumps({'tasks': [normal, repair]}), encoding='utf-8')
+            d.dispatch(args)
+            post.assert_called_once()
+            post.reset_mock()
+            plan.write_text(json.dumps({'tasks': [normal, normal]}), encoding='utf-8')
+            plan.with_name(plan.stem + '-装配结果.json').touch()
+            d.dispatch(args)
+            post.assert_called_once()
+
     def test_group_status_cli_uses_group_endpoint(self):
         import io
         from contextlib import redirect_stdout
