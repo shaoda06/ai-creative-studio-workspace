@@ -220,12 +220,12 @@ python .agents/skills/nora-drama-production/scripts/video_postprocess_plan.py \
 
 - `round`指定已登记且各P均为后处理的本轮组合；按其中场次、P顺序装配，不猜最新轮次或R。当前工具针对常规整集批次，不代替局部返修或定制后处理方案。
 - `approval_reports`为`video_approve.py`输出的已完成二采收尾报告，可含多个场次。工具将报告中的准确来源与当前采用身份对应；当前采用变化、报告未完成或源文件缺失时停止，不以最高R代替采用决定。
-- `video_postprocess`按[共用调用接口](../../studio-video-processing/references/视频技术处理规范.md#调用接口)填写，不含source；工具对每段准确采用来源执行ffprobe，再按目标规格装配，并在任务中绑定source。原规格使用`original`；不同比例须明确fit，不能默认裁切。旧请求的profile/orientation仍可接续，但不用于新问答。
+- `video_postprocess` 按[共用调用接口](../../studio-video-processing/references/视频技术处理规范.md#调用接口)填写。工具对每段已采用的源片执行 ffprobe，按目标规格装配并在任务中绑定 `source`。原规格使用 `original`。源片与目标比例不同时，须明确选择 `fit`。
 - 已满足规格的片段写入清单`reused_sources`，不创建画布或任务；全部可复用时返回state=reuse。复用项沿原文件写入[交付采用组合](../../nora-drama-handoff/references/逐集目录与资产管理规范.md#交付采用组合)；任务清单的expected_video_count仅计实际待处理任务，业务轮次仍须核对复用项与处理项全部齐备，不把空任务清单送入队。
 - `output_root`填写本次服务已有真实输出目录。成功仅表示本地清单及画布已生成，未上传、未入队、未批准任何视频。随后将生成的清单交`comfyui_dispatch.py --plan`执行既有准备检查及批量入队；不另做一次人工逐节点装配或例行重复预检。
 - 清单或任何目标画布已存在时，在写入前停止；沿已有清单和装配结果接续，不能覆盖已执行证据。
 
-回归：`TMPDIR=/private/tmp python -B -m unittest discover -s .agents/skills/nora-drama-production/scripts -p test_video_postprocess_plan.py`。临时项目覆盖不同R的准确采用来源、两种配置及横竖屏实际API导出、未完成／失效批准、缺失源文件和已有文件保护；不调用生成服务。
+用 `python -B -m unittest discover -s .agents/skills/nora-drama-production/scripts -p test_video_postprocess_plan.py` 在临时项目验证不同 R 的准确采用来源、横竖屏规格装配与原规格复用、未完成或失效的批准、缺失源文件和已有文件保护。
 
 
 ### 视频资料自动保存

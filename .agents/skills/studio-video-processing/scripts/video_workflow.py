@@ -18,13 +18,6 @@ def assemble_relayvsr(source, prefix):
     return canvas
 
 
-def assemble(method, source, prefix, size, crop_offset=(0, 0)):
-    if method not in ('crop', 'upscale'):
-        raise ValueError(f'未知固定后处理方式：{method}')
-    return _assemble_standard(source, prefix, 30, True, method if method == 'upscale' else 'none', size,
-                              (*size, *crop_offset) if method == 'crop' else None)
-
-
 def plan_output(metadata, resolution, fps, fit=None):
     """Resolve user choices once for both the question preview and execution."""
     import math

@@ -32,9 +32,13 @@ class PostprocessPlanTests(unittest.TestCase):
         self.put(tool.episode_manifest_key('EP001'), self.manifest)
         self.report = {'state': 'completed', 'finalization': {'stage': '二采', 'sources': sources}}
         self.put('approved.json', self.report)
-        self.request = {'episode': 'EP001', 'round': 2, 'profile': 'crop', 'orientation': 'landscape',
+        self.request = {'episode': 'EP001', 'round': 2,
+                        'video_postprocess': dict(resolution=[1920, 1080], fps=30, fit='crop'),
                         'authorization': '请做这些已批准片段的后处理', 'approval_reports': ['approved.json'],
                         'output_root': 'E:/output'}
+        probe = patch.object(tool, 'probe', return_value=dict(width=1920, height=1088, frame_rate=24))
+        probe.start()
+        self.addCleanup(probe.stop)
 
     def put(self, name, value):
         path = self.root / name
@@ -46,10 +50,16 @@ class PostprocessPlanTests(unittest.TestCase):
             return tool.build(self.root, self.request, output)
 
     def test_source_identity_order_and_workflow_export(self):
-        for profile in ('crop', 'upscale'):
-            for orientation in ('landscape', 'portrait'):
-                with self.subTest(profile=profile, orientation=orientation):
-                    self.request.update(profile=profile, orientation=orientation)
+        for mode in ('crop', 'upscale'):
+            for size in ((1920, 1080), (1080, 1920)):
+                with self.subTest(mode=mode, size=size):
+                    width, height = size
+                    if mode == 'crop':
+                        source_size = (width, height + 8) if width > height else (width + 8, height)
+                    else:
+                        source_size = (width // 2, height // 2)
+                    tool.probe.return_value = dict(width=source_size[0], height=source_size[1], frame_rate=24)
+                    self.request['video_postprocess']['resolution'] = list(size)
                     self.build()
                     plan = json.loads((self.root / 'plan.json').read_text())
                     self.assertEqual(plan['business_scope']['expected_video_count'], 2)
@@ -57,13 +67,12 @@ class PostprocessPlanTests(unittest.TestCase):
                     for task in plan['tasks']:
                         canvas_path = self.root / task['canvas']
                         api = Canvas(json.loads(canvas_path.read_text())).api(['16'])
-                        size = (1920, 1080) if orientation == 'landscape' else (1080, 1920)
-                        fields = ('width', 'height') if profile == 'crop' else ('resize_type.width', 'resize_type.height')
-                        image_node = api['25' if profile == 'crop' else '1']
+                        fields = ('width', 'height') if mode == 'crop' else ('resize_type.width', 'resize_type.height')
+                        image_node = api['25' if mode == 'crop' else '1']
                         self.assertEqual(tuple(image_node['inputs'][f] for f in fields), size)
-                        if profile == 'crop':
+                        if mode == 'crop':
                             self.assertEqual((image_node['inputs']['x'], image_node['inputs']['y']),
-                                             (0, 4) if orientation == 'landscape' else (4, 0))
+                                             (0, 4) if width > height else (4, 0))
                             self.assertEqual(image_node['inputs']['image'], ['12', 0])
                             self.assertEqual(api['16']['inputs']['images'], ['25', 0])
                             self.assertNotIn('1', api)
@@ -75,8 +84,6 @@ class PostprocessPlanTests(unittest.TestCase):
                     (self.root / 'plan.json').unlink()
 
     def test_target_choices_probe_each_source_and_reuse_without_submission(self):
-        self.request.pop('profile')
-        self.request.pop('orientation')
         self.request['video_postprocess'] = dict(resolution=[1920, 1080], fps='original', fit='crop')
         facts = [dict(width=1920, height=1088, frame_rate=24),
                  dict(width=1920, height=1080, frame_rate=30)]
@@ -94,6 +101,12 @@ class PostprocessPlanTests(unittest.TestCase):
         self.assertEqual(api['16']['inputs']['frame_rate'], ['7', 2])
         self.assertEqual(task['video_postprocess']['source'], task['mapping']['source_video'])
         self.assertEqual(task['mapping']['postprocess_configuration']['fps'], 24)
+
+    def test_requires_explicit_output_configuration(self):
+        del self.request['video_postprocess']
+        with self.assertRaisesRegex(ValueError, 'video_postprocess'):
+            self.build()
+        self.assertFalse((self.root / 'plan.json').exists())
 
     def test_all_original_returns_reuse_without_canvases(self):
         self.request['video_postprocess'] = dict(resolution='original', fps='original')

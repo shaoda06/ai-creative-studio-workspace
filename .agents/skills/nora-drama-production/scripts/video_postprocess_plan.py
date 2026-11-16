@@ -13,10 +13,8 @@ for _skill in ("studio-comfyui", "studio-h3", "studio-video-processing", "nora-v
 import video_approve
 from episode_rounds import episode_manifest_key, validate_episode_manifest
 from project_paths import project_file
-from video_workflow import assemble, plan_output, assemble_output
+from video_workflow import plan_output, assemble_output
 from video_metadata import probe
-
-PROFILES = {'crop': '切镜保护插帧与裁切', 'upscale': '切镜保护插帧与超分'}
 
 
 def build(project, request, output):
@@ -30,13 +28,8 @@ def build(project, request, output):
     if not request['authorization'].strip():
         raise ValueError('后处理执行授权不能为空')
     choice = request.get('video_postprocess')
-    if choice is not None:
-        if set(choice) - {'resolution', 'fps', 'fit'} or not {'resolution', 'fps'} <= set(choice):
-            raise ValueError('video_postprocess须提供resolution、fps，可选fit')
-    else:
-        profile, orientation = request['profile'], request['orientation']
-        if profile not in PROFILES or orientation not in ('landscape', 'portrait'):
-            raise ValueError('profile应为crop/upscale，orientation应为landscape/portrait')
+    if not isinstance(choice, dict) or set(choice) - {'resolution', 'fps', 'fit'} or not {'resolution', 'fps'} <= set(choice):
+        raise ValueError('video_postprocess须提供resolution、fps，可选fit')
     sources = {}
     for name in request['approval_reports']:
         report_path = project_file(root, name)
@@ -58,8 +51,6 @@ def build(project, request, output):
             if identity in sources:
                 raise ValueError('重复来源二采身份：' + identity)
             sources[identity] = (source, report_path.relative_to(root).as_posix())
-    if choice is None:
-        width, height = (1920, 1080) if orientation == 'landscape' else (1080, 1920)
     tasks, canvases, reused = [], {}, []
     for scene, data in composition['scenes'].items():
         for segment in data['segments']:
@@ -77,30 +68,24 @@ def build(project, request, output):
             directory = Path(f'09-剧集制作/{episode}/其他资料/执行附件/{identity}')
             canvas_path = directory / '内容画布.workflow.json'
             placeholder = 'planned/' + video.name
-            if choice is not None:
-                configuration = plan_output(probe(video), choice['resolution'], choice['fps'], choice.get('fit'))
-                canvas = assemble_output(placeholder, identity, configuration)
-                if canvas is None:
-                    reused.append(dict(identity=identity, source=chosen, file=video.relative_to(root).as_posix(),
-                                       approval_basis=approval, configuration=configuration))
-                    continue
-                width, height = configuration['output_size']
-                description = '按已选输出规格处理；保留原音轨和播放时长。'
-                delivery = f"{width}×{height}、{configuration['fps']:g}fps、H.264/yuv420p/CRF19。"
-            else:
-                canvas = assemble(profile, placeholder, identity, (width, height),
-                                  (0, 4) if orientation == 'landscape' else (4, 0))
-                description = '已采用二采逐段后处理，保留原音轨和播放时长。'
-                delivery = f'{PROFILES[profile]}；{width}×{height}、30fps、H.264/yuv420p/CRF19。'
+            source_path = video.relative_to(root).as_posix()
+            configuration = plan_output(probe(video), choice['resolution'], choice['fps'], choice.get('fit'))
+            canvas = assemble_output(placeholder, identity, configuration)
+            if canvas is None:
+                reused.append(dict(identity=identity, source=chosen, file=source_path,
+                                   approval_basis=approval, configuration=configuration))
+                continue
+            width, height = configuration['output_size']
             canvases[project_file(root, canvas_path)] = canvas
             tasks.append({'task_type': 'video-postprocess', 'title': part + ' · 后处理',
                           'authorization': request['authorization'],
-                          'description': description,
-                          'delivery_basis': delivery,
+                          'description': '按已选输出规格处理；保留原音轨和播放时长。',
+                          'delivery_basis': f"{width}×{height}、{configuration['fps']:g}fps、H.264/yuv420p/CRF19。",
                           'canvas': canvas_path.as_posix(), 'record_dir': directory.as_posix(),
                           'output_nodes': ['16'], 'output_root': request['output_root'],
-                          'references': [{'file': video.relative_to(root).as_posix(), 'placeholder': placeholder,
+                          'references': [{'file': source_path, 'placeholder': placeholder,
                                           'purpose': '当前采用二采原片，批准及实际来源见approval_basis'}],
+                          'video_postprocess': dict(choice, source=source_path),
                           'mapping': {'scene': episode + '-' + scene,
                                       'screenplay_version': composition['script']['version'],
                                       'scene_storyboard_version': data['storyboard']['version'],
@@ -108,11 +93,9 @@ def build(project, request, output):
                                       'segments': [{'segment': part, 'round': segment['run'], 'source': chosen,
                                                     'duration_seconds': segment['duration'],
                                                     'local_execution_dir': directory.as_posix()}],
-                                      'source_video': video.relative_to(root).as_posix(),
+                                      'source_video': source_path,
+                                      'postprocess_configuration': configuration,
                                       'baseline': 'studio-video-processing', 'approval_basis': approval}})
-            if choice is not None:
-                tasks[-1]['video_postprocess'] = dict(choice, source=video.relative_to(root).as_posix())
-                tasks[-1]['mapping']['postprocess_configuration'] = configuration
     plan = {'business_scope': {'episode': episode, 'episode_round': composition['number'],
                               'expected_video_count': len(tasks), 'scenes': list(composition['scenes']),
                               'delivery': '整轮全部成果齐备并按后处理自动采用规则收尾后统一交付，正常部分成功静默。'},
