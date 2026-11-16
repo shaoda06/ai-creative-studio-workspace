@@ -207,6 +207,25 @@ export async function checkSharedNavigation(page, width, selfTest) {
     assert.ok(currentRow.badgeTop < currentRow.titleBottom && currentRow.badgeBottom > currentRow.titleTop && currentRow.badgeHeight < 30, `${name}: 长文字可换行，当前标记仍在右侧同一行`);
     await combo.press('Escape');
   }
+  const searchCreate = showcase.getByRole('region',{name:'搜索或新建选项',exact:true});
+  const openSearchCreate = searchCreate.getByRole('button',{name:'搜索或新建示例选项',exact:true});
+  const searchCreateMenu = page.getByRole('group',{name:'搜索或新建示例选项',exact:true});
+  const searchCreateInput = searchCreateMenu.getByRole('searchbox',{name:'输入示例名称',exact:true});
+  await openSearchCreate.click();
+  await searchCreateInput.fill('通勤');
+  assert.equal(await searchCreateMenu.getByRole('option').count(),1);
+  assert.equal(await searchCreateMenu.getByRole('button',{name:/^新建/}).count(),0);
+  await searchCreateInput.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await searchCreate.getByText('当前选项 通勤',{exact:true}).waitFor();
+  await openSearchCreate.click();
+  await searchCreateInput.fill('简约');
+  await searchCreateMenu.getByRole('button',{name:'新建「简约」',exact:true}).click();
+  await searchCreate.getByText('当前选项 简约',{exact:true}).waitFor();
+  await openSearchCreate.click();
+  await searchCreateInput.press('Escape');
+  await searchCreateMenu.waitFor({state:'hidden'});
+  assert.equal(await openSearchCreate.evaluate(el=>document.activeElement===el),true);
   await showcase.getByRole('button', { name: '按钮与切换', exact: true }).click();
   const demo = showcase.getByRole('navigation', { name: '长文字页签演示', exact: true });
   await demo.getByRole('button').last().click();

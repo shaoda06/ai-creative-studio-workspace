@@ -221,7 +221,8 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-asset-types input{min-width:0;margin:0;accent-color:var(--green)}
 .chloe-outfit-style-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px}
 .chloe-outfit-style-toolbar .chloe-asset-types{flex:1 1 280px}
-.chloe-outfit-style-select{display:flex;align-items:center;gap:8px;min-width:0;margin-top:12px}
+.chloe-outfit-style-select{display:grid;justify-items:start;gap:6px;min-width:0;margin-top:12px}
+.chloe-outfit-style-current{overflow-wrap:anywhere}
 .chloe-outfit-style-form{display:grid;gap:10px}
 .chloe-outfit-style-form button{justify-self:end}
 .chloe-accessory-columns{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}

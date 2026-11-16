@@ -1,10 +1,10 @@
 import { useId, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import { Dialog } from './components';
 import { useNotify } from './components/Notifications';
-import { TabSelect } from './components/TabSelect';
+import { SearchCreateSelect } from './components/TabSelect';
 
 const stylesKey = (api: string) => ['chloe-outfit-styles', api];
 const clothingUrl = (api: string) => `${api}/shared-clothing`;
@@ -29,6 +29,12 @@ async function writeStyle<T>(url: string, method: 'POST' | 'PUT', style: string)
   return response.json();
 }
 
+async function addStyle(api: string, client: QueryClient, style: string) {
+  const styles = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', style);
+  await client.cancelQueries({ queryKey: stylesKey(api) });
+  client.setQueryData(stylesKey(api), styles);
+}
+
 export function AddOutfitStyleDialog({ close }: { close: () => void }) {
   const { api } = useChloeScope();
   const client = useQueryClient();
@@ -36,10 +42,8 @@ export function AddOutfitStyleDialog({ close }: { close: () => void }) {
   const nameId = useId();
   const [name, setName] = useState('');
   const mutation = useMutation({
-    mutationFn: (style: string) => writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', style),
-    onSuccess: async styles => {
-      await client.cancelQueries({ queryKey: stylesKey(api) });
-      client.setQueryData(stylesKey(api), styles);
+    mutationFn: (style: string) => addStyle(api, client, style),
+    onSuccess: () => {
       close();
       notify('已新增风格');
     },
@@ -62,8 +66,16 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
   const client = useQueryClient();
   const notify = useNotify();
   const mutation = useMutation({
-    mutationFn: (style: string) => writeStyle<{ outfitStyle: string }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', style),
-    onSuccess: async () => {
+    mutationFn: async ({ style, create }: { style: string; create?: boolean }) => {
+      if (create) await addStyle(api, client, style);
+      try {
+        await writeStyle<{ outfitStyle: string }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', style);
+      } catch (error) {
+        if (create && error instanceof Error) throw new Error(`已新增风格。应用到套装失败：${error.message}`);
+        throw error;
+      }
+    },
+    onSuccess: async (_, { create }) => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['chloe-asset-page'], predicate: query => {
           const url = query.queryKey[1];
@@ -71,14 +83,15 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
         } }),
         client.invalidateQueries({ queryKey: ['chloe-reference-detail', 'clothing', api, id] }),
       ]);
-      notify('已更新套装风格');
+      notify(create ? '已新增并应用风格' : '已更新套装风格');
     },
     onError: error => notify(error.message, 'error'),
   });
-  const items = [...new Set([current, ...styles])].map(value => ({ value, label: value }));
+  const items = [...new Set([current, ...styles])];
   return <div className="chloe-outfit-style-select">
-    <span>风格</span>
-    <TabSelect items={items} selected={current} label={`修改 ${id} 的风格`}
-      disabled={mutation.isPending || styles.length === 0} onChange={value => mutation.mutate(value)} size="small" />
+    <div className="chloe-outfit-style-current">风格 <strong>{current}</strong></div>
+    <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"
+      searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
+      onChange={style => mutation.mutate({ style })} onCreate={style => mutation.mutate({ style, create: true })} />
   </div>;
 }

@@ -4,7 +4,7 @@ import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { SearchField } from './SearchField';
 import { LinkButton } from './LinkButton';
-import { TabSelect } from './TabSelect';
+import { SearchCreateSelect, TabSelect } from './TabSelect';
 import { Switch } from './Switch';
 import { CopyButton } from './CopyButton';
 import { FloatingMessage, useNotify } from './Notifications';
@@ -45,6 +45,8 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
   const [longSwitch, setLongSwitch] = useState(false);
   const [tab, setTab] = useState('overview');
   const [selection, setSelection] = useState('one');
+  const [styleOptions, setStyleOptions] = useState(['未分类', '通勤', '周末休闲']);
+  const [styleChoice, setStyleChoice] = useState('未分类');
   const [disabled, setDisabled] = useState(false);
   const [pending, setPending] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -101,6 +103,12 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <TabNav label="长文字分组导航演示" items={options} selected={selection} onChange={setSelection} groups={[{ label: '示例分组', values: options.map(item => item.value) }]} disabled={disabled} />
         <p className="component-draft">按钮只由组件内的SVG显示一个下拉箭头，选中、高亮或禁用时也不叠加背景箭头。</p>
         <p className="component-draft">已选择：{options.find(item => item.value === selection)!.label}</p>
+      </Example>}
+      {category === 'select' && <Example title="搜索或新建选项" rule="输入文字筛选已有选项。输入新的名称时，可在同一个菜单中新建。此示例仅修改页面演示数据。" usage="Chloe 套装风格">
+        <p>当前选项 {styleChoice}</p>
+        <SearchCreateSelect items={styleOptions} selected={styleChoice} label="搜索或新建示例选项"
+          prompt="搜索或新建" searchLabel="输入示例名称" onChange={setStyleChoice}
+          onCreate={value => { setStyleOptions(current => [...current, value]); setStyleChoice(value); }} />
       </Example>}
       {category === 'messages' && <>
         <Example title="公共消息" rule="成功提示3秒消失，错误提示不定时消失；所有提示都可关闭。距屏幕左边16像素；长消息最多520像素，在桌面窗口内换行并保留两侧至少16像素；关闭持续提示不会结束演示状态。" usage="保存、复制、下载进度、读取错误与更新提醒">

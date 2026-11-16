@@ -359,13 +359,19 @@ try {
     assert.equal(await clothingLinks.count(),2);
     await outfitTab.click();
     await libraryFilter.waitFor({state:'detached'});
-    const selectStyle = page.getByRole('combobox',{name:'修改 O001 的风格',exact:true});
+    const selectStyle = page.getByRole('button',{name:'修改 O001 的风格',exact:true});
+    const styleCard = page.locator('article.asset-media-card').filter({has:selectStyle});
+    const currentStyle = styleCard.locator('.chloe-outfit-style-current strong');
+    const styleMenu = page.getByRole('group',{name:'修改 O001 的风格',exact:true});
+    const findStyle = styleMenu.getByRole('searchbox',{name:'输入风格名称',exact:true});
     const styleForm = page.getByRole('dialog',{name:'新增风格',exact:true});
-    await selectStyle.getByText('未分类',{exact:true}).waitFor();
+    await currentStyle.filter({hasText:/^未分类$/}).waitFor();
     assert.equal(await clothingLinks.count(),2);
     assert.equal(await selectStyle.evaluate(control=>{
       const card = control.closest('article.asset-media-card');
-      return Boolean(card?.querySelector('h3 a')) && control.getBoundingClientRect().top >= card.querySelector('.cover').getBoundingClientRect().bottom;
+      const current = card.querySelector('.chloe-outfit-style-current').getBoundingClientRect();
+      return Boolean(card.querySelector('h3 a')) && current.top >= card.querySelector('.cover').getBoundingClientRect().bottom &&
+        control.getBoundingClientRect().top > current.bottom;
     }),true);
     await page.getByRole('button',{name:'新增风格',exact:true}).click();
     await styleForm.getByLabel('风格名称').fill('通勤');
@@ -377,8 +383,18 @@ try {
     await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
     await commute.uncheck();
     await selectStyle.click();
-    await page.getByRole('option',{name:'通勤',exact:true}).click();
-    await selectStyle.getByText('通勤',{exact:true}).waitFor();
+    await findStyle.fill('通勤');
+    assert.equal(await styleMenu.getByRole('option').count(),1);
+    assert.equal(await styleMenu.getByRole('button',{name:/^新建/}).count(),0);
+    await findStyle.fill('简约');
+    assert.equal(await styleMenu.getByRole('option').count(),0);
+    await styleMenu.getByRole('button',{name:'新建「简约」',exact:true}).click();
+    await currentStyle.filter({hasText:/^简约$/}).waitFor();
+    await styleFilter.getByRole('checkbox',{name:'简约',exact:true}).waitFor();
+    await selectStyle.click();
+    await findStyle.fill('通');
+    await styleMenu.getByRole('option',{name:'通勤',exact:true}).click();
+    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
     await commute.check();
     await clothingLinks.nth(1).waitFor({state:'detached'});
     assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
@@ -398,7 +414,8 @@ try {
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     await page.reload();
     await outfitTab.waitFor();
-    await selectStyle.getByText('通勤',{exact:true}).waitFor();
+    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
+    assert.equal(await currentStyle.textContent(),'通勤');
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     await garmentsTab.click();
     await libraryFilter.waitFor();
