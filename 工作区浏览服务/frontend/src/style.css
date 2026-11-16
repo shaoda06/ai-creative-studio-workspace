@@ -178,7 +178,8 @@ dialog.dialog-compact{width:440px}
 .underline-tabs-scroll>button{flex:none}
 .underline-tabs-align-end>button:last-child{margin-inline-start:auto}
 .underline-tabs-end-action{align-self:center;margin-inline-start:auto}
-.underline-tabs-align-end>.underline-tabs-end-action+button:last-child{margin-inline-start:0}
+.underline-tabs-end-action[data-placement=inline]{margin-inline-start:0}
+.underline-tabs-align-end>.underline-tabs-end-action[data-placement=end]+button:last-child{margin-inline-start:0}
 
 dialog .dialog-close{flex:none;white-space:nowrap}
 
@@ -220,8 +221,7 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-asset-types input{min-width:0;margin:0;accent-color:var(--green)}
 .chloe-outfit-style-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px}
 .chloe-outfit-style-toolbar .chloe-asset-types{flex:1 1 280px}
-.chloe-outfit-style-card{display:grid;gap:8px;min-width:0}
-.chloe-outfit-style-select{display:flex;align-items:center;gap:8px;min-width:0}
+.chloe-outfit-style-select{display:flex;align-items:center;gap:8px;min-width:0;margin-top:12px}
 .chloe-outfit-style-form{display:grid;gap:10px}
 .chloe-outfit-style-form button{justify-self:end}
 .chloe-accessory-columns{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
@@ -262,6 +262,7 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .asset-media-card-heading>h3{font-size:15px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .asset-media-card-title-actions{position:relative;z-index:1;display:flex;align-items:center;gap:8px;flex:none}
 .asset-media-card-linked-actions{position:relative}
+.asset-media-card-linked-content{position:relative;z-index:1}
 .asset-media-card-title-link{color:inherit;text-decoration:none}
 .asset-media-card-title-link::after{position:absolute;inset:0;content:"";border-radius:8px}
 .asset-media-card-title-link:focus-visible::after{outline:2px solid var(--green);outline-offset:2px}

@@ -19,7 +19,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       }}>{formal ? '生成记录' : item.generation}</a> : null;
   const version = formal ? item.version?.match(/v\d+(?:\.\d+)*/i)?.[0] : item.version || item.media?.key.match(/(?:候选|草稿)-(v\d+(?:\.\d+)*)/i)?.[1];
   const linked = entry && to;
-  const linkedActions = linked && !!titleActions;
+  const linkedActions = linked && !!(titleActions || children);
   const Cover = linked ? 'div' : 'button';
   const fixedRatioStyle = typeof aspectRatio === 'number' ? { aspectRatio, height: 'auto' } : undefined;
   const naturalRatio = aspectRatio === 'natural';
@@ -61,10 +61,10 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       </>}
       </>}
     </div>
-    {children}
+    {children && (linkedActions ? <div className="asset-media-card-linked-content">{children}</div> : children)}
   </>;
   if (linked && !linkedActions) return <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title} aria-describedby={badge ? badgeId : undefined}>{content}</Link>;
-  return <article className={className} aria-label={hideTitle ? title : undefined}>
+  return <article className={linked && children ? `${className} asset-media-card-link` : className} aria-label={hideTitle ? title : undefined}>
     {content}
     {fullscreen && media?.url && (isVideo ? <FullscreenVideo title={title} item={media} close={() => setFullscreen(false)} />
       : <FullscreenImage title={title} src={media.url} alt={title} close={() => setFullscreen(false)} />)}

@@ -88,6 +88,16 @@ try {
       const path = new URL(url).pathname;
       const assets = cards => route.fulfill({json:chloeAssetResponse(url, cards)});
       const method = route.request().method();
+      if (path === '/api/workspaces/account-demo/shared-asset-search') {
+        const prefix = new URL(url).searchParams.get('q');
+        const matches = [
+          {id:'O001',name:'套装甲',category:'套装',params:{asset:'clothing',clothingTab:'outfits',clothing:'O001'}},
+          {id:'O003',name:'单件样例1',category:'单件',params:{asset:'clothing',clothingTab:'garments',clothing:'O003'}},
+          {id:'RV001',name:'参考视频甲',category:'参考视频',params:{asset:'reference-videos',referenceVideo:'RV001'}},
+          {id:'站姿-016',name:'站姿-016样例',category:'姿态',params:{asset:'poses',pose:'站姿-016'}},
+        ];
+        return route.fulfill({json:matches.filter(({id})=>id.toLowerCase().startsWith(prefix))});
+      }
       if (path === '/api/workspaces/account-demo/shared-clothing/styles') {
         if (method === 'POST') outfitStyles.push(route.request().postDataJSON().style);
         return route.fulfill({json:outfitStyles,status:method === 'POST' ? 201 : 200});
@@ -141,6 +151,10 @@ try {
       if (path === '/api/workspaces/account-demo/shared-clothing') return assets(showAssemblyFixtures ? clothing : []);
       if (path === '/api/workspaces/account-demo/shared-clothing/O001') return route.fulfill({json:{
         id:'O001',name:'套装甲',description:'隔离测试套装',clothingForm:'套装',outfitSource:'合成',outfitStyle:clothing[0].outfitStyle,composition:'开衫叠穿上衣',images:[],
+        sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
+      }});
+      if (path === '/api/workspaces/account-demo/shared-clothing/O003') return route.fulfill({json:{
+        ...clothing.find(card=>card.id==='O003'),description:'隔离测试单件',images:[],
         sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,empty:true})),
       }});
       if (path === '/api/workspaces/account-demo/account-overview') return route.fulfill({json:emptyOverview});
@@ -283,8 +297,27 @@ try {
     const clothingNav = page.getByRole('navigation',{name:'服装分类',exact:true});
     const outfitTab = clothingNav.getByRole('button',{name:'套装',exact:true});
     const garmentsTab = clothingNav.getByRole('button',{name:'单件',exact:true});
+    const styleFilter = page.getByRole('group',{name:'按风格筛选',exact:true});
+    await styleFilter.waitFor();
+    assert.equal(await outfitTab.getAttribute('aria-current'),'page');
+    const searchField = assetNav.getByRole('searchbox',{name:'搜索共用资产编号',exact:true});
+    const searchResults = page.getByRole('region',{name:'资产搜索结果',exact:true});
+    const referenceVideoBounds = await assetNav.getByRole('button',{name:'参考视频',exact:true}).boundingBox();
+    const searchBounds = await searchField.boundingBox();
+    assert.ok(searchBounds.x >= referenceVideoBounds.x + referenceVideoBounds.width &&
+      searchBounds.x - (referenceVideoBounds.x + referenceVideoBounds.width) <= 28 &&
+      Math.abs(searchBounds.y - referenceVideoBounds.y) < 14);
+    await searchField.fill('套装甲');
+    await searchResults.getByText('未找到匹配的资产编号。',{exact:true}).waitFor();
+    await searchField.fill(' o00 ');
+    const garmentResult = searchResults.getByRole('link',{name:/^O003 · 单件样例1/});
+    await garmentResult.waitFor();
+    assert.equal(await searchResults.getByRole('link').count(),2);
+    await garmentResult.click();
+    await page.getByText('隔离测试单件',{exact:true}).waitFor();
+    await page.getByRole('link',{name:'返回服装列表',exact:true}).click();
     const libraryFilter = page.getByRole('group',{name:'按部位筛选',exact:true});
-    const clothingLinks = page.locator('a.asset-media-card-link');
+    const clothingLinks = page.locator('.chloe-assets-content').getByRole('link',{name:/^O\d+ ·/});
     await libraryFilter.waitFor();
     assert.deepEqual(await clothingNav.getByRole('button').allTextContents(),['套装','单件']);
     assert.equal(await garmentsTab.getAttribute('aria-current'),'page');
@@ -297,11 +330,14 @@ try {
     assert.equal(await clothingLinks.count(),2);
     await outfitTab.click();
     await libraryFilter.waitFor({state:'detached'});
-    const styleFilter = page.getByRole('group',{name:'按风格筛选',exact:true});
     const selectStyle = page.getByRole('combobox',{name:'修改 O001 的风格',exact:true});
     const styleForm = page.getByRole('dialog',{name:'新增风格',exact:true});
     await selectStyle.getByText('未分类',{exact:true}).waitFor();
     assert.equal(await clothingLinks.count(),2);
+    assert.equal(await selectStyle.evaluate(control=>{
+      const card = control.closest('article.asset-media-card');
+      return Boolean(card?.querySelector('h3 a')) && control.getBoundingClientRect().top >= card.querySelector('.cover').getBoundingClientRect().bottom;
+    }),true);
     await page.getByRole('button',{name:'新增风格',exact:true}).click();
     await styleForm.getByLabel('风格名称').fill('通勤');
     await styleForm.getByRole('button',{name:'新增',exact:true}).click();
@@ -338,6 +374,14 @@ try {
     await garmentsTab.click();
     await libraryFilter.waitFor();
     assert.equal(await clothingLinks.count(),8);
+    await searchField.fill('站姿-016');
+    await searchResults.getByRole('link',{name:/^站姿-016 · 站姿-016样例/}).click();
+    const offPagePose = page.getByRole('dialog',{name:'站姿-016 · 站姿-016样例',exact:true});
+    await offPagePose.waitFor();
+    await offPagePose.getByRole('button',{name:/关闭/}).click();
+    await searchField.fill('RV001');
+    await searchResults.getByRole('link',{name:/^RV001 · 参考视频甲/}).click();
+    await page.getByRole('link',{name:'返回参考视频列表',exact:true}).waitFor();
     await page.goto(server.resolvedUrls.local[0]+'#/spaces/account-demo?section=assets&asset=assembly');
     await page.reload();
     const summary = page.getByRole('region',{name:'当前选择',exact:true});

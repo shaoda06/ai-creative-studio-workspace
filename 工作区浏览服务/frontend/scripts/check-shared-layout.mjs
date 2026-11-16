@@ -357,7 +357,7 @@ try {
     assert.equal(await page.getByRole('dialog').locator('img').getAttribute('src'), '/component-samples/image.svg');
     await page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click();
     const entryImageCards = showcase.locator('.asset-media-card-entry:not(.asset-media-card-selectable)');
-    assert.equal(await entryImageCards.count(), 4);
+    assert.equal(await entryImageCards.count(), 5);
     for (const card of await entryImageCards.all()) {
       await contained(card, `${width}px / 入口图片卡片`);
       const title = await card.locator('h3').evaluate(el => ({height:el.getBoundingClientRect().height, lineHeight:parseFloat(getComputedStyle(el).lineHeight), ellipsis:getComputedStyle(el).textOverflow}));
@@ -365,7 +365,7 @@ try {
       assert.equal(title.ellipsis,'ellipsis');
       assert.equal(await card.locator('.asset-media-field,.asset-media-html-field,.asset-media-footer').count(),0);
     }
-    assert.equal(await entryImageCards.locator('img').count(),2);
+    assert.equal(await entryImageCards.locator('img').count(),3);
     assert.equal(await entryImageCards.locator('.asset-media-placeholder').count(),2);
     for (const badge of await entryImageCards.locator('.status-badge').all()) {
       await contained(badge, `${width}px / 入口图片卡片状态`);
@@ -376,6 +376,15 @@ try {
     const entryLink=showcase.getByRole('link',{name:'入口卡片无图',exact:true});
     assert.equal(await entryLink.getAttribute('href'),'/');
     assert.equal(await entryLink.locator('button,a').count(),0);
+    const entryWithFooter = entryImageCards.filter({hasText:'底部可操作的入口卡片'});
+    const footerAction = entryWithFooter.getByRole('button',{name:'操作示例卡片',exact:true});
+    const footerBounds = await footerAction.boundingBox(), cardBounds = await entryWithFooter.boundingBox();
+    assert.ok(footerBounds.y + footerBounds.height <= cardBounds.y + cardBounds.height);
+    assert.equal(await entryWithFooter.locator('a button').count(),0);
+    const cardPage = page.url();
+    await footerAction.click();
+    await page.getByText('已操作示例卡片',{exact:true}).waitFor();
+    assert.equal(page.url(),cardPage);
     assert.equal(await entryImageCards.first().locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
     await entryImageCards.first().getByRole('button').click();
     const imageDownload = page.getByRole('dialog').getByRole('link',{name:'下载',exact:true});

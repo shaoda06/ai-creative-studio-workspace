@@ -7,6 +7,7 @@ import './EpisodeProduction.css';
 import type { FileItem, SegmentVideo as VideoItem } from '../api';
 import { Document, FileTree, Groups, Preview, PreviewContext, Result, Rich } from '../components';
 import { SearchField } from './SearchField';
+import { useNotify } from './Notifications';
 import { Switch } from './Switch';
 import { PageHeader } from './PageHeader';
 import { EpisodeTitleStatus } from './EpisodeTitleStatus';
@@ -56,6 +57,7 @@ const sampleDoc = { html: '<h2 id="sample-text">正文与代码</h2><p>这是一
 const liveStatusDoc = { html: '<h2 id="sample-status">示例作品</h2><p>制作状态：作品状态</p>' };
 
 export function ShowcaseExamples({ category }: { category: string }) {
+  const notify = useNotify();
   const [text, setText] = useState('');
   const [breadcrumbActions, setBreadcrumbActions] = useState<HTMLDivElement | null>(null);
   const [search, setSearch] = useState('');
@@ -221,6 +223,9 @@ export function ShowcaseExamples({ category }: { category: string }) {
         <AssetMediaCard title="未关联声音的入口卡片" item={{emptyLabel:'尚未采用图片'}} revision={1} entry to="/"
           titleActions={<AudioPreviewButton name="入口卡片声音" enabled={false} playing={false} progress={0} onClick={()=>{}} />} />
         <AssetMediaCard title="入口卡片无图" item={{ emptyLabel: '尚未采用正面面部图' }} revision={1} entry to="/" badge={{ label: '制作中', tone: 'blue' }} />
+        <AssetMediaCard title="底部可操作的入口卡片" item={imageRecord} revision={1} entry to="/">
+          <button type="button" onClick={() => notify('已操作示例卡片')}>操作示例卡片</button>
+        </AssetMediaCard>
       </ComponentExample>
       <ComponentExample title="资源选择卡片与弹窗" rule="弹窗顶部可确认、关闭和筛选，列表滚动时顶部保持可见。卡片右上角可选择或取消，点击媒体区打开全屏预览。" usage="Chloe 套装装配、造型装配、姿态装配和视频装配">
         <button type="button" onClick={() => { setSelectedImage(''); setOnlyImages(false); setAssetPickerOpen(true); }}>打开资源选择示例</button>

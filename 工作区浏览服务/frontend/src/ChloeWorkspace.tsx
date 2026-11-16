@@ -28,6 +28,7 @@ import { ChloeReview } from './ChloeReview';
 import { ChloePublication } from './ChloePublication';
 import { ChloeResources } from './ChloeResources';
 import { ChloeModels } from './ChloeModels';
+import { ChloeAssetSearch } from './ChloeAssetSearch';
 import { ChloeAssembly } from './ChloeAssembly';
 import { ChloeModelDetail } from './ChloeModelDetail';
 import type { ModelDetail } from './ChloeModelDetail';
@@ -93,9 +94,14 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
     refetchInterval: 5000,
   });
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
-  const assetList = `${page}?${assetListParams(params)}`;
+  const listParams = assetListParams(params);
+  if (referenceKind === 'clothing' && referenceQuery.data && !listParams.has('clothingTab')) {
+    listParams.set('clothingTab', referenceQuery.data.clothingForm === '套装' ? 'outfits' : 'garments');
+  }
+  const assetList = `${page}?${listParams}`;
   const currentLook = params.get('modelTab')==='looks' ? modelQuery.data?.looks.find(item=>item.id===params.get('look')) : undefined;
   const assetNavigation = () => <UnderlineTabs alignLastToEnd label="共用资产分类" items={assetCategories} selected={assetCategory.value}
+    endAction={<ChloeAssetSearch key={api} />} endActionPlacement="inline"
     onChange={value => setParams({ section: 'assets', asset: value })} />;
   return <>
     {!['production', 'publication'].includes(current.value) && <PageHeader title={context || space!.name} stacked actions={<Link to={workspacePage}>返回项目列表</Link>}>

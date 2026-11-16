@@ -1,0 +1,7 @@
+.chloe-asset-search{position:relative;width:200px;max-width:100%}
+.chloe-asset-search-results{position:absolute;z-index:5;top:calc(100% + 6px);left:0;width:320px;max-height:300px;overflow:auto;background:white;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px #10291e22}
+.chloe-asset-search-results ul{list-style:none;margin:0;padding:4px}
+.chloe-asset-search-results a{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:8px;text-decoration:none;overflow-wrap:anywhere}
+.chloe-asset-search-results a:hover,.chloe-asset-search-results a:focus-visible{background:#edf5ef}
+.chloe-asset-search-results small{white-space:nowrap}
+.chloe-asset-search-results p{margin:8px 12px}

@@ -20,14 +20,14 @@ import project_resources as resources
 router = APIRouter(prefix='/shared-models')
 
 
-def model_records(root, requested_id=None):
+def model_records(root, requested_id=None, *, id_prefix=''):
     folder = resources.local(root, '综合资料/共用素材/AI模特')
     if not folder.is_dir():
         raise FileNotFoundError('模特资料目录不存在')
     seen = set()
     for path in sorted(folder.glob('M*-*/模特说明.md')):
         identity, name = path.parent.name.split('-', 1)
-        if requested_id is not None and identity != requested_id:
+        if (requested_id is not None and identity != requested_id) or not identity.casefold().startswith(id_prefix):
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('模特说明越出模特资料目录')
@@ -157,15 +157,17 @@ def linked_html(text, source, allowed, base):
     return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
 
 
-def model_looks(root, identity):
+def model_looks(root, identity=None, *, id_prefix=''):
     folder = resources.local(root, '综合资料/共用素材/造型')
     for path in sorted(folder.glob('L*-*/造型说明.md')):
+        look_id, name = path.parent.name.split('-', 1)
+        if not look_id.casefold().startswith(id_prefix):
+            continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('造型说明越出造型资料目录')
-        look_id, name = path.parent.name.split('-', 1)
         doc = read_document(root, path, template('chloe-assets', '造型说明模板.md'),
                             {'identity': look_id, 'title': name})
-        if fields(doc, '造型信息')['模特编号'] == identity:
+        if identity is None or fields(doc, '造型信息')['模特编号'] == identity:
             yield look_id, name, path, doc
 
 

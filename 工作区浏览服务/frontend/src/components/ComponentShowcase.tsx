@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, Document, FileTree, Preview, PreviewContext } from '../components';
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
+import { SearchField } from './SearchField';
 import { LinkButton } from './LinkButton';
 import { TabSelect } from './TabSelect';
 import { Switch } from './Switch';
@@ -67,7 +68,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <div className="component-demo-row"><button onClick={() => setClicks(n => n + 1)}>普通按钮</button><button className="link" onClick={() => setClicks(n => n + 1)}>链接按钮</button><button disabled>禁用按钮</button></div>
           <p>已点击 {clicks} 次</p><p>{sampleText}</p><CopyButton text={sampleText} label="复制示例文字" />
         </Example>
-        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签选中前后保持字重与宽度，长文字按可用空间换行。末项可以靠右，并在其左侧放置操作按钮。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产装配入口">
+        <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签选中前后保持字重与宽度，长文字按可用空间换行。末项可以靠右，前方的操作可与末项或左侧页签对齐。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产导航">
           <div className="component-demo-row"><span>编辑模式</span><Switch label="示例编辑模式" checked={editing} onChange={setEditing} /></div>
           {editing ? <textarea className="component-demo-textarea" aria-label="示例正文" value={draft} onChange={event => setDraft(event.target.value)} /> : <p className="component-draft">{draft}</p>}
           <UnderlineTabs label="示例页签" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab} />
@@ -75,6 +76,8 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
           <UnderlineTabs label="长文字页签演示" items={[{ value: 'one', label: '简短页签' }, { value: 'long', label: '长文字与连续英文换行：' + 'LongNavigationReference'.repeat(4) }]} selected={longTab} onChange={setLongTab} />
           <UnderlineTabs alignLastToEnd label="末项靠右页签演示" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab}
             endAction={tab === 'detail' && <LinkButton onClick={() => setTab('overview')}>重置示例</LinkButton>} />
+          <UnderlineTabs alignLastToEnd label="行内搜索页签示例" items={[{ value: 'overview', label: '概览' }, { value: 'detail', label: '详情' }]} selected={tab} onChange={setTab}
+            endActionPlacement="inline" endAction={<SearchField label="页签内示例搜索" placeholder="仅用于输入演示" value={fieldDraft} onChange={setFieldDraft} size="compact" />} />
           <p>{tab === 'overview' ? '这里是概览内容。' : '这里是详情内容。'}</p>
         </Example>
         <Example title="轮次修改标记" rule="普通页签右上角的小黄点表示本轮有新视频，与分段条共用；选中与未选中时都保留标记。" usage="场次标签、分段条">

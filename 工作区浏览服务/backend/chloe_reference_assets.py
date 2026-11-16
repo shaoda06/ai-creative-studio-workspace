@@ -31,12 +31,12 @@ SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')
 
 
-def asset_documents(root, kind, requested_id=None):
+def asset_documents(root, kind, requested_id=None, *, id_prefix=''):
     folder = resources.local(root, '综合资料/共用素材/'+kind.label)
     seen = set()
     for path in sorted(folder.glob(f'{kind.prefix}*-*/{kind.label}说明.md')):
         identity, name = path.parent.name.split('-', 1)
-        if requested_id is not None and identity != requested_id:
+        if (requested_id is not None and identity != requested_id) or not identity.casefold().startswith(id_prefix):
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError(kind.label+'说明越出资料目录')

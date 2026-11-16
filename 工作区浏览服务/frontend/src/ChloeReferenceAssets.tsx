@@ -38,7 +38,7 @@ const clothingTabs = [{ value: 'outfits', label: '套装' }, { value: 'garments'
 
 export function referenceAssetListParams(kind: ReferenceAssetKind, clothingTab: string | null) {
   const params = new URLSearchParams({ section: 'assets', asset: kind });
-  if (kind === 'clothing' && clothingTab === 'outfits') params.set('clothingTab', clothingTab);
+  if (kind === 'clothing' && clothingTab) params.set('clothingTab', clothingTab);
   return params;
 }
 
@@ -63,7 +63,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const [params, setParams] = useSearchParams();
   const [addingStyle, setAddingStyle] = useState(false);
   const isClothing = kind === 'clothing';
-  const isOutfit = isClothing && params.get('clothingTab') === 'outfits';
+  const isOutfit = isClothing && params.get('clothingTab') !== 'garments';
   const clothingTab = isOutfit ? 'outfits' : 'garments';
   const isAccessory = kind === 'accessories';
   const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<ReferenceAssetCard>(endpoint,
@@ -71,15 +71,13 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const styles = useOutfitStyles(isOutfit);
   const data = query.isPlaceholderData ? undefined : query.data;
   const types = [...new Set([...(isOutfit ? styles.data ?? [] : []), ...(query.data?.types ?? []), ...activeTypes])];
-  const renderCard = (item: ReferenceAssetCard) => {
-    const card = <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
+  const renderCard = (item: ReferenceAssetCard) =>
+    <AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} entry formal aspectRatio="natural" revision={0}
       badge={chloeAssetStatusBadges[item.status]}
       to={`${page}?${list}&${parameter}=${encodeURIComponent(item.id)}`}
-      item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}} />;
-    return isOutfit && item.outfitStyle ? <div className="chloe-outfit-style-card" key={item.id}>
-      {card}<OutfitStyleSelect id={item.id} current={item.outfitStyle} styles={styles.data ?? []} />
-    </div> : card;
-  };
+      item={{media:item.media,emptyLabel:`尚未采用${label}展示图`}}>
+      {isOutfit && item.outfitStyle && <OutfitStyleSelect id={item.id} current={item.outfitStyle} styles={styles.data ?? []} />}
+    </AssetMediaCard>;
   return <>
     <PageCheckStatus queries={[workspaceQuery,query]} />
     {isClothing && <div className="chloe-clothing-tabs">
