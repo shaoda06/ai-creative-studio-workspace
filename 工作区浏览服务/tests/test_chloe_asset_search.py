@@ -1,3 +1,4 @@
+from os.path import relpath
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -6,9 +7,12 @@ from unittest.mock import patch
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from backend.chloe_asset_search import router
-from chloe_init import initialize_asset, initialize_project, initialize_workspace
+from backend.chloe_poses import Pose
+from backend.chloe_reference_assets import CLOTHING, asset_cards
+from chloe_init import initialize_asset, initialize_project, initialize_workspace, resources
 
 
 class ChloeAssetSearchTests(TestCase):
@@ -33,15 +37,27 @@ class ChloeAssetSearchTests(TestCase):
             end = text.index('\n\n', text.index('| ---', start))
             row = '\n| 模特 | M001 | [说明](<../../AI模特/M001-示例模特/模特说明.md>) | 造型人物 |'
             look.write_text(text[:end]+row+text[end:], 'utf-8')
+            image = Path(directory)/'cover.png'
+            Image.new('RGB', (32, 48), 'teal').save(image)
+            owner = root/'综合资料'
+            ref = resources.register(owner, image, origin='import', key='search-cover')
+            href = Path(relpath(resources.local(owner, ref['file']), outfit.parent)).as_posix()
+            label = f'[共用:{ref["resource_id"]}@{ref["version"]}](<{href}>)'
+            text = outfit.read_text('utf-8')
+            start = text.index('## 当前采用')
+            end = text.index('\n\n', text.index('| ---', start))
+            adopted = f'\n| 服装展示图 | {label} | 隔离样例采用 | 2026-11-17T09:00:00+08:00 |'
+            outfit.write_text(text[:end]+adopted+text[end:], 'utf-8')
 
             def select(scope: str, request: Request):
                 owner, view = {'first': (root, 'chloe-commerce'), 'second': (other, 'chloe-commerce'),
                                'unrelated': (root, 'files')}[scope]
-                request.state.workspace_space = SimpleNamespace(root=owner, view=view)
+                request.state.workspace_space = SimpleNamespace(root=owner, view=view, api=f'/{scope}')
 
             app = FastAPI()
             app.include_router(router, prefix='/{scope}', dependencies=[Depends(select)])
-            poses = {'站姿-016': SimpleNamespace(id='站姿-016', name='隔离姿态')}
+            pose = Pose('站姿-016', '隔离姿态', '站姿', '测试描述', image)
+            poses = {pose.id: pose}
             with TestClient(app) as client, patch('backend.chloe_asset_search.catalog', return_value=(poses, 'test')):
                 url = '/first/shared-asset-search'
                 for query, asset, field in (
@@ -54,6 +70,11 @@ class ChloeAssetSearchTests(TestCase):
                 clothes = client.get(url, params={'q': ' o00 '}).json()
                 self.assertEqual([(item['id'], item['params']['clothingTab']) for item in clothes],
                                  [('O001', 'outfits'), ('O002', 'garments')])
+                self.assertEqual(clothes[0]['previewUrl'], asset_cards(root, '/first', CLOTHING)[0]['media']['thumbnailUrl'])
+                self.assertIsNone(clothes[1]['previewUrl'])
+                self.assertIsNone(client.get(url, params={'q': 'A001'}).json()[0]['previewUrl'])
+                self.assertEqual(client.get(url, params={'q': pose.id}).json()[0]['previewUrl'],
+                                 pose.card('/first')['media']['thumbnailUrl'])
                 look_result = client.get(url, params={'q': 'L001'})
                 self.assertEqual(look_result.status_code, 200, look_result.text)
                 self.assertEqual(look_result.json()[0]['params'],

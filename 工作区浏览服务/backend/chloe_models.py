@@ -46,10 +46,13 @@ def model_portrait(root, path, adoption):
     return portrait
 
 
+def model_adoption(doc):
+    return next((row for row in records(doc, '当前采用') if row['用途'] == '正面面部'), None)
+
+
 def model_documents(root, requested_id):
     for identity, name, path, doc in model_records(root, requested_id):
-        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == '正面面部'), None)
-        yield identity, name, path, doc, model_portrait(root, path, adoption)
+        yield identity, name, path, doc, model_portrait(root, path, model_adoption(doc))
 
 
 def portrait_url(base, portrait):
@@ -71,7 +74,7 @@ def model_card(root, api, path, doc, adoption, metadata):
 def model_rows(root, api):
     rows = []
     for identity, name, path, doc in model_records(root):
-        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == '正面面部'), None)
+        adoption = model_adoption(doc)
         status = asset_status(path, doc)['status']
         card = partial(model_card, root, api, path, doc, adoption, {'id': identity, 'name': name, 'status': status})
         rows.append(AssetRow(identity, card, status, bool(adoption)))
@@ -283,6 +286,14 @@ def head_shoulder_base(root, identity, path, doc, images, base):
     return {'resource': ref['resource_id'], 'version': ref['version'], 'sourceVersion': source['version'], 'media': media}
 
 
+def look_cover(root, base, path, doc, name):
+    cover = next((row for row in records(doc, '当前采用') if row['用途'] == '全身三视图原图'), None)
+    if cover:
+        ref = media_reference(root, path, cover['资源引用'])
+        return linked_media(base, ref['file'], 'image', name)
+    return None
+
+
 def model_detail(root, identity, api):
     name, path, doc, portrait = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
@@ -296,11 +307,7 @@ def model_detail(root, identity, api):
                 image['media']['thumbnailUrl'] = url
     looks = []
     for look_id, look_name, look_path, look_doc in model_looks(root, identity):
-        cover = next((row for row in records(look_doc, '当前采用') if row['用途'] == '全身三视图原图'), None)
-        media = None
-        if cover:
-            ref = media_reference(root, look_path, cover['资源引用'])
-            media = linked_media(base, ref['file'], 'image', look_name)
+        media = look_cover(root, base, look_path, look_doc, look_name)
         clothing = {}
         for row in records(look_doc, '输入记录'):
             if row['输入用途'] not in {'服装参考', '配饰参考'}:

@@ -91,10 +91,14 @@ try {
       if (path === '/api/workspaces/account-demo/shared-asset-search') {
         const prefix = new URL(url).searchParams.get('q');
         const matches = [
-          {id:'O001',name:'套装甲',category:'套装',params:{asset:'clothing',clothingTab:'outfits',clothing:'O001'}},
-          {id:'O003',name:'单件样例1',category:'单件',params:{asset:'clothing',clothingTab:'garments',clothing:'O003'}},
+          {id:'O001',name:'套装甲',category:'套装',previewUrl:'/api/assembly-fixture/O001?hover=1',params:{asset:'clothing',clothingTab:'outfits',clothing:'O001'}},
+          {id:'O003',name:'单件样例1',category:'单件',previewUrl:'/api/assembly-fixture/O003?hover=1',params:{asset:'clothing',clothingTab:'garments',clothing:'O003'}},
+          {id:'O010',name:'旧服装',category:'单件',previewUrl:null,params:{asset:'clothing',clothingTab:'garments',clothing:'O010'}},
           {id:'RV001',name:'参考视频甲',category:'参考视频',params:{asset:'reference-videos',referenceVideo:'RV001'}},
           {id:'站姿-016',name:'站姿-016样例',category:'姿态',params:{asset:'poses',pose:'站姿-016'}},
+          ...moreAccessories.map(({id,name,media})=>({
+            id,name,category:'配饰',previewUrl:media.url,params:{asset:'accessories',accessory:id},
+          })),
         ];
         return route.fulfill({json:matches.filter(({id})=>id.toLowerCase().startsWith(prefix))});
       }
@@ -313,6 +317,31 @@ try {
     const garmentResult = searchResults.getByRole('link',{name:/^O003 · 单件样例1/});
     await garmentResult.waitFor();
     assert.equal(await searchResults.getByRole('link').count(),2);
+    const hoverPreview = page.locator('.chloe-asset-search-preview');
+    assert.equal(await hoverPreview.count(),0);
+    for (const [result, assetId] of [[searchResults.getByRole('link',{name:/^O001 · 套装甲/}),'O001'],[garmentResult,'O003']]) {
+      await result.hover();
+      await hoverPreview.evaluate(image=>image.decode());
+      assert.equal(await hoverPreview.getAttribute('src'),`/api/assembly-fixture/${assetId}?hover=1`);
+      const [row, popup, preview] = await Promise.all([result.boundingBox(),searchResults.boundingBox(),hoverPreview.boundingBox()]);
+      assert.ok(Math.abs(preview.y-row.y)<=1 && preview.x>popup.x+popup.width && preview.x+preview.width<=width+1);
+      assert.ok(Math.abs(preview.width-searchBounds.width)<=1);
+      const ratio = await hoverPreview.evaluate(image=>image.naturalWidth/image.naturalHeight);
+      assert.ok(Math.abs(preview.height-preview.width/ratio)<=1);
+    }
+    await searchField.hover();
+    await hoverPreview.waitFor({state:'detached'});
+    await searchField.fill('O010');
+    const noCoverResult = searchResults.getByRole('link',{name:/^O010 · 旧服装/});
+    await noCoverResult.hover();
+    assert.equal(await hoverPreview.count(),0);
+    await searchField.fill('C0');
+    const scrolledResult = searchResults.getByRole('link',{name:/^C024 ·/});
+    await scrolledResult.hover();
+    await hoverPreview.evaluate(image=>image.decode());
+    assert.ok(await searchResults.evaluate(list=>list.scrollTop>0));
+    assert.ok(Math.abs((await hoverPreview.boundingBox()).y-(await scrolledResult.boundingBox()).y)<=1);
+    await searchField.fill('O003');
     await garmentResult.click();
     await page.getByText('隔离测试单件',{exact:true}).waitFor();
     await page.getByRole('link',{name:'返回服装列表',exact:true}).click();

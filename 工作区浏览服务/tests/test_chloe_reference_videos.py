@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from backend.chloe_asset_search import search_entries
 from backend.chloe_reference_videos import router
 from backend.chloe_resource_library import visual_titles
 from chloe_documents import check_workspace
@@ -76,6 +77,8 @@ class ChloeReferenceVideoTests(unittest.TestCase):
         self.assertEqual(check_workspace(self.root, only=document)['errors'], [])
 
         card, = self.client.get(self.base_url).json()
+        search_match, = search_entries(self.root, self.space.api, 'rv001')
+        self.assertEqual(search_match['previewUrl'], card['coverUrl'])
         self.assertEqual(card['name'], '隔离测试视频')
         self.assertEqual(card['status'], '可用')
         details = self.client.get(self.base_url+'/RV001').json()

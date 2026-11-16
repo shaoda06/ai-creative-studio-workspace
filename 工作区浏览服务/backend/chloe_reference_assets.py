@@ -99,8 +99,12 @@ def asset_card(root, base, kind, path, metadata, adoption):
     return card
 
 
-def asset_rows(root, api, kind):
+def asset_adoption(doc, kind):
     purpose = '声音参考' if kind == VOICES else kind.label+'展示图'
+    return next((row for row in records(doc, '当前采用') if row['用途'] == purpose), None)
+
+
+def asset_rows(root, api, kind):
     rows = []
     for identity, name, path, doc in asset_documents(root, kind):
         status = '' if kind == VOICES else asset_status(path, doc)['status']
@@ -117,7 +121,7 @@ def asset_rows(root, api, kind):
             metadata['status'] = status
         if kind == ACCESSORIES:
             metadata['type'] = asset_type
-        adoption = next((row for row in records(doc, '当前采用') if row['用途'] == purpose), None)
+        adoption = asset_adoption(doc, kind)
         base = f'{api}/{kind.endpoint}/{quote(identity)}'
         card = partial(asset_card, root, base, kind, path, metadata, adoption)
         rows.append(AssetRow(identity, card, status, bool(adoption), classification.get('clothingForm'), asset_type, models))

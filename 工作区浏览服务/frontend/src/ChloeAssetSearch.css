@@ -5,3 +5,4 @@
 .chloe-asset-search-results a:hover,.chloe-asset-search-results a:focus-visible{background:#edf5ef}
 .chloe-asset-search-results small{white-space:nowrap}
 .chloe-asset-search-results p{margin:8px 12px}
+.chloe-asset-search-preview{position:absolute;z-index:5;display:block;width:100%;height:auto;border-radius:8px;background:white;box-shadow:0 8px 24px #10291e22;pointer-events:none}
