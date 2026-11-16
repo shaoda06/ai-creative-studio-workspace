@@ -6,7 +6,6 @@ import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
-import type { PoseCard } from './ChloePoses';
 import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds } from './ChloeReferenceAssets';
 import type { ReferenceAssetCard } from './ChloeReferenceAssets';
 import { PreviewContext, Result } from './components';
@@ -116,9 +115,8 @@ export function ChloeAssembly({ projectName, renderNavigation }: AssemblyProps) 
       <LookAssembly projectName={projectName} renderNavigation={navigation} />
     </Activity>
     <Activity mode={tab === 'poses' ? 'visible' : 'hidden'}>
-      <ListAssembly<PoseCard> kind="poses" renderNavigation={navigation}
-        buildHandoff={poses => poses.map((pose, index) =>
-          `${index + 1}. ${assetTitle(pose)}\n${pose.description}`).join('\n\n')} />
+      <ListAssembly<AssemblyAsset> kind="poses" renderNavigation={navigation}
+        buildHandoff={poses => poses.map(assetTitle).join('\n')} />
     </Activity>
     <Activity mode={tab === 'video' ? 'visible' : 'hidden'}>
       <ChloeVideoAssembly projectName={projectName} renderNavigation={navigation} active={tab === 'video'} />
@@ -149,8 +147,8 @@ function ListAssembly<T extends AssemblyAsset>({ kind, renderNavigation, buildHa
   const title = isPose ? assetTitle : garmentTitle;
   const count = isPose ? `${selected.length} 项` : `${selected.length}/${garmentLimit}`;
   const editing = isPose ? selected.length > 0 : selected.length === garmentLimit;
-  const readyHint = isPose ? '点击「生成」，整理所选姿态的定姿文字。' : '点击「生成」，整理套装制作交接词。';
-  const emptyHint = isPose ? '选定姿态后可生成定姿文字。' : '选定 1–5 项单件后可生成交接词。';
+  const readyHint = isPose ? '点击「生成」，列出所选姿态的编号和标题。' : '点击「生成」，整理套装制作交接词。';
+  const emptyHint = isPose ? '选定姿态后可导出编号和标题。' : '选定 1–5 项单件后可生成交接词。';
 
   const changeSelection = (assets: T[]) => {
     setSelected(assets);

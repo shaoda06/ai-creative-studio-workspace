@@ -20,7 +20,7 @@
 .chloe-assembly-selected-card{display:grid;grid-row:span 2;grid-template-rows:subgrid;min-width:0}
 .chloe-assembly-selected-card>button{justify-self:center}
 .chloe-assembly-garments{--garment-gap:12px;container-type:inline-size;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--garment-gap)}
-.chloe-assembly-accessories.chloe-assembly-poses,.asset-media-grid.chloe-assembly-poses{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.chloe-assembly-accessories.chloe-assembly-poses,.asset-media-grid.chloe-assembly-poses{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 .chloe-assembly-add{display:grid;justify-items:center;align-content:center;gap:4px;min-height:140px;border-style:dashed}
 .chloe-assembly-poses>.chloe-assembly-add{aspect-ratio:3/4}
 /* Match the expected height of a 4:3 image card, including its title and padding. */

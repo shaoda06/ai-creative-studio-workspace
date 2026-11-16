@@ -12,7 +12,7 @@ import { PageCheckStatus } from './components/PageCheckStatus';
 import { Pagination } from './components/Pagination';
 import './ChloePoses.css';
 
-export interface PoseCard {
+interface PoseCard {
   id: string;
   name: string;
   category: string;
