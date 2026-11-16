@@ -109,6 +109,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p>当前选项 {styleChoice.join('、')}</p>
         <SearchCreateSelect items={styleOptions} selected={styleChoice} label="搜索或新建示例选项"
           prompt="搜索或新建" searchLabel="输入示例名称" exclusive="未分类" onChange={setStyleChoice}
+          renderOption={name => <span className={`status-badge status-${['gray', 'blue', 'green', 'purple'][styleOptions.indexOf(name) % 4]}`}>{name}</span>}
           onCreate={(name, values) => { setStyleOptions(current => [...current, name]); setStyleChoice(values); }} />
       </Example>}
       {category === 'messages' && <>

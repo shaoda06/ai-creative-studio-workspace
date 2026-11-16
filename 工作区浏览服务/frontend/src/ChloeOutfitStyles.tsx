@@ -92,17 +92,16 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
   });
   const items = [...new Set([...styles, ...current])];
   const catalog = styles.filter(style => style !== unclassified);
+  const styleBadge = (style: string) => {
+    const index = catalog.indexOf(style);
+    const tone = index < 0 ? 'gray' : styleTones[index % styleTones.length];
+    return <span className={`status-badge status-${tone}`} key={style}>{style}</span>;
+  };
   return <div className="chloe-outfit-style-select">
-    <div className="chloe-outfit-style-current">
-      {current.map(style => {
-        const index = catalog.indexOf(style);
-        const tone = index < 0 ? 'gray' : styleTones[index % styleTones.length];
-        return <span className={`status-badge status-${tone}`} key={style}>{style}</span>;
-      })}
-    </div>
+    <div className="chloe-outfit-style-current">{current.map(styleBadge)}</div>
     <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"
       searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
-      exclusive={unclassified} onChange={selected => mutation.mutate({ selected })}
+      exclusive={unclassified} renderOption={styleBadge} onChange={selected => mutation.mutate({ selected })}
       onCreate={(create, selected) => mutation.mutate({ selected, create })} />
   </div>;
 }

@@ -212,8 +212,14 @@ export async function checkSharedNavigation(page, width, selfTest) {
   const searchCreateMenu = page.getByRole('group',{name:'搜索或新建示例选项',exact:true});
   const searchCreateInput = searchCreateMenu.getByRole('searchbox',{name:'输入示例名称',exact:true});
   await openSearchCreate.click();
+  assert.equal(await searchCreateInput.evaluate(el => {
+    const style = getComputedStyle(el);
+    return document.activeElement === el && style.outlineWidth !== '0px' &&
+      parseFloat(style.outlineOffset) < 0 && style.outlineColor === style.borderTopColor;
+  }),true);
   await searchCreateInput.fill('通勤');
   assert.equal(await searchCreateMenu.getByRole('checkbox').count(),1);
+  assert.equal(await searchCreateMenu.locator('.status-badge.status-blue').textContent(),'通勤');
   assert.equal(await searchCreateMenu.getByRole('button',{name:/^新建/}).count(),0);
   await searchCreateInput.press('ArrowDown');
   await page.keyboard.press('Space');

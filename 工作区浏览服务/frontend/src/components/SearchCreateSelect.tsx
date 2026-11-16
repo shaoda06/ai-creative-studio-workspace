@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { SearchField } from './SearchField';
 import { menuPosition } from './selectMenuPosition';
 import './SearchCreateSelect.css';
 
-export function SearchCreateSelect({ items, selected, exclusive, label, prompt, searchLabel, disabled, onChange, onCreate }: {
+export function SearchCreateSelect({ items, selected, exclusive, label, prompt, searchLabel, disabled, renderOption, onChange, onCreate }: {
   items: string[]; selected: string[]; exclusive?: string; label: string; prompt: string; searchLabel: string; disabled?: boolean;
-  onChange: (values: string[]) => void; onCreate: (name: string, values: string[]) => void;
+  renderOption?: (name: string) => ReactNode; onChange: (values: string[]) => void; onCreate: (name: string, values: string[]) => void;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -71,10 +71,10 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
           event.preventDefault();
         }
       }}>
-      <SearchField label={searchLabel} placeholder={searchLabel} size="compact" value={input} onChange={setInput} />
+      <SearchField label={searchLabel} placeholder={searchLabel} size="compact" focusStyle="inset" value={input} onChange={setInput} />
       <div className="search-create-options">
         {matches.map(item => <label key={item}><input type="checkbox" checked={draft.includes(item)}
-          onChange={event => toggle(item, event.target.checked)} /><span>{item}</span></label>)}
+          onChange={event => toggle(item, event.target.checked)} />{renderOption ? renderOption(item) : <span>{item}</span>}</label>)}
       </div>
       <div className="search-create-actions">
         {canCreate && <button type="button" onClick={() => {

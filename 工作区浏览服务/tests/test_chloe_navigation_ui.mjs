@@ -404,6 +404,12 @@ try {
     assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
     await simple.uncheck();
     await selectStyle.click();
+    assert.equal(await findStyle.evaluate(el => document.activeElement === el &&
+      parseFloat(getComputedStyle(el).outlineOffset) < 0),true);
+    for (const name of ['通勤','备选1','简约']) {
+      assert.equal(await styleMenu.locator('.status-badge').filter({hasText:name}).getAttribute('class'),
+        await currentStyle.filter({hasText:name}).getAttribute('class'));
+    }
     await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).uncheck();
     await styleMenu.getByRole('checkbox',{name:'简约',exact:true}).uncheck();
     await styleMenu.getByRole('button',{name:'应用',exact:true}).click();

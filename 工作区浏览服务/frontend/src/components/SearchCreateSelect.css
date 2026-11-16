@@ -5,5 +5,6 @@
 .search-create-options label{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;overflow-wrap:anywhere}
 .search-create-options label:hover,.search-create-options label:focus-within{background:#edf3ee}
 .search-create-options input{min-width:0;margin:0;accent-color:var(--green)}
+.search-create-options .status-badge{white-space:normal;overflow-wrap:anywhere}
 .search-create-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px}
 .search-create-actions button{overflow-wrap:anywhere;max-width:100%}

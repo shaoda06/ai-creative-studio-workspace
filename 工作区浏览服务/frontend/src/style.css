@@ -168,6 +168,7 @@ dialog header:has(.revision-export-close-actions){flex-wrap:wrap}.revision-expor
 /* Shared component variants. */
 dialog.dialog-compact{width:440px}
 .search-field.search-field-compact{padding:7px 10px;font-size:12px}
+.search-field[data-focus-style=inset]:focus{border-color:var(--green);outline:2px solid var(--green);outline-offset:-2px}
 
 
 .segment-selectors>.tab-select[aria-label="版本切换"]{min-width:152px}
