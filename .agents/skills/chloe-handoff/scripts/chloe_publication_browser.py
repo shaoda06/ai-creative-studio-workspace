@@ -1,12 +1,17 @@
 """Read Chloe publication preparations and manage unreferenced final files."""
+from datetime import datetime, timezone
+from functools import lru_cache
 import html
 from pathlib import Path
 import re
+import sys
 from urllib.parse import quote, unquote, urlsplit
 from markdown_it import MarkdownIt
 
 from chloe_documents import LINK, MISSING, media_reference, read_document, records, template
 import project_resources as resources
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'studio-video-processing/scripts'))
+from video_metadata import probe
 
 
 def project_context(root, name):
@@ -36,6 +41,27 @@ def final_files(project):
                 raise ValueError('成片文件越出成片目录')
             files.append(path.resolve())
     return files
+
+
+@lru_cache(maxsize=256)
+def final_video_metadata(path, _revision):
+    try:
+        info = probe(path)
+    except (OSError, ValueError):
+        return None
+    return {field: info[field] for field in ('width', 'height', 'duration')}
+
+
+def final_file_info(path):
+    info = path.stat()
+    created = getattr(info, 'st_birthtime', None)
+    file_time = created if created is not None else info.st_mtime
+    revision = (info.st_ino, info.st_mtime_ns, info.st_size)
+    return {
+        'fileTime': datetime.fromtimestamp(file_time, timezone.utc).isoformat(timespec='seconds'),
+        'fileTimeSource': 'created' if created is not None else 'modified',
+        'videoMetadata': final_video_metadata(path, revision),
+    }
 
 
 def preparations(root, project, identity, title):
@@ -88,8 +114,14 @@ def detail(root, name, api):
         public_url = public_url if urlsplit(public_url).scheme in {'http', 'https'} else None
         history.append({'url': public_url, 'fields': {k:plain(v) for k,v in row.items()},
                         'materialId': link[1] if link and link[2] == '发布资料.md' else None})
-    return {'project': name, 'id': identity, 'title': title,
-            'finals': [media(path, 'video') for path in final_files(project)],
+    finals = []
+    for path in final_files(project):
+        try:
+            info = final_file_info(path)
+        except FileNotFoundError:
+            continue
+        finals.append({**media(path, 'video'), **info})
+    return {'project': name, 'id': identity, 'title': title, 'finals': finals,
             'materials': materials, 'history': history}
 
 

@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 import sys
 import tempfile
@@ -127,6 +128,26 @@ class ChloePublicationTests(HttpTestCase):
         self.assertEqual(before,{p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
         self.assertEqual(check_workspace(self.root, path)['errors'],[])
         self.assertEqual(self.client.post(self.url).status_code,405)
+
+    def test_final_file_metadata_is_independent_and_follows_replacement(self):
+        film, _, _ = self.prepare()
+        incomplete = film.with_name('正在复制.mp4')
+        incomplete.write_bytes(b'incomplete')
+        def finals():
+            response = self.client.get(self.url)
+            self.assertEqual(response.status_code, 200, response.text)
+            return {item['name']: item for item in response.json()['finals']}
+        items = finals()
+        actual = items[film.name]
+        stamp = film.stat()
+        created = getattr(stamp, 'st_birthtime', None)
+        self.assertEqual(datetime.fromisoformat(actual['fileTime']).timestamp(),
+                         int(created if created is not None else stamp.st_mtime))
+        self.assertEqual(actual['fileTimeSource'], 'created' if created is not None else 'modified')
+        self.assertEqual(actual['videoMetadata'], {'width': 320, 'height': 180, 'duration': 2.0})
+        self.assertIsNone(items[incomplete.name]['videoMetadata'])
+        incomplete.write_bytes(film.read_bytes())
+        self.assertEqual(finals()[incomplete.name]['videoMetadata'], actual['videoMetadata'])
 
     def test_scoped_files_and_symlink_rejection(self):
         film, cover, path = self.prepare()

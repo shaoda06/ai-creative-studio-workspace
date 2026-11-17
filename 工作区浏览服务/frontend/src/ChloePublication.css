@@ -9,4 +9,7 @@
 
 .chloe-publication-covers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;min-width:0;align-items:start}
 
+.chloe-publication-detail .prose .table-scroll .chloe-publication-files{table-layout:fixed;min-width:790px}
+.prose .chloe-publication-files td{vertical-align:middle}
+.chloe-publication-files td.chloe-publication-file-name{text-align:left}
 .chloe-publication-file-actions{justify-content:center}

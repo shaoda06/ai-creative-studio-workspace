@@ -23,9 +23,26 @@ import './components/EpisodeProduction.css';
 
 type Video = { project: string; id: string; title: string; status: string; finalCount: number };
 type Material = { id: string; fields: Record<string, string>; film: FileItem | null; covers: { label: string; media: FileItem | null }[] };
-type Publication = { project: string; id: string; title: string; finals: FileItem[]; materials: Material[];
+type FinalFile = FileItem & {
+  fileTime: string;
+  fileTimeSource: 'created' | 'modified';
+  videoMetadata: { width: number; height: number; duration: number | null } | null;
+};
+type Publication = { project: string; id: string; title: string; finals: FinalFile[]; materials: Material[];
   history: { fields: Record<string, string>; materialId: string | null; url: string | null }[] };
 const missing = new Set(['待确定', '待核实', '未取得', '不适用', '无']);
+const fileTimeFormat = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+const durationFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+const commonAspects = [[1, 1], [5, 4], [4, 3], [3, 2], [16, 10], [16, 9], [2, 1], [21, 9]];
+
+function commonAspect(width: number, height: number) {
+  const ratio = Math.max(width, height) / Math.min(width, height);
+  const distance = ([w, h]: number[]) => Math.abs(Math.log(ratio / (w / h)));
+  const [w, h] = commonAspects.reduce((closest, aspect) => distance(aspect) < distance(closest) ? aspect : closest);
+  return width >= height ? `${w}:${h}` : `${h}:${w}`;
+}
 
 export function ChloePublication({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
@@ -126,17 +143,28 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
         </>}
         <section aria-label="成片目录">
           <h2>成片目录</h2>
-          <div className="prose"><div className="table-scroll"><table aria-label="成片文件">
-            <colgroup><col style={{ width: '60%' }} /><col style={{ width: '40%' }} /></colgroup>
-            <thead><tr><th scope="col">文件名</th><th scope="col">操作</th></tr></thead>
-            <tbody>{data.finals.length ? data.finals.map(file => <tr key={file.key}>
-              <td style={{ verticalAlign: 'middle', textAlign: 'left' }}><span className="chloe-publication-text">{file.name}</span></td>
-              <td><div className="chloe-publication-toolbar chloe-publication-file-actions">
-                <button onClick={() => setPreview(file)}>预览成片</button>
-                <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
-                <button className="danger-button" onClick={() => setRemove(file)}>删除</button>
-              </div></td>
-            </tr>) : <tr><td colSpan={2}>暂无成片</td></tr>}</tbody>
+          <div className="prose"><div className="table-scroll"><table className="chloe-publication-files" aria-label="成片文件">
+            <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 278 }} /></colgroup>
+            <thead><tr><th scope="col" title="优先显示文件创建时间，无法取得时显示修改时间">文件时间</th><th scope="col">文件名</th>
+              <th scope="col">分辨率与比例</th><th scope="col">时长</th><th scope="col">操作</th></tr></thead>
+            <tbody>{data.finals.length ? data.finals.map(file => {
+              const metadata = file.videoMetadata;
+              return <tr key={file.key}>
+                <td><time dateTime={file.fileTime} title={file.fileTimeSource === 'created' ? '文件创建时间' : '文件修改时间'}>
+                  {fileTimeFormat.format(new Date(file.fileTime))}
+                </time></td>
+                <td className="chloe-publication-file-name"><span className="chloe-publication-text">{file.name}</span></td>
+                <td>{metadata && metadata.width > 0 && metadata.height > 0
+                  ? <>{metadata.width} × {metadata.height} <span className="muted">· {commonAspect(metadata.width, metadata.height)}</span></>
+                  : <span title="无法读取视频分辨率">—</span>}</td>
+                <td>{metadata?.duration != null ? `${durationFormat.format(metadata.duration)} 秒` : <span title="无法读取视频时长">—</span>}</td>
+                <td><div className="chloe-publication-toolbar chloe-publication-file-actions">
+                  <button onClick={() => setPreview(file)}>预览成片</button>
+                  <DownloadButton url={file.url!} filename={file.name} label="下载" title={file.name} />
+                  <button className="danger-button" onClick={() => setRemove(file)}>删除</button>
+                </div></td>
+              </tr>;
+            }) : <tr><td colSpan={5}>暂无成片</td></tr>}</tbody>
           </table></div></div>
         </section>
         <section aria-label="发布记录"><h2>发布记录</h2>

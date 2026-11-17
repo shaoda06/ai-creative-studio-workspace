@@ -1,19 +1,20 @@
 // Actual document adapter output, isolated responses, no real project writes.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
+const {createServer}=await import(pathToFileURL(require.resolve('vite')));
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')))).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const tool=fileURLToPath(new URL('../',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
-const fixture=JSON.parse(execFileSync(tool+'.venv/bin/python',['-c',`
+const python=join(tool,'.venv',...(process.platform==='win32'?['Scripts','python.exe']:['bin','python']));
+const fixture=JSON.parse(execFileSync(python,['-X','utf8','-c',`
 import base64,json
 from tests.test_chloe_publication import ChloePublicationTests, publication
 x=ChloePublicationTests();x.setUp()
@@ -36,7 +37,9 @@ try:
 finally:x.doCleanups()
 `],{cwd:tool,encoding:'utf8'}));
 const listItems=[{...fixture.list[0],id:'V002',project:'V002-测试',status:'待发布'}, {...fixture.list[0],id:'V1000',project:'V1000-测试',status:'已发布'}, ...fixture.list, {...fixture.list[0],id:'V010',project:'V010-测试'}];
-const removable={...fixture.detail.finals[0],name:'未引用成片.webm',key:fixture.detail.finals[0].key.replace(/[^/]+$/, '未引用成片.webm'),url:fixture.detail.finals[0].url.replace(/[^/]+$/,encodeURIComponent('未引用成片.webm'))};
+const removable={...fixture.detail.finals[0],name:'未引用成片.webm',key:fixture.detail.finals[0].key.replace(/[^/]+$/, '未引用成片.webm'),url:fixture.detail.finals[0].url.replace(/[^/]+$/,encodeURIComponent('未引用成片.webm')),videoMetadata:null};
+fixture.detail.finals[0].videoMetadata={width:1920,height:1088,duration:8};
+fixture.detail.finals[1].videoMetadata={width:1088,height:1920,duration:12.345};
 fixture.detail.finals.push(removable);
 const video=await readFile(frontend+'public/component-samples/video.webm');
 const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeURIComponent(url),Buffer.from(bytes,'base64')]));
@@ -89,10 +92,10 @@ try {
   await page.getByRole('region',{name:'视频发布资料'}).waitFor();
   for(const field of ['正文','话题','挂品链接']){
    await page.getByRole('button',{name:'复制'+field,exact:true}).click();
-   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[1].fields[field]);
+   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields[field]);
   }
   await page.getByRole('button',{name:'复制挂品信息',exact:true}).click();
-  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
+  assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
   for(const [label,bytes,filename] of [['下载成片',video,'第二版成片.webm'],...fixture.detail.materials[1].covers.map(c=>['下载'+c.label,images.get(decodeURIComponent(c.media.url)),c.media.name])]){
    const event=page.waitForEvent('download');await page.getByRole('button',{name:label,exact:true}).click();
    const download=await event;if(filename)assert.equal(download.suggestedFilename(),filename);
@@ -104,15 +107,27 @@ try {
   assert.equal(await files.locator('details').count(),0);
   assert.equal(await files.getByText('这里可查看目录文件',{exact:false}).count(),0);
   assert.equal(await table.locator('tbody tr').count(),fixture.detail.finals.length);
+  assert.deepEqual(await table.getByRole('columnheader').allTextContents(),['文件时间','文件名','分辨率与比例','时长','操作']);
+  const fileRows=table.locator('tbody tr');
+  assert.equal(await fileRows.first().locator('time').getAttribute('datetime'),fixture.detail.finals[0].fileTime);
+  assert.match(await fileRows.first().locator('time').innerText(),/\d{4}.*\d{2}:\d{2}:\d{2}/);
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(2).innerText(),'1920 × 1088 · 16:9');
+  assert.equal(await fileRows.nth(1).getByRole('cell').nth(2).innerText(),'1088 × 1920 · 9:16');
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(3).innerText(),'8 秒');
+  assert.equal(await fileRows.nth(1).getByRole('cell').nth(3).innerText(),'12.35 秒');
+  assert.equal(await fileRows.nth(2).getByRole('cell',{name:'—',exact:true}).count(),2);
   assert.ok(await table.evaluate(el=>{
-   const cells=el.querySelectorAll('thead th'),box=el.getBoundingClientRect();
-   return Math.abs(cells[0].getBoundingClientRect().width/box.width-.6)<.01 && Math.abs(box.width-el.closest('section').getBoundingClientRect().width)<2;
+   const box=el.getBoundingClientRect();
+   return Math.abs(box.width-el.closest('section').getBoundingClientRect().width)<2;
   }));
-  assert.ok(await table.evaluate(el=>{
-   const row=el.querySelector('tbody tr'),cell=row.cells[0],actions=row.cells[1].querySelector('.chloe-publication-file-actions');
+  const alignment=await table.evaluate(el=>{
+   const row=el.querySelector('tbody tr'),cell=row.cells[1],actions=row.cells[4].querySelector('.chloe-publication-file-actions');
    const buttons=actions.querySelectorAll('button'),left=buttons[0].getBoundingClientRect(),right=buttons[buttons.length-1].getBoundingClientRect(),box=actions.getBoundingClientRect();
-   return getComputedStyle(cell).verticalAlign==='middle' && getComputedStyle(cell).textAlign==='left' && Math.abs((left.left+right.right)/2-(box.left+box.right)/2)<2;
-  }));
+   return {vertical:getComputedStyle(cell).verticalAlign,align:getComputedStyle(cell).textAlign,
+    centered:Math.abs((left.left+right.right)/2-(box.left+box.right)/2)<2,oneLine:left.top===right.top,
+    containerWidth:box.width,buttonWidths:[...buttons].map(button=>button.getBoundingClientRect().width)};
+  });
+  assert.ok(alignment.vertical==='middle' && alignment.align==='left' && alignment.centered && alignment.oneLine,JSON.stringify(alignment));
   const removeRow=table.getByRole('row').filter({hasText:'未引用成片.webm'});
   const buttonStyles=await removeRow.locator('button').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button);return {font:s.fontSize,height:button.getBoundingClientRect().height};}));
   assert(buttonStyles.every(style=>style.font==='14px' && style.height===buttonStyles[0].height));
@@ -161,7 +176,8 @@ try {
   await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
   assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
-  missingPortrait=false;noMaterial=true;await page.reload();await page.getByRole('cell',{name:'暂无成片',exact:true}).waitFor();
+  missingPortrait=false;noMaterial=true;await page.reload();
+  assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'5');
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
