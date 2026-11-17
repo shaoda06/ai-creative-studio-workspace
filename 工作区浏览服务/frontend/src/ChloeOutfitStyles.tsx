@@ -1,8 +1,6 @@
-import { useId, useState } from 'react';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
-import { Dialog } from './components';
 import { useNotify } from './components/Notifications';
 import { SearchCreateSelect } from './components/SearchCreateSelect';
 
@@ -32,45 +30,17 @@ async function writeStyle<T>(url: string, method: 'POST' | 'PUT', payload: { sty
   return response.json();
 }
 
-async function addStyle(api: string, client: QueryClient, style: string) {
-  const styles = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style });
-  await client.cancelQueries({ queryKey: stylesKey(api) });
-  client.setQueryData(stylesKey(api), styles);
-}
-
-export function AddOutfitStyleDialog({ close }: { close: () => void }) {
-  const { api } = useChloeScope();
-  const client = useQueryClient();
-  const notify = useNotify();
-  const nameId = useId();
-  const [name, setName] = useState('');
-  const mutation = useMutation({
-    mutationFn: (style: string) => addStyle(api, client, style),
-    onSuccess: () => {
-      close();
-      notify('已新增风格');
-    },
-    onError: error => notify(error.message, 'error'),
-  });
-  return <Dialog title="新增风格" close={close} closeDisabled={mutation.isPending}>
-    <form className="chloe-outfit-style-form" onSubmit={event => {
-      event.preventDefault();
-      if (name.trim() && !mutation.isPending) mutation.mutate(name.trim());
-    }}>
-      <label htmlFor={nameId}>风格名称</label>
-      <input id={nameId} value={name} required disabled={mutation.isPending} onChange={event => setName(event.target.value)} />
-      <button type="submit" disabled={!name.trim() || mutation.isPending}>{mutation.isPending ? '正在新增…' : '新增'}</button>
-    </form>
-  </Dialog>;
-}
-
 export function OutfitStyleSelect({ id, current, styles }: { id: string; current: string[]; styles: string[] }) {
   const { api } = useChloeScope();
   const client = useQueryClient();
   const notify = useNotify();
   const mutation = useMutation({
     mutationFn: async ({ selected, create }: { selected: string[]; create?: string }) => {
-      if (create) await addStyle(api, client, create);
+      if (create) {
+        const catalog = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style: create });
+        await client.cancelQueries({ queryKey: stylesKey(api) });
+        client.setQueryData(stylesKey(api), catalog);
+      }
       try {
         await writeStyle<{ outfitStyles: string[] }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', { styles: selected });
       } catch (error) {

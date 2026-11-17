@@ -364,8 +364,8 @@ try {
     const currentStyle = styleCard.locator('.chloe-outfit-style-current .status-badge');
     const styleMenu = page.getByRole('group',{name:'修改 O001 的风格',exact:true});
     const findStyle = styleMenu.getByRole('searchbox',{name:'输入风格名称',exact:true});
-    const styleForm = page.getByRole('dialog',{name:'新增风格',exact:true});
     await currentStyle.filter({hasText:/^未分类$/}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'新增风格',exact:true}).count(),0);
     assert.equal(await clothingLinks.count(),2);
     assert.equal(await selectStyle.evaluate(control=>{
       const card = control.closest('article.asset-media-card');
@@ -373,15 +373,17 @@ try {
       return Boolean(card.querySelector('h3 a')) && current.top >= card.querySelector('.cover').getBoundingClientRect().bottom &&
         control.getBoundingClientRect().top > current.bottom;
     }),true);
-    await page.getByRole('button',{name:'新增风格',exact:true}).click();
-    await styleForm.getByLabel('风格名称').fill('通勤');
-    await styleForm.getByRole('button',{name:'新增',exact:true}).click();
-    await styleForm.waitFor({state:'hidden'});
+    const unused = styleFilter.getByRole('checkbox',{name:'备选2',exact:true});
+    await unused.check();
+    await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
+    await unused.uncheck();
+    await selectStyle.click();
+    await findStyle.fill('通勤');
+    await styleMenu.getByRole('button',{name:'新建并应用「通勤」',exact:true}).click();
+    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
     const commute = styleFilter.getByRole('checkbox',{name:'通勤',exact:true});
     const unclassified = styleFilter.getByRole('checkbox',{name:'未分类',exact:true});
-    await commute.check();
-    await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
-    await commute.uncheck();
+    await commute.waitFor();
     await selectStyle.click();
     await findStyle.fill('通勤');
     assert.equal(await styleMenu.getByRole('checkbox').count(),1);

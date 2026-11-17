@@ -14,7 +14,7 @@ import type { ChloeAssetStatus } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
-import { AddOutfitStyleDialog, OutfitStyleSelect, useOutfitStyles } from './ChloeOutfitStyles';
+import { OutfitStyleSelect, useOutfitStyles } from './ChloeOutfitStyles';
 
 interface ClothingClassification {
   clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
@@ -61,7 +61,6 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const {label, parameter, endpoint} = referenceAssetKinds[kind];
   const { page } = useChloeScope();
   const [params, setParams] = useSearchParams();
-  const [addingStyle, setAddingStyle] = useState(false);
   const isClothing = kind === 'clothing';
   const isOutfit = isClothing && params.get('clothingTab') !== 'garments';
   const clothingTab = isOutfit ? 'outfits' : 'garments';
@@ -86,14 +85,9 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
       }} />
     </div>}
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {isOutfit ? <>
-      <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />
-      <div className="chloe-outfit-style-toolbar">
-        {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label="按风格筛选" />}
-        <button type="button" disabled={!styles.data} onClick={() => setAddingStyle(true)}>新增风格</button>
-      </div>
-      {addingStyle && <AddOutfitStyleDialog close={() => setAddingStyle(false)} />}
-    </> : types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label={isClothing ? '按部位筛选' : undefined} />}
+    {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
+    {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked}
+      label={isOutfit ? '按风格筛选' : isClothing ? '按部位筛选' : undefined} />}
     {data && (data.items.length ? isAccessory
       ? <ChloeAccessoryColumns cards={data.items.map(renderCard)} />
       : <div className="asset-media-grid">{data.items.map(renderCard)}</div>
