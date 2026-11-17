@@ -19,7 +19,7 @@ description: Chloe 剪辑方案、已采用素材的剪映交接，以及用户�
 
 穿搭动作要卡点、重排或修顺跳接时，先按[在动作中切镜的剪辑与返修方法](../studio-creative-techniques/references/在动作中切镜指南.md#剪辑与返修怎么用)核对实际素材和接点，将选段及复看结果写进已有剪辑资料。
 
-已有视频需要选择或调整影调时，查[视频调色指南](../studio-creative-techniques/references/视频调色指南.md)。剪辑、调色或整片补帧结果送审时，按[整片后期轮次](../chloe-production/references/视频制作流程与记录.md#整片后期轮次)登记主播放、来源和对照。
+已有视频需要选择或调整影调时，查[视频调色指南](../studio-creative-techniques/references/视频调色指南.md)。剪辑、调色、整片补帧或音频修改结果送审，或按用户要求直接替换成片时，按[整片后期轮次](../chloe-production/references/视频制作流程与记录.md#整片后期轮次)登记主播放、来源和对照。
 
 ## 正式剪映交接
 

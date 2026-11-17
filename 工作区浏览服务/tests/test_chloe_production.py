@@ -132,13 +132,15 @@ class ChloeProductionTests(unittest.TestCase):
         add_row(self.record, '输出记录', ['E005','补帧整片',interpolated_ref])
         interpolated = {'number':4, 'created_at':source['created_at'], 'note':'分段补到60fps后合片',
                         'base_round':3, 'postproduction':{'kind':'补帧','execution':'E005','slot':'补帧整片'}}
-        self.rounds([source, edit, grade, interpolated])
-        result = browser.detail(self.projects,self.project.name,self.api,'V001')['sceneRounds']['whole'][-1]
-        self.assertIn('补帧 · 来源第3轮',result['note'])
-        self.assertEqual(result['songssx']['video']['key'],interpolated_path.relative_to(self.project).as_posix())
-        self.assertEqual(result['segments'][0]['duration'],5)
-        self.assertEqual(result['songssx']['segments'],[])
-        self.assertEqual(browser.round_videos(state(self.project),4)[0][0],interpolated_path)
+        for kind in ('补帧', '音频'):
+            interpolated['postproduction']['kind'] = kind
+            self.rounds([source, edit, grade, interpolated])
+            result = browser.detail(self.projects,self.project.name,self.api,'V001')['sceneRounds']['whole'][-1]
+            self.assertIn(f'{kind} · 来源第3轮',result['note'])
+            self.assertEqual(result['songssx']['video']['key'],interpolated_path.relative_to(self.project).as_posix())
+            self.assertEqual(result['segments'][0]['duration'],5)
+            self.assertEqual(result['songssx']['segments'],[])
+            self.assertEqual(browser.round_videos(state(self.project),4)[0][0],interpolated_path)
         for change, message in [({'base_round':3},'来源轮次'),
                                 ({'postproduction':edit['postproduction']},'已登记轮次')]:
             self.rounds([source, edit, {**grade, **change}])
