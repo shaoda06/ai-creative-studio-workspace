@@ -122,6 +122,23 @@ class ChloeProductionTests(unittest.TestCase):
         self.assertIn('来源第2轮', graded['note'])
         self.assertEqual([v['name'] for v in graded['reviewOutputs']],['调色前后对照'])
         self.assertEqual(edited['reviewOutputs'],[])
+        interpolated_path, interpolated_ref, _ = self.resource(key='E005')
+        metadata = interpolated_path.parent/'版本信息.json'
+        version = json.loads(metadata.read_text('utf-8'))
+        version['facts'].update(duration_seconds=5, fps=60)
+        metadata.write_text(json.dumps(version, ensure_ascii=False), encoding='utf-8')
+        add_row(self.record, '执行记录', ['E005','视频处理','E004','RIFE',
+            '不适用','不适用','隔离授权','未取得','未取得','2026-11-07T12:00:00+08:00','已完成','60fps送审'])
+        add_row(self.record, '输出记录', ['E005','补帧整片',interpolated_ref])
+        interpolated = {'number':4, 'created_at':source['created_at'], 'note':'分段补到60fps后合片',
+                        'base_round':3, 'postproduction':{'kind':'补帧','execution':'E005','slot':'补帧整片'}}
+        self.rounds([source, edit, grade, interpolated])
+        result = browser.detail(self.projects,self.project.name,self.api,'V001')['sceneRounds']['whole'][-1]
+        self.assertIn('补帧 · 来源第3轮',result['note'])
+        self.assertEqual(result['songssx']['video']['key'],interpolated_path.relative_to(self.project).as_posix())
+        self.assertEqual(result['segments'][0]['duration'],5)
+        self.assertEqual(result['songssx']['segments'],[])
+        self.assertEqual(browser.round_videos(state(self.project),4)[0][0],interpolated_path)
         for change, message in [({'base_round':3},'来源轮次'),
                                 ({'postproduction':edit['postproduction']},'已登记轮次')]:
             self.rounds([source, edit, {**grade, **change}])

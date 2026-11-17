@@ -16,7 +16,7 @@ from songssx_browser import scene_playbacks
 SCENE_STAGE = '场次生成'
 SCENE_SLOT = '整场视频'
 STAGES = ('一采', '二采', SCENE_STAGE, '后处理')
-POSTPRODUCTION_KINDS = ('剪辑', '调色')
+POSTPRODUCTION_KINDS = ('剪辑', '调色', '补帧')
 WHOLE_REVIEW_SEGMENT = 'P000'
 VIDEO_PURPOSE = re.compile(r'(P\d{3,})/(' + '|'.join(STAGES) + ')')
 
@@ -122,10 +122,10 @@ def review_outputs(project, root, item):
 def postproduction_round(project, root, item, rounds, executions, outputs):
     field = item['postproduction']
     if set(item)-{'review_outputs'} != {'number', 'created_at', 'note', 'base_round', 'postproduction'}:
-        raise ValueError('剪辑或调色轮次须登记来源轮次及整片输出')
+        raise ValueError('整片后期轮次须登记来源轮次及整片输出')
     if (not isinstance(field, dict) or set(field) != {'kind', 'execution', 'slot'}
             or field['kind'] not in POSTPRODUCTION_KINDS):
-        raise ValueError('整片后期须填写剪辑或调色、执行编号及输出槽位')
+        raise ValueError('整片后期须填写剪辑、调色或补帧、执行编号及输出槽位')
     base = item['base_round']
     if type(base) is not int or base not in rounds:
         raise ValueError('整片后期须引用既有来源轮次')
