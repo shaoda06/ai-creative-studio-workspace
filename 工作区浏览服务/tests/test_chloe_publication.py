@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -141,13 +142,47 @@ class ChloePublicationTests(HttpTestCase):
         actual = items[film.name]
         stamp = film.stat()
         created = getattr(stamp, 'st_birthtime', None)
-        self.assertEqual(datetime.fromisoformat(actual['fileTime']).timestamp(),
-                         int(created if created is not None else stamp.st_mtime))
+        self.assertAlmostEqual(datetime.fromisoformat(actual['fileTime']).timestamp(),
+                               created if created is not None else stamp.st_mtime, places=5)
         self.assertEqual(actual['fileTimeSource'], 'created' if created is not None else 'modified')
         self.assertEqual(actual['videoMetadata'], {'width': 320, 'height': 180, 'duration': 2.0})
         self.assertIsNone(items[incomplete.name]['videoMetadata'])
         incomplete.write_bytes(film.read_bytes())
         self.assertEqual(finals()[incomplete.name]['videoMetadata'], actual['videoMetadata'])
+
+    def test_upload_and_script_record_files_without_overwriting(self):
+        first, _, _ = self.prepare()
+        raw = first.read_bytes()
+        target = self.url + '/files'
+        headers = {'Origin': 'http://127.0.0.1'}
+        upload = {'file': ('网页成片.webm', raw, 'video/webm')}
+        self.assertEqual(self.client.post(target, files=upload).status_code, 403)
+        self.assertEqual(self.client.post(target, files=upload, headers={'Origin': 'https://outside.example'}).status_code, 403)
+        for name, data in [('假视频.mp4', b'bad video'), ('../越界.webm', raw), ('其他.txt', raw)]:
+            with self.subTest(name=name):
+                response = self.client.post(target, headers=headers, files={'file': (name, data, 'video/webm')})
+                self.assertEqual(response.status_code, 422, response.text)
+        response = self.client.post(target, files=upload, headers=headers)
+        self.assertEqual(response.status_code, 201, response.text)
+        added = response.json()
+        self.assertEqual((self.root / added['key']).read_bytes(), raw)
+        self.assertEqual(self.client.post(target, files=upload, headers=headers).status_code, 409)
+
+        script_file = self.base / '脚本成片.webm'
+        script_file.write_bytes(raw)
+        script = Path(publication.__file__)
+        argv = [sys.executable, '-X', 'utf8', '-B', str(script), '--project-root', str(self.root),
+                '--video', self.project.name, str(script_file)]
+        cli = subprocess.run(argv, check=True, capture_output=True, encoding='utf-8')
+        self.assertEqual((self.root / json.loads(cli.stdout)['key']).read_bytes(), raw)
+        self.assertNotEqual(subprocess.run(argv, capture_output=True).returncode, 0)
+
+        items = self.client.get(self.url).json()['finals']
+        self.assertEqual([item['name'] for item in items], [script_file.name, added['name'], first.name])
+        self.assertTrue(all(item['videoMetadata']['duration'] == 2 for item in items))
+        self.assertEqual(self.client.get(self.api+'/publication-videos').json()[0]['finalCount'], 3)
+        self.assertEqual(self.client.delete(target + '/' + added['key'], headers=headers).status_code, 200)
+        self.assertEqual(len(self.client.get(self.url).json()['finals']), 2)
 
     def test_scoped_files_and_symlink_rejection(self):
         film, cover, path = self.prepare()

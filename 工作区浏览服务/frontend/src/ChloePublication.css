@@ -13,3 +13,5 @@
 .prose .chloe-publication-files td{vertical-align:middle}
 .chloe-publication-files td.chloe-publication-file-name{text-align:left}
 .chloe-publication-file-actions{justify-content:center}
+.chloe-publication-directory-heading{justify-content:space-between}
+.chloe-publication-upload-form{display:grid;gap:16px}

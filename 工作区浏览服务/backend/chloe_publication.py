@@ -1,8 +1,9 @@
 """HTTP access to Chloe's publication adapter and its explicitly referenced media."""
 from pathlib import Path
 import sys
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from backend.chloe_production import workspace
 from backend import chloe_overview  # Load the shared Chloe document reader.
@@ -32,6 +33,21 @@ def detail(name: str, request: Request):
         raise HTTPException(404, str(error)) from error
     except (ValueError, OSError) as error:
         raise HTTPException(409, '发布资料读取失败：'+str(error)) from error
+
+
+@write_router.post('/{name}/files', status_code=201)
+def upload_final(name: str, request: Request, file: Annotated[UploadFile, File()]):
+    space = workspace(request)
+    try:
+        return publication.import_final(space.root, name, file.filename, file.file)
+    except FileExistsError as error:
+        raise HTTPException(409, str(error)) from error
+    except FileNotFoundError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, '成片录入失败：'+str(error)) from error
+    except OSError as error:
+        raise HTTPException(503, '成片录入失败：'+str(error)) from error
 
 
 @router.get('/{name}/files/{key:path}')

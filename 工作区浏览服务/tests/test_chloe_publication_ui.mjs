@@ -41,6 +41,8 @@ const removable={...fixture.detail.finals[0],name:'未引用成片.webm',key:fix
 fixture.detail.finals[0].videoMetadata={width:1920,height:1088,duration:8};
 fixture.detail.finals[1].videoMetadata={width:1088,height:1920,duration:12.345};
 fixture.detail.finals.push(removable);
+const uploaded={...fixture.detail.finals[0],name:'最新上传.webm',key:fixture.detail.finals[0].key.replace(/[^/]+$/, '最新上传.webm'),url:fixture.detail.finals[0].url.replace(/[^/]+$/,encodeURIComponent('最新上传.webm'))};
+const uploadPath=decodeURIComponent(removable.url).split('/files/')[0]+'/files';
 const video=await readFile(frontend+'public/component-samples/video.webm');
 const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeURIComponent(url),Buffer.from(bytes,'base64')]));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
@@ -51,11 +53,15 @@ try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
-  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false;
+  const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
    if(request.method()!=='GET')writes.push(path);
+   if(request.method()==='POST' && path===uploadPath){
+    assert.match(request.headers()['content-type'],/^multipart\/form-data/);
+    hasUpload=true;return route.fulfill({status:201,json:{name:uploaded.name,key:uploaded.key}});
+   }
    if(request.method()==='DELETE' && path===decodeURIComponent(removable.url)){
     if(failDelete)return route.fulfill({status:409,json:{detail:'隔离删除失败，请重试'}});
     removed=true;return route.fulfill({json:{ok:true}});
@@ -69,7 +75,7 @@ try {
     return route.fulfill({json:{kind:'group',name:item.project,statusHtml:`<span class="status-badge status-${color}">${item.status}</span>`,scenes:['whole'],segments:{whole:[{id:'P001',duration:20,videos:[]}]}}});
    }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)} });
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:[...(hasUpload?[uploaded]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
    if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
    unexpected.push(path);return route.fulfill({status:404,body:'unexpected isolated request'});
@@ -155,6 +161,20 @@ try {
   await page.waitForFunction(()=>document.querySelector('dialog video')?.currentTime>0);
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   assert.equal(await page.getByRole('dialog').count(),0);
+  const uploadButton=files.getByRole('button',{name:'上传',exact:true});
+  assert.ok(await uploadButton.evaluate(button=>{
+   const header=button.parentElement,heading=header.querySelector('h2');
+   const a=button.getBoundingClientRect(),b=header.getBoundingClientRect(),c=heading.getBoundingClientRect();
+   return Math.abs(a.right-b.right)<2 && a.top<c.bottom && a.bottom>c.top;
+  }));
+  await uploadButton.click();
+  const uploadDialog=page.getByRole('dialog',{name:'上传成片',exact:true});
+  const submit=uploadDialog.getByRole('button',{name:'上传',exact:true});
+  assert.equal(await submit.isDisabled(),true);
+  await uploadDialog.getByLabel('视频文件').setInputFiles({name:uploaded.name,mimeType:'video/webm',buffer:video});
+  await submit.click();
+  await uploadDialog.waitFor({state:'hidden'});
+  assert.equal(await table.locator('tbody tr').first().getByRole('cell').nth(1).innerText(),uploaded.name);
   for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
    await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
    await page.getByRole('dialog').waitFor();
@@ -185,7 +205,7 @@ try {
   empty=true;await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');await page.reload();
   await page.getByText('暂无视频项目。',{exact:false}).waitFor();
   assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 0 部','制作中 0 部','待发布 0 部','已发布 0 部']);
-  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url)]);
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url),uploadPath]);
   await context.close();
  }
  console.log('Chloe publication: real adapter fixtures, copy, original downloads, playback, cover preview, switching, empty/error/retry and three desktop widths passed.');

@@ -76,18 +76,20 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
   const [preview, setPreview] = useState<FileItem | null>(null);
   const [remove, setRemove] = useState<FileItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [upload, setUpload] = useState(false);
   const client = useQueryClient();
   const notify = useNotify();
+  const refreshFinals = () => Promise.all([
+    client.invalidateQueries({ queryKey: ['chloe-publication-detail', baseUrl, project] }),
+    client.invalidateQueries({ queryKey: ['chloe-publication', baseUrl] }),
+  ]);
   async function deleteFile() {
     setDeleting(true);
     try {
       const response = await fetch(remove!.url!, { method: 'DELETE' });
       if (!response.ok) throw new Error((await response.json()).detail || '删除失败');
       setRemove(null);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['chloe-publication-detail', baseUrl, project] }),
-        client.invalidateQueries({ queryKey: ['chloe-publication', baseUrl] }),
-      ]);
+      await refreshFinals();
       notify('已删除成片');
     } catch (error) {
       notify(error instanceof Error ? error.message : String(error), 'error');
@@ -142,7 +144,9 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
           <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
         </>}
         <section aria-label="成片目录">
-          <h2>成片目录</h2>
+          <div className="chloe-publication-toolbar chloe-publication-directory-heading">
+            <h2>成片目录</h2><button type="button" onClick={() => setUpload(true)}>上传</button>
+          </div>
           <div className="prose"><div className="table-scroll"><table className="chloe-publication-files" aria-label="成片文件">
             <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 278 }} /></colgroup>
             <thead><tr><th scope="col" title="优先显示文件创建时间，无法取得时显示修改时间">文件时间</th><th scope="col">文件名</th>
@@ -177,6 +181,8 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
         </section>
       </>}
     </section>
+    {upload && <FinalUpload url={`${baseUrl}/publication-videos/${encodeURIComponent(project)}/files`}
+      close={() => setUpload(false)} done={async () => { await refreshFinals(); setUpload(false); }} />}
     {remove && <Dialog title="删除成片" size="compact" closeDisabled={deleting} close={() => setRemove(null)}>
       <p>确定删除“{remove.name}”吗？文件将从磁盘删除，无法撤销。</p>
       <div className="chloe-publication-toolbar"><button disabled={deleting} onClick={() => setRemove(null)}>取消</button>
@@ -184,4 +190,36 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     </Dialog>}
     {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext>;
+}
+
+function FinalUpload({ url, close, done }: { url: string; close: () => void; done: () => Promise<void> }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const notify = useNotify();
+  return <Dialog title="上传成片" size="compact" close={close} closeDisabled={busy}>
+    <form className="chloe-publication-upload-form" onSubmit={async event => {
+      event.preventDefault();
+      if (!file || busy) return;
+      const body = new FormData();
+      body.append('file', file);
+      setBusy(true);
+      try {
+        const response = await fetch(url, { method: 'POST', body });
+        if (!response.ok) throw new Error((await response.json()).detail || '成片上传失败');
+        await done();
+        notify('成片已上传');
+      } catch (error) {
+        notify(error instanceof Error ? error.message : String(error), 'error');
+      } finally {
+        setBusy(false);
+      }
+    }}>
+      <label>视频文件 <input type="file" accept="video/*,.mkv,.avi" required disabled={busy}
+        onChange={event => setFile(event.target.files?.[0] || null)} /></label>
+      <div className="chloe-publication-toolbar">
+        <button type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传'}</button>
+        <button type="button" disabled={busy} onClick={close}>取消</button>
+      </div>
+    </form>
+  </Dialog>;
 }
