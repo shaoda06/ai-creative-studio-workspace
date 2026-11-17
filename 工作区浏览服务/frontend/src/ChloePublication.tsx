@@ -149,7 +149,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
             <h2>成片目录</h2><button type="button" onClick={() => setUpload(true)}>上传</button>
           </div>
           <div className="prose"><div className="table-scroll"><table className="chloe-publication-files" aria-label="成片文件">
-            <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 88 }} /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 278 }} /></colgroup>
+            <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 88 }} /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 324 }} /></colgroup>
             <thead><tr><th scope="col" title="优先显示文件创建时间，无法取得时显示修改时间">文件时间</th><th scope="col">文件名</th>
               <th scope="col">文件类型</th><th scope="col">分辨率与比例</th><th scope="col">时长</th><th scope="col">操作</th></tr></thead>
             <tbody>{data.finals.length ? data.finals.map(file => {

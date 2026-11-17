@@ -54,7 +54,7 @@ try {
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
-  let uploadedFile=uploaded;
+  let uploadedFile=uploaded, pendingDownload;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',async route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
@@ -85,7 +85,10 @@ try {
    }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
    if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
-   if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
+   if(path.endsWith('.webm')){
+    if(path===decodeURIComponent(fixture.detail.finals[0].url))await pendingDownload?.promise;
+    return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
+   }
    if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
    unexpected.push(path);return route.fulfill({status:404,body:'unexpected isolated request'});
   });
@@ -162,9 +165,29 @@ try {
   await page.getByRole('dialog',{name:'删除成片',exact:true}).getByRole('button',{name:'确认删除',exact:true}).click();
   await removeRow.waitFor({state:'hidden'});
   assert.equal(await page.getByRole('dialog').count(),0);
-  const fileDownload=page.waitForEvent('download');await table.getByRole('button',{name:'下载',exact:true}).first().click();
+  const actionsCell=fileRows.first().getByRole('cell').nth(5);
+  const idleBounds=await actionsCell.boundingBox();
+  const fileDownload=page.waitForEvent('download');
+  pendingDownload=Promise.withResolvers();
+  let busyLayout;
+  try {
+   await actionsCell.getByRole('button',{name:'下载',exact:true}).click();
+   const preparing=actionsCell.getByRole('button',{name:'正在准备…',exact:true});
+   await preparing.waitFor();
+   assert.equal(await preparing.getAttribute('aria-busy'),'true');
+   busyLayout=await actionsCell.evaluate((cell,idleHeight)=>{
+    const {left,right,height}=cell.getBoundingClientRect();
+    const buttons=[...cell.querySelectorAll('button')].map(button=>button.getBoundingClientRect());
+    return Math.abs(height-idleHeight)<1 && buttons.length===3 && buttons.every(button=>
+     Math.abs(button.top-buttons[0].top)<1 && button.left>=left && button.right<=right);
+   },idleBounds.height);
+  } finally {
+   pendingDownload.resolve();
+   pendingDownload=undefined;
+  }
   const exported=await fileDownload;assert.equal(exported.suggestedFilename(),fixture.detail.finals[0].name);
   assert.deepEqual(await readFile(await exported.path()),video);await exported.delete();
+  assert.equal(busyLayout,true,`${width}px 下载准备中三个操作同排且行高不变`);
   await page.getByRole('button',{name:'预览成片',exact:true}).first().click();
   const dialog=page.getByRole('dialog');await dialog.waitFor();
   assert.equal(await dialog.locator('.file-action-links').count(),0);
