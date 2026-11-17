@@ -81,6 +81,8 @@ try {
     let unavailable = '';
     const clothing = fixtureClothing.map(card => ({...card}));
     const outfitStyles = ['未分类', ...Array.from({length:7}, (_, i)=>`备选${i+1}`)];
+    let outfitWrites = 0;
+    let rejectSimpleStyle = true;
     const refreshedAssets = new Map();
     page.on('pageerror', error => errors.push(String(error)));
     await page.route('**/api/**', async route => {
@@ -103,10 +105,18 @@ try {
         return route.fulfill({json:matches.filter(({id})=>id.toLowerCase().startsWith(prefix))});
       }
       if (path === '/api/workspaces/account-demo/shared-clothing/styles') {
-        if (method === 'POST') outfitStyles.push(route.request().postDataJSON().style);
+        if (method === 'POST') {
+          const { style } = route.request().postDataJSON();
+          if (style === '简约' && rejectSimpleStyle) {
+            rejectSimpleStyle = false;
+            return route.fulfill({status:503,json:{detail:'暂时无法新建风格'}});
+          }
+          outfitStyles.push(style);
+        }
         return route.fulfill({json:outfitStyles,status:method === 'POST' ? 201 : 200});
       }
       if (path === '/api/workspaces/account-demo/shared-clothing/O001/style' && method === 'PUT') {
+        outfitWrites++;
         clothing[0].outfitStyles = route.request().postDataJSON().styles;
         return route.fulfill({json:{outfitStyles:clothing[0].outfitStyles}});
       }
@@ -384,11 +394,17 @@ try {
     assert.ok([styleTrigger, stylePopup].every(box =>
       Math.abs(box.width - styleCover.width) <= 1 && Math.abs(box.x - styleCover.x) <= 1));
     const applyStyles = styleMenu.getByRole('button',{name:'应用',exact:true});
+    const createStyle = styleMenu.getByRole('button',{name:'新建',exact:true});
     assert.equal(await applyStyles.isDisabled(),true);
     await findStyle.fill('通勤');
-    assert.equal(await applyStyles.count(),0);
-    await styleMenu.getByRole('button',{name:'新建并应用「通勤」',exact:true}).click();
-    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
+    await createStyle.click();
+    const chooseCommute = styleMenu.getByRole('checkbox',{name:'通勤',exact:true});
+    await chooseCommute.waitFor();
+    assert.ok(await chooseCommute.isChecked());
+    assert.equal(await currentStyle.textContent(),'未分类');
+    assert.equal(outfitWrites,0);
+    await findStyle.press('Escape');
+    await styleMenu.waitFor({state:'hidden'});
     const commute = styleFilter.getByRole('checkbox',{name:'通勤',exact:true});
     const unclassified = styleFilter.getByRole('checkbox',{name:'未分类',exact:true});
     await commute.waitFor();
@@ -397,14 +413,28 @@ try {
     assert.equal(await styleMenu.getByRole('checkbox').count(),1);
     assert.equal(await styleMenu.getByRole('button',{name:/^新建/}).count(),0);
     assert.equal(await applyStyles.isDisabled(),true);
-    await styleMenu.getByRole('checkbox',{name:'通勤',exact:true}).check();
+    assert.equal(await chooseCommute.isChecked(),false);
+    await chooseCommute.check();
     await findStyle.fill('备选1');
     await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).check();
     await findStyle.fill('简约');
     assert.equal(await styleMenu.getByRole('checkbox').count(),0);
-    await styleMenu.getByRole('button',{name:'新建并应用「简约」',exact:true}).click();
+    await createStyle.click();
+    const createStyleError = page.getByRole('alert').filter({hasText:'暂时无法新建风格'});
+    await createStyleError.waitFor();
+    assert.equal(await findStyle.inputValue(),'简约');
+    assert.equal(outfitWrites,0);
+    await createStyle.click();
+    const chooseSimple = styleMenu.getByRole('checkbox',{name:'简约',exact:true});
+    await chooseSimple.waitFor();
+    assert.ok(await chooseSimple.isChecked());
+    assert.equal(await currentStyle.textContent(),'未分类');
+    assert.equal(outfitWrites,0);
+    await applyStyles.click();
     await currentStyle.filter({hasText:/^简约$/}).waitFor();
     assert.deepEqual(await currentStyle.allTextContents(),['通勤','备选1','简约']);
+    assert.equal(outfitWrites,1);
+    await createStyleError.getByRole('button',{name:'关闭通知'}).click();
     assert.equal(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),
       await currentStyle.filter({hasText:/^备选1$/}).getAttribute('class'));
     assert.notEqual(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),

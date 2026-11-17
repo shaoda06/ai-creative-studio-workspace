@@ -1,6 +1,9 @@
 .search-create-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:7px 10px;font-size:12px;text-align:start}
 .search-create-menu{overscroll-behavior:contain}
-.search-create-menu > input,.search-create-actions{flex:none}
+.search-create-input-row,.search-create-actions{flex:none}
+.search-create-input-row{display:flex;gap:6px}
+.search-create-input-row > input{flex:1;min-width:0}
+.search-create-input-row > button{flex:none;white-space:nowrap}
 .search-create-options{min-height:0;overflow:auto}
 .search-create-options label{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;overflow-wrap:anywhere}
 .search-create-options label:hover,.search-create-options label:focus-within{background:#edf3ee}
@@ -8,4 +11,3 @@
 .search-create-options .status-badge{white-space:normal;overflow-wrap:anywhere}
 .search-create-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px}
 .search-create-actions button{overflow-wrap:anywhere;max-width:100%}
-.search-create-new{margin-inline-end:auto;text-align:start}

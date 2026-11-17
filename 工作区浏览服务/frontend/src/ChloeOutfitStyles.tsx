@@ -35,20 +35,9 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
   const client = useQueryClient();
   const notify = useNotify();
   const mutation = useMutation({
-    mutationFn: async ({ selected, create }: { selected: string[]; create?: string }) => {
-      if (create) {
-        const catalog = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style: create });
-        await client.cancelQueries({ queryKey: stylesKey(api) });
-        client.setQueryData(stylesKey(api), catalog);
-      }
-      try {
-        await writeStyle<{ outfitStyles: string[] }>(`${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', { styles: selected });
-      } catch (error) {
-        if (create && error instanceof Error) throw new Error(`已新增风格。应用到套装失败：${error.message}`);
-        throw error;
-      }
-    },
-    onSuccess: async (_, { create }) => {
+    mutationFn: (selected: string[]) => writeStyle<{ outfitStyles: string[] }>(
+      `${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', { styles: selected }),
+    onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['chloe-asset-page'], predicate: query => {
           const url = query.queryKey[1];
@@ -56,10 +45,21 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
         } }),
         client.invalidateQueries({ queryKey: ['chloe-reference-detail', 'clothing', api, id] }),
       ]);
-      notify(create ? '已新增并应用风格' : '已更新套装风格');
+      notify('已更新套装风格');
     },
     onError: error => notify(error.message, 'error'),
   });
+  const createStyle = async (name: string) => {
+    try {
+      const catalog = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style: name });
+      await client.cancelQueries({ queryKey: stylesKey(api) });
+      client.setQueryData<string[]>(stylesKey(api), saved => [...new Set([...catalog, ...(saved ?? [])])]);
+      return catalog.at(-1)!;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '新建风格失败', 'error');
+      return null;
+    }
+  };
   const items = [...new Set([...styles, ...current])];
   const catalog = styles.filter(style => style !== unclassified);
   const styleBadge = (style: string) => {
@@ -71,7 +71,6 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
     <div className="chloe-outfit-style-current">{current.map(styleBadge)}</div>
     <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"
       searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
-      exclusive={unclassified} renderOption={styleBadge} onChange={selected => mutation.mutate({ selected })}
-      onCreate={(create, selected) => mutation.mutate({ selected, create })} />
+      exclusive={unclassified} renderOption={styleBadge} onChange={selected => mutation.mutate(selected)} onCreate={createStyle} />
   </div>;
 }

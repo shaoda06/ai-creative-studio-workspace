@@ -213,6 +213,7 @@ export async function checkSharedNavigation(page, width, selfTest) {
   const searchCreateInput = searchCreateMenu.getByRole('searchbox',{name:'输入示例名称',exact:true});
   const actions = searchCreateMenu.locator('.search-create-actions');
   const applyAction = actions.getByRole('button',{name:'应用',exact:true});
+  const createAction = searchCreateMenu.getByRole('button',{name:'新建',exact:true});
   await openSearchCreate.click();
   const [triggerBox, menuBox] = await Promise.all([openSearchCreate.boundingBox(), searchCreateMenu.boundingBox()]);
   const contentWidth = await searchCreate.evaluate(el => {
@@ -229,14 +230,15 @@ export async function checkSharedNavigation(page, width, selfTest) {
       parseFloat(style.outlineOffset) < 0 && style.outlineColor === style.borderTopColor;
   }),true);
   assert.equal(await applyAction.isDisabled(),true);
+  assert.equal(await createAction.count(),0);
   await searchCreateInput.fill('通');
-  assert.equal(await actions.getByRole('button').count(),1);
-  assert.equal(await actions.getByRole('button',{name:'新建并应用「通」',exact:true}).isEnabled(),true);
+  assert.equal(await applyAction.isDisabled(),true);
+  assert.equal(await createAction.isEnabled(),true);
   assert.equal(await searchCreateMenu.getByRole('checkbox',{name:'通勤',exact:true}).count(),1);
   await searchCreateInput.fill(' 通勤 ');
   assert.equal(await searchCreateMenu.getByRole('checkbox').count(),1);
   assert.equal(await searchCreateMenu.locator('.status-badge.status-blue').textContent(),'通勤');
-  assert.equal(await actions.getByRole('button').count(),1);
+  assert.equal(await createAction.count(),0);
   assert.equal(await applyAction.isDisabled(),true);
   await searchCreateInput.press('ArrowDown');
   await page.keyboard.press('Space');
@@ -246,12 +248,16 @@ export async function checkSharedNavigation(page, width, selfTest) {
   await searchCreate.getByText('当前选项 通勤',{exact:true}).waitFor();
   await openSearchCreate.click();
   await searchCreateInput.fill('简约');
-  const createAction = actions.getByRole('button',{name:'新建并应用「简约」',exact:true});
-  assert.equal(await actions.getByRole('button').count(),1);
-  const [createBox, actionRow] = await Promise.all([createAction.boundingBox(), actions.boundingBox()]);
-  assert.ok(Math.abs(createBox.x - actionRow.x) <= 1);
-  assert.equal(await createAction.evaluate(el => getComputedStyle(el).textAlign),'start');
+  const [createBox, createSearchBox] = await Promise.all([createAction.boundingBox(), searchCreateInput.boundingBox()]);
+  assert.ok(createBox.x >= createSearchBox.x + createSearchBox.width && Math.abs(createBox.y - createSearchBox.y) <= 1);
+  assert.equal(await applyAction.isDisabled(),true);
   await createAction.click();
+  const newOption = searchCreateMenu.getByRole('checkbox',{name:'简约',exact:true});
+  await newOption.waitFor();
+  assert.ok(await newOption.isChecked());
+  assert.equal(await searchCreateInput.inputValue(),'');
+  await searchCreate.getByText('当前选项 通勤',{exact:true}).waitFor();
+  await applyAction.click();
   await searchCreate.getByText('当前选项 通勤、简约',{exact:true}).waitFor();
   await openSearchCreate.click();
   const commuteOption = searchCreateMenu.getByRole('checkbox',{name:'通勤',exact:true});

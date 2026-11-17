@@ -6,12 +6,15 @@ import './SearchCreateSelect.css';
 
 export function SearchCreateSelect({ items, selected, exclusive, label, prompt, searchLabel, disabled, renderOption, onChange, onCreate }: {
   items: string[]; selected: string[]; exclusive?: string; label: string; prompt: string; searchLabel: string; disabled?: boolean;
-  renderOption?: (name: string) => ReactNode; onChange: (values: string[]) => void; onCreate: (name: string, values: string[]) => void;
+  renderOption?: (name: string) => ReactNode; onChange: (values: string[]) => void;
+  onCreate: (name: string) => Promise<string | null>;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const menuOpening = useRef(0);
   const [expanded, setExpanded] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
   const [input, setInput] = useState('');
   const [draft, setDraft] = useState<string[]>([]);
@@ -37,13 +40,28 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
   const toggle = (name: string, checked: boolean) => setDraft(values => {
     if (!checked) return values.filter(value => value !== name);
     if (name === exclusive) return [name];
-    return [...values.filter(value => value !== exclusive), name];
+    return [...values.filter(value => value !== exclusive && value !== name), name];
   });
+  const create = async () => {
+    const opening = menuOpening.current;
+    setCreating(true);
+    try {
+      const name = await onCreate(term);
+      if (name && opening === menuOpening.current && menu.current?.matches(':popover-open')) {
+        toggle(name, true);
+        setInput(value => value.trim() === term ? '' : value);
+        menu.current.querySelector('input')!.focus({ preventScroll: true });
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
   return <>
     <button ref={trigger} type="button" aria-label={label} aria-controls={id} aria-expanded={expanded}
       className="search-create-trigger" disabled={disabled}
       onClick={() => {
         if (expanded) { close(); return; }
+        menuOpening.current += 1;
         setDraft(selected);
         menu.current!.showPopover();
         reposition();
@@ -72,17 +90,19 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
           event.preventDefault();
         }
       }}>
-      <SearchField label={searchLabel} placeholder={searchLabel} size="compact" focusStyle="inset" value={input} onChange={setInput} />
+      <div className="search-create-input-row">
+        <SearchField label={searchLabel} placeholder={searchLabel} size="compact" focusStyle="inset" value={input} onChange={setInput} />
+        {canCreate && <button type="button" disabled={creating} aria-busy={creating} onClick={create}>新建</button>}
+      </div>
       <div className="search-create-options">
         {matches.map(item => <label key={item}><input type="checkbox" checked={draft.includes(item)}
           onChange={event => toggle(item, event.target.checked)} />{renderOption ? renderOption(item) : <span>{item}</span>}</label>)}
       </div>
       <div className="search-create-actions">
-        <button type="button" className={canCreate ? 'search-create-new' : undefined} disabled={!canCreate && !changed} onClick={() => {
+        <button type="button" disabled={creating || !changed} onClick={() => {
           close();
-          if (canCreate) onCreate(term, [...draft.filter(value => value !== exclusive), term]);
-          else onChange(draft);
-        }}>{canCreate ? `新建并应用「${term}」` : '应用'}</button>
+          onChange(draft);
+        }}>应用</button>
       </div>
     </div>
   </>;
