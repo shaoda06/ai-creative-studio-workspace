@@ -148,6 +148,93 @@ class DispatchTests(unittest.TestCase):
         self.assertTrue(post.call_args.args[2]['reprepare'])
         self.assertTrue(post.call_args.args[2]['prepare_only'])
 
+    def test_shared_songssx_checks_the_planned_scenes_before_handoff(self):
+        project = self.workspace.resolve() / '综合资料'
+        project.mkdir()
+        plan = project / '任务清单.json'
+        six_parts = [f'P{i:03}' for i in range(1, 7)]
+        cases = [
+            ([[part] for part in six_parts], [','.join(six_parts)], '场次和 GEN 不匹配'),
+            ([[part] for part in six_parts], [], '填写一组 --songssx-scene'),
+            ([['P001']], [], '填写一组 --songssx-scene'),
+            ([['P001']], [','.join(six_parts)], '场次和 GEN 不匹配'),
+            ([six_parts], [','.join(reversed(six_parts))], '场次和 GEN 不匹配'),
+            ([six_parts], [','.join(six_parts)], None),
+            ([['P001', 'P002'], ['P003']], ['P001,P002', 'P003'], None),
+            ([['P001']], ['P001'], None),
+        ]
+        for actual, expected, failure in cases:
+            plan.write_text(json.dumps({'tasks': [
+                {'task_type': 'video-scene-generation',
+                 'songssx': {'segments': [{'p': p} for p in scene]}}
+                for scene in actual
+            ]}), encoding='utf-8')
+            args = ['--project', str(project), '--plan', plan.name, '--prepare-only']
+            for scene in expected:
+                args.extend(['--songssx-scene', scene])
+            with self.subTest(actual=actual, expected=expected), \
+                    patch.object(d.browser_tasks, 'connection', return_value=(project, {'workspace': str(self.workspace)}, 'caller', {})), \
+                    patch.object(d.browser_tasks, 'local_post', return_value={'status': 'prepared'}) as post:
+                if failure:
+                    with self.assertRaisesRegex(ValueError, failure):
+                        d.dispatch(d.parser().parse_args(args))
+                    post.assert_not_called()
+                else:
+                    d.dispatch(d.parser().parse_args(args))
+                    post.assert_called_once()
+
+    def test_songssx_scene_check_preserves_reuse_and_excludes_gap_repair(self):
+        project = self.workspace.resolve() / '综合资料'
+        project.mkdir()
+        plan = project / '任务清单.json'
+        command = ['--project', str(project), '--plan', plan.name]
+        normal = {'task_type': 'video-scene-generation', 'songssx': {'segments': [{'p': 'P001'}]}}
+        repair = {'task_type': 'video-scene-generation', 'songssx': {'gap_repair': {}, 'segments': [{'p': 'P002'}]}}
+        with patch.object(d.browser_tasks, 'connection', return_value=(project, {'workspace': str(self.workspace)}, 'caller', {})), \
+                patch.object(d.browser_tasks, 'local_post', return_value={'status': 'enqueued'}) as post:
+            plan.write_text(json.dumps({'tasks': [repair]}), encoding='utf-8')
+            d.dispatch(d.parser().parse_args(command))
+            post.assert_called_once()
+            post.reset_mock()
+            plan.write_text(json.dumps({'tasks': [normal, repair]}), encoding='utf-8')
+            d.dispatch(d.parser().parse_args([*command, '--songssx-scene', 'P001']))
+            post.assert_called_once()
+            post.reset_mock()
+            original = {'tasks': [normal]}
+            plan.write_text(json.dumps(original), encoding='utf-8')
+            plan.with_name(plan.stem + '-装配结果.json').write_text(json.dumps({'source': original}), encoding='utf-8')
+            d.dispatch(d.parser().parse_args(command))
+            post.assert_called_once()
+            post.reset_mock()
+            reprepare = [*command, '--prepare-only', '--reprepare']
+            with self.assertRaisesRegex(ValueError, '填写一组 --songssx-scene'):
+                d.dispatch(d.parser().parse_args(reprepare))
+            post.assert_not_called()
+            d.dispatch(d.parser().parse_args([*reprepare, '--songssx-scene', 'P001']))
+            post.assert_called_once()
+            self.assertTrue(post.call_args.args[2]['reprepare'])
+
+    def test_songssx_checks_nested_shared_scope_and_reports_incomplete_segments(self):
+        project = self.workspace.resolve() / '具名项目' / '综合资料'
+        project.mkdir(parents=True)
+        plan = project / '任务清单.json'
+        command = ['--project', str(project), '--plan', plan.name]
+        task = {'task_type': 'video-scene-generation', 'songssx': {'segments': [{}]}}
+        plan.write_text(json.dumps({'tasks': [task]}), encoding='utf-8')
+        with patch.object(d.browser_tasks, 'connection', return_value=(project, {'workspace': str(self.workspace)}, 'caller', {})), \
+                patch.object(d.browser_tasks, 'local_post', return_value={'status': 'enqueued'}) as post:
+            with self.assertRaisesRegex(ValueError, '填写一组 --songssx-scene'):
+                d.dispatch(d.parser().parse_args(command))
+            args = d.parser().parse_args([*command, '--songssx-scene', 'P001'])
+            with self.assertRaisesRegex(ValueError, '各段的 p 编号'):
+                d.dispatch(args)
+            post.assert_not_called()
+            task['songssx']['segments'][0]['p'] = 'P001'
+            plan.write_text(json.dumps({'tasks': [task]}), encoding='utf-8')
+            d.dispatch(args)
+            post.assert_called_once()
+            self.assertEqual(post.call_args.args[2]['project'], '具名项目::@shared')
+
     def test_group_status_cli_uses_group_endpoint(self):
         import io
         from contextlib import redirect_stdout
