@@ -312,7 +312,8 @@ try {
     const outfitTab = clothingNav.getByRole('button',{name:'套装',exact:true});
     const garmentsTab = clothingNav.getByRole('button',{name:'单件',exact:true});
     const styleFilter = page.getByRole('group',{name:'按风格筛选',exact:true});
-    await styleFilter.waitFor();
+    await styleFilter.getByRole('checkbox',{name:'备选7',exact:true}).waitFor();
+    assert.deepEqual(await styleFilter.locator('label').allTextContents(),outfitStyles);
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     const searchField = assetNav.getByRole('searchbox',{name:'搜索共用资产编号',exact:true});
     const searchResults = page.getByRole('region',{name:'资产搜索结果',exact:true});
@@ -432,7 +433,8 @@ try {
     assert.equal(outfitWrites,0);
     await applyStyles.click();
     await currentStyle.filter({hasText:/^简约$/}).waitFor();
-    assert.deepEqual(await currentStyle.allTextContents(),['通勤','备选1','简约']);
+    assert.deepEqual(await currentStyle.allTextContents(),['备选1','通勤','简约']);
+    assert.deepEqual(await styleFilter.locator('label').allTextContents(),outfitStyles);
     assert.equal(outfitWrites,1);
     await createStyleError.getByRole('button',{name:'关闭通知'}).click();
     assert.equal(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),
@@ -445,6 +447,7 @@ try {
     assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
     await simple.uncheck();
     await selectStyle.click();
+    assert.deepEqual(await styleMenu.locator('label').allTextContents(),outfitStyles);
     assert.equal(await findStyle.evaluate(el => document.activeElement === el &&
       parseFloat(getComputedStyle(el).outlineOffset) < 0),true);
     for (const name of ['通勤','备选1','简约']) {
@@ -813,6 +816,8 @@ try {
     const clothingA = dialog.getByRole('button',{name:'选择O001 · 套装甲',exact:true});
     await pickerCount('套装',0).waitFor();
     const pickerStyles = dialog.getByRole('group',{name:'按风格筛选',exact:true});
+    await pickerStyles.getByRole('checkbox',{name:'备选7',exact:true}).waitFor();
+    assert.deepEqual(await pickerStyles.locator('label').allTextContents(),outfitStyles);
     const pickerUnclassified = pickerStyles.getByRole('checkbox',{name:'未分类',exact:true});
     await pickerUnclassified.check();
     await dialog.getByText('暂无符合所选风格的可用套装。',{exact:true}).waitFor();

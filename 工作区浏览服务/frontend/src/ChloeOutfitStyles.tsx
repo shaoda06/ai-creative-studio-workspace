@@ -68,7 +68,7 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
     return <span className={`status-badge status-${tone}`} key={style}>{style}</span>;
   };
   return <div className="chloe-outfit-style-select">
-    <div className="chloe-outfit-style-current">{current.map(styleBadge)}</div>
+    <div className="chloe-outfit-style-current">{items.filter(style => current.includes(style)).map(styleBadge)}</div>
     <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"
       searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
       exclusive={unclassified} renderOption={styleBadge} onChange={selected => mutation.mutate(selected)} onCreate={createStyle} />

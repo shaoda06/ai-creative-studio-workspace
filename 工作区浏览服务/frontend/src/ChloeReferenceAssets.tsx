@@ -42,12 +42,13 @@ export function referenceAssetListParams(kind: ReferenceAssetKind, clothingTab: 
   return params;
 }
 
-export function ChloeAssetTypes({ types, activeTypes, setTypeChecked, label = '按类型筛选' }: {
-  types: string[]; activeTypes: string[]; label?: string;
+export function ChloeAssetTypes({ types, activeTypes, setTypeChecked, label = '按类型筛选', sortByName = true }: {
+  types: string[]; activeTypes: string[]; label?: string; sortByName?: boolean;
   setTypeChecked: (type: string, checked: boolean) => void;
 }) {
+  const orderedTypes = sortByName ? [...types].sort((a, b) => a.localeCompare(b, 'zh-CN')) : types;
   return <fieldset className="chloe-asset-types"><legend>{label}</legend>
-    {[...types].sort((a, b) => a.localeCompare(b, 'zh-CN')).map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
+    {orderedTypes.map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
       onChange={event => setTypeChecked(type, event.target.checked)} />{type}</label>)}
   </fieldset>;
 }
@@ -86,7 +87,7 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
     </div>}
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
-    {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked}
+    {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} sortByName={!isOutfit}
       label={isOutfit ? '按风格筛选' : isClothing ? '按部位筛选' : undefined} />}
     {data && (data.items.length ? isAccessory
       ? <ChloeAccessoryColumns cards={data.items.map(renderCard)} />
