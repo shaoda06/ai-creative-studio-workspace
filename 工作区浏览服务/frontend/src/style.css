@@ -217,6 +217,8 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-assets-content{margin-top:20px}
 .chloe-clothing-tabs{margin-bottom:18px}
 .chloe-asset-types{display:flex;flex-wrap:wrap;gap:8px 20px;min-width:0;margin:0;padding:8px 12px 12px;border:1px solid var(--line);border-radius:7px}
+.chloe-asset-types-header{display:flex;align-items:center;gap:8px;width:100%}
+.chloe-asset-types-header>span{flex:1;border-top:1px solid var(--line)}
 .chloe-asset-types+.asset-media-grid{margin-top:18px}
 .chloe-asset-types label{display:flex;align-items:center;gap:6px;cursor:pointer}
 .chloe-asset-types input{min-width:0;margin:0;accent-color:var(--green)}
@@ -224,6 +226,10 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-outfit-style-current{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
 .chloe-outfit-style-badge{white-space:normal;overflow-wrap:anywhere}
 .chloe-outfit-style-current .chloe-outfit-style-badge{cursor:default}
+.chloe-outfit-style-manager-list{display:grid;gap:10px;list-style:none;margin:0;padding:0}
+.chloe-outfit-style-manager-list>li{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.chloe-outfit-style-manager-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.chloe-outfit-style-rename{display:grid;gap:6px;margin-bottom:12px}
 .status-purple{background:#eee4f9;color:#684291}
 .status-teal{background:#dff4f1;color:#206e67}
 .status-rose{background:#fbe5ee;color:#91335e}

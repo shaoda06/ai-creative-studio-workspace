@@ -14,7 +14,7 @@ import type { ChloeAssetStatus } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { ChloeAssetRecords } from './ChloeAssetRecords';
 import type { AssetDetail } from './ChloeModelDetail';
-import { OutfitStyleBadge, OutfitStyleSelect, useOutfitStyles } from './ChloeOutfitStyles';
+import { OutfitStyleBadge, OutfitStyleManager, OutfitStyleSelect, useOutfitStyles } from './ChloeOutfitStyles';
 
 interface ClothingClassification {
   clothingForm?: '单件' | '套装' | null; bodyArea?: string | null;
@@ -42,12 +42,15 @@ export function referenceAssetListParams(kind: ReferenceAssetKind, clothingTab: 
   return params;
 }
 
-export function ChloeAssetTypes({ types, activeTypes, setTypeChecked, label = '按类型筛选', styleCatalog }: {
-  types: string[]; activeTypes: string[]; label?: string; styleCatalog?: string[];
+export function ChloeAssetTypes({ types, activeTypes, setTypeChecked, label = '按类型筛选', styleCatalog, headerAction }: {
+  types: string[]; activeTypes: string[]; label?: string; styleCatalog?: string[]; headerAction?: ReactNode;
   setTypeChecked: (type: string, checked: boolean) => void;
 }) {
   const orderedTypes = styleCatalog ? types : [...types].sort((a, b) => a.localeCompare(b, 'zh-CN'));
-  return <fieldset className="chloe-asset-types"><legend>{label}</legend>
+  return <fieldset className="chloe-asset-types" aria-label={headerAction ? label : undefined}>
+    <legend className={headerAction ? 'chloe-asset-types-header' : undefined}>{label}
+      {headerAction && <><span aria-hidden="true" />{headerAction}</>}
+    </legend>
     {orderedTypes.map(type => <label key={type}><input type="checkbox" checked={activeTypes.includes(type)}
       onChange={event => setTypeChecked(type, event.target.checked)} />
       {styleCatalog ? <OutfitStyleBadge style={type} catalog={styleCatalog} /> : type}</label>)}
@@ -65,9 +68,10 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
   const [params, setParams] = useSearchParams();
   const isClothing = kind === 'clothing';
   const isOutfit = isClothing && params.get('clothingTab') !== 'garments';
+  const [managingStyles, setManagingStyles] = useState(false);
   const clothingTab = isOutfit ? 'outfits' : 'garments';
   const isAccessory = kind === 'accessories';
-  const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<ReferenceAssetCard>(endpoint,
+  const { query, list, changePage, activeTypes, setTypeChecked, setActiveTypes } = useAssetList<ReferenceAssetCard>(endpoint,
     { form: isClothing ? (isOutfit ? '套装' : '单件') : undefined });
   const styles = useOutfitStyles(isOutfit);
   const data = query.isPlaceholderData ? undefined : query.data;
@@ -90,7 +94,12 @@ export function ChloeReferenceAssets({ kind, workspaceQuery }: { kind: Reference
     {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
     {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked}
       styleCatalog={isOutfit ? styles.data ?? [] : undefined}
+      headerAction={isOutfit && styles.data && <button type="button" className="link" onClick={() => setManagingStyles(true)}>管理</button>}
       label={isOutfit ? '按风格筛选' : isClothing ? '按部位筛选' : undefined} />}
+    {isOutfit && managingStyles && styles.data && <OutfitStyleManager styles={styles.data} close={() => setManagingStyles(false)}
+      onChange={(style, name) => {
+        if (activeTypes.includes(style)) setActiveTypes(activeTypes.flatMap(value => value !== style ? [value] : name ? [name] : []), true);
+      }} />}
     {data && (data.items.length ? isAccessory
       ? <ChloeAccessoryColumns cards={data.items.map(renderCard)} />
       : <div className="asset-media-grid">{data.items.map(renderCard)}</div>

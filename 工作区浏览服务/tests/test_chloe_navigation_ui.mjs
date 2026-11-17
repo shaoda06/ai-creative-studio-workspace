@@ -113,6 +113,16 @@ try {
           }
           outfitStyles.push(style);
         }
+        if (method === 'PATCH' || method === 'DELETE') {
+          const { style, name } = route.request().postDataJSON();
+          if (name && outfitStyles.includes(name)) return route.fulfill({status:409,json:{detail:'该风格已存在'}});
+          outfitStyles.splice(outfitStyles.indexOf(style),1,...(name ? [name] : []));
+          for (const card of clothing) {
+            if (!card.outfitStyles?.includes(style)) continue;
+            const next = card.outfitStyles.flatMap(value => value !== style ? [value] : name ? [name] : []);
+            card.outfitStyles = next.length ? next : ['未分类'];
+          }
+        }
         return route.fulfill({json:outfitStyles,status:method === 'POST' ? 201 : 200});
       }
       if (path === '/api/workspaces/account-demo/shared-clothing/O001/style' && method === 'PUT') {
@@ -1277,6 +1287,46 @@ try {
     await confirm.click();
     await dialog.waitFor({state:'hidden'});
     assert.equal(await choose('选择造型图').textContent(),'M002 · 模特乙 / L014 · 分页造型14');
+
+    refreshedAssets.delete('/api/workspaces/account-demo/shared-clothing');
+    await assetNav.getByRole('button',{name:'服装',exact:true}).click();
+    await commute.check();
+    await currentStyle.filter({hasText:/^通勤$/}).waitFor();
+    const manageStyles = styleFilter.getByRole('button',{name:'管理',exact:true});
+    const [legendBox, manageBox, styleFilterBounds] = await Promise.all([
+      styleFilter.locator('legend').boundingBox(), manageStyles.boundingBox(), styleFilter.boundingBox(),
+    ]);
+    assert.ok(Math.abs(manageBox.y - legendBox.y) < 3 && styleFilterBounds.x + styleFilterBounds.width - manageBox.x - manageBox.width < 28);
+    await manageStyles.click();
+    const styleManager = page.getByRole('dialog',{name:'管理套装风格',exact:true});
+    assert.equal(await styleManager.getByRole('button',{name:'删除 未分类',exact:true}).count(),0);
+    await styleManager.getByRole('button',{name:'重命名 通勤',exact:true}).click();
+    const nameInput = styleManager.getByRole('textbox',{name:'风格名称',exact:true});
+    const saveName = styleManager.getByRole('button',{name:'保存名称',exact:true});
+    assert.ok(await saveName.isDisabled());
+    await nameInput.fill('简约');
+    await saveName.click();
+    const namingError = styleManager.getByRole('alert').filter({hasText:'该风格已存在'});
+    await namingError.getByRole('button',{name:'关闭通知'}).click();
+    await nameInput.fill('都市');
+    await saveName.click();
+    const removeStyle = styleManager.getByRole('button',{name:'删除 都市',exact:true});
+    await removeStyle.waitFor();
+    const selectedFilter = url => new URLSearchParams(url.hash.split('?')[1]).get('assetType');
+    await page.waitForURL(url => selectedFilter(url) === '都市');
+    await styleManager.getByRole('button',{name:'关闭',exact:true}).click();
+    await currentStyle.filter({hasText:/^都市$/}).waitFor();
+    assert.ok(await styleFilter.getByRole('checkbox',{name:'都市',exact:true}).isChecked());
+    await manageStyles.click();
+    await removeStyle.click();
+    await styleManager.getByRole('button',{name:'取消',exact:true}).click();
+    await removeStyle.click();
+    await styleManager.getByRole('button',{name:'确认删除',exact:true}).click();
+    await removeStyle.waitFor({state:'detached'});
+    await page.waitForURL(url => !selectedFilter(url));
+    await styleManager.getByRole('button',{name:'关闭',exact:true}).click();
+    await currentStyle.filter({hasText:/^未分类$/}).waitFor();
+    assert.equal(await styleFilter.getByRole('checkbox',{name:'都市',exact:true}).count(),0);
 
     await nav.getByRole('button',{name:'账号概况',exact:true}).click();
     await page.getByRole('heading',{name:'作品进度',exact:true}).waitFor();

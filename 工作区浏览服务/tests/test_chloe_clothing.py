@@ -172,7 +172,7 @@ class ChloeClothingTests(unittest.TestCase):
 
 class ChloeOutfitStyleTests(unittest.TestCase):
     def test_shared_catalog_and_paged_filters_round_trip(self):
-        from backend.chloe_clothing import style_path, style_router, write_router
+        from backend.chloe_clothing import save_text, style_path, style_router, write_router
         from backend.main import queue_write
 
         with tempfile.TemporaryDirectory() as directory:
@@ -247,6 +247,39 @@ class ChloeOutfitStyleTests(unittest.TestCase):
                 self.assertEqual(outfit_path.read_bytes(), before_invalid)
                 self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'styles': []}).json(), {'outfitStyles': ['未分类']})
                 self.assertEqual(client.get(api+'/O001').json()['outfitStyles'], ['未分类'])
+
+                self.assertEqual(client.patch(catalog, json={'style': '韩系', 'name': '通勤/复古'}).status_code, 403)
+                self.assertEqual(client.patch(catalog, headers=origin, json={'style': '韩系', 'name': second}).status_code, 409)
+                self.assertEqual(client.patch(catalog, headers=origin, json={'style': '韩系', 'name': '坏|值'}).status_code, 422)
+                self.assertEqual(client.patch(catalog, headers=origin, json={'style': '未分类', 'name': '其他'}).status_code, 409)
+                self.assertEqual(client.request('DELETE', catalog, headers=origin, json={'style': '未分类'}).status_code, 409)
+                self.assertEqual(client.request('DELETE', catalog, headers=origin, json={'style': '不存在'}).status_code, 404)
+                self.assertEqual(client.put(api+'/O001/style', headers=origin, json={'styles': selected}).status_code, 200)
+                self.assertEqual(client.put(api+'/O003/style', headers=origin, json={'styles': ['韩系']}).status_code, 200)
+                before_rename = {path: path.read_bytes() for path in (outfit_path, new_outfit_path, garment_path, style_path(root))}
+
+                def fail_catalog(path, text):
+                    if path == style_path(root):
+                        raise PermissionError('测试写入失败')
+                    save_text(path, text)
+
+                rename = {'style': '韩系', 'name': '通勤/复古'}
+                with patch('backend.chloe_clothing.save_text', side_effect=fail_catalog):
+                    self.assertEqual(client.patch(catalog, headers=origin, json=rename).status_code, 500)
+                for path, content in before_rename.items():
+                    self.assertEqual(path.read_bytes(), content)
+
+                self.assertEqual(client.patch(catalog, headers=origin, json=rename).json(), ['未分类', '通勤/复古', second])
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyles'], ['通勤/复古', second])
+                self.assertEqual(client.get(api+'/O003').json()['outfitStyles'], ['通勤/复古'])
+                self.assertEqual(outfit_path.read_bytes(), before_rename[outfit_path].replace('韩系'.encode(), '通勤/复古'.encode()))
+                self.assertEqual(client.get(api, params={**params, 'types': '通勤/复古'}).json()['total'], 2)
+                self.assertEqual(client.get(api, params={**params, 'types': '韩系'}).json()['total'], 0)
+                self.assertEqual(client.request('DELETE', catalog, headers=origin, json={'style': '通勤/复古'}).json(), ['未分类', second])
+                self.assertEqual(client.get(api+'/O001').json()['outfitStyles'], [second])
+                self.assertEqual(client.get(api+'/O003').json()['outfitStyles'], ['未分类'])
+                self.assertEqual(garment_path.read_bytes(), before_rename[garment_path])
+                self.assertEqual(client.get('/second/shared-clothing/styles').json(), ['未分类'])
 
 
 class ChloeHairTests(ChloeClothingTests):

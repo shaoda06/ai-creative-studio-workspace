@@ -99,15 +99,16 @@ export function useAssetList<T>(endpoint: string, filters: AssetFilters = {}) {
     else list.set('assetPage', String(next));
     setParams(list);
   };
-  const setTypeChecked = (type: string, checked: boolean) => {
-    const next = checked ? [...types, type] : types.filter(value => value !== type);
+  const setActiveTypes = (next: string[], replace = false) => {
     setFilterEdit({ key, types: next });
     list.delete('assetPage');
     list.delete('assetType');
     for (const value of next) list.append('assetType', value);
-    setParams(list);
+    setParams(list, { replace });
   };
-  return { query, list, changePage, setTypeChecked, activeTypes: types };
+  const setTypeChecked = (type: string, checked: boolean) =>
+    setActiveTypes(checked ? [...types, type] : types.filter(value => value !== type));
+  return { query, list, changePage, setActiveTypes, setTypeChecked, activeTypes: types };
 }
 
 export function useAssetDraft<T extends { id: string }>(endpoint: string, filters: AssetFilters, initialIds: string[], onConfirm: (items: T[]) => void) {

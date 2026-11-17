@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
+import { Dialog } from './components';
 import { useNotify } from './components/Notifications';
 import { SearchCreateSelect } from './components/SearchCreateSelect';
 
@@ -25,7 +28,7 @@ export function useOutfitStyles(enabled: boolean) {
   });
 }
 
-async function writeStyle<T>(url: string, method: 'POST' | 'PUT', payload: { style: string } | { styles: string[] }): Promise<T> {
+async function writeStyle<T>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', payload: { style: string; name?: string } | { styles: string[] }): Promise<T> {
   const response = await fetch(url, {
     method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
@@ -36,6 +39,22 @@ async function writeStyle<T>(url: string, method: 'POST' | 'PUT', payload: { sty
   return response.json();
 }
 
+async function refreshOutfitStyleViews(client: QueryClient, api: string) {
+  await Promise.all([
+    client.invalidateQueries({ predicate: ({queryKey: [kind, url]}) =>
+      (kind === 'chloe-asset-page' || kind === 'chloe-asset-draft') &&
+      typeof url === 'string' && url.startsWith(`${clothingUrl(api)}?`) }),
+    client.invalidateQueries({ queryKey: ['chloe-reference-detail', 'clothing', api] }),
+  ]);
+}
+
+async function acceptCatalog(client: QueryClient, api: string, catalog: string[]) {
+  const queryKey = stylesKey(api);
+  await client.cancelQueries({ queryKey });
+  client.setQueryData(queryKey, catalog);
+  void client.invalidateQueries({ queryKey });
+}
+
 export function OutfitStyleSelect({ id, current, styles }: { id: string; current: string[]; styles: string[] }) {
   const { api } = useChloeScope();
   const client = useQueryClient();
@@ -44,13 +63,7 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
     mutationFn: (selected: string[]) => writeStyle<{ outfitStyles: string[] }>(
       `${clothingUrl(api)}/${encodeURIComponent(id)}/style`, 'PUT', { styles: selected }),
     onSuccess: async () => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['chloe-asset-page'], predicate: query => {
-          const url = query.queryKey[1];
-          return typeof url === 'string' && url.startsWith(`${clothingUrl(api)}?`);
-        } }),
-        client.invalidateQueries({ queryKey: ['chloe-reference-detail', 'clothing', api, id] }),
-      ]);
+      await refreshOutfitStyleViews(client, api);
       notify('已更新套装风格');
     },
     onError: error => notify(error.message, 'error'),
@@ -58,8 +71,7 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
   const createStyle = async (name: string) => {
     try {
       const catalog = await writeStyle<string[]>(`${clothingUrl(api)}/styles`, 'POST', { style: name });
-      await client.cancelQueries({ queryKey: stylesKey(api) });
-      client.setQueryData<string[]>(stylesKey(api), saved => [...new Set([...catalog, ...(saved ?? [])])]);
+      await acceptCatalog(client, api, catalog);
       return catalog.at(-1)!;
     } catch (error) {
       notify(error instanceof Error ? error.message : '新建风格失败', 'error');
@@ -74,4 +86,60 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
       searchLabel="输入风格名称" disabled={mutation.isPending || styles.length === 0}
       exclusive={unclassified} renderOption={styleBadge} onChange={selected => mutation.mutate(selected)} onCreate={createStyle} />
   </div>;
+}
+
+export function OutfitStyleManager({ styles, close, onChange }: {
+  styles: string[]; close: () => void; onChange: (style: string, name?: string) => void;
+}) {
+  const { api } = useChloeScope();
+  const client = useQueryClient();
+  const notify = useNotify();
+  const [action, setAction] = useState<{ style: string; type: 'rename' | 'delete' }>();
+  const [input, setInput] = useState('');
+  const name = input.trim();
+  const mutation = useMutation({
+    mutationFn: ({ style, name }: { style: string; name?: string }) => writeStyle<string[]>(
+      `${clothingUrl(api)}/styles`, name === undefined ? 'DELETE' : 'PATCH', { style, name }),
+    onSuccess: async (catalog, { style, name }) => {
+      await acceptCatalog(client, api, catalog);
+      onChange(style, name);
+      setAction(undefined);
+      await refreshOutfitStyleViews(client, api);
+      notify(name === undefined ? '已删除风格' : '已重命名风格');
+    },
+    onError: error => notify(error.message, 'error'),
+  });
+  const busy = mutation.isPending;
+  return <Dialog title="管理套装风格" size="compact" lockPageScroll close={close} closeDisabled={busy}>
+    {action?.type === 'rename' ? <form onSubmit={event => {
+      event.preventDefault();
+      if (!busy && name && name !== action.style) mutation.mutate({ style: action.style, name });
+    }}>
+      <label className="chloe-outfit-style-rename">风格名称
+        <input autoFocus value={input} disabled={busy} onChange={event => setInput(event.target.value)} />
+      </label>
+      <div className="chloe-outfit-style-manager-actions">
+        <button type="button" disabled={busy} onClick={() => setAction(undefined)}>取消</button>
+        <button type="submit" disabled={busy || !name || name === action.style}>保存名称</button>
+      </div>
+    </form> : action?.type === 'delete' ? <>
+      <p>删除「{action.style}」后，所有套装都会移除此风格。没有其他风格的套装会归入「未分类」。</p>
+      <div className="chloe-outfit-style-manager-actions">
+        <button type="button" disabled={busy} onClick={() => setAction(undefined)}>取消</button>
+        <button type="button" className="danger-button" disabled={busy} onClick={() => mutation.mutate({ style: action.style })}>确认删除</button>
+      </div>
+    </> : <ul className="chloe-outfit-style-manager-list">
+      {styles.map(style => <li key={style}>
+        <OutfitStyleBadge style={style} catalog={styles} />
+        {style === unclassified ? <span className="muted">默认风格</span> : <div className="chloe-outfit-style-manager-actions">
+          <button type="button" aria-label={`重命名 ${style}`} disabled={busy} onClick={() => {
+            setInput(style);
+            setAction({ style, type: 'rename' });
+          }}>重命名</button>
+          <button type="button" className="danger-button" aria-label={`删除 ${style}`} disabled={busy}
+            onClick={() => setAction({ style, type: 'delete' })}>删除</button>
+        </div>}
+      </li>)}
+    </ul>}
+  </Dialog>;
 }
