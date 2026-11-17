@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import html
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import shutil
 import sys
@@ -70,11 +70,16 @@ def final_file_info(path):
     }
 
 
+def validate_final_name(filename):
+    if (not filename or filename.startswith('.') or any(c in filename for c in '/\\:<>|?*"')
+            or any(ord(c) < 32 for c in filename) or PureWindowsPath(filename).is_reserved()
+            or Path(filename).suffix.lower() not in resources.KINDS['视频']):
+        raise ValueError('请选择有效的视频文件名')
+
+
 def import_final(root, name, filename, stream):
     project, _, _, _ = project_context(root, name)
-    if (not filename or filename.startswith('.') or any(c in filename for c in '/\\:<>|?*"')
-            or any(ord(c) < 32 for c in filename) or Path(filename).suffix.lower() not in resources.KINDS['视频']):
-        raise ValueError('请选择有效的视频文件名')
+    validate_final_name(filename)
     folder = project / '成片'
     if folder.is_symlink():
         raise ValueError('成片目录不能使用符号链接')
@@ -175,6 +180,107 @@ def media_file(root, name, key):
     if target not in allowed:
         raise FileNotFoundError('不是本视频成片或已引用的发布封面')
     return target
+
+
+def retarget_final_links(source, text, before, after):
+    relative = Path(os.path.relpath(after, source.parent)).as_posix()
+
+    def update(match):
+        if match[1]:
+            return match[0]
+        raw = match[2] or match[3]
+        if raw.startswith(('/', '\\')) or re.match(r'[a-z][a-z\d+.-]*:', raw, re.I):
+            return match[0]
+        if (source.parent / raw).resolve() == before:
+            return '](<' + relative + '>)'
+        link = urlsplit(raw)
+        decoded = Path(unquote(link.path))
+        if link.scheme or link.netloc or decoded.is_absolute() or (source.parent / decoded).resolve() != before:
+            return match[0]
+        if not (link.query or link.fragment):
+            return '](<' + relative + '>)'
+        rewritten = link._replace(path=quote(relative, safe='/')).geturl()
+        return '](<' + rewritten + '>)'
+
+    # The fixed records use bracketed destinations; also accept ordinary relative Markdown links.
+    pattern = r'(`+[^`\r\n]+`+)|\]\((?:<([^>\r\n]+)>|([^\s<>()]+))\)'
+    lines = text.splitlines(keepends=True)
+    fragments = []
+    start = 0
+    for block in MarkdownIt('commonmark').parse(text):
+        if block.type not in ('fence', 'code_block'):
+            continue
+        first, end = block.map
+        fragments.extend((re.sub(pattern, update, ''.join(lines[start:first])), ''.join(lines[first:end])))
+        start = end
+    fragments.append(re.sub(pattern, update, ''.join(lines[start:])))
+    return ''.join(fragments)
+
+
+def move_final(source, target):
+    if sys.platform == 'win32' or target.exists() and source.samefile(target):
+        source.rename(target)
+        return
+    os.link(source, target)
+    try:
+        source.unlink()
+    except OSError:
+        target.unlink()
+        raise
+
+
+def rename_final(root, name, key, stem):
+    project, _, _, _ = project_context(root, name)
+    source = resources.local(root, key)
+    if source not in final_files(project):
+        raise FileNotFoundError('不是本视频成片目录内的视频')
+    stem = stem.strip()
+    if stem.lower().endswith(source.suffix.lower()):
+        stem = stem[:-len(source.suffix)].rstrip()
+    if '#' in stem:
+        raise ValueError('文件名不能包含 #，以便项目内链接正常打开')
+    filename = stem + source.suffix
+    validate_final_name(filename)
+    target = source.with_name(filename)
+    if source.name == filename:
+        return {'name': filename, 'key': key}
+    if target.is_symlink() or (target.exists() and not (
+        source.name.casefold() == filename.casefold() and source.samefile(target)
+    )):
+        raise FileExistsError('已有同名成片，请换一个文件名')
+
+    with tempfile.TemporaryDirectory(prefix='.final-rename-', dir=project) as temporary:
+        staged = Path(temporary)
+        edits = []
+        for document in sorted(project.rglob('*.md')):
+            if (any(part.startswith('.') or part == '历史版本' for part in document.relative_to(project).parts)
+                    or document.is_symlink() or not document.resolve().is_relative_to(project)):
+                continue
+            original = document.read_bytes()
+            text = original.decode('utf-8')
+            updated = retarget_final_links(document, text, source, target)
+            if updated != text:
+                backup = staged / f'{len(edits)}.original'
+                replacement = staged / f'{len(edits)}.updated'
+                backup.write_bytes(original)
+                replacement.write_bytes(updated.encode('utf-8'))
+                edits.append((document, backup, replacement))
+        move_final(source, target)
+        applied = []
+        try:
+            for document, backup, replacement in edits:
+                if document.read_bytes() != backup.read_bytes():
+                    raise ValueError('项目资料正在更新，请重试改名')
+                replacement.replace(document)
+                applied.append((document, backup))
+        except (OSError, ValueError):
+            try:
+                for document, backup in reversed(applied):
+                    backup.replace(document)
+            finally:
+                move_final(target, source)
+            raise
+    return {'name': filename, 'key': target.relative_to(root).as_posix()}
 
 
 def delete_final(root, name, key):

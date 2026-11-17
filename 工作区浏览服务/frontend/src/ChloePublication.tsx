@@ -149,16 +149,18 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
             <h2>成片目录</h2><button type="button" onClick={() => setUpload(true)}>上传</button>
           </div>
           <div className="prose"><div className="table-scroll"><table className="chloe-publication-files" aria-label="成片文件">
-            <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 278 }} /></colgroup>
+            <colgroup><col style={{ width: 170 }} /><col /><col style={{ width: 88 }} /><col style={{ width: 168 }} /><col style={{ width: 88 }} /><col style={{ width: 278 }} /></colgroup>
             <thead><tr><th scope="col" title="优先显示文件创建时间，无法取得时显示修改时间">文件时间</th><th scope="col">文件名</th>
-              <th scope="col">分辨率与比例</th><th scope="col">时长</th><th scope="col">操作</th></tr></thead>
+              <th scope="col">文件类型</th><th scope="col">分辨率与比例</th><th scope="col">时长</th><th scope="col">操作</th></tr></thead>
             <tbody>{data.finals.length ? data.finals.map(file => {
               const metadata = file.videoMetadata;
+              const extensionAt = file.name.lastIndexOf('.');
               return <tr key={file.key}>
                 <td><time dateTime={file.fileTime} title={file.fileTimeSource === 'created' ? '文件创建时间' : '文件修改时间'}>
                   {fileTimeFormat.format(new Date(file.fileTime))}
                 </time></td>
-                <td className="chloe-publication-file-name"><span className="chloe-publication-text">{file.name}</span></td>
+                <td className="chloe-publication-file-name"><FinalName name={file.name.slice(0, extensionAt)} url={file.url!} refresh={refreshFinals} /></td>
+                <td>{file.name.slice(extensionAt)}</td>
                 <td>{metadata && metadata.width > 0 && metadata.height > 0
                   ? <>{metadata.width} × {metadata.height} <span className="muted">· {commonAspect(metadata.width, metadata.height)}</span></>
                   : <span title="无法读取视频分辨率">—</span>}</td>
@@ -169,7 +171,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
                   <button className="danger-button" onClick={() => setRemove(file)}>删除</button>
                 </div></td>
               </tr>;
-            }) : <tr><td colSpan={5}>暂无成片</td></tr>}</tbody>
+            }) : <tr><td colSpan={6}>暂无成片</td></tr>}</tbody>
           </table></div></div>
         </section>
         <section aria-label="发布记录"><h2>发布记录</h2>
@@ -191,6 +193,61 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     </Dialog>}
     {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
   </PreviewContext>;
+}
+
+function FinalName({ name, url, refresh }: { name: string; url: string; refresh: () => Promise<unknown> }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  function cancel() {
+    setDraft(null);
+    setError('');
+  }
+
+  if (draft === null) return <div className="chloe-publication-name-row">
+    <span className="chloe-publication-text">{name}</span>
+    <button type="button" className="chloe-publication-name-action" aria-label="重命名" title="重命名"
+      onClick={() => setDraft(name)}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m14 5 5 5M5 19l4-.8L20 7.2 16.8 4 5.8 15Z" />
+      </svg>
+    </button>
+  </div>;
+
+  return <form onSubmit={async event => {
+    event.preventDefault();
+    if (saving || !draft.trim()) return;
+    if (draft.trim() === name) { cancel(); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: draft.trim() }),
+      });
+      if (!response.ok) throw new Error((await response.json()).detail || '成片重命名失败');
+      await refresh();
+      cancel();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setSaving(false);
+    }
+  }}>
+    <div className="chloe-publication-name-row">
+      <input type="text" aria-label="新文件名" aria-invalid={!!error} autoFocus value={draft} disabled={saving}
+        onFocus={event => event.currentTarget.select()} onChange={event => { setDraft(event.target.value); setError(''); }}
+        onKeyDown={event => {
+          if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault();
+          if (event.key === 'Escape' && !event.nativeEvent.isComposing) { event.preventDefault(); cancel(); }
+        }} />
+      <button type="submit" className="chloe-publication-name-action" aria-label="保存文件名" title="保存文件名"
+        disabled={saving || !draft.trim()}>✓</button>
+      <button type="button" className="chloe-publication-name-action" aria-label="取消重命名" title="取消重命名"
+        disabled={saving} onClick={cancel}>×</button>
+    </div>
+    {error && <small className="chloe-publication-name-error" role="alert">{error}</small>}
+  </form>;
 }
 
 function FinalUpload({ url, close, done }: { url: string; close: () => void; done: () => Promise<void> }) {

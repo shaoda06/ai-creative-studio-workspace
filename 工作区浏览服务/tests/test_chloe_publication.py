@@ -2,10 +2,12 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from fastapi import Depends, FastAPI
@@ -183,6 +185,72 @@ class ChloePublicationTests(HttpTestCase):
         self.assertEqual(self.client.get(self.api+'/publication-videos').json()[0]['finalCount'], 3)
         self.assertEqual(self.client.delete(target + '/' + added['key'], headers=headers).status_code, 200)
         self.assertEqual(len(self.client.get(self.url).json()['finals']), 2)
+
+    def test_rename_keeps_media_and_updates_local_document_links(self):
+        film, _, material = self.prepare()
+        raw = film.read_bytes()
+        sibling = film.with_name('同名.webm')
+        sibling.write_bytes(raw)
+        self.append(self.project / 'README.md', '发布记录',
+                    ['P001', self.row[3], self.row[4], self.row[5], '[Q001](<发布资料.md>)',
+                     self.row[8], self.row[10], self.row[11], '未取得', '未取得', '立即发布',
+                     '待提交', '未取得', '未取得', '隔离安排', '未取得'])
+        record = self.project / '制作记录.md'
+        self.append(record, '交接与成片核对', ['K001', '2026-11-16T12:00:00+08:00', self.row[3],
+                    '测试原片引用', '通过', '文件读取通过'])
+        related = self.project / '执行记录/补充核对.md'
+        related.write_text('[原文件](../成片/%E6%9C%80%E7%BB%88%E6%88%90%E7%89%87.webm)\n'
+                           '[外部](https://example.org/最终成片.webm)\n'
+                           '`[命令示例](<../成片/最终成片.webm>)`\n'
+                           '```md\n[文档示例](<../成片/最终成片.webm>)\n```\n', encoding='utf-8')
+        url = self.url + '/files/' + film.relative_to(self.root).as_posix()
+        headers = {'Origin': 'http://127.0.0.1'}
+        self.assertEqual(self.client.patch(url, json={'name': '待改'}).status_code, 403)
+        for invalid in ('同名', '  ', '../错误', 'CON'):
+            self.assertEqual(self.client.patch(url, headers=headers, json={'name': invalid}).status_code, 409)
+        self.assertTrue(film.exists())
+        self.assertIn('最终成片.webm', material.read_text(encoding='utf-8'))
+        response = self.client.patch(url, headers=headers, json={'name': '暖光 终版.WebM'})
+        self.assertEqual(response.status_code, 200, response.text)
+        expected = film.with_name('暖光 终版.webm')
+        self.assertEqual((self.root / response.json()['key']), expected)
+        self.assertEqual(expected.read_bytes(), raw)
+        self.assertFalse(film.exists())
+        self.assertIn('](<../成片/暖光 终版.webm>)', related.read_text(encoding='utf-8'))
+        self.assertIn('https://example.org/最终成片.webm', related.read_text(encoding='utf-8'))
+        self.assertIn('[命令示例](<../成片/最终成片.webm>)', related.read_text(encoding='utf-8'))
+        self.assertIn('[文档示例](<../成片/最终成片.webm>)', related.read_text(encoding='utf-8'))
+        self.assertIn('](<成片/暖光 终版.webm>)', record.read_text(encoding='utf-8'))
+        data = self.client.get(self.url).json()
+        self.assertEqual(data['materials'][0]['film']['name'], expected.name)
+        self.assertIn(expected.name, data['history'][0]['fields']['发布文件'])
+        self.assertEqual(self.client.get(data['materials'][0]['film']['url']).content, raw)
+        self.assertEqual(sibling.read_bytes(), raw)
+
+    def test_rename_rolls_back_when_a_link_cannot_be_written(self):
+        film, _, material = self.prepare()
+        readme = self.project / 'README.md'
+        original = readme.read_text(encoding='utf-8')
+        # Put a real link in a recognized field, so README is written before the failing publication file.
+        edited = re.sub(r'(\| 下一步 \| )[^|]+', r'\1[成片](<成片/最终成片.webm>) ', original, count=1)
+        self.assertNotEqual(edited, original)
+        readme.write_text(edited, encoding='utf-8')
+        before = readme.read_bytes()
+        original_replace = Path.replace
+
+        def fail_write(path, target):
+            if target == material:
+                raise PermissionError('模拟发布资料无法写入')
+            return original_replace(path, target)
+
+        url = self.url+'/files/'+film.relative_to(self.root).as_posix()
+        with patch.object(Path, 'replace', fail_write):
+            response = self.client.patch(url, headers={'Origin': 'http://127.0.0.1'}, json={'name': '待改'})
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(readme.read_bytes(), before)
+        self.assertTrue(film.exists())
+        self.assertFalse(film.with_name('待改.webm').exists())
+        self.assertEqual(self.client.get(self.url).status_code, 200)
 
     def test_scoped_files_and_symlink_rejection(self):
         film, cover, path = self.prepare()

@@ -54,6 +54,7 @@ try {
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
+  let uploadedFile=uploaded;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',async route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
@@ -62,6 +63,13 @@ try {
     assert.match(request.headers()['content-type'],/^multipart\/form-data/);
     assert.equal(await page.getByRole('button',{name:'更换文件',exact:true}).isDisabled(),true);
     hasUpload=true;return route.fulfill({status:201,json:{name:uploaded.name,key:uploaded.key}});
+   }
+   if(request.method()==='PATCH' && path===decodeURIComponent(uploaded.url)){
+    const {name}=request.postDataJSON();
+    if(name==='同名')return route.fulfill({status:409,json:{detail:'已有同名成片，请换一个文件名'}});
+    assert.equal(name,'新文件名');
+    uploadedFile={...uploaded,name:name+'.webm',key:uploaded.key.replace(/[^/]+$/,name+'.webm'),url:uploaded.url.replace(/[^/]+$/,encodeURIComponent(name+'.webm'))};
+    return route.fulfill({json:{name:uploadedFile.name,key:uploadedFile.key}});
    }
    if(request.method()==='DELETE' && path===decodeURIComponent(removable.url)){
     if(failDelete)return route.fulfill({status:409,json:{detail:'隔离删除失败，请重试'}});
@@ -76,7 +84,7 @@ try {
     return route.fulfill({json:{kind:'group',name:item.project,statusHtml:`<span class="status-badge status-${color}">${item.status}</span>`,scenes:['whole'],segments:{whole:[{id:'P001',duration:20,videos:[]}]}}});
    }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:[...(hasUpload?[uploaded]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
    if(path.endsWith('.webm'))return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
    if(path.endsWith('.png'))return route.fulfill({contentType:'image/png',body:images.get(path)});
    unexpected.push(path);return route.fulfill({status:404,body:'unexpected isolated request'});
@@ -114,29 +122,31 @@ try {
   assert.equal(await files.locator('details').count(),0);
   assert.equal(await files.getByText('这里可查看目录文件',{exact:false}).count(),0);
   assert.equal(await table.locator('tbody tr').count(),fixture.detail.finals.length);
-  assert.deepEqual(await table.getByRole('columnheader').allTextContents(),['文件时间','文件名','分辨率与比例','时长','操作']);
+  assert.deepEqual(await table.getByRole('columnheader').allTextContents(),['文件时间','文件名','文件类型','分辨率与比例','时长','操作']);
   const fileRows=table.locator('tbody tr');
   assert.equal(await fileRows.first().locator('time').getAttribute('datetime'),fixture.detail.finals[0].fileTime);
   assert.match(await fileRows.first().locator('time').innerText(),/\d{4}.*\d{2}:\d{2}:\d{2}/);
-  assert.equal(await fileRows.nth(0).getByRole('cell').nth(2).innerText(),'1920 × 1088 · 16:9');
-  assert.equal(await fileRows.nth(1).getByRole('cell').nth(2).innerText(),'1088 × 1920 · 9:16');
-  assert.equal(await fileRows.nth(0).getByRole('cell').nth(3).innerText(),'8 秒');
-  assert.equal(await fileRows.nth(1).getByRole('cell').nth(3).innerText(),'12.35 秒');
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(1).innerText(),fixture.detail.finals[0].name.replace(/\.webm$/,''));
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(2).innerText(),'.webm');
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(3).innerText(),'1920 × 1088 · 16:9');
+  assert.equal(await fileRows.nth(1).getByRole('cell').nth(3).innerText(),'1088 × 1920 · 9:16');
+  assert.equal(await fileRows.nth(0).getByRole('cell').nth(4).innerText(),'8 秒');
+  assert.equal(await fileRows.nth(1).getByRole('cell').nth(4).innerText(),'12.35 秒');
   assert.equal(await fileRows.nth(2).getByRole('cell',{name:'—',exact:true}).count(),2);
   assert.ok(await table.evaluate(el=>{
    const box=el.getBoundingClientRect();
    return Math.abs(box.width-el.closest('section').getBoundingClientRect().width)<2;
   }));
   const alignment=await table.evaluate(el=>{
-   const row=el.querySelector('tbody tr'),cell=row.cells[1],actions=row.cells[4].querySelector('.chloe-publication-file-actions');
+   const row=el.querySelector('tbody tr'),cell=row.cells[1],actions=row.cells[5].querySelector('.chloe-publication-file-actions');
    const buttons=actions.querySelectorAll('button'),left=buttons[0].getBoundingClientRect(),right=buttons[buttons.length-1].getBoundingClientRect(),box=actions.getBoundingClientRect();
    return {vertical:getComputedStyle(cell).verticalAlign,align:getComputedStyle(cell).textAlign,
     centered:Math.abs((left.left+right.right)/2-(box.left+box.right)/2)<2,oneLine:left.top===right.top,
     containerWidth:box.width,buttonWidths:[...buttons].map(button=>button.getBoundingClientRect().width)};
   });
   assert.ok(alignment.vertical==='middle' && alignment.align==='left' && alignment.centered && alignment.oneLine,JSON.stringify(alignment));
-  const removeRow=table.getByRole('row').filter({hasText:'未引用成片.webm'});
-  const buttonStyles=await removeRow.locator('button').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button);return {font:s.fontSize,height:button.getBoundingClientRect().height};}));
+  const removeRow=table.getByRole('row').filter({has:page.getByText('未引用成片',{exact:true})});
+  const buttonStyles=await removeRow.getByRole('cell').nth(5).locator('button').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button);return {font:s.fontSize,height:button.getBoundingClientRect().height};}));
   assert(buttonStyles.every(style=>style.font==='14px' && style.height===buttonStyles[0].height));
   assert(await removeRow.getByRole('button',{name:'删除',exact:true}).evaluate(button=>button.classList.contains('danger-button')));
   await removeRow.getByRole('button',{name:'删除',exact:true}).click();
@@ -185,7 +195,26 @@ try {
   assert.equal(await submit.isEnabled(),true);
   await submit.click();
   await uploadDialog.waitFor({state:'hidden'});
-  assert.equal(await table.locator('tbody tr').first().getByRole('cell').nth(1).innerText(),uploaded.name);
+  const newRow=table.locator('tbody tr').first();
+  assert.equal(await newRow.getByRole('cell').nth(1).innerText(),'最新上传');
+  await newRow.getByRole('button',{name:'重命名',exact:true}).click();
+  const nameField=newRow.getByRole('textbox',{name:'新文件名',exact:true});
+  assert.equal(await nameField.inputValue(),'最新上传');
+  assert.equal(await nameField.evaluate(el=>el.selectionStart===0 && el.selectionEnd===el.value.length),true);
+  await nameField.fill('未提交');
+  await nameField.press('Escape');
+  assert.equal(await nameField.count(),0);
+  assert.equal(writes.length,3);
+  await newRow.getByRole('button',{name:'重命名',exact:true}).click();
+  await nameField.fill('同名');
+  await nameField.press('Enter');
+  await newRow.getByRole('alert').getByText('已有同名成片，请换一个文件名',{exact:true}).waitFor();
+  assert.equal(await nameField.inputValue(),'同名');
+  await nameField.fill('新文件名');
+  await newRow.getByRole('button',{name:'保存文件名',exact:true}).click();
+  await newRow.getByText('新文件名',{exact:true}).waitFor();
+  assert.equal(await newRow.getByRole('cell').nth(2).innerText(),'.webm');
+  assert.equal(await page.getByRole('dialog').count(),0);
   for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
    await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
    await page.getByRole('dialog').waitFor();
@@ -208,7 +237,7 @@ try {
   assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
   assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
   missingPortrait=false;noMaterial=true;await page.reload();
-  assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'5');
+  assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'6');
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
@@ -216,7 +245,7 @@ try {
   empty=true;await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');await page.reload();
   await page.getByText('暂无视频项目。',{exact:false}).waitFor();
   assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 0 部','制作中 0 部','待发布 0 部','已发布 0 部']);
-  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url),uploadPath]);
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url),uploadPath,decodeURIComponent(uploaded.url),decodeURIComponent(uploaded.url)]);
   await context.close();
  }
  console.log('Chloe publication: real adapter fixtures, copy, original downloads, playback, cover preview, switching, empty/error/retry and three desktop widths passed.');
