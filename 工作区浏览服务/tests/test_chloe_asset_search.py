@@ -79,7 +79,13 @@ class ChloeAssetSearchTests(TestCase):
                 self.assertEqual(look_result.status_code, 200, look_result.text)
                 self.assertEqual(look_result.json()[0]['params'],
                                  {'asset': 'models', 'model': 'M001', 'modelTab': 'looks', 'look': 'L001'})
-                for query in ('', '示例套装', 'RV001', '001'):
+                self.assertEqual([item['id'] for item in client.get(url, params={'q': '001'}).json()],
+                                 ['A001', 'C001', 'H001', 'L001', 'M001', 'O001', 'S001'])
+                for fragment in ('016', '姿-01'):
+                    self.assertEqual(client.get(url, params={'q': fragment}).json()[0]['id'], pose.id)
+                initialize_asset(root, '服装', 'O0010', '更长编号')
+                self.assertEqual([item['id'] for item in client.get(url, params={'q': 'O001'}).json()], ['O001', 'O0010'])
+                for query in ('', '示例套装', 'RV001', 'v001', 'o1'):
                     self.assertEqual(client.get(url, params={'q': query}).json(), [])
                 self.assertEqual(client.get('/second/shared-asset-search', params={'q': 'O001'}).json(), [])
                 self.assertEqual(client.get('/unrelated/shared-asset-search', params={'q': 'O001'}).status_code, 404)

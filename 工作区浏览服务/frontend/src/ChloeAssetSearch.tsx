@@ -24,12 +24,12 @@ export function ChloeAssetSearch() {
   const results = useRef<HTMLElement>(null);
   const hovered = useRef<{ row: HTMLAnchorElement; url: string } | null>(null);
   const [preview, setPreview] = useState<{ url: string; top: number; left: number } | null>(null);
-  const prefix = value.trim().toLowerCase();
+  const fragment = value.trim().toLowerCase();
   useEffect(() => {
-    const timer = window.setTimeout(() => setSettled(prefix), 180);
+    const timer = window.setTimeout(() => setSettled(fragment), 180);
     return () => window.clearTimeout(timer);
-  }, [prefix]);
-  const ready = open && !!prefix && settled === prefix;
+  }, [fragment]);
+  const ready = open && !!fragment && settled === fragment;
   const query = useQuery({
     queryKey: ['chloe-asset-search', api, settled],
     queryFn: () => get<SearchMatch[]>(`${api}/shared-asset-search?${new URLSearchParams({ q: settled })}`),
@@ -54,9 +54,9 @@ export function ChloeAssetSearch() {
       if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); clearPreview(); }
     }}
     onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); clearPreview(); } }}>
-    <SearchField size="compact" label="搜索共用资产编号" placeholder="搜索编号，如 O001"
+    <SearchField size="compact" label="搜索共用资产编号" placeholder="搜索完整或部分编号"
       value={value} onChange={next => { setValue(next); setOpen(true); clearPreview(); }} />
-    {open && prefix && <section ref={results} className="chloe-asset-search-results" aria-label="资产搜索结果" tabIndex={-1}
+    {open && fragment && <section ref={results} className="chloe-asset-search-results" aria-label="资产搜索结果" tabIndex={-1}
       onScroll={positionPreview}>
       <Result loading={!ready || query.isPending} error={ready ? query.error : null} retry={query.refetch} retrying={query.isFetching} />
       {ready && query.data && (query.data.length ? <ul>

@@ -91,7 +91,7 @@ try {
       const assets = cards => route.fulfill({json:chloeAssetResponse(url, cards)});
       const method = route.request().method();
       if (path === '/api/workspaces/account-demo/shared-asset-search') {
-        const prefix = new URL(url).searchParams.get('q');
+        const fragment = new URL(url).searchParams.get('q');
         const matches = [
           {id:'O001',name:'套装甲',category:'套装',previewUrl:'/api/assembly-fixture/O001?hover=1',params:{asset:'clothing',clothingTab:'outfits',clothing:'O001'}},
           {id:'O003',name:'单件样例1',category:'单件',previewUrl:'/api/assembly-fixture/O003?hover=1',params:{asset:'clothing',clothingTab:'garments',clothing:'O003'}},
@@ -102,7 +102,7 @@ try {
             id,name,category:'配饰',previewUrl:media.url,params:{asset:'accessories',accessory:id},
           })),
         ];
-        return route.fulfill({json:matches.filter(({id})=>id.toLowerCase().startsWith(prefix))});
+        return route.fulfill({json:matches.filter(({id})=>id.toLowerCase().includes(fragment))});
       }
       if (path === '/api/workspaces/account-demo/shared-clothing/styles') {
         if (method === 'POST') {
@@ -336,8 +336,10 @@ try {
       Math.abs(searchBounds.y - referenceVideoBounds.y) < 14);
     await searchField.fill('套装甲');
     await searchResults.getByText('未找到匹配的资产编号。',{exact:true}).waitFor();
-    await searchField.fill(' o00 ');
     const garmentResult = searchResults.getByRole('link',{name:/^O003 · 单件样例1/});
+    await searchField.fill('003');
+    await garmentResult.waitFor();
+    await searchField.fill(' o00 ');
     await garmentResult.waitFor();
     assert.equal(await searchResults.getByRole('link').count(),2);
     const hoverPreview = page.locator('.chloe-asset-search-preview');

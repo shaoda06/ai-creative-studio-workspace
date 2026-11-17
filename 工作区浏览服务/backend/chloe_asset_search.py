@@ -24,11 +24,13 @@ def image_preview(media):
     return None
 
 
-def search_entries(root, api, prefix):
+def search_entries(root, api, fragment):
+    # Project asset numbers consist of a kind code followed by digits.
+    code_part = fragment.rstrip('0123456789')
     for kind, asset, parameter in REFERENCE_GROUPS:
-        if not (prefix.startswith(kind.prefix.casefold()) or kind.prefix.casefold().startswith(prefix)):
+        if code_part not in kind.prefix.casefold():
             continue
-        for identity, name, path, doc in asset_documents(root, kind, id_prefix=prefix):
+        for identity, name, path, doc in asset_documents(root, kind, id_fragment=fragment):
             preview = None
             if kind == VIDEO:
                 reference = playback_reference(root, path, fields(doc, VIDEO_SECTION))
@@ -46,23 +48,23 @@ def search_entries(root, api, prefix):
                 params['clothingTab'] = 'outfits' if is_outfit else 'garments'
                 label = '套装' if is_outfit else '单件'
             yield {'id': identity, 'name': name, 'category': label, 'params': params, 'previewUrl': preview}
-    if prefix.startswith('m'):
-        for identity, name, path, doc in model_records(root, id_prefix=prefix):
+    if not code_part or code_part == 'm':
+        for identity, name, path, doc in model_records(root, id_fragment=fragment):
             card = model_card(root, api, path, doc, model_adoption(doc), {'id': identity, 'name': name})
             yield {'id': identity, 'name': name, 'category': 'AI 模特', 'params': {'asset': 'models', 'model': identity},
                    'previewUrl': image_preview(card['media'])}
-    if prefix.startswith('l'):
-        for identity, name, path, doc in model_looks(root, id_prefix=prefix):
+    if not code_part or code_part == 'l':
+        for identity, name, path, doc in model_looks(root, id_fragment=fragment):
             model = fields(doc, '造型信息')['模特编号']
             if next(model_records(root, model), None):
                 preview = look_cover(root, f'{api}/shared-models/{quote(model)}', path, doc, name)
                 yield {'id': identity, 'name': name, 'category': '造型', 'previewUrl': image_preview(preview),
                        'params': {'asset': 'models', 'model': model, 'modelTab': 'looks', 'look': identity}}
     # Pose IDs begin with their registered category name.
-    if not prefix.isascii() or '-' in prefix:
+    if not code_part or not fragment.isascii() or '-' in fragment:
         poses, _ = catalog()
         for pose in poses.values():
-            if pose.id.casefold().startswith(prefix):
+            if fragment in pose.id.casefold():
                 yield {'id': pose.id, 'name': pose.name, 'category': '姿态', 'params': {'asset': 'poses', 'pose': pose.id},
                        'previewUrl': image_preview(pose.card(api)['media'])}
 
@@ -70,13 +72,13 @@ def search_entries(root, api, prefix):
 @router.get('/shared-asset-search')
 def search(request: Request, q: Annotated[str, Query(max_length=64)] = ''):
     space = request_space(request)
-    prefix = q.strip().casefold()
-    if not prefix:
+    fragment = q.strip().casefold()
+    if not fragment:
         return []
     try:
         with reuse_read_indexes():
-            return sorted(search_entries(space.root, space.api, prefix), key=lambda item: (
-                item['id'].casefold() != prefix, item['id'], item['name'],
+            return sorted(search_entries(space.root, space.api, fragment), key=lambda item: (
+                item['id'].casefold() != fragment, not item['id'].casefold().startswith(fragment), item['id'], item['name'],
             ))[:20]
     except (OSError, ValueError) as error:
         raise HTTPException(409, str(error)) from error

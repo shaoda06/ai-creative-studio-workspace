@@ -20,14 +20,14 @@ import project_resources as resources
 router = APIRouter(prefix='/shared-models')
 
 
-def model_records(root, requested_id=None, *, id_prefix=''):
+def model_records(root, requested_id=None, *, id_fragment=''):
     folder = resources.local(root, '综合资料/共用素材/AI模特')
     if not folder.is_dir():
         raise FileNotFoundError('模特资料目录不存在')
     seen = set()
     for path in sorted(folder.glob('M*-*/模特说明.md')):
         identity, name = path.parent.name.split('-', 1)
-        if (requested_id is not None and identity != requested_id) or not identity.casefold().startswith(id_prefix):
+        if (requested_id is not None and identity != requested_id) or id_fragment not in identity.casefold():
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('模特说明越出模特资料目录')
@@ -160,11 +160,11 @@ def linked_html(text, source, allowed, base):
     return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
 
 
-def model_looks(root, identity=None, *, id_prefix=''):
+def model_looks(root, identity=None, *, id_fragment=''):
     folder = resources.local(root, '综合资料/共用素材/造型')
     for path in sorted(folder.glob('L*-*/造型说明.md')):
         look_id, name = path.parent.name.split('-', 1)
-        if not look_id.casefold().startswith(id_prefix):
+        if id_fragment not in look_id.casefold():
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('造型说明越出造型资料目录')
