@@ -378,7 +378,10 @@ try {
     await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
     await unused.uncheck();
     await selectStyle.click();
+    const applyStyles = styleMenu.getByRole('button',{name:'应用',exact:true});
+    assert.equal(await applyStyles.isDisabled(),true);
     await findStyle.fill('通勤');
+    assert.equal(await applyStyles.count(),0);
     await styleMenu.getByRole('button',{name:'新建并应用「通勤」',exact:true}).click();
     await currentStyle.filter({hasText:/^通勤$/}).waitFor();
     const commute = styleFilter.getByRole('checkbox',{name:'通勤',exact:true});
@@ -388,6 +391,7 @@ try {
     await findStyle.fill('通勤');
     assert.equal(await styleMenu.getByRole('checkbox').count(),1);
     assert.equal(await styleMenu.getByRole('button',{name:/^新建/}).count(),0);
+    assert.equal(await applyStyles.isDisabled(),true);
     await styleMenu.getByRole('checkbox',{name:'通勤',exact:true}).check();
     await findStyle.fill('备选1');
     await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).check();

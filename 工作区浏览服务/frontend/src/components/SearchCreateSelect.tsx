@@ -19,6 +19,7 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
   const normalized = term.toLowerCase();
   const matches = items.filter(item => item.toLowerCase().includes(normalized));
   const canCreate = term !== '' && !matches.some(item => item.toLowerCase() === normalized);
+  const changed = draft.length !== selected.length || draft.some(value => !selected.includes(value));
   const reposition = useCallback(() => setPosition(menuPosition(trigger.current!, menu.current!)), []);
   useEffect(() => {
     if (!expanded) return;
@@ -65,7 +66,7 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
           close();
         }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('input, button')];
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('input:not(:disabled), button:not(:disabled)')];
           const next = controls.indexOf(event.target as HTMLElement) + (event.key === 'ArrowDown' ? 1 : -1);
           controls[(next + controls.length) % controls.length].focus();
           event.preventDefault();
@@ -77,11 +78,11 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
           onChange={event => toggle(item, event.target.checked)} />{renderOption ? renderOption(item) : <span>{item}</span>}</label>)}
       </div>
       <div className="search-create-actions">
-        {canCreate && <button type="button" className="search-create-new" onClick={() => {
+        <button type="button" className={canCreate ? 'search-create-new' : undefined} disabled={!canCreate && !changed} onClick={() => {
           close();
-          onCreate(term, [...draft.filter(value => value !== exclusive), term]);
-        }}>新建并应用「{term}」</button>}
-        <button type="button" onClick={() => { close(); onChange(draft); }}>应用</button>
+          if (canCreate) onCreate(term, [...draft.filter(value => value !== exclusive), term]);
+          else onChange(draft);
+        }}>{canCreate ? `新建并应用「${term}」` : '应用'}</button>
       </div>
     </div>
   </>;
