@@ -227,7 +227,15 @@ export async function checkSharedNavigation(page, width, selfTest) {
   await searchCreate.getByText('当前选项 通勤',{exact:true}).waitFor();
   await openSearchCreate.click();
   await searchCreateInput.fill('简约');
-  await searchCreateMenu.getByRole('button',{name:'新建并应用「简约」',exact:true}).click();
+  const createAction = searchCreateMenu.getByRole('button',{name:'新建并应用「简约」',exact:true});
+  const applyAction = searchCreateMenu.getByRole('button',{name:'应用',exact:true});
+  const [createBox, applyBox, actionRow] = await Promise.all([
+    createAction.boundingBox(), applyAction.boundingBox(), searchCreateMenu.locator('.search-create-actions').boundingBox(),
+  ]);
+  assert.ok(Math.abs(createBox.x - actionRow.x) <= 1 &&
+    Math.abs(applyBox.x + applyBox.width - actionRow.x - actionRow.width) <= 1);
+  assert.equal(await createAction.evaluate(el => getComputedStyle(el).textAlign),'start');
+  await createAction.click();
   await searchCreate.getByText('当前选项 通勤、简约',{exact:true}).waitFor();
   await openSearchCreate.click();
   await searchCreateInput.press('Escape');

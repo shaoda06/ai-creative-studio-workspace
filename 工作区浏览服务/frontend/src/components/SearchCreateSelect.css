@@ -8,3 +8,4 @@
 .search-create-options .status-badge{white-space:normal;overflow-wrap:anywhere}
 .search-create-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px}
 .search-create-actions button{overflow-wrap:anywhere;max-width:100%}
+.search-create-new{margin-inline-end:auto;text-align:start}

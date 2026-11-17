@@ -77,7 +77,7 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
           onChange={event => toggle(item, event.target.checked)} />{renderOption ? renderOption(item) : <span>{item}</span>}</label>)}
       </div>
       <div className="search-create-actions">
-        {canCreate && <button type="button" onClick={() => {
+        {canCreate && <button type="button" className="search-create-new" onClick={() => {
           close();
           onCreate(term, [...draft.filter(value => value !== exclusive), term]);
         }}>新建并应用「{term}」</button>}
