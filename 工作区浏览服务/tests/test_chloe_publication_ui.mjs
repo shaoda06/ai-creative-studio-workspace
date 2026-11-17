@@ -55,11 +55,12 @@ try {
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
   page.on('pageerror',e=>errors.push(String(e)));
-  await page.route('**/api/**',route=>{
+  await page.route('**/api/**',async route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
    if(request.method()!=='GET')writes.push(path);
    if(request.method()==='POST' && path===uploadPath){
     assert.match(request.headers()['content-type'],/^multipart\/form-data/);
+    assert.equal(await page.getByRole('button',{name:'更换文件',exact:true}).isDisabled(),true);
     hasUpload=true;return route.fulfill({status:201,json:{name:uploaded.name,key:uploaded.key}});
    }
    if(request.method()==='DELETE' && path===decodeURIComponent(removable.url)){
@@ -171,7 +172,12 @@ try {
   const uploadDialog=page.getByRole('dialog',{name:'上传成片',exact:true});
   const submit=uploadDialog.getByRole('button',{name:'上传',exact:true});
   assert.equal(await submit.isDisabled(),true);
-  await uploadDialog.getByLabel('视频文件').setInputFiles({name:uploaded.name,mimeType:'video/webm',buffer:video});
+  assert.equal(await uploadDialog.getByText('未选择文件',{exact:true}).isVisible(),true);
+  const chooseVideo=page.waitForEvent('filechooser');
+  await uploadDialog.getByRole('button',{name:'选择视频',exact:true}).click();
+  await (await chooseVideo).setFiles({name:uploaded.name,mimeType:'video/webm',buffer:video});
+  assert.equal(await uploadDialog.getByText(uploaded.name,{exact:true}).isVisible(),true);
+  assert.equal(await submit.isEnabled(),true);
   await submit.click();
   await uploadDialog.waitFor({state:'hidden'});
   assert.equal(await table.locator('tbody tr').first().getByRole('cell').nth(1).innerText(),uploaded.name);

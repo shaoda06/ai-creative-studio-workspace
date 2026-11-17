@@ -3,6 +3,7 @@ import { Dialog, Document, FileTree, Preview, PreviewContext } from '../componen
 import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { SearchField } from './SearchField';
+import { FilePicker } from './FilePicker';
 import { LinkButton } from './LinkButton';
 import { TabSelect } from './TabSelect';
 import { SearchCreateSelect } from './SearchCreateSelect';
@@ -43,6 +44,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
   const [draft, setDraft] = useState(sampleText);
   const [fieldDraft, setFieldDraft] = useState('');
   const [fieldsDisabled, setFieldsDisabled] = useState(false);
+  const [sampleFileName, setSampleFileName] = useState('');
   const [longSwitch, setLongSwitch] = useState(false);
   const [tab, setTab] = useState('overview');
   const [selection, setSelection] = useState('one');
@@ -95,6 +97,10 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
             <label>只读输入<input aria-label="只读输入示例" value="可以选择复制，不能修改的示例文字" readOnly /></label>
             <div className="component-demo-row"><span className="component-draft" style={{ flex: 1, minWidth: 0 }}>长说明文字与连续英文：LongSwitchDescriptionLongSwitchDescription</span><Switch label="长说明开关示例" checked={longSwitch} disabled={fieldsDisabled} onChange={setLongSwitch} /></div>
           </div>
+        </Example>
+        <Example title="文件选择" rule="选择后显示完整文件名，长名称可换行。禁用输入时，选择和更换按钮一并禁用。演示只显示当前文件名。" usage="Chloe 成片上传">
+          <FilePicker label="示例视频文件" chooseLabel="选择视频" accept="video/*" fileName={sampleFileName}
+            onSelect={file => setSampleFileName(file.name)} disabled={fieldsDisabled} />
         </Example>
       </>}
       {category === 'select' && <Example title="选项菜单" rule="菜单最小与触发按钮同宽，按内容自然撑宽，不设固定最大值；仅限制不超出屏幕，超长选项才换行。纯图标入口同样按内容适配，窗口缩放时重新定位。选中项右侧统一显示“当前”且不另起一行，长名称仅在文字区域内换行；支持方向键、Enter选择与Esc关闭；禁用选项不可选择，键盘会跳过。长选项在菜单内换行，触发按钮显示省略。表单、紧凑、小号、工具栏和选中高亮均为公共规格。" usage="项目切换、修改轮次、视频候选、提示词分类">

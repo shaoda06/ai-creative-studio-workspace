@@ -17,6 +17,7 @@ import { AssetMediaCard } from './components/AssetMediaCard';
 import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { CopyButton } from './components/CopyButton';
 import { DownloadButton } from './components/DownloadButton';
+import { FilePicker } from './components/FilePicker';
 import { useNotify } from './components/Notifications';
 import './ChloePublication.css';
 import './components/EpisodeProduction.css';
@@ -214,8 +215,7 @@ function FinalUpload({ url, close, done }: { url: string; close: () => void; don
         setBusy(false);
       }
     }}>
-      <label>视频文件 <input type="file" accept="video/*,.mkv,.avi" required disabled={busy}
-        onChange={event => setFile(event.target.files?.[0] || null)} /></label>
+      <FilePicker label="视频文件" chooseLabel="选择视频" accept="video/*,.mkv,.avi" fileName={file?.name} onSelect={setFile} disabled={busy} />
       <div className="chloe-publication-toolbar">
         <button type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传'}</button>
         <button type="button" disabled={busy} onClick={close}>取消</button>

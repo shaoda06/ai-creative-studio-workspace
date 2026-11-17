@@ -1,0 +1,5 @@
+.file-picker{display:grid;gap:6px;min-width:0}
+.file-picker-label{font-size:14px;font-weight:600}
+.file-picker-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#f5f8f6}
+.file-picker-name{flex:1 1 100px;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.file-picker-row button{flex:none;white-space:nowrap}

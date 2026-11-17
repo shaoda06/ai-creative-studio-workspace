@@ -113,6 +113,29 @@ export async function checkSharedInputs(page, width, selfTest) {
   await switchFits(showcase.getByRole('switch', { name: '长说明开关示例', exact: true }), `${width}/展示开关`);
   await showcase.getByRole('switch', { name: '禁用输入示例', exact: true }).click();
   assert.equal(await showcase.getByLabel('单行输入示例', { exact: true }).isDisabled(), true);
+  assert.equal(await showcase.getByRole('button', { name: '选择视频', exact: true }).isDisabled(), true);
+  await showcase.getByRole('switch', { name: '禁用输入示例', exact: true }).click();
+  const fileInput = showcase.getByLabel('示例视频文件', { exact: true });
+  const choose = showcase.getByRole('button', { name: '选择视频', exact: true });
+  assert.equal(await fileInput.isVisible(), false);
+  assert.equal(await showcase.getByText('未选择文件', { exact: true }).isVisible(), true);
+  const chooser = page.waitForEvent('filechooser');
+  await choose.press('Enter');
+  const fileName = '穿搭视频_'.repeat(6) + 'LongUnbrokenFilename'.repeat(5) + '.mp4';
+  await (await chooser).setFiles({ name: fileName, mimeType: 'video/mp4', buffer: Buffer.from('选择器演示') });
+  const changeFile = showcase.getByRole('button', { name: '更换文件', exact: true });
+  await changeFile.waitFor();
+  assert.equal(await showcase.getByText(fileName, { exact: true }).isVisible(), true);
+  assert.equal(await changeFile.evaluate(el => {
+    const row = el.parentElement;
+    return row.scrollWidth <= row.clientWidth + 1;
+  }), true, '完整文件名及按钮留在文件选择区域内');
+  const replacement = page.waitForEvent('filechooser');
+  await changeFile.click();
+  await (await replacement).setFiles({ name: '更换后的示例.mp4', mimeType: 'video/mp4', buffer: Buffer.from('演示') });
+  await showcase.getByText('更换后的示例.mp4', { exact: true }).waitFor();
+  await showcase.getByRole('switch', { name: '禁用输入示例', exact: true }).click();
+  assert.equal(await changeFile.isDisabled(), true);
   await showcase.getByRole('switch', { name: '禁用输入示例', exact: true }).click();
   await showcase.getByRole('button', { name: '布局与搜索', exact: true }).click();
   await showcase.getByRole('button', { name: '填入长搜索文字', exact: true }).click();
@@ -123,5 +146,5 @@ export async function checkSharedInputs(page, width, selfTest) {
     const screenshot = join(tmpdir(), `nora-inputs-${width}-${process.pid}.png`);
     await page.screenshot({ path: screenshot }); console.log(`输入组件截图：${screenshot}`);
   }
-  console.log(`输入检查：${width}px标准/紧凑搜索、单行/多行输入长文字及只读禁用、清空重输、开关鼠标/键盘切换和禁用跳过通过。`);
+  console.log(`输入检查：${width}px搜索、长文字与禁用、开关及文件选择、更换、长文件名和禁用通过。`);
 }
