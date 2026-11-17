@@ -20,7 +20,7 @@ import project_resources as resources
 router = APIRouter(prefix='/shared-models')
 
 
-def model_records(root, requested_id=None, *, id_fragment=''):
+def model_record_candidates(root, requested_id=None, *, id_fragment=''):
     folder = resources.local(root, '综合资料/共用素材/AI模特')
     if not folder.is_dir():
         raise FileNotFoundError('模特资料目录不存在')
@@ -34,9 +34,14 @@ def model_records(root, requested_id=None, *, id_fragment=''):
         if identity in seen:
             raise ValueError('模特编号重复：' + identity)
         seen.add(identity)
-        doc = read_document(root, path, template('chloe-assets', '模特说明模板.md'),
-                            {'identity': identity, 'title': name})
-        yield identity, name, path, doc
+        load = partial(read_document, root, path, template('chloe-assets', '模特说明模板.md'),
+                       {'identity': identity, 'title': name})
+        yield identity, name, path, load
+
+
+def model_records(root, requested_id=None):
+    for identity, name, path, load in model_record_candidates(root, requested_id):
+        yield identity, name, path, load()
 
 
 def model_portrait(root, path, adoption):
@@ -160,7 +165,7 @@ def linked_html(text, source, allowed, base):
     return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
 
 
-def model_looks(root, identity=None, *, id_fragment=''):
+def look_candidates(root, *, id_fragment=''):
     folder = resources.local(root, '综合资料/共用素材/造型')
     for path in sorted(folder.glob('L*-*/造型说明.md')):
         look_id, name = path.parent.name.split('-', 1)
@@ -168,8 +173,14 @@ def model_looks(root, identity=None, *, id_fragment=''):
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('造型说明越出造型资料目录')
-        doc = read_document(root, path, template('chloe-assets', '造型说明模板.md'),
-                            {'identity': look_id, 'title': name})
+        load = partial(read_document, root, path, template('chloe-assets', '造型说明模板.md'),
+                       {'identity': look_id, 'title': name})
+        yield look_id, name, path, load
+
+
+def model_looks(root, identity=None):
+    for look_id, name, path, load in look_candidates(root):
+        doc = load()
         if identity is None or fields(doc, '造型信息')['模特编号'] == identity:
             yield look_id, name, path, doc
 

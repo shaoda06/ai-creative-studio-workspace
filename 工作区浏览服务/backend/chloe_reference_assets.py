@@ -31,7 +31,7 @@ SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')
 
 
-def asset_documents(root, kind, requested_id=None, *, id_fragment=''):
+def asset_document_candidates(root, kind, requested_id=None, *, id_fragment=''):
     folder = resources.local(root, '综合资料/共用素材/'+kind.label)
     seen = set()
     for path in sorted(folder.glob(f'{kind.prefix}*-*/{kind.label}说明.md')):
@@ -43,9 +43,14 @@ def asset_documents(root, kind, requested_id=None, *, id_fragment=''):
         if identity in seen:
             raise ValueError(kind.label+'编号重复：' + identity)
         seen.add(identity)
-        doc = read_document(root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
-                            {'identity': identity, 'title': name})
-        yield identity, name, path, doc
+        load = partial(read_document, root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
+                       {'identity': identity, 'title': name})
+        yield identity, name, path, load
+
+
+def asset_documents(root, kind, requested_id=None):
+    for identity, name, path, load in asset_document_candidates(root, kind, requested_id):
+        yield identity, name, path, load()
 
 
 def asset_context(root, identity, kind):

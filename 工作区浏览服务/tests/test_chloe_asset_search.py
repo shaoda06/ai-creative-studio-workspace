@@ -1,4 +1,5 @@
 from os.path import relpath
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -89,3 +90,16 @@ class ChloeAssetSearchTests(TestCase):
                     self.assertEqual(client.get(url, params={'q': query}).json(), [])
                 self.assertEqual(client.get('/second/shared-asset-search', params={'q': 'O001'}).json(), [])
                 self.assertEqual(client.get('/unrelated/shared-asset-search', params={'q': 'O001'}).status_code, 404)
+
+                loaded = []
+
+                def load_candidate(identity):
+                    loaded.append(identity)
+                    return None if identity == 'O001' else {'id': identity}
+
+                ids = [f'O{index:03d}' for index in range(1, 26)]
+                candidates = [(identity, '', partial(load_candidate, identity)) for identity in reversed(ids)]
+                with patch('backend.chloe_asset_search.search_candidates', return_value=candidates):
+                    results = client.get(url, params={'q': '0'}).json()
+                self.assertEqual([item['id'] for item in results], ids[1:21])
+                self.assertEqual(loaded, ids[:21])
