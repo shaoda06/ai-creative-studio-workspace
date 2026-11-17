@@ -7,6 +7,12 @@ import { SearchCreateSelect } from './components/SearchCreateSelect';
 const unclassified = '未分类';
 const styleTones = ['blue', 'green', 'purple', 'orange', 'teal', 'rose', 'red', 'indigo'] as const;
 
+export function OutfitStyleBadge({ style, catalog }: { style: string; catalog: string[] }) {
+  const index = catalog.filter(name => name !== unclassified).indexOf(style);
+  const tone = index < 0 ? 'gray' : styleTones[index % styleTones.length];
+  return <span className={`status-badge status-${tone} chloe-outfit-style-badge`}>{style}</span>;
+}
+
 const stylesKey = (api: string) => ['chloe-outfit-styles', api];
 const clothingUrl = (api: string) => `${api}/shared-clothing`;
 
@@ -61,12 +67,7 @@ export function OutfitStyleSelect({ id, current, styles }: { id: string; current
     }
   };
   const items = [...new Set([...styles, ...current])];
-  const catalog = styles.filter(style => style !== unclassified);
-  const styleBadge = (style: string) => {
-    const index = catalog.indexOf(style);
-    const tone = index < 0 ? 'gray' : styleTones[index % styleTones.length];
-    return <span className={`status-badge status-${tone}`} key={style}>{style}</span>;
-  };
+  const styleBadge = (style: string) => <OutfitStyleBadge style={style} catalog={styles} key={style} />;
   return <div className="chloe-outfit-style-select">
     <div className="chloe-outfit-style-current">{items.filter(style => current.includes(style)).map(styleBadge)}</div>
     <SearchCreateSelect items={items} selected={current} label={`修改 ${id} 的风格`} prompt="搜索或新建风格"

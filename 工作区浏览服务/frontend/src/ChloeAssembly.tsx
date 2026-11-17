@@ -116,7 +116,7 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
   return <AssetSelectionDialog title={`选择${label} ${selected.length}${limit === undefined ? ' 项' : `/${limit}`}`} close={onClose}
     confirm={draft.confirmSelection}
     confirmDisabled={!ready || draft.confirming || (!selected.length && !initial.length)}
-    toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types} sortByName={!isOutfit}
+    toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types} styleCatalog={isOutfit ? styles.data ?? [] : undefined}
       setTypeChecked={setTypeChecked} label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : isOutfit ? '按风格筛选' : undefined} />}>
     {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
     <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />

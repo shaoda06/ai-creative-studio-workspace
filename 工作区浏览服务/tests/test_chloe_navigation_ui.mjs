@@ -314,6 +314,8 @@ try {
     const styleFilter = page.getByRole('group',{name:'按风格筛选',exact:true});
     await styleFilter.getByRole('checkbox',{name:'备选7',exact:true}).waitFor();
     assert.deepEqual(await styleFilter.locator('label').allTextContents(),outfitStyles);
+    assert.deepEqual(await styleFilter.locator('.status-badge').allTextContents(),outfitStyles);
+    assert.equal(await styleFilter.locator('.status-gray').textContent(),'未分类');
     assert.equal(await outfitTab.getAttribute('aria-current'),'page');
     const searchField = assetNav.getByRole('searchbox',{name:'搜索共用资产编号',exact:true});
     const searchResults = page.getByRole('region',{name:'资产搜索结果',exact:true});
@@ -442,7 +444,8 @@ try {
     assert.notEqual(await currentStyle.filter({hasText:/^简约$/}).getAttribute('class'),
       await currentStyle.filter({hasText:/^通勤$/}).getAttribute('class'));
     const simple = styleFilter.getByRole('checkbox',{name:'简约',exact:true});
-    await simple.check();
+    await styleFilter.getByText('简约',{exact:true}).click();
+    assert.ok(await simple.isChecked());
     await clothingLinks.nth(1).waitFor({state:'detached'});
     assert.equal(await clothingLinks.getAttribute('aria-label'),'O001 · 套装甲');
     await simple.uncheck();
@@ -451,8 +454,10 @@ try {
     assert.equal(await findStyle.evaluate(el => document.activeElement === el &&
       parseFloat(getComputedStyle(el).outlineOffset) < 0),true);
     for (const name of ['通勤','备选1','简约']) {
-      assert.equal(await styleMenu.locator('.status-badge').filter({hasText:name}).getAttribute('class'),
-        await currentStyle.filter({hasText:name}).getAttribute('class'));
+      const badgeClass = await currentStyle.filter({hasText:name}).getAttribute('class');
+      for (const group of [styleMenu,styleFilter]) {
+        assert.equal(await group.locator('.status-badge').filter({hasText:name}).getAttribute('class'),badgeClass);
+      }
     }
     await styleMenu.getByRole('checkbox',{name:'备选1',exact:true}).uncheck();
     await styleMenu.getByRole('checkbox',{name:'简约',exact:true}).uncheck();
@@ -818,6 +823,8 @@ try {
     const pickerStyles = dialog.getByRole('group',{name:'按风格筛选',exact:true});
     await pickerStyles.getByRole('checkbox',{name:'备选7',exact:true}).waitFor();
     assert.deepEqual(await pickerStyles.locator('label').allTextContents(),outfitStyles);
+    assert.deepEqual(await pickerStyles.locator('.status-badge').allTextContents(),outfitStyles);
+    assert.equal(await pickerStyles.locator('.status-gray').textContent(),'未分类');
     const pickerUnclassified = pickerStyles.getByRole('checkbox',{name:'未分类',exact:true});
     await pickerUnclassified.check();
     await dialog.getByText('暂无符合所选风格的可用套装。',{exact:true}).waitFor();

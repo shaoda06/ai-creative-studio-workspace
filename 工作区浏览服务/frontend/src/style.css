@@ -222,7 +222,8 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .chloe-asset-types input{min-width:0;margin:0;accent-color:var(--green)}
 .chloe-outfit-style-select{display:grid;justify-items:start;gap:6px;min-width:0;margin-top:12px}
 .chloe-outfit-style-current{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
-.chloe-outfit-style-current .status-badge{cursor:default;white-space:normal;overflow-wrap:anywhere}
+.chloe-outfit-style-badge{white-space:normal;overflow-wrap:anywhere}
+.chloe-outfit-style-current .chloe-outfit-style-badge{cursor:default}
 .status-purple{background:#eee4f9;color:#684291}
 .status-teal{background:#dff4f1;color:#206e67}
 .status-rose{background:#fbe5ee;color:#91335e}
