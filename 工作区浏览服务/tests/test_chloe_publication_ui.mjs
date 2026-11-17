@@ -171,6 +171,11 @@ try {
   await uploadButton.click();
   const uploadDialog=page.getByRole('dialog',{name:'上传成片',exact:true});
   const submit=uploadDialog.getByRole('button',{name:'上传',exact:true});
+  assert.equal(await uploadDialog.getByRole('button',{name:'取消',exact:true}).evaluate(button=>{
+   const group=button.parentElement;
+   return Math.abs(button.getBoundingClientRect().right-group.getBoundingClientRect().right)<2
+     && group.firstElementChild.getBoundingClientRect().top===button.getBoundingClientRect().top;
+  }),true,'上传和取消同排右对齐');
   assert.equal(await submit.isDisabled(),true);
   assert.equal(await uploadDialog.getByText('未选择文件',{exact:true}).isVisible(),true);
   const chooseVideo=page.waitForEvent('filechooser');

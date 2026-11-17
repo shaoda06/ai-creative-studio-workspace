@@ -216,7 +216,7 @@ function FinalUpload({ url, close, done }: { url: string; close: () => void; don
       }
     }}>
       <FilePicker label="视频文件" chooseLabel="选择视频" accept="video/*,.mkv,.avi" fileName={file?.name} onSelect={setFile} disabled={busy} />
-      <div className="chloe-publication-toolbar">
+      <div className="chloe-publication-toolbar chloe-publication-upload-actions">
         <button type="submit" disabled={!file || busy}>{busy ? '上传中…' : '上传'}</button>
         <button type="button" disabled={busy} onClick={close}>取消</button>
       </div>
