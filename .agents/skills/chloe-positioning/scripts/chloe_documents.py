@@ -22,6 +22,7 @@ PREFIXES = {'事项编号': 'I', '记录编号': 'B', '事实编号': 'F', '条�
             '执行编号': 'E', '审阅编号': 'R', '返修编号': 'X', '交接编号': 'J',
             '发布编号': 'P', '采集编号': 'D', '复盘编号': 'R', '验证编号': 'T', '修订编号': 'U',
             '核对编号': 'K', '镜头编号': 'SH', '资料编号': 'Q'}
+SOUND_TYPES = ('背景音乐', '环境声', '音效', '人物声音参考')
 REQUIRED_ASSET_IMAGES = {
     '模特说明.md': ('正面面部', '全身三视图原图'),
     '造型说明.md': ('造型面部三视图', '全身三视图原图', '全身三视图遮面版'),
@@ -219,6 +220,8 @@ def read_document(root, path, source, substitutions, *, body=None):
                         expected_names = names  # Older records remain readable without a clothing form.
                     elif '风格' not in names:
                         expected_names.remove('风格')  # Existing outfits default to 未分类.
+                if path.name == '声音说明.md' and section['heading'] == '声音信息' and names == ['声音说明']:
+                    expected_names = names  # Existing sound records describe voice references.
                 if names != expected_names:
                     raise ValueError(section['heading']+'：固定字段缺失、重复、改名或顺序改变')
             seen = set()
@@ -265,6 +268,11 @@ def read_document(root, path, source, substitutions, *, body=None):
                     seen.add(key)
     check_relations(root, path, actual)
     return actual
+
+
+def sound_type(doc):
+    info = {row['字段']: row['内容'] for row in records(doc, '声音信息')}
+    return info.get('声音分类', SOUND_TYPES[-1])
 
 
 def records(doc, heading):
@@ -407,6 +415,9 @@ def check_relations(root, path, doc):
                 if Path(ref['file']).suffix.lower() not in DISPLAY_IMAGE_SUFFIXES:
                     raise ValueError(path.stem+'：'+heading+'须引用PNG、JPEG或WebP图片')
     if path.name == '声音说明.md':
+        category = sound_type(doc)
+        if category not in SOUND_TYPES:
+            raise ValueError('声音分类须为' + '、'.join(SOUND_TYPES))
         for heading in ('参考版本', '当前采用'):
             for row in records(doc, heading):
                 purpose = row['用途']
@@ -415,13 +426,17 @@ def check_relations(root, path, doc):
                 if heading == '当前采用' and purpose != '声音参考':
                     raise ValueError('声音当前采用只登记声音参考')
                 ref = media_reference(root, path, row['资源引用'])
+                if ref['owner'] != '综合资料':
+                    raise ValueError('声音资产须引用本项目的准确共用版本')
                 suffix = Path(ref['file']).suffix.lower()
-                allowed = resources.KINDS['音频'] if purpose == '声音参考' else resources.KINDS['音频'] | resources.KINDS['视频']
+                allowed = resources.KINDS['音频']
+                if purpose == '声音原始参考' and category == SOUND_TYPES[-1]:
+                    allowed = allowed | resources.KINDS['视频']
                 if suffix not in allowed:
                     raise ValueError('声音参考须为音频，原始参考须为音频或视频')
         for row in records(doc, '关联资料'):
-            if row['关系'] == '模特' and not re.fullmatch(r'M\d{3,}', row['对象编号']):
-                raise ValueError('关联模特须使用M编号')
+            if row['关系'] == '模特' and (category != SOUND_TYPES[-1] or not re.fullmatch(r'M\d{3,}', row['对象编号'])):
+                raise ValueError('人物声音参考的关联模特须使用M编号')
     current = {r['字段']:r['内容'] for r in records(doc,'定位与当前进度')}
     if current and current['商品编号'] not in MISSING:
         linked_object(root,path,current['商品编号'],current['商品资料'],'G')

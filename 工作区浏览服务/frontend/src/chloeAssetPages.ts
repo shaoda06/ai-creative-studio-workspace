@@ -12,7 +12,7 @@ export const chloeAssetStatusBadges = {
 export type ChloeAssetStatus = keyof typeof chloeAssetStatusBadges;
 
 interface AssetPage<T> { items: T[]; total: number; page: number; page_size: number; types: string[] }
-interface AssetFilters { available?: boolean; require_media?: boolean; form?: string; page_size?: number }
+interface AssetFilters { available?: boolean; require_media?: boolean; form?: string; page_size?: number; search?: string }
 export const poseAssetPageSize = 15;
 
 export function assetUrl(api: string, endpoint: string, { page_size, ...filters }: AssetFilters, page?: number, types: string[] = [], ids: string[] = []) {
@@ -46,14 +46,14 @@ export function assetPaging<T>(data: AssetPage<T>, change: (page: number) => voi
 
 export function assetListParams(params: URLSearchParams) {
   const list = new URLSearchParams({ section: 'assets', asset: params.get('asset') || 'models' });
-  for (const key of ['clothingTab', 'assetPage', 'assetType'])
+  for (const key of ['clothingTab', 'assetPage', 'assetType', 'assetSearch'])
     for (const value of params.getAll(key)) list.append(key, value);
   return list;
 }
 
 let previousListScroll: { key: string; top: number } | undefined;
 
-export function useAssetList<T>(endpoint: string, filters: AssetFilters = {}) {
+export function useAssetList<T>(endpoint: string, filters: AssetFilters = {}, searchable = false) {
   const { page: path } = useChloeScope();
   const [params, setParams] = useSearchParams();
   const list = assetListParams(params);
@@ -63,7 +63,8 @@ export function useAssetList<T>(endpoint: string, filters: AssetFilters = {}) {
   const requested = Number(list.get('assetPage'));
   const page = !pendingTypes && Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
   const types = pendingTypes ?? list.getAll('assetType');
-  const query = useAssetPage<T>(endpoint, page, filters, types, true);
+  const search = searchable ? list.get('assetSearch') || '' : '';
+  const query = useAssetPage<T>(endpoint, page, { ...filters, search: search.trim() }, types, true);
   const ready = !!query.data && !query.isPlaceholderData;
 
   useLayoutEffect(() => { setFilterEdit(undefined); }, [key]);
@@ -108,7 +109,13 @@ export function useAssetList<T>(endpoint: string, filters: AssetFilters = {}) {
   };
   const setTypeChecked = (type: string, checked: boolean) =>
     setActiveTypes(checked ? [...types, type] : types.filter(value => value !== type));
-  return { query, list, changePage, setActiveTypes, setTypeChecked, activeTypes: types };
+  const setSearch = (value: string) => {
+    list.delete('assetPage');
+    if (value) list.set('assetSearch', value);
+    else list.delete('assetSearch');
+    setParams(list, { replace: true, preventScrollReset: true });
+  };
+  return { query, list, changePage, setActiveTypes, setTypeChecked, activeTypes: types, search, setSearch };
 }
 
 export function useAssetDraft<T extends { id: string }>(endpoint: string, filters: AssetFilters, initialIds: string[], onConfirm: (items: T[]) => void) {

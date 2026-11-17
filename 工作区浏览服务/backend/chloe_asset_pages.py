@@ -20,6 +20,7 @@ class AssetPage:
         types: Annotated[list[str] | None, Query()] = None,
         ids: Annotated[list[str] | None, Query()] = None,
         models: Annotated[list[str] | None, Query()] = None,
+        search: str = '',
     ):
         self.page = page
         self.page_size = page_size
@@ -29,6 +30,7 @@ class AssetPage:
         self.types = set(types or ())
         self.ids = ids
         self.models = set(models or ())
+        self.search = search.strip().casefold()
 
 
 @dataclass
@@ -41,18 +43,19 @@ class AssetRow:
     type: str | None = None
     models: tuple = ()
     types: tuple[str, ...] = ()
+    search_text: str = ''
 
     @property
     def filter_types(self):
         return self.types or ((self.type,) if self.type else ())
 
 
-def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None):
+def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None, categories=()):
     rows, revision = views.read((space.api, endpoint, scope), folders, build)
-    return view_response(request, revision, partial(asset_page, rows, options))
+    return view_response(request, revision, partial(asset_page, rows, options, categories))
 
 
-def asset_page(rows, options: AssetPage):
+def asset_page(rows, options: AssetPage, categories=()):
     eligible = [
         row for row in rows
         if (not options.available or row.status == '可用')
@@ -65,10 +68,11 @@ def asset_page(rows, options: AssetPage):
         if options.ids is not None:
             by_id = {row.id: row for row in eligible}
             return [by_id[key].card() for key in options.ids if key in by_id]
-        filtered = [row for row in eligible if not options.types or options.types.intersection(row.filter_types)]
+        filtered = [row for row in eligible if (not options.types or options.types.intersection(row.filter_types))
+                    and options.search in row.search_text.casefold()]
         if options.page is None:
             return [row.card() for row in filtered]
-        types = sorted({kind for row in eligible for kind in row.filter_types})
+        types = categories or sorted({kind for row in eligible for kind in row.filter_types})
         total = len(filtered)
         size = options.page_size
         page = min(options.page, max(1, (total + size - 1) // size))

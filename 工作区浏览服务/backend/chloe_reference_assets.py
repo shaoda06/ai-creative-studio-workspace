@@ -13,7 +13,7 @@ from backend.chloe_models import adopted_media, asset_content, linked_files, lin
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
-from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, asset_status, outfit_styles, read_document, records, template
+from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, SOUND_TYPES, asset_status, outfit_styles, read_document, records, sound_type, template
 from chloe_init import asset_template_skill
 import project_resources as resources
 
@@ -77,6 +77,10 @@ def asset_detail(root, identity, api, kind):
     content = asset_content(root, path, doc, linked_files(root, path, doc), base,
                             ('audio', 'video') if kind == VOICES else ('image',))
     if kind == VOICES:
+        content['type'] = sound_type(doc)
+        content['voiceReference'] = content['type'] == SOUND_TYPES[-1]
+        content['source'] = fields(doc, '资产身份')['来源说明']
+        content['tags'] = fields(doc, '声音信息').get('标签', '无')
         content['versions'] = content.pop('images')
         for item in content['versions']:
             info = json.loads((resources.local(root, item['media']['key']).parent/'版本信息.json').read_text('utf-8'))
@@ -123,16 +127,21 @@ def asset_rows(root, api, kind):
         models = tuple(row['对象编号'] for row in records(doc, '关联资料') if row['关系'] == '模特') if kind == VOICES else ()
         metadata = {'id': identity, 'name': name, **classification}
         if kind == VOICES:
-            metadata.update(models=list(models), description=info['声音说明'])
+            asset_type = sound_type(doc)
+            metadata.update(models=list(models), description=info['声音说明'], type=asset_type)
         else:
             metadata['status'] = status
         if kind == ACCESSORIES:
             metadata['type'] = asset_type
         adoption = asset_adoption(doc, kind)
+        preview = adoption
+        if kind == VOICES and asset_type != SOUND_TYPES[-1] and not preview:
+            preview = next((row for row in records(doc, '参考版本') if row['用途'] == '声音原始参考'), None)
         base = f'{api}/{kind.endpoint}/{quote(identity)}'
-        card = partial(asset_card, root, base, kind, path, metadata, adoption)
-        rows.append(AssetRow(identity, card, status, bool(adoption), classification.get('clothingForm'), asset_type, models,
-                             tuple(classification.get('outfitStyles', ()))))
+        card = partial(asset_card, root, base, kind, path, metadata, preview)
+        tags = info.get('标签', '无')
+        rows.append(AssetRow(identity, card, status, bool(preview), classification.get('clothingForm'), asset_type, models,
+                             tuple(classification.get('outfitStyles', ())), name if tags in MISSING else name + ' ' + tags))
     return rows
 
 
@@ -155,7 +164,8 @@ def asset_router(kind):
         space = request_space(request)
         try:
             return respond_asset_page(request, space, kind.endpoint, options,
-                                      lambda: asset_rows(space.root, space.api, kind), folders=[space.root / '综合资料'])
+                                      lambda: asset_rows(space.root, space.api, kind), folders=[space.root / '综合资料'],
+                                      categories=SOUND_TYPES if kind == VOICES else ())
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:

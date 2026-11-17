@@ -16,6 +16,12 @@ const server=await createServer({configFile:false,root:frontend,plugins:[react()
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
 const media={kind:'audio',name:'样本',key:'sample.wav',url:'/component-samples/tone.wav'};
+const types=['背景音乐','环境声','音效','人物声音参考'];
+const cards=[
+ {id:'A001',name:'声音甲',media,type:types[3],reference:{duration:1}},
+ {id:'A002',name:'声音乙',media:null,type:types[3]},
+ {id:'A003',name:'配乐甲',media,type:types[0],reference:{duration:65}},
+];
 const detail={id:'A001',name:'声音甲',description:'轻柔、自然的普通话声线',models:[{id:'M001',name:'M001 · 模特甲'}],sections:['关联资料','当前采用','采用变更','执行记录','输入记录','输出记录','审阅记录','返修记录'].map(heading=>({heading,html:'',empty:true})),versions:[
  {purpose:'声音原始参考',resource:'AUD-TEST',version:'V001',media,duration:1,adopted:false,execution:'不适用',sourceHtml:'<p>原件</p>'},
  {purpose:'声音原始参考',resource:'VID-TEST',version:'V001',media:{kind:'video',name:'原始视频',key:'sample.webm',url:'/component-samples/video.webm'},duration:1,adopted:false,execution:'不适用',sourceHtml:'<p>原件</p>'},
@@ -28,7 +34,11 @@ try {
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
    if(route.request().method()!=='GET') unexpected.push(route.request().method()+' '+path);
-   if(path==='/api/workspaces/test/shared-voices') return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:chloeAssetResponse(route.request().url(), empty?[]:[{id:'A001',name:'声音甲',media},{id:'A002',name:'声音乙',media:null}])});
+   if(path==='/api/workspaces/test/shared-voices') {
+    const search=new URL(route.request().url()).searchParams.get('search');
+    const selected=empty?[]:cards.filter(card=>!search || card.name.includes(search));
+    return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:{...chloeAssetResponse(route.request().url(),selected),types}});
+   }
    if(path==='/api/workspaces/test/shared-voices/A001') return route.fulfill({json:noReference ? {...detail,versions:[]} : detail});
    if(path==='/api/workspaces/test/shared-models') return route.fulfill({json:chloeAssetResponse(route.request().url(), [])});
    if(path==='/api/service') return route.fulfill({json:{version,ready:true}});
@@ -38,6 +48,19 @@ try {
   });
   const url=server.resolvedUrls.local[0]+'#/spaces/test?section=assets&asset=voices';
   await page.goto(url);
+  const filters=page.getByRole('navigation',{name:'声音分类',exact:true});
+  await filters.getByRole('button',{name:'背景音乐',exact:true}).click();
+  await page.getByText('背景音乐 · 65秒（1分5秒）',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'播放A003 · 配乐甲',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('audio')?.currentTime>0);
+  await filters.getByRole('button',{name:'音效',exact:true}).click();
+  await page.getByText('暂无声音资料。',{exact:true}).waitFor();
+  await filters.getByRole('button',{name:'全部',exact:true}).click();
+  const search=page.getByRole('searchbox',{name:'搜索声音',exact:true});
+  await search.fill('配乐甲');
+  await page.getByRole('button',{name:'A003 · 配乐甲',exact:true}).waitFor();
+  await page.getByRole('button',{name:'A001 · 声音甲',exact:true}).waitFor({state:'hidden'});
+  await search.clear();
   await page.getByRole('button',{name:'A001 · 声音甲',exact:true}).waitFor();
   assert.ok(await page.getByRole('button',{name:'A002 · 声音乙暂无音频'}).isDisabled());
   await page.getByRole('button',{name:'播放A001 · 声音甲'}).click();

@@ -5,10 +5,13 @@ import tempfile
 import unittest
 import wave
 
-from backend.chloe_reference_assets import VOICES, asset_cards, asset_detail, asset_file
-from chloe_init import initialize_workspace, initialize_project, initialize_asset, SKILLS
+from backend.chloe_asset_pages import AssetPage, asset_page
+from backend.chloe_reference_assets import VOICES, asset_cards, asset_detail, asset_file, asset_rows
+from chloe_init import initialize_workspace, initialize_project, initialize_asset, initialize_video, SKILLS
+from chloe_documents import SOUND_TYPES
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))
-from chloe_resources import import_media
+from chloe_resources import bind_reference, import_media, resolve_reference
+from chloe_sound import record_sound
 
 
 class ChloeVoicesTests(unittest.TestCase):
@@ -88,3 +91,29 @@ class ChloeVoicesTests(unittest.TestCase):
         self.path.write_text(self.path.read_text().replace('| 声音原始参考 |', '| 声音参考 |'))
         with self.assertRaisesRegex(ValueError, '声音参考须为音频'):
             asset_detail(self.root, 'A001', self.api, VOICES)
+
+    def test_shared_original_filters_and_binds_to_other_videos(self):
+        ref, _ = self.audio('sample', 1)
+        source = self.base / 'sample.wav'
+        chorus = record_sound(self.root, source, 'A002', '曲目甲', SOUND_TYPES[0], '用户提供', '快节奏')
+        self.assertEqual(chorus['resource_id'], ref['resource_id'])
+        self.assertEqual(record_sound(self.root, source, 'A002', '曲目甲', SOUND_TYPES[0], '用户提供'), chorus)
+        self.path.write_text(self.path.read_text().replace('| 声音分类 | 人物声音参考 |\n| 标签 | 无 |\n', ''))
+        rows = asset_rows(self.root, self.api, VOICES)
+        filtered = asset_page(rows, AssetPage(page=1, types=[SOUND_TYPES[0]], search='快节奏'), SOUND_TYPES)
+        self.assertEqual(tuple(filtered['types']), SOUND_TYPES)
+        self.assertEqual([item['id'] for item in filtered['items']], ['A002'])
+        self.assertEqual(filtered['items'][0]['reference']['duration'], 1)
+        voices = asset_page(rows, AssetPage(types=[SOUND_TYPES[-1]]))
+        self.assertEqual([item['id'] for item in voices], ['A001'])
+        self.assertIsNone(voices[0]['media'])
+        detail = asset_detail(self.root, 'A002', self.api, VOICES)
+        self.assertFalse(detail['voiceReference'])
+        self.assertFalse(detail['versions'][0]['adopted'])
+        self.assertEqual(asset_file(self.root, 'A002', detail['versions'][0]['media']['key'], VOICES),
+                         self.root / chorus['file'])
+        for identity in ('V001', 'V002'):
+            video = initialize_video(self.root, identity, '跨作品复用')
+            bind_reference(self.root, video.name, '剪辑/配乐', chorus['resource_id'], chorus['version'])
+            self.assertEqual(resolve_reference(self.root, video.name, '剪辑/配乐'), self.root / chorus['file'])
+            self.assertFalse(list((video / '资源/音频').rglob('*.wav')))
