@@ -22,6 +22,25 @@ async function switchFits(control, context) {
 }
 export async function checkSharedInputs(page, width, selfTest) {
   const fixture = page.getByTestId('inputs');
+  const filters = fixture.getByRole('group', { name: '分类筛选检查' });
+  const clear = filters.getByRole('button', { name: '清空' });
+  const heading = filters.getByText('分类筛选检查', { exact: true });
+  const music = filters.getByRole('checkbox', { name: '背景音乐' });
+  await filters.scrollIntoViewIfNeeded();
+  await fieldFits(filters, `${width}/分类筛选`);
+  const titleBox = await heading.boundingBox(), clearBox = await clear.boundingBox(), filterBox = await filters.boundingBox();
+  const manageBox = await filters.getByRole('button', { name: '管理分类' }).boundingBox();
+  assert.ok(Math.abs(titleBox.y + titleBox.height / 2 - clearBox.y - clearBox.height / 2) < 2
+    && manageBox.x + manageBox.width < clearBox.x && filterBox.x + filterBox.width - clearBox.x - clearBox.width < 20,
+  '清空与标题同排，位于管理按钮右边并靠近右侧边缘');
+  assert.ok(await clear.isDisabled());
+  await music.focus();
+  await page.keyboard.press('Space');
+  await filters.getByRole('checkbox', { name: '环境声' }).check();
+  assert.equal(await filters.locator('input:checked').count(), 2);
+  await clear.click();
+  assert.equal(await filters.locator('input:checked').count(), 0);
+  assert.ok(await clear.isDisabled());
   const counts = async () => JSON.parse(await fixture.getByTestId('input-counts').innerText());
   const longValue = '中文搜索、标题与正文输入' + 'LongUnbrokenInputValue'.repeat(20);
   for (const name of ['标准搜索检查', '紧凑搜索检查', '单行输入检查', '多行输入检查', '一行高台词检查']) {
@@ -78,7 +97,7 @@ export async function checkSharedInputs(page, width, selfTest) {
   await single.fill('禁用前保留内容');
   await fixture.getByRole('button', { name: '切换输入禁用', exact: true }).click();
   const disabledState = await counts();
-  for (const field of await fixture.locator('input:not([readonly]),textarea:not([readonly])').all()) {
+  for (const field of await fixture.locator('input:not([readonly], [type="checkbox"]),textarea:not([readonly])').all()) {
     assert.equal(await field.isDisabled(), true); assert.equal(await field.isEditable(), false);
     await field.click({ force: true }); await page.keyboard.insertText('不应改变');
     assert.equal(await field.inputValue(), '禁用前保留内容');

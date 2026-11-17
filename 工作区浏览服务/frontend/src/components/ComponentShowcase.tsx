@@ -4,6 +4,7 @@ import { TabNav } from './TabNav';
 import { UnderlineTabs } from './UnderlineTabs';
 import { SearchField } from './SearchField';
 import { FilePicker } from './FilePicker';
+import { CheckboxFilters } from './CheckboxFilters';
 import { LinkButton } from './LinkButton';
 import { TabSelect } from './TabSelect';
 import { SearchCreateSelect } from './SearchCreateSelect';
@@ -45,6 +46,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
   const [fieldDraft, setFieldDraft] = useState('');
   const [fieldsDisabled, setFieldsDisabled] = useState(false);
   const [sampleFileName, setSampleFileName] = useState('');
+  const [sampleFilters, setSampleFilters] = useState<string[]>([]);
   const [longSwitch, setLongSwitch] = useState(false);
   const [tab, setTab] = useState('overview');
   const [selection, setSelection] = useState('one');
@@ -101,6 +103,9 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <Example title="文件选择" rule="选择后显示完整文件名，长名称可换行。禁用输入时，选择和更换按钮一并禁用。演示只显示当前文件名。" usage="Chloe 成片上传">
           <FilePicker label="示例视频文件" chooseLabel="选择视频" accept="video/*" fileName={sampleFileName}
             onSelect={file => setSampleFileName(file.name)} disabled={fieldsDisabled} />
+        </Example>
+        <Example title="复选筛选条" rule="可同时勾选多项。无勾选时显示全部，右侧「清空」禁用。演示在本地更新勾选。" usage="Chloe 配饰、服装、姿态、声音及装配选材">
+          <CheckboxFilters options={['包袋', '耳饰', '项链']} selected={sampleFilters} onChange={setSampleFilters} />
         </Example>
       </>}
       {category === 'select' && <Example title="选项菜单" rule="菜单最小与触发按钮同宽，按内容自然撑宽，不设固定最大值；仅限制不超出屏幕，超长选项才换行。纯图标入口同样按内容适配，窗口缩放时重新定位。选中项右侧统一显示“当前”且不另起一行，长名称仅在文字区域内换行；支持方向键、Enter选择与Esc关闭；禁用选项不可选择，键盘会跳过。长选项在菜单内换行，触发按钮显示省略。表单、紧凑、小号、工具栏和选中高亮均为公共规格。" usage="项目切换、修改轮次、视频候选、提示词分类">

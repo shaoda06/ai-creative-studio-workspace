@@ -1,0 +1,7 @@
+.checkbox-filters{display:flex;flex-wrap:wrap;gap:8px 20px;min-width:0;margin:0;padding:8px 12px 12px;border:1px solid var(--line);border-radius:7px}
+.checkbox-filters legend{box-sizing:border-box;width:100%}
+.checkbox-filters-heading{display:flex;align-items:center;gap:8px}
+.checkbox-filters-heading>span{min-width:0;margin-right:auto}
+.checkbox-filters-clear{flex:none}
+.checkbox-filters label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.checkbox-filters input{min-width:0;margin:0;accent-color:var(--green)}

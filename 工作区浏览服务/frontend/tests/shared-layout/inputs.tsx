@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SearchField } from '../../src/components/SearchField';
+import { CheckboxFilters } from '../../src/components/CheckboxFilters';
 import { Switch } from '../../src/components/Switch';
 
 const longText = '很长的中文输入说明与搜索条件' + 'LongUnbrokenInputReference'.repeat(6);
@@ -10,6 +11,7 @@ export function InputsFixture() {
   const [toggles, setToggles] = useState(0);
   const [disabled, setDisabled] = useState(false);
   const [submits, setSubmits] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
   const change = (next: string) => { setValue(next); setChanges(n => n + 1); };
   return <section className="panel" data-testid="inputs">
     <button onClick={() => setDisabled(state => !state)}>切换输入禁用</button>
@@ -28,6 +30,8 @@ export function InputsFixture() {
           <Switch label={longText} checked={checked} disabled={disabled} onChange={next => { setChecked(next); setToggles(n => n + 1); }} />
         </div>
         <button type="submit">提交示例输入</button>
+        <CheckboxFilters label="分类筛选检查" options={['背景音乐', '环境声', '音效', '人物声音参考']}
+          selected={selected} onChange={setSelected} headerAction={<button type="button">管理分类</button>} />
       </div>
     </form>
   </section>;

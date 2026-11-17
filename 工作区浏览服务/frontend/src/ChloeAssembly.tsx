@@ -6,9 +6,10 @@ import { useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import { useChloeScope } from './chloeScope';
 import type { ModelDetail } from './ChloeModelDetail';
-import { ChloeAccessoryColumns, ChloeAssetTypes, referenceAssetKinds } from './ChloeReferenceAssets';
+import { ChloeAccessoryColumns, referenceAssetKinds } from './ChloeReferenceAssets';
+import { CheckboxFilters } from './components/CheckboxFilters';
 import type { ReferenceAssetCard } from './ChloeReferenceAssets';
-import { useOutfitStyles } from './ChloeOutfitStyles';
+import { OutfitStyleBadge, useOutfitStyles } from './ChloeOutfitStyles';
 import { PreviewContext, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
 import { AssetSelectionDialog } from './components/AssetSelectionDialog';
@@ -108,16 +109,15 @@ function AssemblyPicker<T extends AssemblyAsset>({ kind, initial, onConfirm, onC
           : limit === 1 ? [asset] : [...selected, asset])}} />;
   }) : [];
   const filterTypes = [...new Set([...(isOutfit ? styles.data ?? [] : []), ...(query.data?.types ?? []), ...types])];
-  const setTypeChecked = (type: string, checked: boolean) => {
-    setTypes(checked ? [...types, type] : types.filter(value => value !== type));
-    setPage(1);
-  };
+  if (!isOutfit) filterTypes.sort((a, b) => a.localeCompare(b, 'zh-CN'));
   const failed = query.error ? query : draft.initial;
   return <AssetSelectionDialog title={`选择${label} ${selected.length}${limit === undefined ? ' 项' : `/${limit}`}`} close={onClose}
     confirm={draft.confirmSelection}
     confirmDisabled={!ready || draft.confirming || (!selected.length && !initial.length)}
-    toolbar={filterTypes.length > 0 && <ChloeAssetTypes types={filterTypes} activeTypes={types} styleCatalog={isOutfit ? styles.data ?? [] : undefined}
-      setTypeChecked={setTypeChecked} label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : isOutfit ? '按风格筛选' : undefined} />}>
+    toolbar={(isAccessory || isGarment || isOutfit || isPose || filterTypes.length > 0) &&
+      <CheckboxFilters options={filterTypes} selected={types} onChange={next => { setTypes(next); setPage(1); }}
+        renderOption={isOutfit ? type => <OutfitStyleBadge style={type} catalog={styles.data ?? []} /> : undefined}
+        label={isPose ? '按分类筛选' : isGarment ? '按部位筛选' : isOutfit ? '按风格筛选' : undefined} />}>
     {isOutfit && <Result loading={styles.isPending} error={styles.error} retry={styles.refetch} retrying={styles.isFetching} />}
     <Result loading={query.isFetching || draft.initial.isFetching} error={failed.error} retry={failed.refetch} retrying={failed.isFetching} />
     {ready && (cards.length ? isAccessory

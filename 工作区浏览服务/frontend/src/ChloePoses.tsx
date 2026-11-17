@@ -3,7 +3,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { get, type FileItem, type WorkspaceSpace } from './api';
 import { useChloeScope } from './chloeScope';
-import { ChloeAssetTypes } from './ChloeReferenceAssets';
+import { CheckboxFilters } from './components/CheckboxFilters';
 import { assetPaging, assetUrl, poseAssetPageSize, useAssetList } from './chloeAssetPages';
 import { Dialog, Result } from './components';
 import { AssetMediaCard } from './components/AssetMediaCard';
@@ -53,7 +53,7 @@ function PoseDetails({ pose, close }: { pose: PoseCard; close: () => void }) {
 export function ChloePoses({ workspaceQuery }: { workspaceQuery: UseQueryResult<WorkspaceSpace[]> }) {
   const { api } = useChloeScope();
   const [params, setParams] = useSearchParams();
-  const { query, list, changePage, activeTypes, setTypeChecked } = useAssetList<PoseCard>('shared-poses', { page_size: poseAssetPageSize });
+  const { query, list, changePage, activeTypes, setActiveTypes } = useAssetList<PoseCard>('shared-poses', { page_size: poseAssetPageSize });
   const data = query.isPlaceholderData ? undefined : query.data;
   const poseId = params.get('pose') ?? '';
   const onPage = data?.items.find(pose => pose.id === poseId);
@@ -64,13 +64,13 @@ export function ChloePoses({ workspaceQuery }: { workspaceQuery: UseQueryResult<
     enabled: !!poseId && !!data && !onPage,
   });
   const selected = onPage ?? detail.data?.[0];
-  const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])];
+  const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])].sort((a, b) => a.localeCompare(b, 'zh-CN'));
 
   return <>
     <PageCheckStatus queries={[workspaceQuery, query]} />
+    <CheckboxFilters options={types} selected={activeTypes} onChange={setActiveTypes} label="按分类筛选" />
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {poseId && data && !onPage && <Result loading={detail.isPending} error={detail.error} retry={detail.refetch} retrying={detail.isFetching} />}
-    {types.length > 0 && <ChloeAssetTypes types={types} activeTypes={activeTypes} setTypeChecked={setTypeChecked} label="按分类筛选" />}
     {data && (data.items.length ? <div className="chloe-pose-grid">{data.items.map(pose => <AssetMediaCard key={pose.id}
       title={`${pose.id} · ${pose.name}`} item={{ media: pose.media }} revision={0} compact entry aspectRatio="natural"
       to={`?${list}&pose=${encodeURIComponent(pose.id)}`} />)}</div> : <p className="muted">暂无姿态资料。</p>)}

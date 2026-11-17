@@ -1295,10 +1295,12 @@ try {
     await commute.check();
     await currentStyle.filter({hasText:/^通勤$/}).waitFor();
     const manageStyles = styleFilter.getByRole('button',{name:'管理',exact:true});
-    const [legendBox, manageBox, styleFilterBounds] = await Promise.all([
-      styleFilter.locator('legend').boundingBox(), manageStyles.boundingBox(), styleFilter.boundingBox(),
+    const [legendBox, manageBox, clearBox] = await Promise.all([
+      styleFilter.locator('legend').boundingBox(), manageStyles.boundingBox(),
+      styleFilter.getByRole('button',{name:'清空',exact:true}).boundingBox(),
     ]);
-    assert.ok(Math.abs(manageBox.y - legendBox.y) < 3 && styleFilterBounds.x + styleFilterBounds.width - manageBox.x - manageBox.width < 28);
+    assert.ok(Math.abs(manageBox.y + manageBox.height / 2 - clearBox.y - clearBox.height / 2) < 2);
+    assert.ok(manageBox.x + manageBox.width < clearBox.x && legendBox.x + legendBox.width - clearBox.x - clearBox.width < 5);
     await manageStyles.click();
     const styleManager = page.getByRole('dialog',{name:'管理套装风格',exact:true});
     assert.equal(await styleManager.getByRole('button',{name:'删除 未分类',exact:true}).count(),0);

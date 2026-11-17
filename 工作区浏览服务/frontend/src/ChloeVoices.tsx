@@ -2,7 +2,7 @@ import { assetPaging, useAssetList } from './chloeAssetPages';
 import { Pagination } from './components/Pagination';
 import { useChloeScope } from './chloeScope';
 import { AudioReferenceCard, formatAudioDuration } from './components/AudioReferenceCard';
-import { TabNav } from './components/TabNav';
+import { CheckboxFilters } from './components/CheckboxFilters';
 import { SearchField } from './components/SearchField';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -26,15 +26,14 @@ export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult
   const navigate = useNavigate();
   const { query, list, changePage, activeTypes, setActiveTypes, search, setSearch } = useAssetList<VoiceCard>('shared-voices', {}, true);
   const data = query.isPlaceholderData ? undefined : query.data;
+  const types = [...new Set([...(query.data?.types ?? []), ...activeTypes])];
   const audio = useAudioPreview(true, `${spaceId}/${list}`, 0);
   return <>
     <div className="toolbar">
-      {query.data && <TabNav label="声音分类"
-        items={[{ value: '', label: '全部' }, ...query.data.types.map(type => ({ value: type, label: type }))]}
-        selected={activeTypes[0] || ''} onChange={type => setActiveTypes(type ? [type] : [])} />}
       <SearchField label="搜索声音" placeholder="按名称或标签搜索" value={search} onChange={setSearch} size="compact" />
     </div>
     <PageCheckStatus queries={[workspaceQuery,query]} />
+    <CheckboxFilters options={types} selected={activeTypes} onChange={setActiveTypes} />
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {audio.player}
     {data && (data.items.length ? <div className="reference-media-list">{data.items.map(item=>{

@@ -30,6 +30,8 @@ const detail={id:'A001',name:'声音甲',description:'轻柔、自然的普通�
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
   const page=await browser.newPage({viewport:{width,height}}); const errors=[],unexpected=[];let empty=false,failed=false,noReference=false;
+  let finishInitialLoad;
+  const initialLoad=new Promise(resolve=>{finishInitialLoad=resolve;});
   page.on('pageerror',error=>errors.push(String(error)));
   await page.route('**/api/**',route=>{
    const path=new URL(route.request().url()).pathname;
@@ -37,7 +39,7 @@ try {
    if(path==='/api/workspaces/test/shared-voices') {
     const search=new URL(route.request().url()).searchParams.get('search');
     const selected=empty?[]:cards.filter(card=>!search || card.name.includes(search));
-    return failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:{...chloeAssetResponse(route.request().url(),selected),types}});
+    return initialLoad.then(()=>failed ? route.fulfill({status:409,json:{detail:'声音资料错误'}}) : route.fulfill({json:{...chloeAssetResponse(route.request().url(),selected),types}}));
    }
    if(path==='/api/workspaces/test/shared-voices/A001') return route.fulfill({json:noReference ? {...detail,versions:[]} : detail});
    if(path==='/api/workspaces/test/shared-models') return route.fulfill({json:chloeAssetResponse(route.request().url(), [])});
@@ -48,16 +50,33 @@ try {
   });
   const url=server.resolvedUrls.local[0]+'#/spaces/test?section=assets&asset=voices';
   await page.goto(url);
-  const filters=page.getByRole('navigation',{name:'声音分类',exact:true});
-  await filters.getByRole('button',{name:'背景音乐',exact:true}).click();
+  const filters=page.getByRole('group',{name:'按类型筛选',exact:true});
+  const clear=filters.getByRole('button',{name:'清空',exact:true});
+  const loading=page.locator('.chloe-assets-content .page-loading');
+  await loading.waitFor();
+  assert.ok((await filters.boundingBox()).y < (await loading.boundingBox()).y);
+  assert.ok(await clear.isDisabled());
+  finishInitialLoad();
+  const music=filters.getByRole('checkbox',{name:'背景音乐',exact:true});
+  const effect=filters.getByRole('checkbox',{name:'音效',exact:true});
+  await music.waitFor();
+  assert.equal(await filters.getByRole('checkbox').count(),4);
+  assert.equal(await filters.locator('input:checked').count(),0);
+  await music.check();
   await page.getByText('背景音乐 · 65秒（1分5秒）',{exact:true}).waitFor();
   await page.getByRole('button',{name:'播放A003 · 配乐甲',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('audio')?.currentTime>0);
-  await filters.getByRole('button',{name:'音效',exact:true}).click();
+  await effect.check();
+  await page.getByText('背景音乐 · 65秒（1分5秒）',{exact:true}).waitFor();
+  await music.uncheck();
   await page.getByText('暂无声音资料。',{exact:true}).waitFor();
-  await filters.getByRole('button',{name:'全部',exact:true}).click();
+  await clear.click();
   const search=page.getByRole('searchbox',{name:'搜索声音',exact:true});
   await search.fill('配乐甲');
+  await effect.check();
+  await page.getByText('暂无声音资料。',{exact:true}).waitFor();
+  await clear.click();
+  assert.equal(await search.inputValue(),'配乐甲');
   await page.getByRole('button',{name:'A003 · 配乐甲',exact:true}).waitFor();
   await page.getByRole('button',{name:'A001 · 声音甲',exact:true}).waitFor({state:'hidden'});
   await search.clear();

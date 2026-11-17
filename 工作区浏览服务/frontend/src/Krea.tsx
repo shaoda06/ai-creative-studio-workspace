@@ -30,7 +30,7 @@ export default function Krea() {
     {controlsRoot && createPortal(<div className="toolbar"><SearchField label="搜索风格" placeholder="搜索风格名称、分类" value={search} onChange={value => { setSearch(value); setPage(1); }} />
       <TabSelect label="资源库" selected={library} onChange={value => { setLibrary(value); setCategory(''); setPage(1); }} items={[{ value: '', label: '全部资源库' }, { value: 'krea2_styles', label: '风格库' }, { value: 'Krea2_moodboard', label: '灵感库' }]} />
       <TabSelect label="风格分类" selected={category} onChange={value => { setCategory(value); setPage(1); }} items={[{ value: '', label: '全部分类' }, ...(catalogue.data?.categories || []).map((value: string) => ({ value, label: value }))]} /><span className="muted">{catalogue.data?.total ?? '…'} 个风格</span>
-    </div>, controlsRoot)}<Result page loading={catalogue.isPending} error={catalogue.error} retry={catalogue.refetch} retrying={catalogue.isFetching} />
+    </div>, controlsRoot)}<Result loading={catalogue.isPending} error={catalogue.error} retry={catalogue.refetch} retrying={catalogue.isFetching} />
     <div className="style-grid">{catalogue.data?.items.map((item: RecordData) => <button className="style-card" key={item.id} onClick={() => setSelected(item.id)}>{item.image ? <img loading="lazy" src={styleUrl(item.image)} alt={item.name_cn || item.name} /> : <div className="cover">图片缺失</div>}<span><strong>{item.name_cn || item.name}</strong><small>{item.name}</small><small>{item.category_name}</small></span></button>)}</div>
     <Pagination page={page} total={catalogue.data?.total || 0} change={setPage} />
     {selected && <Style identity={selected} version={version} close={() => setSelected(null)} />}
