@@ -215,6 +215,8 @@ dialog header.dialog-header-with-toolbar{display:grid;grid-template-columns:minm
 .asset-media-card-selectable:has(.asset-media-card-select[aria-pressed=true]) .cover{position:relative}
 .asset-media-card-selectable:has(.asset-media-card-select[aria-pressed=true]) .cover::after{content:"";position:absolute;inset:0;background:#25716324;pointer-events:none}
 .chloe-assets-content{margin-top:20px}
+.chloe-voices-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:767px){.chloe-voices-list{grid-template-columns:minmax(0,1fr)}}
 .chloe-clothing-tabs{margin-bottom:18px}
 .checkbox-filters+.asset-media-grid{margin-top:18px}
 .chloe-outfit-style-select{display:grid;justify-items:start;gap:6px;min-width:0;margin-top:12px}

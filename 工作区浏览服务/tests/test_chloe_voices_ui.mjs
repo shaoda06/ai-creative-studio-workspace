@@ -62,6 +62,15 @@ try {
   await music.waitFor();
   assert.equal(await filters.getByRole('checkbox').count(),4);
   assert.equal(await filters.locator('input:checked').count(),0);
+  const voiceCards=page.locator('.chloe-voices-list .reference-media-card');
+  const [first,second,third]=await Promise.all([0,1,2].map(index=>voiceCards.nth(index).boundingBox()));
+  assert.ok(first.y===second.y && second.x>first.x && third.y>first.y && third.x===first.x,'声音列表每行两张卡片');
+  if(width===1280){
+   await page.setViewportSize({width:700,height});
+   const [upper,lower]=await Promise.all([0,1].map(index=>voiceCards.nth(index).boundingBox()));
+   assert.ok(lower.y>upper.y && lower.x===upper.x,'窄屏使用单列');
+   await page.setViewportSize({width,height});
+  }
   await music.check();
   await page.getByText('背景音乐 · 65秒（1分5秒）',{exact:true}).waitFor();
   await page.getByRole('button',{name:'播放A003 · 配乐甲',exact:true}).click();

@@ -36,7 +36,7 @@ export function ChloeVoices({ workspaceQuery }: { workspaceQuery: UseQueryResult
     <CheckboxFilters options={types} selected={activeTypes} onChange={setActiveTypes} />
     <Result loading={query.isPending || query.isPlaceholderData} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {audio.player}
-    {data && (data.items.length ? <div className="reference-media-list">{data.items.map(item=>{
+    {data && (data.items.length ? <div className="reference-media-list chloe-voices-list">{data.items.map(item=>{
       const name = `${item.id} · ${item.name}`;
       const duration = item.reference ? formatAudioDuration(item.reference.duration) : '暂无试听音频';
       return <ReferenceMediaCard key={item.id} audio item={{kind:'reference',name,media:item.media ? {...item.media,name} : undefined,approvalHtml:`<span>${item.type} · ${duration}</span>`}}
