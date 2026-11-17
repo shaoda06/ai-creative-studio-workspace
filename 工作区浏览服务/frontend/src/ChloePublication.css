@@ -16,7 +16,7 @@
 .chloe-publication-directory-heading{justify-content:space-between}
 .chloe-publication-upload-form{display:grid;gap:16px}
 .chloe-publication-upload-actions{justify-content:flex-end}
-.chloe-publication-name-row{display:flex;align-items:center;gap:6px;min-width:0}
+.chloe-publication-name-row{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
 .chloe-publication-name-row input{flex:1;min-width:0;width:0;padding:4px 7px}
 .chloe-publication-name-action{display:grid;place-items:center;flex:none;width:26px;height:26px;padding:0;border-color:transparent;background:transparent}
 .chloe-publication-name-action:hover{background:#edf5ef}

@@ -124,6 +124,8 @@ try {
   assert.equal(await table.locator('tbody tr').count(),fixture.detail.finals.length);
   assert.deepEqual(await table.getByRole('columnheader').allTextContents(),['文件时间','文件名','文件类型','分辨率与比例','时长','操作']);
   const fileRows=table.locator('tbody tr');
+  assert.equal(await table.getByRole('button',{name:'重命名',exact:true}).evaluateAll(buttons=>
+   buttons.every(button=>Math.abs(button.getBoundingClientRect().right-button.parentElement.getBoundingClientRect().right)<2)),true);
   assert.equal(await fileRows.first().locator('time').getAttribute('datetime'),fixture.detail.finals[0].fileTime);
   assert.match(await fileRows.first().locator('time').innerText(),/\d{4}.*\d{2}:\d{2}:\d{2}/);
   assert.equal(await fileRows.nth(0).getByRole('cell').nth(1).innerText(),fixture.detail.finals[0].name.replace(/\.webm$/,''));
