@@ -378,6 +378,11 @@ try {
     await page.getByText('暂无符合所选风格的套装。',{exact:true}).waitFor();
     await unused.uncheck();
     await selectStyle.click();
+    const [styleCover, styleTrigger, stylePopup] = await Promise.all([
+      styleCard.locator('.cover').boundingBox(), selectStyle.boundingBox(), styleMenu.boundingBox(),
+    ]);
+    assert.ok([styleTrigger, stylePopup].every(box =>
+      Math.abs(box.width - styleCover.width) <= 1 && Math.abs(box.x - styleCover.x) <= 1));
     const applyStyles = styleMenu.getByRole('button',{name:'应用',exact:true});
     assert.equal(await applyStyles.isDisabled(),true);
     await findStyle.fill('通勤');

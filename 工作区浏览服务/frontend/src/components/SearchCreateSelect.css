@@ -1,5 +1,5 @@
-.search-create-trigger{display:inline-flex;align-items:center;gap:8px;font-size:12px;padding:7px 10px}
-.search-create-menu{width:min(300px,calc(100vw - 16px));overscroll-behavior:contain}
+.search-create-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:7px 10px;font-size:12px;text-align:start}
+.search-create-menu{overscroll-behavior:contain}
 .search-create-menu > input,.search-create-actions{flex:none}
 .search-create-options{min-height:0;overflow:auto}
 .search-create-options label{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;overflow-wrap:anywhere}

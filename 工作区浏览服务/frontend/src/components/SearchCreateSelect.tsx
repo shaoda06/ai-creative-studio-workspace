@@ -20,7 +20,7 @@ export function SearchCreateSelect({ items, selected, exclusive, label, prompt, 
   const matches = items.filter(item => item.toLowerCase().includes(normalized));
   const canCreate = term !== '' && !matches.some(item => item.toLowerCase() === normalized);
   const changed = draft.length !== selected.length || draft.some(value => !selected.includes(value));
-  const reposition = useCallback(() => setPosition(menuPosition(trigger.current!, menu.current!)), []);
+  const reposition = useCallback(() => setPosition(menuPosition(trigger.current!, menu.current!, true)), []);
   useEffect(() => {
     if (!expanded) return;
     window.addEventListener('resize', reposition);

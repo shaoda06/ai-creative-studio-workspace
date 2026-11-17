@@ -214,6 +214,15 @@ export async function checkSharedNavigation(page, width, selfTest) {
   const actions = searchCreateMenu.locator('.search-create-actions');
   const applyAction = actions.getByRole('button',{name:'应用',exact:true});
   await openSearchCreate.click();
+  const [triggerBox, menuBox] = await Promise.all([openSearchCreate.boundingBox(), searchCreateMenu.boundingBox()]);
+  const contentWidth = await searchCreate.evaluate(el => {
+    const style = getComputedStyle(el);
+    return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  });
+  assert.ok(Math.abs(triggerBox.width - contentWidth) <= 1 &&
+    Math.abs(triggerBox.width - menuBox.width) <= 1 && Math.abs(triggerBox.x - menuBox.x) <= 1,
+  `${width}/搜索新建按钮占满内容区，菜单同宽对齐`);
+  await fits(searchCreateMenu, `${width}/搜索新建菜单`);
   assert.equal(await searchCreateInput.evaluate(el => {
     const style = getComputedStyle(el);
     return document.activeElement === el && style.outlineWidth !== '0px' &&

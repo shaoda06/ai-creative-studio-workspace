@@ -105,7 +105,7 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
         <p className="component-draft">按钮只由组件内的SVG显示一个下拉箭头，选中、高亮或禁用时也不叠加背景箭头。</p>
         <p className="component-draft">已选择：{options.find(item => item.value === selection)!.label}</p>
       </Example>}
-      {category === 'select' && <Example title="搜索或新建选项" rule="输入新名称时显示「新建并应用」，同时保存已勾选的项。搜索为空或完全匹配已有名称时显示「应用」，勾选有变化后可用。此示例仅更新页面演示数据。" usage="Chloe 套装风格">
+      {category === 'select' && <Example title="搜索或新建选项" rule="按钮填满容器内容区，展开菜单与按钮同宽。输入新名称时显示「新建并应用」，同时保存已勾选的项。搜索为空或完全匹配已有名称时显示「应用」，勾选有变化后可用。此示例仅更新页面演示数据。" usage="Chloe 套装风格">
         <p>当前选项 {styleChoice.join('、')}</p>
         <SearchCreateSelect items={styleOptions} selected={styleChoice} label="搜索或新建示例选项"
           prompt="搜索或新建" searchLabel="输入示例名称" exclusive="未分类" onChange={setStyleChoice}
