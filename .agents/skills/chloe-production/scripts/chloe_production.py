@@ -125,7 +125,7 @@ def postproduction_round(project, root, item, rounds, executions, outputs):
         raise ValueError('整片后期轮次须登记来源轮次及整片输出')
     if (not isinstance(field, dict) or set(field) != {'kind', 'execution', 'slot'}
             or field['kind'] not in POSTPRODUCTION_KINDS):
-        raise ValueError('整片后期须填写剪辑、调色、补帧或音频、执行编号及输出槽位')
+        raise ValueError('整片后期须填写有效的展示分类、执行编号及输出槽位')
     base = item['base_round']
     if type(base) is not int or base not in rounds:
         raise ValueError('整片后期须引用既有来源轮次')
