@@ -112,7 +112,7 @@ try {
   const detail=page.getByRole('region',{name:'作品成片与发布'});
   const tabs=detail.getByRole('navigation',{name:'成片与发布子页'});
   const directoryTab=tabs.getByRole('button',{name:'成片目录',exact:true});
-  const releaseTab=tabs.getByRole('button',{name:'发布',exact:true});
+  const releaseTab=tabs.getByRole('button',{name:'发布记录',exact:true});
   const files=detail.getByRole('region',{name:'成片目录',exact:true});
   const history=detail.getByRole('region',{name:'发布记录',exact:true});
   await files.waitFor();

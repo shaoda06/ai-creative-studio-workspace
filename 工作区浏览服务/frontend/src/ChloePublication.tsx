@@ -34,7 +34,7 @@ type Publication = { project: string; id: string; title: string; finals: FinalFi
   history: { fields: Record<string, string>; materialId: string | null; url: string | null }[] };
 const publicationTabs: { value: 'files' | 'release'; label: string }[] = [
   { value: 'files', label: '成片目录' },
-  { value: 'release', label: '发布' },
+  { value: 'release', label: '发布记录' },
 ];
 const missing = new Set(['待确定', '待核实', '未取得', '不适用', '无']);
 const fileTimeFormat = new Intl.DateTimeFormat('zh-CN', {
