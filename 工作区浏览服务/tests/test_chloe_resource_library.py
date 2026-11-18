@@ -126,7 +126,15 @@ class ChloeResourceLibraryTests(unittest.TestCase):
             self.assertEqual(detail.status_code,200)
         self.assertEqual(self.snapshot(),before)
 
-    def test_restart_reuses_unchanged_metadata_when_one_version_changes(self):
+    def test_voice_titles_use_catalog_fields_without_full_history_validation(self):
+        from backend import chloe_read_cache
+        with patch.object(chloe_read_cache, 'validate_document', wraps=chloe_read_cache.validate_document) as validate:
+            catalog(self.root, self.api)
+        reads = [call for call in validate.call_args_list if call.args[1].name == '声音说明.md']
+        self.assertTrue(reads)
+        self.assertTrue(all(call.kwargs.get('check_references') is False for call in reads))
+
+    def test_restart_and_release_change_reuse_unchanged_metadata(self):
         from backend import chloe_resource_library as library
         from backend.services.read_views import ReadViews
         cache_file = library.catalog_cache_file(self.space)
@@ -141,10 +149,11 @@ class ChloeResourceLibraryTests(unittest.TestCase):
             if path.name in {'版本信息.json', '资源信息.json'}:
                 reads.append(path)
             return read_text(path, *args, **kwargs)
-        with patch.object(library, 'views', ReadViews()), patch.object(library, 'metadata_cache', OrderedDict()), \
+        with patch.object(library, 'RELEASE', 'isolated-next-release'), \
+             patch.object(library, 'views', ReadViews()), patch.object(library, 'metadata_cache', OrderedDict()), \
              patch.object(library, 'loaded_metadata_files', set()), patch.object(library, 'saved_metadata_revisions', {}), \
              patch.object(Path, 'read_text', track):
-            (entries, _), _ = library.catalog_view(self.root, self.api, cache_file=cache_file)
+            (entries, _), _ = library.catalog_view(self.root, self.api, cache_file=library.catalog_cache_file(self.space))
         entry = next(item for item in entries if item['resource_id'] == self.first['resource_id'] and item['version'] == self.first['version'])
         self.assertEqual(entry['facts']['width'], 31)
         self.assertEqual(reads, [changed])
@@ -280,3 +289,33 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         entry=next(v for v in catalog(self.root,self.api)[0] if v['resource_id']==self.local['resource_id'])
         self.assertEqual(entry['display_name'],'隔离穿搭展示 · P001全身开场参考图')
         self.assertEqual(entry['name'],'portrait.png')
+        producer.write_text(json.dumps({'purpose': 'P002侧身参考图'}))
+        entry=next(v for v in catalog(self.root,self.api)[0] if v['resource_id']==self.local['resource_id'])
+        self.assertEqual(entry['display_name'], '隔离穿搭展示 · P002侧身参考图')
+
+    def test_unread_execution_directory_does_not_invalidate_catalog(self):
+        from backend import chloe_resource_library as library
+        directory = self.video / '执行记录/隔离执行'
+        directory.mkdir(parents=True)
+        metadata = Path(self.local['absolute_file']).with_name('版本信息.json')
+        data = json.loads(metadata.read_text())
+        data['producer'] = directory.relative_to(self.video).as_posix()
+        resources.write_json(metadata, data)
+        with resources.edit_index(self.video) as index:
+            index['files'][self.local['file']]['producer'] = data['producer']
+        library.catalog_view(self.root, self.api)
+        (directory / '后台状态.txt').write_text('changed')
+        with patch.object(library, 'build_catalog', side_effect=AssertionError('unread directory rebuilt catalog')):
+            library.catalog_view(self.root, self.api)
+
+    def test_catalog_sources_reject_outside_metadata_before_reading_it(self):
+        from backend import chloe_resource_library as library
+        outside = self.base / 'outside/版本信息.json'
+        outside.parent.mkdir()
+        outside.write_text('{"producer":"outside.json"}')
+        with resources.edit_index(self.video) as index:
+            index['files'][self.local['file']]['file'] = os.path.relpath(outside.parent / 'file.png', self.video)
+        with patch.object(library, 'read_metadata', wraps=library.read_metadata) as read:
+            with self.assertRaisesRegex(ValueError, '越出所属项目'):
+                library.catalog_sources(self.root)
+        self.assertNotIn(outside, [call.args[0] for call in read.call_args_list])

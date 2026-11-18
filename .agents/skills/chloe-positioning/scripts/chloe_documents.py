@@ -8,7 +8,7 @@ import re
 import sys
 from urllib.parse import urlsplit
 
-from chloe_init import ASSETS, SKILLS, asset_template_skill, resources, workspace_path, project_path
+from chloe_init import ASSETS, SKILLS, asset_template_skill, resources, project_path
 
 sys.path.insert(0, str(SKILLS / 'studio-storyboard/scripts'))
 from storyboard_fields import read_shots

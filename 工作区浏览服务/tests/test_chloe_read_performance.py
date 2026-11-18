@@ -1,5 +1,4 @@
 """Read projections stay scoped, invalidate correctly and avoid repeated validation."""
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -50,6 +49,14 @@ class ChloeReadPerformanceTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.read_model()
 
+    def test_missing_index_invalidates_cached_document_without_a_type_error(self):
+        _, label = self.add_image('red', 'first')
+        self.append('参考版本', ['正面面部', label, '用户提供', '不适用'])
+        self.read_model()
+        resources.index_path(self.root / '综合资料').unlink()
+        with self.assertRaisesRegex(FileNotFoundError, '缺少项目资源索引'):
+            self.read_model()
+
     def test_model_view_and_media_do_not_visit_unrelated_looks(self):
         ref, label = self.add_image('red', 'first')
         self.append('参考版本', ['正面面部', label, '用户提供', '不适用'])
@@ -76,6 +83,25 @@ class ChloeReadPerformanceTests(unittest.TestCase):
             path.unlink()
             self.assertEqual(snapshot([path]), {path: None})
 
+    def test_rebuild_diagnostics_distinguish_cold_and_changed_sources(self):
+        from backend.services.request_diagnostics import read_rebuilds
+        records = []
+        token = read_rebuilds.set(records)
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / 'source.md'
+                path.write_text('one')
+                views = ReadViews()
+                views.read('source', [path], path.read_text)
+                path.write_text('changed')
+                views.read('source', [path], path.read_text)
+                views.read('source', [path], path.read_text)
+                self.assertEqual([item['reason'] for item in records], ['cold', 'sources_changed'])
+                self.assertEqual(records[1]['sources'], [str(path)])
+                self.assertEqual(records[1]['changed_count'], 1)
+        finally:
+            read_rebuilds.reset(token)
+
     def test_catalog_validates_files_for_the_current_page_not_every_history(self):
         from backend.chloe_reference_assets import asset_rows, ACCESSORIES
         from backend.chloe_asset_pages import asset_page, AssetPage
@@ -93,6 +119,22 @@ class ChloeReadPerformanceTests(unittest.TestCase):
             self.assertEqual(len(full), 12)
             with self.assertRaises((ValueError, FileNotFoundError)):
                 asset_page(rows, AssetPage(page=2))
+
+    def test_changed_sources_during_build_are_reported_and_not_cached(self):
+        from backend.services.request_diagnostics import read_rebuilds
+        records = []
+        token = read_rebuilds.set(records)
+        try:
+            path = Path('isolated-source.md')
+            scans = iter([{path: 1}, {path: 2}, {path: 2}, {path: 2}])
+            views = ReadViews()
+            views.read('source', [path], lambda: 'first', source_snapshot=lambda: next(scans))
+            second, _ = views.read('source', [path], lambda: 'second', source_snapshot=lambda: next(scans))
+            self.assertEqual(second, 'second')
+            self.assertEqual([record['reason'] for record in records], ['cold', 'changed_during_build', 'cold'])
+            self.assertEqual(records[1]['sources'], [str(path)])
+        finally:
+            read_rebuilds.reset(token)
 
     def test_persistent_read_view_restarts_without_rebuilding_and_detects_changes(self):
         with tempfile.TemporaryDirectory() as folder:

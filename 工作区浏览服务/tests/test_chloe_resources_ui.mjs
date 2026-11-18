@@ -11,12 +11,13 @@ const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
 const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const tool=fileURLToPath(new URL('../',import.meta.url));
 const fixture=JSON.parse(execFileSync(join(tool,'.venv',process.platform==='win32'?'Scripts':'bin',process.platform==='win32'?'python.exe':'python'),['-X','utf8','-c',`
-import base64,json
+import base64,json,tempfile
 from pathlib import Path
 from PIL import Image
 from tests.test_chloe_resource_library import ChloeResourceLibraryTests
 from backend.chloe_resource_library import catalog,detail_data
 from chloe_resources import import_media
+tempfile.tempdir = str(Path.cwd())
 x=ChloeResourceLibraryTests();x.setUp();x.label_visuals();x.add_voice_video()
 try:
  for i in range(9):

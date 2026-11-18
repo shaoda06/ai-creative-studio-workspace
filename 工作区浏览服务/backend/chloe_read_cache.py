@@ -7,7 +7,6 @@ from urllib.parse import unquote, urlsplit
 
 from backend.services.read_views import ReadViews
 from chloe_documents import LINK, MEDIA, SKILLS, owner_for, parse, records, read_document as validate_document
-from backend.services.read_views import snapshot
 import project_resources as resources
 
 documents = ReadViews(limit=512)
@@ -63,7 +62,7 @@ def _document_sources(root, path, source=None, *, summary=False):
         target = Path(os.path.abspath(path.parent / href))
         key = target.relative_to(owner).as_posix()
         index = resources.read_index(owner)
-        result[(owner, identity, version)] = json.dumps(index['files'].get(key), sort_keys=True)
+        result[(owner, identity, version)] = json.dumps(index['files'].get(key) if index is not None else None, sort_keys=True)
         files.add(target.parent / '版本信息.json')
     owner = owner_for(root, path)
     if owner != root / '综合资料':

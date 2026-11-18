@@ -14,7 +14,7 @@ from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
 from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, SOUND_TYPES, asset_status, outfit_styles, records, sound_type, template
-from backend.chloe_read_cache import read_document, read_catalog_document, asset_sources, document_sources
+from backend.chloe_read_cache import read_document, read_catalog_document, asset_sources
 from chloe_init import asset_template_skill
 import project_resources as resources
 

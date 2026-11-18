@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from backend.chloe_publication import publication, router, write_router
 from chloe_init import initialize_workspace, initialize_project, initialize_video, write_template, SKILLS
-from chloe_documents import check_workspace, read_document, template
+from chloe_documents import check_workspace
 from tests.http_case import HttpTestCase
 from backend.main import queue_write
 sys.path.insert(0, str(SKILLS/'chloe-assets/scripts'))

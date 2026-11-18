@@ -7,7 +7,6 @@ from fractions import Fraction
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -195,6 +194,8 @@ def matches_recorded_stamp(project, value, stamp):
 
 def version_file(project, resource_id, version):
     data = read_index(project)
+    if data is None:
+        raise FileNotFoundError('缺少项目资源索引：' + str(index_path(project)))
     indexes = _READ_INDEXES.get()
     key = (Path(project), 'versions')
     if indexes is not None:
@@ -355,22 +356,33 @@ def register(project, source, *, resource_id=None, name=None, origin='user_uploa
     return finish(project, ref['file'], info=info, source=source, source_range=source_range)
 
 
-def catalog(project, resource_id=None):
+def catalog_versions(project, resource_id=None, *, read_metadata=None):
+    """Yield family, version and its resolved file from one resource reader."""
+    read = read_metadata or (lambda path: json.loads(path.read_text('utf-8')))
     data = read_index(project)
     if data is None:
-        return []
-    families = {item['resource_id']: {**json.loads((resource_directory(project) / item['kind'] / item['resource_id'] / '资源信息.json').read_text('utf-8')),
-                                     'versions': []} for item in data['families'].values() if resource_id is None or item['resource_id'] == resource_id}
+        return
+    families = {item['resource_id']: read(local(project, resource_directory(project) / item['kind'] / item['resource_id'] / '资源信息.json'))
+                for item in data['families'].values() if resource_id is None or item['resource_id'] == resource_id}
     for ref in data['files'].values():
         if ref['resource_id'] not in families:
             continue
-        metadata = local(project, ref['file']).parent / '版本信息.json'
+        file = local(project, ref['file'])
+        metadata = file.parent / '版本信息.json'
         if metadata.is_file():
-            version = json.loads(metadata.read_text('utf-8'))
-            families[ref['resource_id']]['versions'].append(version)
+            version = read(metadata)
+            if version['file'] != ref['file']:
+                file = local(project, version['file'])
+            yield families[ref['resource_id']], version, file
+
+
+def catalog(project, resource_id=None, *, read_metadata=None):
+    families = {}
+    for family, version, _ in catalog_versions(project, resource_id, read_metadata=read_metadata):
+        families.setdefault(family['resource_id'], {**family, 'versions': []})['versions'].append(version)
     for family in families.values():
         family['versions'].sort(key=lambda item: item['version'])
-    return sorted((item for item in families.values() if item['versions']), key=lambda item: (item['kind'], item['name']))
+    return sorted(families.values(), key=lambda item: (item['kind'], item['name']))
 
 
 def refs_in(project, document):

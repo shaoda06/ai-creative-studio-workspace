@@ -49,26 +49,8 @@ def read_metadata(path, revision):
 
 
 def resource_versions(owner):
-    index = resources.read_index(owner)
-    directory = resources.resource_directory(owner)
-    names = {}
-    for family in index['families'].values():
-        path = resources.local(owner, directory / family['kind'] / family['resource_id'] / '资源信息.json')
-        names[family['resource_id']] = read_metadata(path, stamp(path))['name']
-    for ref in index['files'].values():
-        if ref['resource_id'] not in names:
-            continue
-        path = (owner / ref['file']).resolve()
-        if not path.is_relative_to(owner):
-            raise ValueError('资源路径越出所属项目：' + ref['file'])
-        metadata = path.parent / '版本信息.json'
-        revision = stamp(metadata)
-        if revision is None:
-            continue
-        version = read_metadata(metadata, revision)
-        if version['file'] != ref['file']:
-            path = resources.local(owner, version['file'])
-        yield names[ref['resource_id']], ref['kind'], version, path
+    for family, version, file in resources.catalog_versions(owner, read_metadata=lambda path: read_metadata(path, stamp(path))):
+        yield family['name'], family['kind'], version, file
 
 
 def reference_key(path, value):
@@ -133,9 +115,15 @@ def catalog_sources(root):
             result[path] = stamp(path)
             for metadata in (path.parent / '版本信息.json', path.parent.parent / '资源信息.json'):
                 result[metadata] = stamp(metadata)
-            if ref.get('producer'):
-                producer = owner / ref['producer']
-                result[producer] = stamp(producer)
+            if ref['kind'] == '图片' and owner != root / '综合资料':
+                metadata = resources.local(owner, path.parent / '版本信息.json')
+                revision = stamp(metadata)
+                result[metadata] = revision
+                if revision is not None:
+                    producer = read_metadata(metadata, revision).get('producer')
+                    if producer and Path(producer).suffix == '.json':
+                        producer = owner / producer
+                        result[producer] = stamp(producer)
     return result
 
 
@@ -148,7 +136,7 @@ def catalog_cache_file(space):
 
 
 def catalog_view(root, api, *, cache_file=None):
-    metadata_file = cache_file.with_name(f'{RELEASE}-resource-metadata.json') if cache_file else None
+    metadata_file = cache_file.with_name('resource-metadata.json') if cache_file else None
     if metadata_file and metadata_file not in loaded_metadata_files:
         if metadata_file.is_file():
             saved = json.loads(metadata_file.read_text('utf-8'))
@@ -181,7 +169,7 @@ def build_catalog(root, api):
     project_names = {}
     visuals = visual_titles(root)
     voice_titles = {}
-    for _, _, path, doc in asset_documents(root, VOICES):
+    for _, _, path, doc in asset_documents(root, VOICES, catalog=True):
         name = fields(doc, '资产身份')['资产名称']
         versions = {}
         for row in sorted(records(doc, '参考版本'), key=lambda row: row['用途'] != '声音原始参考'):

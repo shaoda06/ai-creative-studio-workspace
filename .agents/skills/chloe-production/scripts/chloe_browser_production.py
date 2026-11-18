@@ -1,12 +1,11 @@
 """Chloe's reference projection into the complete public ProductionWorkbench."""
 import json
 from math import isclose
-from pathlib import Path
 from functools import cache
 import re
 from urllib.parse import quote
 
-from chloe_production import (state, local, link_path, fields, document, plan, director_slot, STAGES,
+from chloe_production import (state, local, link_path, fields, document, director_slot, STAGES,
                               prompt_sections, check_handoffs, scene_source, timeline_values, upstream_candidate,
                               SCENE_SLOT, VIDEO_PURPOSE)
 from chloe_documents import records, media_reference, MISSING

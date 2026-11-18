@@ -34,6 +34,21 @@ class ProjectResourcesTests(unittest.TestCase):
         Image.new('RGB', (12, 8), color).save(stream, format='PNG')
         path.write_bytes(stream.getvalue())
 
+    def test_catalog_metadata_reader_keeps_the_common_catalog_format(self):
+        resources.register(self.project, self.source, key='upload', name='隔离资源')
+        expected = resources.catalog(self.project)
+        paths = []
+        def read(path):
+            paths.append(path)
+            return json.loads(path.read_text('utf-8'))
+        self.assertEqual(resources.catalog(self.project, read_metadata=read), expected)
+        self.assertEqual({path.name for path in paths}, {'资源信息.json', '版本信息.json'})
+        self.assertEqual(len(paths), 2)
+
+    def test_missing_index_reports_the_missing_resource_index(self):
+        with self.assertRaisesRegex(FileNotFoundError, '缺少项目资源索引'):
+            resources.version_file(self.project, 'IMG-isolated', 'V001')
+
     def test_uploads_and_revisions_keep_one_family_and_exact_old_version(self):
         mode = self.source.stat().st_mode
         first = resources.register(self.project, self.source, key='upload-1', name='人物三视图')

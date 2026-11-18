@@ -12,12 +12,22 @@ import time
 from contextvars import ContextVar
 
 read_timings = ContextVar('read_timings', default=None)
+read_rebuilds = ContextVar('read_rebuilds', default=None)
 
 
 def record_read_timing(phase, seconds):
     timings = read_timings.get()
     if timings is not None:
         timings[phase] = round(timings.get(phase, 0) + seconds, 4)
+
+
+def record_read_rebuild(previous, current, reason=None):
+    records = read_rebuilds.get()
+    if records is not None:
+        changed = [] if previous is None else [key for key in previous.keys() | current.keys()
+                                              if previous.get(key) != current.get(key)]
+        records.append({'reason': reason or ('cold' if previous is None else 'sources_changed'),
+                        'changed_count': len(changed), 'sources': sorted(map(str, changed))[:5]})
 
 
 class RequestDiagnostics:
@@ -134,9 +144,12 @@ class RequestDiagnosticsMiddleware:
         monitor = scope['app'].state.request_diagnostics
         key = monitor.begin(scope['method'], scope['path'])
         timings = {}
+        rebuilds = []
         token = read_timings.set(timings)
+        rebuild_token = read_rebuilds.set(rebuilds)
         with monitor.lock:
             monitor.pending[key]['read_timings'] = timings
+            monitor.pending[key]['read_rebuilds'] = rebuilds
 
         async def response(message):
             if message['type'] == 'http.response.start':
@@ -150,3 +163,4 @@ class RequestDiagnosticsMiddleware:
         finally:
             monitor.finish(key)
             read_timings.reset(token)
+            read_rebuilds.reset(rebuild_token)

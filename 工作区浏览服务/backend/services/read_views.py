@@ -10,7 +10,7 @@ import stat
 from threading import Lock
 from contextvars import ContextVar
 from time import perf_counter
-from backend.services.request_diagnostics import record_read_timing
+from backend.services.request_diagnostics import record_read_timing, record_read_rebuild
 
 reading = ContextVar('reading_view', default=False)
 
@@ -104,6 +104,8 @@ class ReadViews:
                 if saved['key'] == str(key) and saved['sources'] == signature and sources == scan():
                     view.sources, view.data, view.revision = sources, saved['data'], saved['revision']
             if view.sources != sources:
+                if measure:
+                    record_read_rebuild(view.sources, sources)
                 started = perf_counter()
                 with reuse_read_indexes():
                     data = build()
@@ -113,7 +115,10 @@ class ReadViews:
                 # Keep the response for this request, but never cache a build
                 # across a concurrent change to its source files.
                 started = perf_counter()
-                stable = sources == scan()
+                checked = scan()
+                stable = sources == checked
+                if measure and not stable:
+                    record_read_rebuild(sources, checked, 'changed_during_build')
                 if measure:
                     record_read_timing('source_recheck', perf_counter() - started)
                 if stable:
