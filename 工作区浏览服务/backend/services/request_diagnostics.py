@@ -9,6 +9,15 @@ import os
 from pathlib import Path
 import threading
 import time
+from contextvars import ContextVar
+
+read_timings = ContextVar('read_timings', default=None)
+
+
+def record_read_timing(phase, seconds):
+    timings = read_timings.get()
+    if timings is not None:
+        timings[phase] = round(timings.get(phase, 0) + seconds, 4)
 
 
 class RequestDiagnostics:
@@ -124,6 +133,10 @@ class RequestDiagnosticsMiddleware:
             return await self.app(scope, receive, send)
         monitor = scope['app'].state.request_diagnostics
         key = monitor.begin(scope['method'], scope['path'])
+        timings = {}
+        token = read_timings.set(timings)
+        with monitor.lock:
+            monitor.pending[key]['read_timings'] = timings
 
         async def response(message):
             if message['type'] == 'http.response.start':
@@ -136,3 +149,4 @@ class RequestDiagnosticsMiddleware:
             await self.app(scope, receive, response)
         finally:
             monitor.finish(key)
+            read_timings.reset(token)

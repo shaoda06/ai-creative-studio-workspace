@@ -82,6 +82,36 @@ class ChloeProductionTests(unittest.TestCase):
         initialize_video(self.root,'V001','隔离演示')
         self.assertEqual(state(self.project)['rounds'],{})
 
+    def test_summary_defers_candidate_context_until_it_is_requested(self):
+        self.plan()
+        self.candidate('P001', 'E001')
+        self.candidate('P002', 'E002')
+        self.rounds([self.round(1, [('P001', 'E001'), ('P002', 'E002')])])
+        with patch.object(browser, 'context_for', side_effect=AssertionError('eager prompt context')):
+            detail = browser.detail(self.projects, self.project.name, self.api, 'V001', summary=True)
+        summary = production.summary(detail, '/detail', None, 'test')
+        self.assertTrue(summary['segments']['whole'][0]['videos'][0]['contextUrl'])
+        with patch.object(browser, 'context_for', wraps=browser.context_for) as read_context:
+            browser.detail(self.projects, self.project.name, self.api, 'V001')
+            self.assertEqual(read_context.call_count, 2)
+
+    def test_list_duration_uses_latest_postproduction_output_without_full_detail(self):
+        from backend.chloe_production import video_card
+        self.plan()
+        self.candidate('P001', 'E001')
+        self.candidate('P002', 'E002')
+        output, _, _ = self.candidate('P001', 'E003', stage='后处理')
+        metadata = output.with_name('版本信息.json')
+        data = json.loads(metadata.read_text())
+        data['facts']['duration_seconds'] = 7.25
+        resources.write_json(metadata, data)
+        self.rounds([self.round(1, [('P001', 'E001'), ('P002', 'E002')]),
+                     {'number': 2, 'created_at': '2026-11-19T00:00:00+08:00', 'note': '隔离剪辑',
+                      'base_round': 1, 'postproduction': {'kind': '剪辑', 'execution': 'E003', 'slot': 'P001视频'}}])
+        space = SimpleNamespace(root=self.root, projects=self.projects, production_adapter='chloe-production')
+        with patch.object(browser, 'detail', side_effect=AssertionError('full detail on list')):
+            card = video_card(space, self.project.name)
+        self.assertEqual(card['durationSummary'], {'seconds': 7.25, 'estimated': False})
     def test_local_edit_and_grade_play_exact_outputs_on_their_own_timeline(self):
         self.plan()
         self.candidate('P001','E001')

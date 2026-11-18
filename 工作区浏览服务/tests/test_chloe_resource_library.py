@@ -6,6 +6,8 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
+from collections import OrderedDict
 from PIL import Image
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -51,7 +53,7 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         voice_doc.write_text(voice_doc.read_text().replace(header,header+f'\n| 声音参考 | {ref} | 原件 | 无 |\n| 声音原始参考 | {ref} | 用户上传 | 无 |'))
         shutil.copyfile(samples/'video.webm',self.video/'成片/人工成片.webm')
         (self.video/'剪辑交接/示例包.zip').write_bytes(b'not a media resource')
-        self.space = SimpleNamespace(root=self.root,api=self.api,view='chloe-commerce')
+        self.space = SimpleNamespace(root=self.root,api=self.api,view='chloe-commerce',runtime=self.base/'runtime')
         app = FastAPI()
         @app.middleware('http')
         async def scope(request, call_next):
@@ -124,13 +126,36 @@ class ChloeResourceLibraryTests(unittest.TestCase):
             self.assertEqual(detail.status_code,200)
         self.assertEqual(self.snapshot(),before)
 
+    def test_restart_reuses_unchanged_metadata_when_one_version_changes(self):
+        from backend import chloe_resource_library as library
+        from backend.services.read_views import ReadViews
+        cache_file = library.catalog_cache_file(self.space)
+        library.catalog_view(self.root, self.api, cache_file=cache_file)
+        changed = Path(self.first['absolute_file']).with_name('版本信息.json')
+        data = json.loads(changed.read_text())
+        data['facts']['width'] = 31
+        resources.write_json(changed, data)
+        read_text = Path.read_text
+        reads = []
+        def track(path, *args, **kwargs):
+            if path.name in {'版本信息.json', '资源信息.json'}:
+                reads.append(path)
+            return read_text(path, *args, **kwargs)
+        with patch.object(library, 'views', ReadViews()), patch.object(library, 'metadata_cache', OrderedDict()), \
+             patch.object(library, 'loaded_metadata_files', set()), patch.object(library, 'saved_metadata_revisions', {}), \
+             patch.object(Path, 'read_text', track):
+            (entries, _), _ = library.catalog_view(self.root, self.api, cache_file=cache_file)
+        entry = next(item for item in entries if item['resource_id'] == self.first['resource_id'] and item['version'] == self.first['version'])
+        self.assertEqual(entry['facts']['width'], 31)
+        self.assertEqual(reads, [changed])
+
     def test_filters_pagination_and_registered_order(self):
         for index, ref in enumerate((self.first,self.second,self.local)):
             path = Path(ref['absolute_file']).with_name('版本信息.json');data=json.loads(path.read_text())
             data['registered_at']=f'2030-01-0{index+1}T10:00:00+08:00';resources.write_json(path,data)
         listing = self.client.get(self.api+'/resource-library',params={'kind':'图片','page_size':2}).json()
         self.assertEqual(listing['total'],3)
-        self.assertEqual([v['file'] for v in listing['items']],[str(Path(self.local['absolute_file']).relative_to(self.root)),str(Path(self.second['absolute_file']).relative_to(self.root))])
+        self.assertEqual([v['file'] for v in listing['items']],[Path(self.local['absolute_file']).relative_to(self.root).as_posix(),Path(self.second['absolute_file']).relative_to(self.root).as_posix()])
         last = self.client.get(self.api+'/resource-library',params={'kind':'图片','page_size':2,'page':99}).json()
         self.assertEqual(last['page'],2);self.assertEqual(len(last['items']),1)
         filtered=self.client.get(self.api+'/resource-library',params={'owner':'综合资料','q':'UPSCALED'}).json()
@@ -228,7 +253,7 @@ class ChloeResourceLibraryTests(unittest.TestCase):
         self.assertEqual(entry['display_name'],entry['title'])
 
     def test_missing_file_remains_recorded(self):
-        path=Path(self.first['absolute_file']);path.unlink()
+        path=Path(self.first['absolute_file']);path.chmod(0o644);path.unlink()
         entry=next(v for v in catalog(self.root,self.api)[0] if v['owner']=='综合资料' and v['resource_id']==self.first['resource_id'] and v['version']=='V001')
         self.assertIsNone(entry['media'])
 

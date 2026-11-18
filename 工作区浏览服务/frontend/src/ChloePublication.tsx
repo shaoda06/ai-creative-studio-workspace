@@ -96,7 +96,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
   const [materialId, setMaterialId] = useState('');
   const url = `${baseUrl}/publication-videos/${encodeURIComponent(project)}`;
   const query = useQuery({ queryKey: ['chloe-publication-detail', baseUrl, project],
-    queryFn: () => get<Publication>(url), refetchInterval: 5000 });
+    queryFn: ({ signal }) => get<Publication>(url, signal), refetchInterval: 5000 });
   const client = useQueryClient();
   const refreshFinals = () => Promise.all([
     client.invalidateQueries({ queryKey: ['chloe-publication-detail', baseUrl, project] }),

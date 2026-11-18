@@ -4,7 +4,8 @@ import sys
 
 TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL.parent / '.agents/skills/chloe-positioning/scripts'))
-from chloe_documents import read_document, records, template
+from chloe_documents import records, template
+from backend.chloe_read_cache import read_document
 
 
 def account_overview(root: Path):

@@ -4,6 +4,7 @@ import json
 import re
 from functools import partial
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote, unquote, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,13 +15,16 @@ from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response, thumbnail_url
 from backend.parsers import documents
 from backend.services.read_views import respond_view
-from chloe_documents import LINK, asset_status, media_reference, read_document, records, template
+from chloe_documents import LINK, asset_status, media_reference, records, template
+from backend.chloe_read_cache import read_document, read_catalog_document, asset_sources, document_sources
+from backend.services.read_views import views, ReadViews
 import project_resources as resources
 
 router = APIRouter(prefix='/shared-models')
+file_views = ReadViews(limit=512)
 
 
-def model_record_candidates(root, requested_id=None, *, id_fragment=''):
+def model_record_candidates(root, requested_id=None, *, id_fragment='', catalog=False):
     folder = resources.local(root, '综合资料/共用素材/AI模特')
     if not folder.is_dir():
         raise FileNotFoundError('模特资料目录不存在')
@@ -34,13 +38,13 @@ def model_record_candidates(root, requested_id=None, *, id_fragment=''):
         if identity in seen:
             raise ValueError('模特编号重复：' + identity)
         seen.add(identity)
-        load = partial(read_document, root, path, template('chloe-assets', '模特说明模板.md'),
+        load = partial(read_catalog_document if catalog else read_document, root, path, template('chloe-assets', '模特说明模板.md'),
                        {'identity': identity, 'title': name})
         yield identity, name, path, load
 
 
-def model_records(root, requested_id=None):
-    for identity, name, path, load in model_record_candidates(root, requested_id):
+def model_records(root, requested_id=None, *, catalog=False):
+    for identity, name, path, load in model_record_candidates(root, requested_id, catalog=catalog):
         yield identity, name, path, load()
 
 
@@ -65,6 +69,8 @@ def portrait_url(base, portrait):
 
 
 def model_card(root, api, path, doc, adoption, metadata):
+    identity, title = path.parent.name.split('-', 1)
+    read_document(root, path, template('chloe-assets', '模特说明模板.md'), {'identity': identity, 'title': title})
     portrait = model_portrait(root, path, adoption)
     media = None
     if portrait:
@@ -78,7 +84,7 @@ def model_card(root, api, path, doc, adoption, metadata):
 
 def model_rows(root, api):
     rows = []
-    for identity, name, path, doc in model_records(root):
+    for identity, name, path, doc in model_records(root, catalog=True):
         adoption = model_adoption(doc)
         status = asset_status(path, doc)['status']
         card = partial(model_card, root, api, path, doc, adoption, {'id': identity, 'name': name, 'status': status})
@@ -104,7 +110,8 @@ def listing(request: Request, options: AssetPage = Depends()):
         raise HTTPException(404, '该空间未接入带货共用资产')
     try:
         return respond_asset_page(request, space, 'shared-models', options,
-                                  lambda: model_rows(space.root, space.api), folders=[space.root / '综合资料'])
+                                  lambda: model_rows(space.root, space.api), folders=[space.root / '综合资料'],
+                                  source_snapshot=lambda: asset_sources(space.root, space.root / '综合资料/共用素材/AI模特', 'M*-*/模特说明.md', summary=True))
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -136,6 +143,11 @@ def model_context(root, identity):
 
 
 def linked_files(root, path, doc):
+    return file_views.read((root, path), [path], lambda: _linked_files(root, path, doc),
+                           source_snapshot=lambda: document_sources(root, path))[0]
+
+
+def _linked_files(root, path, doc):
     """Only files directly referenced by this model's business tables are exposed."""
     allowed = {path.relative_to(root).as_posix()}
     for section in doc['sections']:
@@ -165,7 +177,7 @@ def linked_html(text, source, allowed, base):
     return re.sub(r'<a href="([^"]*)" data-doc="([^"]*)">([^<]*)</a>', replace, rendered)
 
 
-def look_candidates(root, *, id_fragment=''):
+def look_candidates(root, *, id_fragment='', catalog=False):
     folder = resources.local(root, '综合资料/共用素材/造型')
     for path in sorted(folder.glob('L*-*/造型说明.md')):
         look_id, name = path.parent.name.split('-', 1)
@@ -173,13 +185,15 @@ def look_candidates(root, *, id_fragment=''):
             continue
         if not path.resolve().is_relative_to(folder):
             raise ValueError('造型说明越出造型资料目录')
-        load = partial(read_document, root, path, template('chloe-assets', '造型说明模板.md'),
+        load = partial(read_catalog_document if catalog else read_document, root, path, template('chloe-assets', '造型说明模板.md'),
                        {'identity': look_id, 'title': name})
         yield look_id, name, path, load
 
 
-def model_looks(root, identity=None):
-    for look_id, name, path, load in look_candidates(root):
+def model_looks(root, identity=None, requested_look=None, *, catalog=False):
+    for look_id, name, path, load in look_candidates(root, catalog=catalog):
+        if requested_look is not None and look_id != requested_look:
+            continue
         doc = load()
         if identity is None or fields(doc, '造型信息')['模特编号'] == identity:
             yield look_id, name, path, doc
@@ -222,7 +236,7 @@ def adopted_media(root, path, base, row, media_kinds=('image',)):
             'media': linked_media(base, ref['file'], kind, purpose + ' · ' + version)}
 
 
-def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
+def asset_content(root, path, doc, allowed, base, media_kinds=('image',), *, history=True):
     source = path.relative_to(root).as_posix()
     adopted = set()
     for row in records(doc, '当前采用'):
@@ -250,6 +264,8 @@ def asset_content(root, path, doc, allowed, base, media_kinds=('image',)):
     sections = []
     for section in doc['sections']:
         if section['heading'] in ('填写说明', '资产身份'):
+            continue
+        if not history and section['heading'] != '人物特征':
             continue
         text = []
         for table in section['tables']:
@@ -305,20 +321,30 @@ def look_cover(root, base, path, doc, name):
     return None
 
 
-def model_detail(root, identity, api):
+def model_detail(root, identity, api, view=None, selected_look=None, history=False):
     name, path, doc, portrait = model_context(root, identity)
     base = f'{api}/shared-models/{quote(identity)}'
-    allowed = model_files(root, identity, path, doc)
-    content = asset_content(root, path, doc, allowed, base)
-    head_base = head_shoulder_base(root, identity, path, doc, content['images'], base)
+    look_docs = list(model_looks(root, identity, selected_look, catalog=view == 'looks' and not selected_look)) if view in (None, 'looks') else []
+    allowed = linked_files(root, path, doc)
+    for _, _, look_path, look_doc in look_docs:
+        if view is None or selected_look:
+            allowed.update(linked_files(root, look_path, look_doc))
+    content = asset_content(root, path, doc, allowed, base, history=view is None or history)
+    head_base = head_shoulder_base(root, identity, path, doc, content['images'], base) if view != 'looks' else None
+    if view == 'looks':
+        content = {'images': [], 'sections': []}
     if portrait:
         url = thumbnail_url(portrait_url(base, portrait))
         for image in content['images']:
             if image['media']['key'] == portrait['file']:
                 image['media']['thumbnailUrl'] = url
     looks = []
-    for look_id, look_name, look_path, look_doc in model_looks(root, identity):
+    for look_id, look_name, look_path, look_doc in look_docs:
         media = look_cover(root, base, look_path, look_doc, look_name)
+        if view == 'looks' and not selected_look:
+            looks.append({'id': look_id, 'name': look_name, 'media': media,
+                          'status': asset_status(look_path, look_doc)['status']})
+            continue
         clothing = {}
         for row in records(look_doc, '输入记录'):
             if row['输入用途'] not in {'服装参考', '配饰参考'}:
@@ -334,14 +360,15 @@ def model_detail(root, identity, api):
         looks.append({'id': look_id, 'name': look_name, 'media': media, 'status': asset_status(look_path, look_doc)['status'],
                       'description': fields(look_doc, '造型信息')['造型说明'],
                       'clothing': list(clothing.values()),
-                      **asset_content(root, look_path, look_doc, allowed, base),
-                      'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base),
+                      **asset_content(root, look_path, look_doc, allowed, base, history=view is None or history),
+                      **({'html': linked_html(look_path.read_text('utf-8-sig').split('## 填写说明')[0], key, allowed, base)} if view is None else {}),
                       'url': base + '/files/' + quote(key, safe='/')})
     return {'id': identity, 'name': name, **content, 'looks': looks, 'headShoulderBase': head_base,
             'url': base + '/files/' + quote(path.relative_to(root).as_posix(), safe='/')}
 
 
 def assembly_look_card(root, base, path, identity, name, adopted):
+    read_document(root, path, template('chloe-assets', '造型说明模板.md'), {'identity': identity, 'title': name})
     face = adopted_media(root, path, base, adopted['造型面部三视图'])
     masked = adopted_media(root, path, base, adopted['全身三视图遮面版'])
     cover = adopted.get('全身三视图原图')
@@ -356,7 +383,7 @@ def assembly_look_rows(root, api, identity):
     if not model or asset_status(model[2], model[3])['status'] != '可用':
         return []
     rows = []
-    for look_id, name, path, doc in model_looks(root, identity):
+    for look_id, name, path, doc in model_looks(root, identity, catalog=True):
         if asset_status(path, doc)['status'] != '可用':
             continue
         adopted = {row['用途']: row for row in records(doc, '当前采用')}
@@ -372,16 +399,36 @@ def assembly_looks(identity: str, request: Request, options: AssetPage = Depends
     try:
         return respond_asset_page(request, space, 'assembly-looks', options,
                                   lambda: assembly_look_rows(space.root, space.api, identity),
-                                  folders=[space.root / '综合资料'], scope=identity)
+                                  folders=[space.root / '综合资料'], scope=identity,
+                                  source_snapshot=lambda: model_sources(space.root, identity, 'looks', catalog=True))
     except (ValueError, OSError) as error:
         raise HTTPException(409, str(error)) from error
 
 
 def model_file(root, identity, key):
-    _, path, doc, _ = model_context(root, identity)
-    if key not in model_files(root, identity, path, doc):
+    _, source, doc, _ = model_context(root, identity)
+    direct = linked_files(root, source, doc)
+    def allowed():
+        _, path, doc, _ = model_context(root, identity)
+        return model_files(root, identity, path, doc)
+    files = direct
+    if key not in direct:
+        files, _ = views.read((root, 'model-files', identity), [root / '综合资料'], allowed,
+                             source_snapshot=lambda: model_sources(root, identity, 'looks'))
+    if key not in files:
         raise FileNotFoundError('文件未被该模特直接引用')
-    return resources.local(root, key)
+    path = resources.local(root, key)
+    if path.relative_to(root).as_posix() != key:
+        raise FileNotFoundError('文件引用路径已改变')
+    return path
+
+
+def model_sources(root, identity, view, selected_look=None, *, catalog=False):
+    result = asset_sources(root, root / '综合资料/共用素材/AI模特', f'{identity}-*/模特说明.md')
+    if view in (None, 'looks'):
+        result.update(asset_sources(root, root / '综合资料/共用素材/造型',
+                                    f'{selected_look or "L*"}-*/造型说明.md', summary=catalog))
+    return result
 
 
 def request_space(request):
@@ -392,11 +439,12 @@ def request_space(request):
 
 
 @router.get('/{identity}')
-def detail(identity: str, request: Request):
+def detail(identity: str, request: Request, view: Literal['base', 'images', 'looks'] | None = None, look: str | None = None, history: bool = False):
     space = request_space(request)
     try:
-        return respond_view(request, (space.api, 'shared-models', identity), [space.root / '综合资料'],
-                            lambda: model_detail(space.root, identity, space.api))
+        return respond_view(request, (space.api, 'shared-models', identity, view, look, history), [space.root / '综合资料'],
+                            lambda: model_detail(space.root, identity, space.api, view, look, history),
+                            source_snapshot=lambda: model_sources(space.root, identity, view, look, catalog=view == 'looks' and not look))
     except FileNotFoundError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

@@ -40,9 +40,9 @@ export function ChloeResources({workspaceQuery}: {workspaceQuery:UseQueryResult<
   const [selected,setSelected] = useState<ResourceVersion|null>(null);
   const [preview,setPreview] = useState<FileItem|null>(null);
   const listing = useQuery({queryKey:['chloe-resources',api,kind,owner,search,page],
-    queryFn:()=>get<ResourceList>(`${base}?${new URLSearchParams({kind,owner,q:search,page:String(page)})}`),refetchInterval:5000});
+    queryFn:({ signal })=>get<ResourceList>(`${base}?${new URLSearchParams({kind,owner,q:search,page:String(page)})}`, signal),refetchInterval:30000});
   const detail = useQuery({queryKey:['chloe-resource-detail',api,selected?.key],enabled:!!selected,
-    queryFn:()=>get<ResourceDetail>(`${base}/detail?${new URLSearchParams({owner:selected!.owner,resource_id:selected!.resource_id,version:selected!.version})}`)});
+    queryFn:({ signal })=>get<ResourceDetail>(`${base}/detail?${new URLSearchParams({owner:selected!.owner,resource_id:selected!.resource_id,version:selected!.version})}`, signal)});
   const audio = useAudioPreview(!preview && !selected, `${kind}/${owner}/${search}/${page}`,0);
   const document = (path:string,name:string):FileItem => ({kind:path.endsWith('.md')?'markdown':'json',key:path,name,url:base+'/files/'+path.split('/').map(encodeURIComponent).join('/')});
   return <PreviewContext.Provider value={setPreview}>

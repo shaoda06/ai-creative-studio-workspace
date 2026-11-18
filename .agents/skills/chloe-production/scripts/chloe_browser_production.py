@@ -144,7 +144,7 @@ def context_for(data, api, candidate, active=None, bindings=None):
     return result
 
 
-def video(data,api,value,adopted_refs):
+def video(data,api,value,adopted_refs, *, summary=False):
     reference=value['ref']; project=data['project']
     path=data['root']/reference['file'] if reference else None
     key=path.relative_to(project).as_posix() if path else 'pending/'+value['execution']+'/'+value['slot']
@@ -155,7 +155,7 @@ def video(data,api,value,adopted_refs):
     return {'key':key,'url':file_url(api,key) if path else '', 'stage':value['stage'],'run':value['run'],
             'approved':approved,'adoptionKnown':True,'candidateNumber':int(value['run'][1:]),
             'fileRevision':f'{info.st_size}:{info.st_mtime_ns}' if info else '',
-            'context':context_for(data,api,value),'deliveryStatus':'已取回' if path else '未取回',
+            'context':empty_context(None) if summary else context_for(data,api,value),'deliveryStatus':'已取回' if path else '未取回',
             'taskStatus':task_state.get('status',value['record']['执行状态']),
             'taskStateUrl':file_url(api,(task_record[1]/'后台任务状态.json').relative_to(project).as_posix()) if task_state else '',
             'checkedAt':task_state.get('updated_at','')}
@@ -205,14 +205,14 @@ def segment_script(part, source, entry, shot_id=None):
     return html
 
 
-def segment_data(data, api, adopted_refs, part):
+def segment_data(data, api, adopted_refs, part, *, summary=False):
     segments={key:{**{name:item[name] for name in ('id','duration','shotIds')},
                    'scriptHtml':segment_script(part,'脚本.md',item),
                    'scriptUrl':file_url(api,'脚本.md'),'videos':[]} for key,item in data['plan'].items()}
     for value in data['candidates'].values():
         item=segments.setdefault(value['id'],{'id':value['id'],'duration':0,'scriptHtml':'','videos':[]})
         if not scene_source(data['candidates'], value):
-            item['videos'].append(video(data,api,value,adopted_refs))
+            item['videos'].append(video(data,api,value,adopted_refs, summary=summary))
     for item in segments.values():
         item['planned']=not item['videos']
     return {'segments':list(segments.values()),'batches':[],'issues':[]}
@@ -267,7 +267,7 @@ def apply_script_timing(context, script_shots, entry):
     context['shotTimingSource'] = 'plan'
 
 
-def detail(projects,name,space_api,work,view=None,**kwargs):
+def detail(projects,name,space_api,work,view=None,summary=False,**kwargs):
     project=projects.project(name);check_work(project,work)
     if view=='archive':
         raise FileNotFoundError('本视频无独立归档入口')
@@ -284,7 +284,7 @@ def detail(projects,name,space_api,work,view=None,**kwargs):
         return render_part(source, tuple(ids))
 
     current=script_view('脚本.md')
-    segments=segment_data(data, api, adopted_refs, part)['segments']
+    segments=segment_data(data, api, adopted_refs, part, summary=summary)['segments']
     videos_by_revision={(row['id'], v['stage'], v['run']): v for row in segments for v in row['videos']}
     rounds=[]
     standalone_songssx = set()

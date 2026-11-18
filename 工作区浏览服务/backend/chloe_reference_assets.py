@@ -13,7 +13,8 @@ from backend.chloe_models import adopted_media, asset_content, linked_files, lin
 from backend.chloe_overview import fields
 from backend.chloe_thumbnails import IMAGE_EXTENSIONS, thumbnail_response
 from backend.parsers import documents
-from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, SOUND_TYPES, asset_status, outfit_styles, read_document, records, sound_type, template
+from chloe_documents import DEFAULT_OUTFIT_STYLE, MISSING, SOUND_TYPES, asset_status, outfit_styles, records, sound_type, template
+from backend.chloe_read_cache import read_document, read_catalog_document, asset_sources, document_sources
 from chloe_init import asset_template_skill
 import project_resources as resources
 
@@ -31,7 +32,7 @@ SCENES = AssetKind('场景', 'S', 'shared-scenes')
 VOICES = AssetKind('声音', 'A', 'shared-voices')
 
 
-def asset_document_candidates(root, kind, requested_id=None, *, id_fragment=''):
+def asset_document_candidates(root, kind, requested_id=None, *, id_fragment='', catalog=False):
     folder = resources.local(root, '综合资料/共用素材/'+kind.label)
     seen = set()
     for path in sorted(folder.glob(f'{kind.prefix}*-*/{kind.label}说明.md')):
@@ -43,13 +44,13 @@ def asset_document_candidates(root, kind, requested_id=None, *, id_fragment=''):
         if identity in seen:
             raise ValueError(kind.label+'编号重复：' + identity)
         seen.add(identity)
-        load = partial(read_document, root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
+        load = partial(read_catalog_document if catalog else read_document, root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
                        {'identity': identity, 'title': name})
         yield identity, name, path, load
 
 
-def asset_documents(root, kind, requested_id=None):
-    for identity, name, path, load in asset_document_candidates(root, kind, requested_id):
+def asset_documents(root, kind, requested_id=None, *, catalog=False):
+    for identity, name, path, load in asset_document_candidates(root, kind, requested_id, catalog=catalog):
         yield identity, name, path, load()
 
 
@@ -99,6 +100,9 @@ def asset_detail(root, identity, api, kind):
 
 
 def asset_card(root, base, kind, path, metadata, adoption):
+    identity, title = path.parent.name.split('-', 1)
+    read_document(root, path, template(asset_template_skill(kind.label), kind.label+'说明模板.md'),
+                  {'identity': identity, 'title': title})
     media_kinds = ('audio', 'video') if kind == VOICES else ('image',)
     current = adopted_media(root, path, base, adoption, media_kinds) if adoption else None
     card = {**metadata, 'media': current['media'] if current else None}
@@ -117,7 +121,7 @@ def asset_adoption(doc, kind):
 
 def asset_rows(root, api, kind):
     rows = []
-    for identity, name, path, doc in asset_documents(root, kind):
+    for identity, name, path, doc in asset_documents(root, kind, catalog=True):
         status = '' if kind == VOICES else asset_status(path, doc)['status']
         info = fields(doc, kind.label+'信息')
         classification = clothing_classification(info) if kind == CLOTHING else {}
@@ -165,7 +169,8 @@ def asset_router(kind):
         try:
             return respond_asset_page(request, space, kind.endpoint, options,
                                       lambda: asset_rows(space.root, space.api, kind), folders=[space.root / '综合资料'],
-                                      categories=SOUND_TYPES if kind == VOICES else ())
+                                      categories=SOUND_TYPES if kind == VOICES else (),
+                                      source_snapshot=lambda: asset_sources(space.root, space.root / ('综合资料/共用素材/' + kind.label), f'{kind.prefix}*-*/{kind.label}说明.md', summary=True))
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:
@@ -177,7 +182,8 @@ def asset_router(kind):
         space = request_space(request)
         try:
             return respond_view(request, (space.api, kind.endpoint, identity), [space.root / '综合资料'],
-                                lambda: asset_detail(space.root, identity, space.api, kind))
+                                lambda: asset_detail(space.root, identity, space.api, kind),
+                                source_snapshot=lambda: asset_sources(space.root, space.root / ('综合资料/共用素材/' + kind.label), f'{identity}-*/{kind.label}说明.md'))
         except FileNotFoundError as error:
             raise HTTPException(404, str(error)) from error
         except ValueError as error:

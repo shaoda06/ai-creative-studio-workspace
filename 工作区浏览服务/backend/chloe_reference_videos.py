@@ -13,6 +13,7 @@ from backend.chloe_reference_assets import AssetKind, asset_context, asset_docum
 from backend.chloe_thumbnails import video_cover_response
 from chloe_documents import MISSING, media_reference
 from chloe_init import ASSETS
+from backend.chloe_read_cache import asset_sources
 import project_resources as resources
 
 KIND = AssetKind('参考视频', ASSETS['参考视频'][1], 'shared-reference-videos')
@@ -62,7 +63,8 @@ def listing(request: Request, options: AssetPage = Depends()):
     space = request_space(request)
     try:
         return respond_asset_page(request, space, KIND.endpoint, options, lambda: video_rows(space.root, space.api),
-                                  folders=[space.root / '综合资料'])
+                                  folders=[space.root / '综合资料'],
+                                  source_snapshot=lambda: asset_sources(space.root, space.root / '综合资料/共用素材/参考视频', 'RV*-*/参考视频说明.md'))
     except (ValueError, OSError) as error:
         raise HTTPException(409, str(error)) from error
 

@@ -1,15 +1,17 @@
 // Real common production components; isolated inputs, media and in-memory review writes.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {mkdtemp,readFile} from 'node:fs/promises';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
+const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const frontend=fileURLToPath(new URL('../frontend/',import.meta.url));
 const version=JSON.parse(await readFile(frontend+'package.json','utf8')).version;
-const out=await mkdtemp('/private/tmp/W464-production-');
+const out=await mkdtemp(join(tmpdir(),'W464-production-'));
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();const browser=await chromium.launch({channel:'chrome',headless:true});
 let activePage;
@@ -266,7 +268,7 @@ try{
   await page.getByRole('button',{name:'提示词',exact:true}).click();
   await page.locator('pre.segment-prompt-text').filter({hasText:'P001同版中文R002'}).waitFor();
   await page.getByRole('combobox',{name:'画质选择',exact:true}).click();await page.getByRole('option',{name:'一采',exact:true}).click();
-  await page.getByRole('combobox',{name:'版本切换',exact:true}).click();await page.getByRole('option',{name:'候选一',exact:true}).click();
+  await page.getByRole('combobox',{name:'版本切换',exact:true}).click();await page.getByRole('option',{name:/^候选一/}).click();
   await page.locator('pre.segment-prompt-text').filter({hasText:'P001同版中文R001'}).waitFor();
   await page.getByRole('button',{name:'查看 Picture 1 fixture.png',exact:true}).click();await page.getByRole('dialog').waitFor();await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
@@ -283,7 +285,7 @@ try{
   await page.reload();await page.getByRole('navigation',{name:'项目栏目',exact:true}).getByRole('button',{name:'视频制作',exact:true}).click();
   await page.getByRole('button',{name:'修改意见',exact:true}).click();
   await page.getByRole('combobox',{name:'画质选择',exact:true}).click();await page.getByRole('option',{name:'一采',exact:true}).click();
-  await page.getByRole('combobox',{name:'版本切换',exact:true}).click();await page.getByRole('option',{name:'候选一',exact:true}).click();
+  await page.getByRole('combobox',{name:'版本切换',exact:true}).click();await page.getByRole('option',{name:/^候选一/}).click();
   assert.equal(await page.getByRole('textbox',{name:'修改意见',exact:true}).inputValue(),'隔离P001一采意见');
   await page.getByRole('combobox',{name:'生产批次',exact:true}).click();await page.getByRole('option',{name:'R001-隔离一采',exact:true}).click();
   await page.getByRole('button',{name:'导出修改意见',exact:true}).click();

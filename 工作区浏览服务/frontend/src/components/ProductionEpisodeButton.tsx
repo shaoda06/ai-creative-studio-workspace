@@ -11,8 +11,9 @@ export function ProductionEpisodeButton({ item, project, revision, onSelect }: {
 }) {
   const access = useProductionAccess();
   const detail = useQuery({ queryKey: ['episode', access.namespace(project), item.name, revision],
-    queryFn: () => get<FileItem>(access.detail(project, item.name)) });
-  const episode = detail.data;
+    queryFn: ({ signal }) => get<FileItem>(access.detail(project, item.name), signal),
+    enabled: item.durationSummary === undefined });
+  const episode = item.durationSummary === undefined ? detail.data : undefined;
   const latest = episode?.episodeRounds?.at(-1);
   const scenes = latest?.scenes || episode?.scenes || [];
   // Opening/ending scenes are alternative schemes; opening a card defaults to the first.
@@ -24,8 +25,8 @@ export function ProductionEpisodeButton({ item, project, revision, onSelect }: {
     <EpisodeButton item={access.unitKind === 'work' && !item.readOnly && episode?.statusHtml
       ? { ...item, statusHtml: episode.statusHtml } : item} onSelect={onSelect}
       displayName={access.unitDisplayName?.(item.name)}
-      duration={detail.isPending ? '读取中…' : detail.isError ? '时长读取失败' : formatProductionDuration(durations.total)} />
-    {detail.isError ? <FloatingMessage tone="error">{item.name}时长读取失败：{detail.error.message}。<button className="link" onClick={() => void detail.refetch()}>重新读取</button></FloatingMessage>
+      duration={item.durationSummary !== undefined ? formatProductionDuration(item.durationSummary) : detail.isPending ? '读取中…' : detail.isError ? '时长读取失败' : formatProductionDuration(durations.total)} />
+    {item.durationSummary === undefined && detail.isError ? <FloatingMessage tone="error">{item.name}时长读取失败：{detail.error.message}。<button className="link" onClick={() => void detail.refetch()}>重新读取</button></FloatingMessage>
       : durations.failed > 0 && <FloatingMessage tone="error">{item.name}有{durations.failed}段视频时长读取失败，暂用计划时长（*）。<button className="link" onClick={durations.retry}>重新读取</button></FloatingMessage>}
   </>;
 }

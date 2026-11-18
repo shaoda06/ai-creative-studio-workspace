@@ -30,7 +30,7 @@ export function ChloeReview() {
   const { api } = useChloeScope();
   const [params, setParams] = useSearchParams();
   const [preview, setPreview] = useState<FileItem | null>(null);
-  const query = useQuery({ queryKey: ['chloe-reviews', api], queryFn: () => get<ReviewData>(`${api}/reviews`), refetchInterval: 5000 });
+  const query = useQuery({ queryKey: ['chloe-reviews', api], queryFn: ({ signal }) => get<ReviewData>(`${api}/reviews`, signal), refetchInterval: 30000 });
   const tab = tabs.find(item => item.value === params.get('reviewTab'))?.value || 'single';
   const data = query.data;
   const filter = params.get('adoption') || '';

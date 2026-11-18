@@ -1,5 +1,5 @@
-export async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { signal });
   if (!response.ok) throw Object.assign(new Error((await response.text()) || `读取失败（${response.status}）`), { status: response.status });
   return response.json();
 }
@@ -36,6 +36,7 @@ export interface SceneRound { number: number; created_at: string; note?: string;
 export type DirectorSheetImage = FileItem & { page: number; version: string; sourceVersion: string; candidateNumber?: number | null; adopted?: boolean; sourceRecord?: FileItem };
 export interface DirectorSheets { formal: DirectorSheetImage[]; candidates: DirectorSheetImage[]; history?: DirectorSheetImage[]; record: FileItem | null }
 export interface FileItem {
+  durationSummary?: { seconds: number; estimated: boolean } | null;
   segmentPlanHasShotContinuations?: boolean;
   thumbnailUrl?: string;
   originalDimensions?: [number, number];

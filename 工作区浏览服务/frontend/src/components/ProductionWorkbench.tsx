@@ -88,7 +88,7 @@ export function ProductionWorkbench({ project, items, statistics, selected, onSe
   const sharedSelected = selected === '片头' || selected === '片尾';
   const contentLabel = sharedSelected ? `${selected}内容稿` : workMode ? '制作脚本' : '本集剧本';
   const detail = useQuery({ queryKey: ['episode', namespace, selected, revision],
-    queryFn: () => get<FileItem>(access.detail(project, selected!)), enabled: !!selectedItem, refetchInterval: workMode ? 5000 : false,
+    queryFn: ({ signal }) => get<FileItem>(access.detail(project, selected!), signal), enabled: !!selectedItem, refetchInterval: workMode ? 5000 : false,
     placeholderData: (previous, query) => query?.queryKey[2] === selected ? previous : undefined });
   const loaded = selectedItem && detail.data?.name === selected ? detail.data : undefined;
   const workflows = loaded?.productionWorkflows || [];

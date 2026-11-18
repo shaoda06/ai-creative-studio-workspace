@@ -50,8 +50,8 @@ class AssetRow:
         return self.types or ((self.type,) if self.type else ())
 
 
-def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None, categories=()):
-    rows, revision = views.read((space.api, endpoint, scope), folders, build)
+def respond_asset_page(request: Request, space, endpoint, options: AssetPage, build, *, folders, scope=None, categories=(), source_snapshot=None):
+    rows, revision = views.read((space.api, endpoint, scope), folders, build, source_snapshot=source_snapshot)
     return view_response(request, revision, partial(asset_page, rows, options, categories))
 
 

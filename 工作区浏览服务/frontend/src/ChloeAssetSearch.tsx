@@ -32,7 +32,7 @@ export function ChloeAssetSearch() {
   const ready = open && !!fragment && settled === fragment;
   const query = useQuery({
     queryKey: ['chloe-asset-search', api, settled],
-    queryFn: () => get<SearchMatch[]>(`${api}/shared-asset-search?${new URLSearchParams({ q: settled })}`),
+    queryFn: ({ signal }) => get<SearchMatch[]>(`${api}/shared-asset-search?${new URLSearchParams({ q: settled })}`, signal),
     enabled: ready,
   });
   const clearPreview = () => {

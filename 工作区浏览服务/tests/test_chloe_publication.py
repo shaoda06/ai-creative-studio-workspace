@@ -33,7 +33,9 @@ class ChloePublicationTests(HttpTestCase):
         self.root = initialize_project(initialize_workspace(self.base/'Chloe Workspace'), '隔离样例')
         self.project = initialize_video(self.root, 'V001', '隔离发布')
         self.api = '/api/workspaces/chloe'
-        self.space = SimpleNamespace(root=self.root, api=self.api, view='chloe-commerce')
+        from backend.services.project_files import ProjectFiles
+        self.space = SimpleNamespace(root=self.root, api=self.api, view='chloe-commerce',
+                                     projects=ProjectFiles(self.root/'projects'), production_adapter='chloe-production')
         app = FastAPI()
         @app.middleware('http')
         async def workspace(request, call_next):
@@ -77,6 +79,7 @@ class ChloePublicationTests(HttpTestCase):
         other = self.project/'成片/保留.webm'
         store_media(self.project, film, source=Path(__file__).parents[1]/'frontend/public/component-samples/video.webm')
         store_media(self.project, other, source=film)
+        film.chmod(0o644)  # Exercise ordinary deletion, not immutable-file permissions.
         before = other.read_bytes()
         key = film.relative_to(self.root).as_posix()
         url = self.url+'/files/'+key
@@ -316,7 +319,8 @@ class ChloePublicationTests(HttpTestCase):
                 revised[0], revised[6], revised[8], revised[13] = 'Q002', '适配后的标题', '#上衣', executor
                 revised[14] = '[Q001](<发布资料.md>)；隔离长度调整决定'
                 self.append(path, '发布资料', revised)
-                self.assertIn(frozen.strip(), path.read_text())
+                self.assertIn(next(line for line in frozen.splitlines() if line.startswith('| Q001 |')), path.read_text())
+                self.assertIn(frozen.split('**本条发布设置**')[-1], path.read_text())
                 readme.write_text(readme.read_text().replace('[Q001](<发布资料.md>)', '[Q002](<发布资料.md>)')
                                  .replace(self.row[8], revised[8]))
                 self.append(readme, '阶段变更', ['B001', time, 'P001/发布资料', '[Q001](<发布资料.md>)',

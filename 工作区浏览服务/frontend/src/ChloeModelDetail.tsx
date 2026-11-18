@@ -153,7 +153,8 @@ export function ChloeModelDetail({ query, workspaceQuery }: { query: UseQueryRes
         {data.looks.length ? <div className="asset-media-grid">{data.looks.map(item=><AssetMediaCard key={item.id} title={`${item.id} · ${item.name}`} formal entry aspectRatio="natural" revision={0}
           badge={chloeAssetStatusBadges[item.status]} to={lookUrl(item.id)} item={{media:item.media,emptyLabel:'尚未采用全身三视图原图'}} />)}</div> : <p className="muted">暂无该模特的造型资料。</p>}
       </section>)}
-      {(tab!=='looks' || look) && <ChloeAssetRecords sections={asset!.sections} />}
+      {(tab!=='looks' || look) && <ChloeAssetRecords key={`${data.id}/${look?.id || ''}`} sections={asset!.sections} lookId={look?.id}
+        url={`${api}/shared-models/${encodeURIComponent(data.id)}?${new URLSearchParams({view:look ? 'looks' : 'images',history:'true',...(look ? {look:look.id} : {})})}`} />}
       </div>
     </div>}
     {document ? <Preview project="" item={document} baseUrl={`${api}/shared-models/${encodeURIComponent(data!.id)}`} revision={0} close={() => setDocument(null)} />

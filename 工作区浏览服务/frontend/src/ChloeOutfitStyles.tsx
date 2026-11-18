@@ -23,7 +23,7 @@ export function useOutfitStyles(enabled: boolean) {
   const { api } = useChloeScope();
   return useQuery({
     queryKey: stylesKey(api), enabled,
-    queryFn: () => get<string[]>(`${clothingUrl(api)}/styles`),
+    queryFn: ({ signal }) => get<string[]>(`${clothingUrl(api)}/styles`, signal),
     refetchOnMount: 'always',
   });
 }

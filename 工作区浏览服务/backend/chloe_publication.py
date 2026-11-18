@@ -7,7 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from backend.chloe_production import workspace
+from backend.chloe_production import workspace, video_card
+import project_resources as resources
 from backend import chloe_overview  # Load the shared Chloe document reader.
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'.agents/skills/chloe-handoff/scripts'))
@@ -26,8 +27,10 @@ class FinalRename(BaseModel):
 def listing(request: Request):
     space = workspace(request)
     try:
-        return publication.listing(space.root, space.api)
-    except (ValueError, OSError) as error:
+        with resources.reuse_read_indexes():
+            return [{**item, 'card': video_card(space, item['project'])}
+                    for item in publication.listing(space.root, space.api)]
+    except (ValueError, KeyError, OSError) as error:
         raise HTTPException(409, '发布资料读取失败：'+str(error)) from error
 
 

@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {mkdtemp,readFile} from 'node:fs/promises';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
 const {chromium}=require('playwright');
-const {createServer}=await import(require.resolve('vite'));
-const react=(await import(require.resolve('@vitejs/plugin-react'))).default;
+const {createServer}=await import(pathToFileURL(require.resolve('vite')).href);
+const react=(await import(pathToFileURL(require.resolve('@vitejs/plugin-react')).href)).default;
 const tool=fileURLToPath(new URL('../',import.meta.url));
-const fixture=JSON.parse(execFileSync(tool+'.venv/bin/python',['-c',`
+const fixture=JSON.parse(execFileSync(join(tool,'.venv',process.platform==='win32'?'Scripts':'bin',process.platform==='win32'?'python.exe':'python'),['-X','utf8','-c',`
 import base64,json
 from pathlib import Path
 from PIL import Image
@@ -26,9 +28,9 @@ try:
  files={v['file']:base64.b64encode((x.root/v['file']).read_bytes()).decode() for v in items}
  print(json.dumps({'items':items,'owners':owners,'details':details,'docs':docs,'files':files,'api':x.api}))
 finally:x.doCleanups()
-`],{cwd:tool,encoding:'utf8',env:{...process.env,PATH:'/opt/homebrew/bin:'+process.env.PATH}}));
+`],{cwd:tool,encoding:'utf8'}));
 const version=JSON.parse(await readFile(tool+'frontend/package.json','utf8')).version;
-const output=await mkdtemp('/tmp/chloe-resources-ui-');
+const output=await mkdtemp(join(tmpdir(),'chloe-resources-ui-'));
 const server=await createServer({configFile:false,root:tool+'frontend',plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();const browser=await chromium.launch({channel:'chrome',headless:true});
 try{

@@ -30,7 +30,7 @@ from workflow_paths import workflow_download, workflow_root
 from backend.services.task_details import task_detail
 from backend.services.task_history import task_history
 from backend.services import task_monitor
-from backend.services.read_views import view_response, views as read_views
+from backend.services.read_views import view_response, views as read_views, snapshot
 from backend.services import production
 from iris_works import project_works
 from backend.services.iris_presentation import presentation as iris_presentation, work_view as iris_work_view
@@ -128,7 +128,8 @@ class StaticAssetCompression:
 
     async def __call__(self, scope, receive, send):
         hashed_script = scope['type'] == 'http' and re.fullmatch(r'/assets/[^/]+-[\w-]{8}\.(?:js|css)', scope['path'])
-        backend = self.compressed if hashed_script and not any(name == b'range' for name, _ in scope['headers']) else self.app
+        json_api = scope['type'] == 'http' and scope['path'].startswith('/api/') and not scope['path'].endswith('/events')
+        backend = self.compressed if (hashed_script or json_api) and not any(name == b'range' for name, _ in scope['headers']) else self.app
         await backend(scope, receive, send)
 
 
@@ -1019,7 +1020,7 @@ def workspace_production_works(name: str, request: Request):
 def workspace_production_detail(name: str, work: str, request: Request, view: Literal['current', 'archive'] | None = None,
                                 summary: bool = False):
     try:
-        detail, revision = read_production_detail(request, name, work, view)
+        detail, revision = read_production_detail(request, name, work, view, summary=summary)
         if summary:
             return view_response(request, revision,
                                  lambda: production.summary(detail, request.url.path, view, revision))
@@ -1030,16 +1031,24 @@ def workspace_production_detail(name: str, work: str, request: Request, view: Li
         raise HTTPException(409, '作品制作资料读取失败：' + str(error)) from error
 
 
-def read_production_detail(request, name, work, view):
+def read_production_detail(request, name, work, view, *, summary=False):
     space = request.state.workspace_space
     adapter = production.workbench(space)
     project = space.projects.project(name)
     roots = [project]
     if space.view == 'chloe-commerce':
-        roots.append(space.root / '综合资料')
+        from backend.chloe_read_cache import document_sources
+        def source_snapshot():
+            sources = snapshot(roots)
+            for path in (project / '制作记录.md', project / 'README.md', project / '脚本.md'):
+                sources.update(document_sources(space.root, path))
+            return sources
+    else:
+        source_snapshot = None
+    options = {'summary': summary} if space.view == 'chloe-commerce' else {}
     return read_views.read(
-        (space.api, 'production-detail', project, work, view), roots,
-        lambda: adapter.detail(space.projects, name, space.api, work, view))
+        (space.api, 'production-detail', project, work, view, tuple(options.items())), roots,
+        lambda: adapter.detail(space.projects, name, space.api, work, view, **options), source_snapshot=source_snapshot)
 
 
 @spaces_router.get('/projects/{name}/works/{work}/production-detail/context')

@@ -60,8 +60,8 @@ type WorkspaceQuery = UseQueryResult<WorkspaceSpace[]>;
 function AccountOverview({ workspaceQuery }: { workspaceQuery: WorkspaceQuery }) {
   const { api } = useChloeScope();
   const query = useQuery({ queryKey: ['account-overview', api],
-    queryFn: () => get<ChloeOverviewData>(`${api}/account-overview`),
-    refetchInterval: 5000 });
+    queryFn: ({ signal }) => get<ChloeOverviewData>(`${api}/account-overview`, signal),
+    refetchInterval: 30000 });
   return <section aria-label="账号概况">
     <PageCheckStatus queries={[workspaceQuery, query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
@@ -79,19 +79,23 @@ export function ChloeWorkspace({ workspaceQuery }: { workspaceQuery: WorkspaceQu
   const current = sections.find(section => section.value === params.get('section')) || sections[0];
   const assetCategory = assetCategories.find(item => item.value === params.get('asset')) || assetCategories[0];
   const modelId = current.value === 'assets' && assetCategory.value === 'models' ? params.get('model') : null;
-  const modelQuery = useQuery({queryKey:['chloe-model',api,modelId], queryFn:()=>get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}`), enabled:!!modelId, refetchInterval:5000});
+  const modelView = params.get('modelTab') === 'looks' ? 'looks' : params.get('modelTab') === 'images' ? 'images' : 'base';
+  const selectedLook = modelView === 'looks' ? params.get('look') : null;
+  const modelQuery = useQuery({queryKey:['chloe-model',api,modelId,modelView,selectedLook],
+    queryFn:({signal})=>get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}?${new URLSearchParams({view:modelView,...(selectedLook ? {look:selectedLook} : {})})}`,signal),
+    enabled:!!modelId, refetchInterval:30000});
   const referenceKind = assetCategory.value in referenceAssetKinds ? assetCategory.value as ReferenceAssetKind : null;
   const referenceConfig = referenceKind ? referenceAssetKinds[referenceKind] : null;
   const referenceId = current.value==='assets' && referenceConfig ? params.get(referenceConfig.parameter) : null;
-  const referenceQuery = useQuery({queryKey:['chloe-reference-detail',referenceKind,api,referenceId],queryFn:()=>get<ReferenceAssetDetail>(`${api}/${referenceConfig!.endpoint}/${encodeURIComponent(referenceId!)}`),enabled:!!referenceId,refetchInterval:5000});
+  const referenceQuery = useQuery({queryKey:['chloe-reference-detail',referenceKind,api,referenceId],queryFn:({ signal })=>get<ReferenceAssetDetail>(`${api}/${referenceConfig!.endpoint}/${encodeURIComponent(referenceId!)}`, signal),enabled:!!referenceId,refetchInterval:30000});
   const voiceId = current.value==='assets' && assetCategory.value==='voices' ? params.get('voice') : null;
-  const voiceQuery = useQuery({queryKey:['chloe-voice',api,voiceId],queryFn:()=>get<VoiceDetail>(`${api}/shared-voices/${encodeURIComponent(voiceId!)}`),enabled:!!voiceId,refetchInterval:5000});
+  const voiceQuery = useQuery({queryKey:['chloe-voice',api,voiceId],queryFn:({ signal })=>get<VoiceDetail>(`${api}/shared-voices/${encodeURIComponent(voiceId!)}`, signal),enabled:!!voiceId,refetchInterval:30000});
   const referenceVideoId = current.value === 'assets' && assetCategory.value === 'reference-videos' ? params.get('referenceVideo') : null;
   const referenceVideoQuery = useQuery({
     queryKey: ['chloe-reference-video', api, referenceVideoId],
-    queryFn: () => get<ReferenceVideoDetail>(`${api}/shared-reference-videos/${encodeURIComponent(referenceVideoId!)}`),
+    queryFn: ({ signal }) => get<ReferenceVideoDetail>(`${api}/shared-reference-videos/${encodeURIComponent(referenceVideoId!)}`, signal),
     enabled: !!referenceVideoId,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
   const assetDetail = modelId || referenceId || voiceId || referenceVideoId;
   const listParams = assetListParams(params);

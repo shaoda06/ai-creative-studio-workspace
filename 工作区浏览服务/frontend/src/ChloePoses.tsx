@@ -60,7 +60,7 @@ export function ChloePoses({ workspaceQuery }: { workspaceQuery: UseQueryResult<
   const detailUrl = assetUrl(api, 'shared-poses', {}, undefined, [], [poseId]);
   const detail = useQuery({
     queryKey: ['chloe-pose-detail', detailUrl],
-    queryFn: () => get<PoseCard[]>(detailUrl),
+    queryFn: ({ signal }) => get<PoseCard[]>(detailUrl, signal),
     enabled: !!poseId && !!data && !onPage,
   });
   const selected = onPage ?? detail.data?.[0];

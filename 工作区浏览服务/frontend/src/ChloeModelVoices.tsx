@@ -12,7 +12,7 @@ export function useModelVoices(modelIds: string[]) {
   const { api } = useChloeScope();
   const params = new URLSearchParams(modelIds.map(id => ['models', id]));
   return useQuery({queryKey:['chloe-model-voices',api,modelIds],enabled:modelIds.length>0,
-    queryFn:()=>get<VoiceCard[]>(`${api}/shared-voices?${params}`),refetchInterval:5000});
+    queryFn:({ signal })=>get<VoiceCard[]>(`${api}/shared-voices?${params}`, signal),refetchInterval:30000});
 }
 
 export function ChloeModelVoices({modelId}: {modelId:string}) {

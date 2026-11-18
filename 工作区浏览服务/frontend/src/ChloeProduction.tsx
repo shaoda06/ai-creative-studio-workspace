@@ -20,7 +20,7 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
   const [actions, setActions] = useState<HTMLDivElement | null>(null);
   const [selector, setSelector] = useState<HTMLSpanElement | null>(null);
   const [preview, setPreview] = useState<FileItem | null>(null);
-  const list = useQuery({ queryKey: ['production-videos', baseUrl], queryFn: () => get<FileItem[]>(baseUrl + '/production-videos'), refetchInterval: 5000 });
+  const list = useQuery({ queryKey: ['production-videos', baseUrl], queryFn: ({ signal }) => get<FileItem[]>(baseUrl + '/production-videos', signal), refetchInterval: selected ? false : 15000 });
   const projectUrl = (unit: string) => `${baseUrl}/projects/${encodeURIComponent(unit)}`;
   const access = useChloeProductionAccess(baseUrl, selected);
   return <div><ProductionAccessContext value={access}><BreadcrumbActionsContext value={actions}><BreadcrumbSelectorContext value={selector}><PreviewContext value={setPreview}>

@@ -32,10 +32,10 @@ export function useAssetPage<T>(endpoint: string, page: number, filters: AssetFi
   const url = assetUrl(api, endpoint, filters, page, types);
   return useQuery({
     queryKey: ['chloe-asset-page', url],
-    queryFn: () => get<AssetPage<T>>(url),
+    queryFn: ({ signal }) => get<AssetPage<T>>(url, signal),
     enabled: !!endpoint,
     refetchOnMount: browse ? true : 'always',
-    refetchInterval: browse ? 5000 : false,
+    refetchInterval: browse ? 30000 : false,
     placeholderData: keepPreviousData,
   });
 }
@@ -123,7 +123,7 @@ export function useAssetDraft<T extends { id: string }>(endpoint: string, filter
   const initialUrl = assetUrl(api, endpoint, filters, undefined, [], initialIds);
   const initial = useQuery({
     queryKey: ['chloe-asset-draft', initialUrl],
-    queryFn: () => get<T[]>(initialUrl),
+    queryFn: ({ signal }) => get<T[]>(initialUrl, signal),
     enabled: !!endpoint && initialIds.length > 0,
     refetchOnMount: 'always',
   });

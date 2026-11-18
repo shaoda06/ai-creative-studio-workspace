@@ -95,7 +95,7 @@ export function ChloeVideoAssembly({ projectName, active }: {
   const openImage: OpenImage = (title, src) => setPreview({ title, src });
   const videoId = video?.asset.id;
   const videoQuery = useQuery({ queryKey: ['chloe-reference-video', api, videoId],
-    queryFn: () => get<ReferenceVideoDetail>(`${api}/shared-reference-videos/${encodeURIComponent(videoId!)}`),
+    queryFn: ({ signal }) => get<ReferenceVideoDetail>(`${api}/shared-reference-videos/${encodeURIComponent(videoId!)}`, signal),
     enabled: active && !!videoId });
   const reference = videoQuery.data;
   const canGenerate = !!(reference?.status === '可用' && look && !videoQuery.error);

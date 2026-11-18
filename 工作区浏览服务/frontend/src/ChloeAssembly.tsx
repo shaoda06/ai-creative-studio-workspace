@@ -294,8 +294,8 @@ function LookAssembly({ projectName }: { projectName: string }) {
   const openImage: OpenImage = (title, src) => setPreview({title, src});
   const modelId = model?.id;
   const modelQuery = useQuery({
-    queryKey: ['chloe-model', api, modelId],
-    queryFn: () => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}`),
+    queryKey: ['chloe-model', api, modelId, 'images'],
+    queryFn: ({ signal }) => get<ModelDetail>(`${api}/shared-models/${encodeURIComponent(modelId!)}?view=images`, signal),
     enabled: !!modelId,
   });
   const front = modelQuery.data?.images.find(image => image.adopted && image.purpose === '正面面部')?.media ?? model?.media;

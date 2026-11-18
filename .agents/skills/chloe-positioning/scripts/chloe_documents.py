@@ -177,7 +177,7 @@ def outfit_styles(value):
     return [name for name in names if name != DEFAULT_OUTFIT_STYLE] or [DEFAULT_OUTFIT_STYLE]
 
 
-def read_document(root, path, source, substitutions, *, body=None):
+def read_document(root, path, source, substitutions, *, body=None, check_references=True):
     text = source.read_text('utf-8')
     for key, value in substitutions.items():
         text = text.replace('{{'+key+'}}', value)
@@ -236,6 +236,8 @@ def read_document(root, path, source, substitutions, *, body=None):
                         raise ValueError(field+'与目录不符')
                     if field == '资产类型' and value != dict(base['rows'])[field]:
                         raise ValueError('资产类型与模板不符')
+                    if not check_references:
+                        continue
                     if field in ('资源引用','横版封面引用','竖版封面引用') and value not in MISSING:
                         ref = media_reference(root, path, value)
                         if field.endswith('封面引用') and Path(ref['file']).suffix.lower() not in resources.KINDS['图片']:
@@ -266,7 +268,12 @@ def read_document(root, path, source, substitutions, *, body=None):
                     if key in seen:
                         raise ValueError(section['heading']+'：记录身份重复 '+str(key))
                     seen.add(key)
-    check_relations(root, path, actual)
+    if check_references:
+        check_relations(root, path, actual)
+    elif path.name in REQUIRED_ASSET_IMAGES:
+        status = asset_status(path, actual)
+        if status['status'] == '可用' and status['missing_images']:
+            raise ValueError('资产登记为可用前须采用：' + '、'.join(status['missing_images']))
     return actual
 
 

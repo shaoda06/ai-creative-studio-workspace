@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import re
+from collections import OrderedDict
+from threading import Lock
 from typing import Annotated
 from urllib.parse import quote, unquote, urlsplit
 
@@ -16,9 +18,57 @@ from backend.chloe_reference_assets import VOICES, asset_documents
 from backend.chloe_overview import fields
 from chloe_documents import MEDIA as MEDIA_REFERENCE, parse, records
 from chloe_init import ASSETS
+from backend.chloe_read_cache import stamp
+from backend.services.read_views import views, view_response
+from backend.chloe_thumbnails import production_thumbnail, thumbnail_url
 
 router = APIRouter(prefix='/resource-library')
 MEDIA = {'图片': 'image', '视频': 'video', '音频': 'audio'}
+RELEASE = json.loads((Path(__file__).resolve().parents[1] / 'frontend/package.json').read_text('utf-8'))['version']
+
+
+metadata_cache = OrderedDict()
+metadata_lock = Lock()
+loaded_metadata_files = set()
+saved_metadata_revisions = {}
+
+
+def read_metadata(path, revision):
+    with metadata_lock:
+        cached = metadata_cache.get(path)
+        if cached and cached[0] == revision:
+            metadata_cache.move_to_end(path)
+            return cached[1]
+    data = json.loads(path.read_text('utf-8-sig'))
+    with metadata_lock:
+        metadata_cache[path] = (revision, data)
+        metadata_cache.move_to_end(path)
+        if len(metadata_cache) > 4096:
+            metadata_cache.popitem(last=False)
+    return data
+
+
+def resource_versions(owner):
+    index = resources.read_index(owner)
+    directory = resources.resource_directory(owner)
+    names = {}
+    for family in index['families'].values():
+        path = resources.local(owner, directory / family['kind'] / family['resource_id'] / '资源信息.json')
+        names[family['resource_id']] = read_metadata(path, stamp(path))['name']
+    for ref in index['files'].values():
+        if ref['resource_id'] not in names:
+            continue
+        path = (owner / ref['file']).resolve()
+        if not path.is_relative_to(owner):
+            raise ValueError('资源路径越出所属项目：' + ref['file'])
+        metadata = path.parent / '版本信息.json'
+        revision = stamp(metadata)
+        if revision is None:
+            continue
+        version = read_metadata(metadata, revision)
+        if version['file'] != ref['file']:
+            path = resources.local(owner, version['file'])
+        yield names[ref['resource_id']], ref['kind'], version, path
 
 
 def reference_key(path, value):
@@ -69,8 +119,66 @@ def owners(root):
     return [resources.local(root, p) for p in candidates if resources.enabled(p)]
 
 
+def catalog_sources(root):
+    paths = [path for folder, prefix, filename in ASSETS.values()
+             for path in (root / '综合资料' / folder).glob(f'{prefix}*-*/{filename}')]
+    paths.extend(path for project in (root / 'projects').glob('V*-*')
+                 for path in (project / 'README.md', project / '制作记录.md'))
+    result = {path: stamp(path) for path in paths}
+    for owner in owners(root):
+        index = resources.read_index(owner)
+        result[resources.index_path(owner)] = stamp(resources.index_path(owner))
+        for ref in index['files'].values():
+            path = owner / ref['file']
+            result[path] = stamp(path)
+            for metadata in (path.parent / '版本信息.json', path.parent.parent / '资源信息.json'):
+                result[metadata] = stamp(metadata)
+            if ref.get('producer'):
+                producer = owner / ref['producer']
+                result[producer] = stamp(producer)
+    return result
+
+
+def reference_sources(root):
+    return {**catalog_sources(root), **{path: stamp(path) for path in source_documents(root)}}
+
+
+def catalog_cache_file(space):
+    return space.runtime / 'read-views' / space.root.name / f'{RELEASE}-resource-catalog.json'
+
+
+def catalog_view(root, api, *, cache_file=None):
+    metadata_file = cache_file.with_name(f'{RELEASE}-resource-metadata.json') if cache_file else None
+    if metadata_file and metadata_file not in loaded_metadata_files:
+        if metadata_file.is_file():
+            saved = json.loads(metadata_file.read_text('utf-8'))
+            with metadata_lock:
+                for key, (revision, data) in saved.items():
+                    path = Path(key)
+                    if path.is_relative_to(root):
+                        metadata_cache.setdefault(path, (tuple(revision), data))
+                while len(metadata_cache) > 4096:
+                    metadata_cache.popitem(last=False)
+        loaded_metadata_files.add(metadata_file)
+    result = views.read((root, api, 'resource-catalog', RELEASE), [root], lambda: build_catalog(root, api),
+                        source_snapshot=lambda: catalog_sources(root), cache_file=cache_file)
+    if metadata_file and saved_metadata_revisions.get(metadata_file) != result[1]:
+        with metadata_lock:
+            saved = {str(path): value for path, value in metadata_cache.items()
+                     if path.is_relative_to(root) and path.name in {'资源信息.json', '版本信息.json'}}
+        if saved:
+            resources.write_json(metadata_file, saved)
+        saved_metadata_revisions[metadata_file] = result[1]
+    return result
+
+
 def catalog(root, api):
+    return catalog_view(root, api)[0]
+
+
+def build_catalog(root, api):
     entries, scopes = [], []
+    project_names = {}
     visuals = visual_titles(root)
     voice_titles = {}
     for _, _, path, doc in asset_documents(root, VOICES):
@@ -87,32 +195,33 @@ def catalog(root, api):
         scope = owner.relative_to(root).as_posix()
         label = '共用资源' if scope == '综合资料' else owner.name
         scopes.append({'value': scope, 'label': label})
-        for family in resources.catalog(owner):
-            for version in family['versions']:
-                file = resources.local(owner, version['file'])
+        for family_name, family_kind, version, file in resource_versions(owner):
                 key = file.relative_to(root).as_posix()
                 display_name = file.name
-                if family['kind'] == '音频':
+                if family_kind == '音频':
                     titles = voice_titles.get((file, version['resource_id'], version['version']), [])
-                    display_name = '；'.join(dict.fromkeys(titles)) or family['name'] or file.name
+                    display_name = '；'.join(dict.fromkeys(titles)) or family_name or file.name
                 else:
                     reference = (file, version['resource_id'], version['version'])
                     titles = visuals.get(reference, []) + voice_titles.get(reference, [])
                     if titles:
                         display_name = '；'.join(dict.fromkeys(titles))
-                    elif family['kind'] == '图片' and scope != '综合资料':
+                    elif family_kind == '图片' and scope != '综合资料':
                         purpose = file.stem
                         if version.get('producer'):
                             producer = resources.local(owner, version['producer'])
                             if producer.is_file() and producer.suffix == '.json':
-                                purpose = json.loads(producer.read_text('utf-8-sig')).get('purpose') or purpose
-                        name = fields(parse((owner/'README.md').read_text('utf-8-sig')), '定位与当前进度')['视频名称']
+                                purpose = read_metadata(producer, stamp(producer)).get('purpose') or purpose
+                        if owner not in project_names:
+                            project_names[owner] = fields(parse((owner/'README.md').read_text('utf-8-sig')), '定位与当前进度')['视频名称']
+                        name = project_names[owner]
                         display_name = name+' · '+purpose
-                entries.append({**version, 'name': file.name, 'title': family['name'], 'display_name': display_name,
+                url = api+'/resource-library/files/'+quote(key, safe='/')
+                entries.append({**version, 'name': file.name, 'title': family_name, 'display_name': display_name,
                     'owner': scope, 'owner_label': label, 'file': key,
                     'key': scope+'/'+resources.label(version),
-                    'media': {'kind': MEDIA[family['kind']], 'key': key, 'name': file.name,
-                              'url': api+'/resource-library/files/'+quote(key, safe='/')} if file.is_file() else None})
+                    'media': {'kind': MEDIA[family_kind], 'key': key, 'name': file.name,
+                              'url': url, **({'thumbnailUrl': thumbnail_url(url)} if family_kind == '图片' else {})} if file.is_file() else None})
     entries.sort(key=lambda item: (datetime.fromisoformat(item['registered_at']), item['key']), reverse=True)
     return entries, scopes
 
@@ -152,6 +261,7 @@ def references(root, entry, api):
     uses = []
     target = resources.local(root, entry['file'])
     page = api.replace('/api/workspaces/', '/spaces/', 1)
+    resolved = {}
     for path in source_documents(root):
         heading = path.stem
         seen = set()
@@ -162,7 +272,14 @@ def references(root, entry, api):
                 parsed = urlsplit(href.strip('<>'))
                 if parsed.scheme or parsed.netloc or not parsed.path:
                     continue
-                if (path.parent/unquote(parsed.path)).resolve() != target or heading in seen:
+                candidate = Path(os.path.abspath(path.parent / unquote(parsed.path)))
+                # A directory alias keeps the filename. A differently named
+                # file can match only through a file symlink; retain that case.
+                if candidate.name.casefold() != target.name.casefold() and not candidate.is_symlink():
+                    continue
+                if candidate not in resolved:
+                    resolved[candidate] = candidate.resolve()
+                if resolved[candidate] != target or heading in seen:
                     continue
                 seen.add(heading)
                 uses.append({'heading': heading, 'path': path.relative_to(root).as_posix(),
@@ -180,8 +297,8 @@ def references(root, entry, api):
     return uses
 
 
-def detail_data(root, api, owner, resource_id, version):
-    entries, _ = catalog(root, api)
+def detail_data(root, api, owner, resource_id, version, *, cache_file=None):
+    (entries, _), _ = catalog_view(root, api, cache_file=cache_file)
     family = [v for v in entries if v['owner'] == owner and v['resource_id'] == resource_id]
     entry = next((v for v in family if v['version'] == version), None)
     if entry is None:
@@ -225,7 +342,21 @@ def library_file(root, key):
         path = resources.local(root, key)
     except ValueError as error:
         raise HTTPException(404, '文件不在当前项目内') from error
-    if key not in allowed_files(root) or not path.is_file():
+    if not path.is_file():
+        raise HTTPException(404, '未找到资源文件或来源记录')
+    if path.relative_to(root).as_posix() != key:
+        raise HTTPException(404, '文件引用路径已改变')
+    for owner in owners(root):
+        if path.is_relative_to(owner):
+            ref = resources.reference(owner, path)
+            metadata = path.parent / '版本信息.json'
+            if ref and metadata.is_file():
+                version = json.loads(metadata.read_text('utf-8'))
+                if all(version[field] == ref[field] for field in ('file', 'resource_id', 'version')):
+                    return path
+    allowed, _ = views.read((root, 'resource-library-files'), [root], lambda: allowed_files(root),
+                           source_snapshot=lambda: reference_sources(root))
+    if key not in allowed:
         raise HTTPException(404, '未找到资源文件或来源记录')
     return path
 
@@ -235,25 +366,29 @@ def listing(request: Request, kind: str = '', owner: str = '', q: str = '',
             page: Annotated[int, Query(ge=1)] = 1,
             page_size: Annotated[int, Query(ge=1, le=48)] = 12):
     space = request_space(request)
-    entries, scopes = catalog(space.root, space.api)
+    (entries, scopes), revision = catalog_view(space.root, space.api, cache_file=catalog_cache_file(space))
     entries = [v for v in entries if (not kind or v['kind'] == kind) and (not owner or v['owner'] == owner)
                and (not q or q.casefold() in (v['display_name']+' '+v['name']+' '+v['title']+' '+resources.label(v)).casefold())]
     total = len(entries)
     page = min(page, max(1, (total+page_size-1)//page_size))
-    return {'items': entries[(page-1)*page_size:page*page_size], 'owners': scopes,
-            'total': total, 'page': page, 'page_size': page_size}
+    return view_response(request, revision, lambda: {
+        'items': entries[(page-1)*page_size:page*page_size], 'owners': scopes,
+        'total': total, 'page': page, 'page_size': page_size})
 
 
 @router.get('/detail')
 def detail(request: Request, owner: str, resource_id: str, version: str):
     space = request_space(request)
-    return detail_data(space.root, space.api, owner, resource_id, version)
+    return detail_data(space.root, space.api, owner, resource_id, version,
+                       cache_file=catalog_cache_file(space))
 
 
 @router.get('/files/{key:path}')
-def file(request: Request, key: str, download: bool = False):
+def file(request: Request, key: str, download: bool = False, thumbnail: int | None = None):
     space = request_space(request)
     path = library_file(space.root, key)
+    if thumbnail is not None and not download:
+        return production_thumbnail(space.runtime, path, thumbnail, request)
     return FileResponse(path, filename=path.name if download else None,
                         headers={'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'})
 

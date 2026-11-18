@@ -195,10 +195,18 @@ def matches_recorded_stamp(project, value, stamp):
 
 def version_file(project, resource_id, version):
     data = read_index(project)
-    matches = [item for item in data['files'].values() if item['resource_id'] == resource_id and item['version'] == version]
-    if not matches:
+    indexes = _READ_INDEXES.get()
+    key = (Path(project), 'versions')
+    if indexes is not None:
+        if key not in indexes:
+            indexes[key] = {(item['resource_id'], item['version']): item['file'] for item in data['files'].values()}
+        file = indexes[key].get((resource_id, version))
+    else:
+        file = next((item['file'] for item in data['files'].values()
+                     if item['resource_id'] == resource_id and item['version'] == version), None)
+    if file is None:
         raise FileNotFoundError(f'没有这个资源版本：{resource_id}@{version}')
-    return local(project, matches[0]['file'])
+    return local(project, file)
 
 
 def label(ref):

@@ -50,6 +50,7 @@ try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]) {
   const page=await browser.newPage({viewport:{width,height}});page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let videoStatus="制作中";let notes={notes:{},rounds:{}};let failList=true;let taskMode=false;let taskFailure=true;let detailRequests=0;let downloadFailure=true;const downloadRequests=[];let scopedDetail=fixture.detail;
+  let useSummaries=false,summaryDetailRequests=0;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',route=>{
    const request=route.request(),url=new URL(request.url()),path=decodeURIComponent(url.pathname);
@@ -65,9 +66,9 @@ try {
    }
    if(path.endsWith('/production-videos')){
     if(failList){return route.fulfill({status:409,body:'隔离读取失败'});}
-    return route.fulfill({json:fixture.statusItems[videoStatus]});
+    return route.fulfill({json:fixture.statusItems[videoStatus].map(item=>useSummaries?{...item,durationSummary:{seconds:9,estimated:false}}:item)});
    }
-   if(path.endsWith('/production-detail'))return route.fulfill({json:{...scopedDetail,statusHtml:fixture.statusItems[videoStatus][0].statusHtml}});
+   if(path.endsWith('/production-detail')){if(useSummaries)summaryDetailRequests++;return route.fulfill({json:{...scopedDetail,statusHtml:fixture.statusItems[videoStatus][0].statusHtml}});}
    if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads[url.searchParams.get('round') || '2']});
    if(path.endsWith('/production-download')){
     downloadRequests.push(url.search);
@@ -266,6 +267,14 @@ try {
    await page.waitForFunction(()=>document.querySelector('.segment-video video')?.readyState>=2);
    assert.ok(requests.some(url=>url.endsWith(video.url)),video.url);
   }
+  await page.route('**/isolated-empty',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Isolated navigation</title>'}));
+  await page.goto(server.resolvedUrls.local[0]+'isolated-empty');
+  useSummaries=true;taskMode=false;summaryDetailRequests=0;
+  await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=production');
+  await page.getByText('9秒',{exact:true}).waitFor();
+  await page.waitForTimeout(200);
+  assert.equal(summaryDetailRequests,0,'list summaries must not fetch per-card production details');
+  assert.equal(await page.locator('video').count(),0,'list summaries must not open videos to measure duration');
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }

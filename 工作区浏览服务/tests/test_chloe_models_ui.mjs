@@ -182,6 +182,7 @@ try {
    if(path==='/api/workspaces/chloe/shared-accessories')return route.fulfill({json:chloeAssetResponse(route.request().url(), emptyAccessories ? [] : sample.accessoryCards)});
    const accessory=sample.accessories.find(item=>path===`/api/workspaces/chloe/shared-accessories/${item.id}`);
    if(accessory)return route.fulfill({json:accessory});
+   if(path==='/api/workspaces/chloe/shared-clothing/styles')return route.fulfill({json:['未分类']});
    if(path==='/api/workspaces/chloe/shared-clothing')return route.fulfill({json:chloeAssetResponse(route.request().url(), sample.clothingCards)});
    if(path==='/api/workspaces/chloe/shared-scenes')return route.fulfill(fail ? {status:409,json:{detail:'isolated invalid scene'}} : {json:chloeAssetResponse(route.request().url(), emptyScenes ? [] : sample.sceneCards)});
    const scene=sample.scenes.find(item=>path===`/api/workspaces/chloe/shared-scenes/${item.id}`);
@@ -484,6 +485,7 @@ try {
   for (const [kind,label,prefix,title,ratio,details] of [['hair','发型','H','示例盘发','16:9',sample.hair],['clothing','服装','O','示例外套','4:3',sample.clothes],['scenes','场景','S','示例庭院',null,sample.scenes]]) {
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:label,exact:true}).click();
   await page.waitForFunction(label=>document.querySelector('.breadcrumbs [aria-current="page"]')?.textContent===label,label);
+  if(kind==='clothing')await page.getByRole('navigation',{name:'服装分类',exact:true}).getByRole('button',{name:'单件',exact:true}).click();
   const entry=page.getByRole('link',{name:`${prefix}001 · ${title}`,exact:true});
   await entry.waitFor();
   assert.equal(await page.locator('.asset-media-card').count(),2);
@@ -578,7 +580,7 @@ try {
   }
   await assetTabs.getByRole('button',{name:'服装',exact:true}).click();
   await page.getByRole('button',{name:'套装',exact:true}).click();
-  await page.getByRole('link',{name:'O003 · 示例套装',exact:true}).getByText('制作中',{exact:true}).waitFor();
+  await page.locator('.asset-media-card').filter({has:page.getByRole('link',{name:'O003 · 示例套装',exact:true})}).getByText('制作中',{exact:true}).waitFor();
   await page.getByRole('navigation',{name:'共用资产分类',exact:true}).getByRole('button',{name:'场景',exact:true}).click();
   await page.getByRole('link',{name:'S001 · 示例庭院',exact:true}).waitFor();
   fail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
@@ -598,7 +600,7 @@ try {
   const accessoryCards=page.locator('.asset-media-grid .asset-media-card');
   await bag.waitFor();
   assert.equal(await filters.getByRole('checkbox').count(),2);
-  assert.equal(await page.getByRole('searchbox').count(),0);
+  assert.equal(await page.getByRole('searchbox',{name:'搜索共用资产编号'}).count(),1);
   assert.equal(await accessoryCards.count(),4);
   const columns=page.locator('.chloe-accessory-column');
   assert.equal(await columns.count(),3);
@@ -643,7 +645,8 @@ try {
   await page.getByRole('link',{name:'返回配饰列表',exact:true}).click();
   emptyAccessories=true;await page.reload();
   await page.getByText('暂无配饰资料。',{exact:true}).waitFor();
-  assert.equal(await filters.count(),0);
+  assert.equal(await filters.count(),1);
+  assert.equal(await filters.getByRole('checkbox').count(),0);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   await page.close();
  }
