@@ -71,9 +71,10 @@ export function ComponentShowcase({ onImplementation }: { onImplementation: () =
     <TabNav label="组件分类" items={categories} selected={category} onChange={value => { clearNotices(); setCategory(value); }} />
     <div className="component-examples">
       {category === 'controls' && <>
-        <Example title="按钮与复制" rule="按钮沿用全站样式；禁用后不能操作。复制按钮会复制下方示例文字并触发公共反馈。" usage="文档阅读、提示词、修改意见">
+        <Example title="按钮与复制" rule="按钮沿用全站样式；禁用后不能操作。普通与链接样式都复制示例文字并显示公共反馈。" usage="文档阅读、提示词、修改意见、Chloe 发布基础信息">
           <div className="component-demo-row"><button onClick={() => setClicks(n => n + 1)}>普通按钮</button><button className="link" onClick={() => setClicks(n => n + 1)}>链接按钮</button><button disabled>禁用按钮</button></div>
-          <p>已点击 {clicks} 次</p><p>{sampleText}</p><CopyButton text={sampleText} label="复制示例文字" />
+          <p>已点击 {clicks} 次</p><p>{sampleText}</p>
+          <div className="component-demo-row"><CopyButton text={sampleText} label="复制示例文字" /><CopyButton text={sampleText} label="复制" ariaLabel="用链接按钮复制示例文字" appearance="link" /></div>
         </Example>
         <Example title="编辑开关与页签" rule="开关只控制示例正文的编辑状态。页签选中前后保持字重与宽度，长文字按可用空间换行。末项可以靠右，前方的操作可与末项或左侧页签对齐。" usage="提示词编辑、分镜与提示词页签、Chloe 共用资产导航">
           <div className="component-demo-row"><span>编辑模式</span><Switch label="示例编辑模式" checked={editing} onChange={setEditing} /></div>

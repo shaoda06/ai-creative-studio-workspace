@@ -15,7 +15,6 @@ import { useChloeProductionAccess } from './chloeProductionAccess';
 import { TabSelect } from './components/TabSelect';
 import { UnderlineTabs } from './components/UnderlineTabs';
 import { AssetMediaCard } from './components/AssetMediaCard';
-import { ReleaseFilmPlayer } from './components/ReleaseFilms';
 import { CopyButton } from './components/CopyButton';
 import { DownloadButton } from './components/DownloadButton';
 import { FilePicker } from './components/FilePicker';
@@ -119,8 +118,9 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
   const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
   const [mediaTab, setMediaTab] = useState<'landscape' | 'portrait' | 'video'>('landscape');
   const material = data.materials.find(item => item.id === materialId) || data.materials.at(-1);
-  const coverLabel = mediaTab === 'landscape' ? '横版封面' : '竖版封面';
-  const cover = material?.covers.find(item => item.label === coverLabel)?.media;
+  const videoTab = mediaTab === 'video';
+  const mediaLabel = videoTab ? '本次视频' : mediaTab === 'landscape' ? '横版封面' : '竖版封面';
+  const media = videoTab ? material?.film : material?.covers.find(item => item.label === mediaLabel)?.media;
   const used = data.history.some(item => item.materialId === material?.id);
   const product = material ? ['商品', '款式或SKU', '挂品链接'].filter(field => !missing.has(material.fields[field]))
     .map(field => `${field}：${material.fields[field]}`).join('\n') : '';
@@ -138,7 +138,7 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
           {informationTab === 'basic' ? <div className="chloe-publication-copy">
             {['标题', '正文', '话题'].map(field => <section key={field} aria-label={field}>
               <div className="chloe-publication-toolbar"><h2>{field}</h2>
-                {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label={`复制${field}`} successMessage={`${field}已复制`} />}
+                {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label="复制" ariaLabel={`复制${field}`} appearance="link" successMessage={`${field}已复制`} />}
               </div>
               <p className="chloe-publication-text">{material.fields[field]}</p>
             </section>)}
@@ -153,16 +153,11 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
         </section>
         <section aria-label="发布媒体" className="chloe-publication-column">
           <UnderlineTabs label="发布媒体分类" items={mediaTabs} selected={mediaTab} onChange={setMediaTab} />
-          {mediaTab === 'video' ? <section aria-label="本次视频" className="chloe-publication-media-content">
-            {material.film ? <>
-              <p className="chloe-publication-text">{material.film.name}</p>
-              <ReleaseFilmPlayer key={material.film.url} item={material.film} />
-              <DownloadButton url={material.film.url!} filename={material.film.name} label="下载成片" title={material.film.name} />
-            </> : <p className="muted">尚未指定本次发布使用的成片。</p>}
-          </section> : <section aria-label={coverLabel} className="chloe-publication-media-content">
-            <AssetMediaCard key={cover?.url || coverLabel} title={coverLabel} hideTitle item={{ media: cover, emptyLabel: `尚未准备${coverLabel}。` }} revision={0} showVersion={false} showFileActions={false} />
-            <DownloadButton url={cover?.url || null} filename={cover?.name} label={`下载${coverLabel}`} title={cover?.name || coverLabel} />
-          </section>}
+          <section aria-label={mediaLabel}>
+            <AssetMediaCard key={media?.url || mediaLabel} title={mediaLabel} hideTitle fixedPreview revision={0}
+              item={{ media: media || undefined, emptyLabel: videoTab ? '尚未指定本次发布使用的成片。' : `尚未准备${mediaLabel}。` }}
+              showVersion={false} showFileActions={false} />
+          </section>
         </section>
       </div>
       <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>

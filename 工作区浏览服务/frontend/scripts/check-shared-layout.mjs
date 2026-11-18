@@ -578,6 +578,18 @@ try {
     assert.equal(await dimensionsCard.locator('img').getAttribute('src'), '/component-samples/image.svg?thumbnail=sample');
     assert.equal(await dimensionsCard.locator('.file-entry-main').count(),0);
     await contained(dimensionsCard,`${width}px / 仅尺寸图片卡`);
+    const stableMediaHeights=[];
+    for (const name of ['固定预览图片','固定预览视频','固定预览空态']) {
+      const card=showcase.getByRole('article',{name,exact:true});
+      await contained(card,`${width}px / ${name}`);
+      stableMediaHeights.push((await card.boundingBox()).height);
+      assert.equal((await card.locator('.cover').boundingBox()).height,260);
+      assert.equal(await card.getByRole('button',{name:/^下载/}).count(),0);
+    }
+    assert.equal(new Set(stableMediaHeights).size,1);
+    const cardPlayer=showcase.getByRole('article',{name:'固定预览视频',exact:true}).locator('video');
+    await contained(cardPlayer,`${width}px / 固定预览视频播放器`);
+    assert.equal(await cardPlayer.getAttribute('controlslist'),'nodownload');
     const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});
     assert.equal(await defaultCard.getByText('文件：',{exact:true}).count(),1);
     assert.equal(await defaultCard.getByText('采用版本：',{exact:true}).count(),1);
@@ -707,6 +719,9 @@ try {
     await showcase.getByRole('button', { name: '按钮与切换', exact: true }).click();
     const linkExample = showcase.getByRole('button', { name: '链接操作示例', exact: true });
     await sameStyle(linkExample, taskLinkStyles[0], `${width}px / 公共下划线链接`);
+    const copyLink=showcase.getByRole('button',{name:'用链接按钮复制示例文字',exact:true});
+    await sameStyle(copyLink,taskLinkStyles[0],`${width}px / 链接复制按钮`);
+    assert.equal(await copyLink.innerText(),'复制');
     assert.equal(await showcase.getByRole('button', { name: '禁用链接示例', exact: true }).isDisabled(), true);
     await linkExample.focus(); await page.keyboard.press('Enter');
     await showcase.getByRole('status').filter({ hasText: '链接示例已点击' }).waitFor();

@@ -2,8 +2,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 const require=createRequire(new URL('../frontend/package.json',import.meta.url));
@@ -50,7 +49,6 @@ const images=new Map(Object.entries(fixture.images).map(([url,bytes])=>[decodeUR
 const server=await createServer({configFile:false,root:frontend,plugins:[react()],define:{__APP_VERSION__:JSON.stringify(version)},server:{host:'127.0.0.1',port:0}});
 await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
-const downloads=await mkdtemp(join(tmpdir(),'chloe-publication-downloads-'));
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
@@ -156,8 +154,11 @@ try {
     aligned:left.top===right.top, fits:right.right<=host.right+1, below:history.top>=Math.max(left.bottom,right.bottom)};
   });
   assert.ok(Math.abs(layout.ratio-.4)<.005 && layout.separated && layout.aligned && layout.fits && layout.below,JSON.stringify(layout));
-  for(const field of ['正文','话题']){
-   await page.getByRole('button',{name:'复制'+field,exact:true}).click();
+  for(const field of ['标题','正文','话题']){
+   const copy=detail.getByRole('region',{name:field,exact:true}).getByRole('button',{name:'复制'+field,exact:true});
+   assert.equal(await copy.innerText(),'复制');
+   assert.deepEqual(await copy.evaluate(el=>[getComputedStyle(el).fontSize,getComputedStyle(el).textDecorationLine,getComputedStyle(el).borderTopWidth]),['13px','underline','0px']);
+   await copy.click();
    assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields[field]);
   }
   await productTab.focus();await page.keyboard.press('Enter');
@@ -168,15 +169,19 @@ try {
   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields['挂品链接']);
   await page.getByRole('button',{name:'复制挂品信息',exact:true}).click();
   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
-  for(const [tab,label,bytes,filename] of [[videoTab,'下载成片',video,'第二版成片.webm'],
-    ...fixture.detail.materials[1].covers.map((c,i)=>[[landscapeTab,portraitTab][i],'下载'+c.label,images.get(decodeURIComponent(c.media.url)),c.media.name])]){
+  const mediaArea=detail.getByRole('region',{name:'发布媒体'});
+  const previewCard=mediaArea.locator('.asset-media-card');
+  const firstCard=await previewCard.boundingBox();
+  for(const tab of [landscapeTab,portraitTab,videoTab]){
    await tab.click();
    assert.equal(await productTab.getAttribute('aria-current'),'page');
-   const event=page.waitForEvent('download');await page.getByRole('button',{name:label,exact:true}).click();
-   const download=await event;if(filename)assert.equal(download.suggestedFilename(),filename);
-   const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
-   assert.deepEqual(await readFile(destination),bytes);await download.delete();
+   assert.equal(await mediaArea.getByRole('button',{name:/^下载/}).count(),0);
+   const bounds=await previewCard.boundingBox();
+   assert.deepEqual([bounds.width,bounds.height],[firstCard.width,firstCard.height]);
   }
+  const inCardVideo=previewCard.locator('video');
+  assert.equal(await inCardVideo.getAttribute('controlslist'),'nodownload');
+  assert.equal(await inCardVideo.evaluate(el=>el.getBoundingClientRect().height),260);
   await directoryTab.click();
   await files.waitFor();
   assert.equal(page.url(),directoryUrl);
@@ -336,10 +341,12 @@ try {
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   if(process.env.CHLOE_UI_SCREENSHOT && width===1366){await page.getByRole('button',{name:'关闭提示',exact:true}).evaluateAll(buttons=>buttons.forEach(button=>button.click()));await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:process.env.CHLOE_UI_SCREENSHOT,fullPage:true});}
   missingPortrait=true;await page.reload();
-  assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
+  await previewCard.waitFor();
+  const loadedHeight=(await previewCard.boundingBox()).height;
   await portraitTab.click();
   await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
-  assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
+  assert.equal((await previewCard.boundingBox()).height,loadedHeight);
+  assert.equal(await mediaArea.getByRole('button',{name:/^下载/}).count(),0);
   missingPortrait=false;noMaterial=true;await page.reload();
   await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();
   assert.equal(await files.count(),0);
@@ -350,7 +357,7 @@ try {
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await videoTab.click();
-  await page.getByRole('button',{name:'下载成片',exact:true}).waitFor();
+  await mediaArea.getByRole('region',{name:'本次视频',exact:true}).locator('video').waitFor();
   await page.getByRole('button',{name:'成片与发布',exact:true}).click();
   await cards.first().waitFor();
   assert.equal(await tabs.count(),0);
@@ -361,4 +368,4 @@ try {
   await context.close();
  }
  console.log('Chloe publication: real adapter fixtures, copy, original downloads, playback, cover preview, switching, empty/error/retry and three desktop widths passed.');
-}finally{await browser.close();await server.close();await rm(downloads,{recursive:true,force:true});}
+}finally{await browser.close();await server.close();}
