@@ -120,7 +120,14 @@ function PublicationRelease({ data, materialId, onMaterialChange }: {
 }) {
   const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
   const [mediaTab, setMediaTab] = useState<'landscape' | 'portrait' | 'video'>('landscape');
-  const material = data.materials.find(item => item.id === materialId) || data.materials.at(-1);
+  const available = data.materials.flatMap(material => {
+    const platform = material.fields['平台']?.trim();
+    return platform && !missing.has(platform) ? [{ platform, material }] : [];
+  });
+  const platforms = [...new Set(available.map(entry => entry.platform))];
+  const selected = available.find(entry => entry.material.id === materialId) || available.at(-1);
+  const material = selected?.material;
+  const platformMaterials = available.filter(entry => entry.platform === selected?.platform);
   const videoTab = mediaTab === 'video';
   const mediaLabel = videoTab ? '本次视频' : mediaTab === 'landscape' ? '横版封面' : '竖版封面';
   const media = videoTab ? material?.film : material?.covers.find(item => item.label === mediaLabel)?.media;
@@ -129,10 +136,17 @@ function PublicationRelease({ data, materialId, onMaterialChange }: {
   const product = material ? ['商品', '款式或SKU', '挂品链接'].filter(field => !missing.has(material.fields[field]))
     .map(field => `${field}：${material.fields[field]}`).join('\n') : '';
   return <>
-    {material ? <>
+    {selected && material ? <>
+      <UnderlineTabs label="发布平台" items={platforms.map(platform => ({ value: platform, label: platform }))}
+        selected={selected.platform} onChange={platform => {
+          if (platform === selected.platform) return;
+          const next = available.filter(entry => entry.platform === platform).at(-1);
+          if (next) onMaterialChange(next.material.id);
+        }} />
       <div className="chloe-publication-toolbar">
-        <TabSelect label="选择发布资料" items={data.materials.map(item => ({ value: item.id, label: `${item.id} · ${item.fields['平台']} · ${item.fields['账号']}` }))}
-          selected={material.id} onChange={onMaterialChange} />
+        {platformMaterials.length > 1 && <TabSelect label="选择发布资料"
+          items={platformMaterials.map(({ material: item }) => ({ value: item.id, label: `${item.id} · ${item.fields['账号']}` }))}
+          selected={material.id} onChange={onMaterialChange} />}
         <span>{used ? '已有发布记录引用此资料' : '发布准备资料'}</span>
         <span>发布执行：{material.fields['发布执行']}</span>
       </div>

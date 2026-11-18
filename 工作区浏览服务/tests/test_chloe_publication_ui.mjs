@@ -54,7 +54,7 @@ try {
   const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
-  let uploadedFile=uploaded, pendingDownload;
+  let uploadedFile=uploaded, pendingDownload, materialsOverride;
   page.on('pageerror',e=>errors.push(String(e)));
   await page.route('**/api/**',async route=>{
    const request=route.request(),path=decodeURIComponent(new URL(request.url()).pathname);
@@ -84,7 +84,7 @@ try {
     return route.fulfill({json:{kind:'group',name:item.project,statusHtml:`<span class="status-badge status-${color}">${item.status}</span>`,scenes:['whole'],segments:{whole:[{id:'P001',duration:20,videos:[]}]}}});
    }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,materials:materialsOverride??fixture.detail.materials,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
    if(path.endsWith('.webm')){
     if(path===decodeURIComponent(fixture.detail.finals[0].url))await pendingDownload?.promise;
     return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
@@ -113,11 +113,16 @@ try {
   const releaseTab=tabs.getByRole('button',{name:'发布记录',exact:true});
   const files=detail.getByRole('region',{name:'成片目录',exact:true});
   const history=detail.getByRole('region',{name:'发布记录',exact:true});
+  const platforms=detail.getByRole('navigation',{name:'发布平台',exact:true});
+  const douyin=platforms.getByRole('button',{name:'抖音',exact:true});
+  const xiaohongshu=platforms.getByRole('button',{name:'小红书',exact:true});
+  const materialSelect=detail.getByRole('combobox',{name:'选择发布资料'});
+  const releaseTitle=detail.getByRole('region',{name:'标题',exact:true}).getByRole('paragraph');
   await files.waitFor();
   assert.equal(await directoryTab.getAttribute('aria-current'),'page');
   assert.equal(await history.count(),0);
   assert.equal(await detail.getByRole('region',{name:'本次成片'}).count(),0);
-  assert.equal(await detail.getByRole('combobox',{name:'选择发布资料'}).count(),0);
+  assert.equal(await platforms.count(),0);
   const directoryUrl=page.url();
   await releaseTab.focus();await page.keyboard.press('Enter');
   await history.waitFor();
@@ -132,6 +137,14 @@ try {
   await page.reload();await history.waitFor();
   assert.equal(await releaseTab.getAttribute('aria-current'),'page');
   assert.equal(await files.count(),0);
+  assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书']);
+  assert.equal(await xiaohongshu.getAttribute('aria-current'),'page');
+  assert.equal(await materialSelect.count(),0);
+  await douyin.focus();await page.keyboard.press('Enter');
+  assert.equal(await douyin.getAttribute('aria-current'),'page');
+  assert.equal(await releaseTitle.innerText(),fixture.detail.materials[0].fields['标题']);
+  await xiaohongshu.click();
+  assert.equal(await releaseTitle.innerText(),fixture.detail.materials[1].fields['标题']);
   assert.equal(await tabs.evaluate(el=>[...el.querySelectorAll('button')].every(button=>
    button.getBoundingClientRect().right<=el.getBoundingClientRect().right+1)),true);
   const infoTabs=detail.getByRole('navigation',{name:'发布信息分类'});
@@ -362,6 +375,7 @@ try {
   await landscapeTab.click();
   assert.equal(await player.count(),0);
   await history.getByRole('button',{name:'查看 Q001 发布资料',exact:true}).click();
+  assert.equal(await douyin.getAttribute('aria-current'),'page');
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
@@ -394,8 +408,33 @@ try {
   assert.equal((await previewCard.boundingBox()).height,loadedHeight);
   assert.equal(await matchColumnHeights(),loadedColumnHeight);
   assert.equal(await mediaArea.getByRole('button',{name:/^下载/}).count(),0);
-  missingPortrait=false;noMaterial=true;await page.reload();
+  missingPortrait=false;
+  const [firstMaterial, secondMaterial]=fixture.detail.materials;
+  materialsOverride=[firstMaterial];await page.reload();await platforms.waitFor();
+  assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音']);
+  assert.equal(await douyin.getAttribute('aria-current'),'page');
+  assert.equal(await materialSelect.count(),0);
+  materialsOverride=[firstMaterial,secondMaterial,
+   {...secondMaterial,id:'Q003',fields:{...secondMaterial.fields,'平台':'快手','标题':'快手发布标题'}},
+   {...firstMaterial,id:'Q004',fields:{...firstMaterial.fields,'账号':'另一个抖音账号','标题':'另一个抖音标题'}},
+   {...firstMaterial,id:'Q005',fields:{...firstMaterial.fields,'平台':'待确定'}}];
+  await page.reload();await platforms.waitFor();
+  assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书','快手']);
+  assert.equal(await douyin.getAttribute('aria-current'),'page');
+  assert.equal(await releaseTitle.innerText(),'另一个抖音标题');
+  assert.match(await materialSelect.innerText(),/Q004 · 另一个抖音账号/);
+  await materialSelect.click();
+  const choices=detail.getByRole('listbox',{name:'选择发布资料'});
+  assert.equal(await choices.getByRole('option').count(),2);
+  await choices.getByRole('option',{name:'Q001 · 示例账号',exact:true}).click();
+  assert.equal(await releaseTitle.innerText(),firstMaterial.fields['标题']);
+  assert.equal(await douyin.getAttribute('aria-current'),'page');
+  await platforms.getByRole('button',{name:'快手',exact:true}).click();
+  assert.equal(await releaseTitle.innerText(),'快手发布标题');
+  assert.equal(await materialSelect.count(),0);
+  materialsOverride=undefined;noMaterial=true;await page.reload();
   await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();
+  assert.equal(await platforms.count(),0);
   assert.equal(await files.count(),0);
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   await directoryTab.click();
