@@ -27,6 +27,8 @@ try:
  store_media(x.project,x.project/'成片/第二版成片.webm',source=film)
  second=x.base/'第二封面.png';Image.new('RGB',(200,150),'navy').save(second)
  ref=import_media(x.root,second,'second-cover',project=x.project.name)
+ x.append(x.project/'README.md','发布记录',['P001',x.row[3],x.row[4],x.row[5],'[Q001](<发布资料.md>)',x.row[8],x.row[10],x.row[11],
+                                      '未取得','未取得','立即发布','待提交','未取得','未取得','示例安排','未取得'])
  x.row[3]='[成片](<成片/第二版成片.webm>)'
  x.row[4]=f'[本视频:{ref["resource_id"]}@{ref["version"]}](<{Path(ref["absolute_file"]).relative_to(x.project).as_posix()}>)'
  x.row[0]='Q002';x.row[1]='小红书';x.row[6]='另一平台的长标题'+('细节展示'*18)
@@ -107,7 +109,33 @@ try {
   assert.deepEqual(await card.evaluate(el=>[el.getBoundingClientRect().height,getComputedStyle(el).padding,getComputedStyle(el).gap]),[48,'8px 12px','8px']);
   await card.focus();await page.keyboard.press('Enter');
   assert(new URL(page.url()).hash.includes('section=publication&video='), '作品按钮仍进入发布详情');
-  await page.getByRole('region',{name:'视频发布资料'}).waitFor();
+  const detail=page.getByRole('region',{name:'作品成片与发布'});
+  const tabs=detail.getByRole('navigation',{name:'成片与发布子页'});
+  const directoryTab=tabs.getByRole('button',{name:'成片目录',exact:true});
+  const releaseTab=tabs.getByRole('button',{name:'发布',exact:true});
+  const files=detail.getByRole('region',{name:'成片目录',exact:true});
+  const history=detail.getByRole('region',{name:'发布记录',exact:true});
+  await files.waitFor();
+  assert.equal(await directoryTab.getAttribute('aria-current'),'page');
+  assert.equal(await history.count(),0);
+  assert.equal(await detail.getByRole('region',{name:'本次成片'}).count(),0);
+  assert.equal(await detail.getByRole('combobox',{name:'选择发布资料'}).count(),0);
+  const directoryUrl=page.url();
+  await releaseTab.focus();await page.keyboard.press('Enter');
+  await history.waitFor();
+  assert.equal(await releaseTab.getAttribute('aria-current'),'page');
+  assert.equal(await files.count(),0);
+  assert.match(new URL(page.url()).hash,/&publicationTab=release$/);
+  const releaseUrl=page.url();
+  await page.goBack();await files.waitFor();
+  assert.equal(page.url(),directoryUrl);
+  await page.goForward();await history.waitFor();
+  assert.equal(page.url(),releaseUrl);
+  await page.reload();await history.waitFor();
+  assert.equal(await releaseTab.getAttribute('aria-current'),'page');
+  assert.equal(await files.count(),0);
+  assert.equal(await tabs.evaluate(el=>[...el.querySelectorAll('button')].every(button=>
+   button.getBoundingClientRect().right<=el.getBoundingClientRect().right+1)),true);
   for(const field of ['正文','话题','挂品链接']){
    await page.getByRole('button',{name:'复制'+field,exact:true}).click();
    assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields[field]);
@@ -120,7 +148,10 @@ try {
    const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
    assert.deepEqual(await readFile(destination),bytes);await download.delete();
   }
-  const files=page.getByRole('region',{name:'成片目录',exact:true});
+  await directoryTab.click();
+  await files.waitFor();
+  assert.equal(page.url(),directoryUrl);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   const table=files.getByRole('table',{name:'成片文件',exact:true});
   assert.equal(await files.locator('details').count(),0);
   assert.equal(await files.getByText('这里可查看目录文件',{exact:false}).count(),0);
@@ -240,6 +271,8 @@ try {
   await newRow.getByText('新文件名',{exact:true}).waitFor();
   assert.equal(await newRow.getByRole('cell').nth(2).innerText(),'.webm');
   assert.equal(await page.getByRole('dialog').count(),0);
+  await releaseTab.click();
+  await history.waitFor();
   for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
    await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
    await page.getByRole('dialog').waitFor();
@@ -248,13 +281,19 @@ try {
   }
   const player=page.locator('video');await player.evaluate(el=>el.play());
   await page.waitForFunction(()=>document.querySelector('video')?.currentTime>0);
-  await player.evaluate(el=>el.pause());
-  await page.getByRole('combobox',{name:'选择发布资料',exact:true}).click();
-  await page.getByRole('option',{name:/Q001/}).click();
+  await history.getByRole('button',{name:'查看 Q001 发布资料',exact:true}).click();
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
   assert.equal(await page.locator('video').getAttribute('aria-label'),'最终成片.webm');
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
+  await player.evaluate(el=>el.play());
+  await directoryTab.click();
+  await files.waitFor();
+  assert.equal(await player.count(),0);
+  await releaseTab.click();
+  await history.waitFor();
+  assert.equal(await player.getAttribute('aria-label'),'最终成片.webm');
+  assert.equal(await player.evaluate(el=>el.paused),true);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   if(process.env.CHLOE_UI_SCREENSHOT && width===1366){await page.getByRole('button',{name:'关闭提示',exact:true}).evaluateAll(buttons=>buttons.forEach(button=>button.click()));await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:process.env.CHLOE_UI_SCREENSHOT,fullPage:true});}
   missingPortrait=true;await page.reload();
@@ -262,12 +301,19 @@ try {
   assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
   assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
   missingPortrait=false;noMaterial=true;await page.reload();
-  assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'6');
+  await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();
+  assert.equal(await files.count(),0);
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
+  await directoryTab.click();
+  assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'6');
+  await releaseTab.click();
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
   await page.getByRole('button',{name:'下载成片',exact:true}).waitFor();
-  empty=true;await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=publication');await page.reload();
+  await page.getByRole('button',{name:'成片与发布',exact:true}).click();
+  await cards.first().waitFor();
+  assert.equal(await tabs.count(),0);
+  empty=true;await page.reload();
   await page.getByText('暂无视频项目。',{exact:false}).waitFor();
   assert.deepEqual(await page.locator('[aria-label="作品发布统计"] > span').allTextContents(), ['共 0 部','制作中 0 部','待发布 0 部','已发布 0 部']);
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(writes,[decodeURIComponent(removable.url),decodeURIComponent(removable.url),uploadPath,decodeURIComponent(uploaded.url),decodeURIComponent(uploaded.url)]);
