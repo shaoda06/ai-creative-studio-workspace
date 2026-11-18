@@ -32,6 +32,10 @@ try:
  x.row[4]=f'[本视频:{ref["resource_id"]}@{ref["version"]}](<{Path(ref["absolute_file"]).relative_to(x.project).as_posix()}>)'
  x.row[0]='Q002';x.row[1]='小红书';x.row[6]='另一平台的长标题'+('细节展示'*18)
  x.append(path,'发布资料',x.row)
+ readme=x.project/'README.md'
+ readme.write_text(readme.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
+ x.append(readme,'发布记录',['P002',x.row[3],x.row[4],x.row[5],'[Q002](<发布资料.md>)',x.row[8],x.row[10],x.row[11],
+                            '未取得','2026-11-18T21:00:00+08:00','立即发布','已发布','sample-002','https://example.com/post/002','示例安排','https://example.com/post/002'])
  detail=publication.detail(x.root,x.project.name,x.api)
  images={c['media']['url']:base64.b64encode((x.root/c['media']['key']).read_bytes()).decode() for m in detail['materials'] for c in m['covers']}
  print(json.dumps({'list':publication.listing(x.root,x.api),'detail':detail,'images':images}))
@@ -84,7 +88,7 @@ try {
     return route.fulfill({json:{kind:'group',name:item.project,statusHtml:`<span class="status-badge status-${color}">${item.status}</span>`,scenes:['whole'],segments:{whole:[{id:'P001',duration:20,videos:[]}]}}});
    }
    if(path.endsWith('/publication-videos'))return failList?route.fulfill({status:409,body:'隔离列表错误'}):route.fulfill({json:empty?[]:listItems});
-   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,materials:materialsOverride??fixture.detail.materials,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
+   if(path.endsWith('/publication-videos/'+fixture.detail.project))return failDetail?route.fulfill({status:409,body:'隔离资料错误'}):route.fulfill({json:noMaterial?{...fixture.detail,materials:[],finals:[],history:[]}:missingPortrait?{...fixture.detail,materials:fixture.detail.materials.map(m=>({...m,covers:m.covers.map((c,i)=>i===1?{...c,media:null}:c)}))}:{...fixture.detail,materials:materialsOverride??fixture.detail.materials,finals:[...(hasUpload?[uploadedFile]:[]),...fixture.detail.finals.filter(f=>!removed||f.key!==removable.key)]} });
    if(path.endsWith('.webm')){
     if(path===decodeURIComponent(fixture.detail.finals[0].url))await pendingDownload?.promise;
     return route.fulfill({contentType:'video/webm',body:video,headers:{'Content-Disposition':"inline; filename*=utf-8''"+encodeURIComponent('最终成片.webm')}});
@@ -110,7 +114,8 @@ try {
   const detail=page.getByRole('region',{name:'作品成片与发布'});
   const tabs=detail.getByRole('navigation',{name:'成片与发布子页'});
   const directoryTab=tabs.getByRole('button',{name:'成片目录',exact:true});
-  const releaseTab=tabs.getByRole('button',{name:'发布记录',exact:true});
+  const releaseTab=tabs.getByRole('button',{name:'发布资料',exact:true});
+  const historyTab=tabs.getByRole('button',{name:'发布记录',exact:true});
   const files=detail.getByRole('region',{name:'成片目录',exact:true});
   const history=detail.getByRole('region',{name:'发布记录',exact:true});
   const platforms=detail.getByRole('navigation',{name:'发布平台',exact:true});
@@ -124,17 +129,19 @@ try {
   assert.equal(await detail.getByRole('region',{name:'本次成片'}).count(),0);
   assert.equal(await platforms.count(),0);
   const directoryUrl=page.url();
+  assert.deepEqual(await tabs.getByRole('button').allTextContents(),['成片目录','发布资料','发布记录']);
   await releaseTab.focus();await page.keyboard.press('Enter');
-  await history.waitFor();
+  await platforms.waitFor();
   assert.equal(await releaseTab.getAttribute('aria-current'),'page');
   assert.equal(await files.count(),0);
+  assert.equal(await history.count(),0);
   assert.match(new URL(page.url()).hash,/&publicationTab=release$/);
   const releaseUrl=page.url();
   await page.goBack();await files.waitFor();
   assert.equal(page.url(),directoryUrl);
-  await page.goForward();await history.waitFor();
+  await page.goForward();await platforms.waitFor();
   assert.equal(page.url(),releaseUrl);
-  await page.reload();await history.waitFor();
+  await page.reload();await platforms.waitFor();
   assert.equal(await releaseTab.getAttribute('aria-current'),'page');
   assert.equal(await files.count(),0);
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书']);
@@ -161,12 +168,11 @@ try {
   const layout=await detail.evaluate(el=>{
    const left=el.querySelector('[aria-label="发布文字资料"]').getBoundingClientRect();
    const right=el.querySelector('[aria-label="发布媒体"]').getBoundingClientRect();
-   const history=el.querySelector('[aria-label="发布记录"]').getBoundingClientRect();
    const host=el.querySelector('.chloe-publication-preparation').getBoundingClientRect();
    return {ratio:left.width/(left.width+right.width), separated:left.right<right.left,
-    aligned:left.top===right.top, fits:right.right<=host.right+1, below:history.top>=Math.max(left.bottom,right.bottom)};
+    aligned:left.top===right.top, fits:right.right<=host.right+1};
   });
-  assert.ok(Math.abs(layout.ratio-.4)<.005 && layout.separated && layout.aligned && layout.fits && layout.below,JSON.stringify(layout));
+  assert.ok(Math.abs(layout.ratio-.4)<.005 && layout.separated && layout.aligned && layout.fits,JSON.stringify(layout));
   const matchColumnHeights=async()=>{
    const boxes=await detail.evaluate(el=>{
     const left=el.querySelector('[aria-label="发布文字资料"]').getBoundingClientRect();
@@ -346,7 +352,7 @@ try {
   assert.equal(await newRow.getByRole('cell').nth(2).innerText(),'.webm');
   assert.equal(await page.getByRole('dialog').count(),0);
   await releaseTab.click();
-  await history.waitFor();
+  await platforms.waitFor();
   for(const [tab,label,width] of [[landscapeTab,'横版封面',200],[portraitTab,'竖版封面',120]]){
    await tab.click();
    const imageButton=page.getByRole('region',{name:label,exact:true}).locator('button.cover');
@@ -374,7 +380,20 @@ try {
   assert.equal(await fullscreenVideo.evaluate(video=>video.paused),true);
   await landscapeTab.click();
   assert.equal(await player.count(),0);
+  await historyTab.click();await history.waitFor();
+  assert.equal(await historyTab.getAttribute('aria-current'),'page');
+  assert.match(new URL(page.url()).hash,/&publicationTab=history$/);
+  await page.reload();
+  await history.getByRole('heading',{name:'P001 · 待提交',exact:true}).waitFor();
+  await history.getByRole('heading',{name:'P002 · 已发布',exact:true}).waitFor();
+  assert.equal(await history.getByRole('link',{name:'打开已发布作品'}).getAttribute('href'),'https://example.com/post/002');
+  assert.equal(await platforms.count(),0);
+  assert.equal(await mediaArea.count(),0);
+  assert.equal(await files.count(),0);
   await history.getByRole('button',{name:'查看 Q001 发布资料',exact:true}).click();
+  await platforms.waitFor();
+  assert.equal(await releaseTab.getAttribute('aria-current'),'page');
+  assert.equal(await history.count(),0);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
@@ -386,7 +405,7 @@ try {
   await files.waitFor();
   assert.equal(await player.count(),0);
   await releaseTab.click();
-  await history.waitFor();
+  await platforms.waitFor();
   assert.equal(await basicTab.getAttribute('aria-current'),'page');
   assert.equal(await landscapeTab.getAttribute('aria-current'),'page');
   assert.equal(await player.count(),0);
@@ -437,6 +456,8 @@ try {
   assert.equal(await platforms.count(),0);
   assert.equal(await files.count(),0);
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
+  await historyTab.click();
+  await history.getByText('暂无发布安排或结果。',{exact:true}).waitFor();
   await directoryTab.click();
   assert.equal(await page.getByRole('cell',{name:'暂无成片',exact:true}).getAttribute('colspan'),'6');
   await releaseTab.click();

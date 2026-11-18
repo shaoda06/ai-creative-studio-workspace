@@ -22,7 +22,7 @@ import { useNotify } from './components/Notifications';
 import './ChloePublication.css';
 import './components/EpisodeProduction.css';
 
-type Video = { project: string; id: string; title: string; status: string; finalCount: number };
+type Video = { project: string; id: string; title: string; status: string; finalCount: number; card?: FileItem };
 type Material = { id: string; fields: Record<string, string>; film: FileItem | null; covers: { label: string; media: FileItem | null }[] };
 type FinalFile = FileItem & {
   fileTime: string;
@@ -31,9 +31,11 @@ type FinalFile = FileItem & {
 };
 type Publication = { project: string; id: string; title: string; finals: FinalFile[]; materials: Material[];
   history: { fields: Record<string, string>; materialId: string | null; url: string | null }[] };
-const publicationTabs: { value: 'files' | 'release'; label: string }[] = [
+type PublicationTab = 'files' | 'release' | 'history';
+const publicationTabs: { value: PublicationTab; label: string }[] = [
   { value: 'files', label: '成片目录' },
-  { value: 'release', label: '发布记录' },
+  { value: 'release', label: '发布资料' },
+  { value: 'history', label: '发布记录' },
 ];
 const informationTabs: { value: 'basic' | 'product'; label: string }[] = [
   { value: 'basic', label: '基础信息' },
@@ -67,7 +69,7 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
 }) {
   const { workspacePage } = useChloeScope();
   const access = useChloeProductionAccess(baseUrl, selected);
-  const list = useQuery({ queryKey: ['chloe-publication', baseUrl], queryFn: () => get<Video[]>(`${baseUrl}/publication-videos`), refetchInterval: 5000 });
+  const list = useQuery({ queryKey: ['chloe-publication', baseUrl], queryFn: ({ signal }) => get<Video[]>(`${baseUrl}/publication-videos`, signal), enabled: !selected, refetchInterval: 15000 });
   return <>
     <PageHeader stacked title={title} actions={<Link to={workspacePage}>返回项目列表</Link>}>
       <Breadcrumbs items={[{ label: '成片与发布', onClick: selected ? () => onSelect(null) : undefined }, ...(selected ? [{ label: selected }] : [])]} />
@@ -81,7 +83,7 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
       <PageCheckStatus queries={[list]} />
       <Result loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
       {list.data && (list.data.length ? <ProductionAccessContext value={access}><div className="episode-grid episode-grid-pairs">{list.data.slice().sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true })).map(video => <ProductionEpisodeButton key={video.project}
-        project={baseUrl} revision={0} item={{ kind: 'group', name: video.project, title: video.title }} onSelect={onSelect} />)}</div></ProductionAccessContext>
+        project={baseUrl} revision={0} item={video.card || { kind: 'group', name: video.project, title: video.title }} onSelect={onSelect} />)}</div></ProductionAccessContext>
         : <p className="muted">暂无视频项目。已有视频的成片和发布资料会显示在这里。</p>)}
     </section>}
   </>;
@@ -89,7 +91,8 @@ export function ChloePublication({ title, baseUrl, selected, onSelect }: {
 
 function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: string }) {
   const [params, setParams] = useSearchParams();
-  const tab = params.get('publicationTab') === 'release' ? 'release' : 'files';
+  const requestedTab = params.get('publicationTab');
+  const tab = requestedTab === 'release' || requestedTab === 'history' ? requestedTab : 'files';
   const [materialId, setMaterialId] = useState('');
   const url = `${baseUrl}/publication-videos/${encodeURIComponent(project)}`;
   const query = useQuery({ queryKey: ['chloe-publication-detail', baseUrl, project],
@@ -99,23 +102,29 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     client.invalidateQueries({ queryKey: ['chloe-publication-detail', baseUrl, project] }),
     client.invalidateQueries({ queryKey: ['chloe-publication', baseUrl] }),
   ]);
+  const selectTab = (value: PublicationTab) => {
+    if (value === tab) return;
+    const next = new URLSearchParams(params);
+    if (value === 'files') next.delete('publicationTab');
+    else next.set('publicationTab', value);
+    setParams(next);
+  };
   return <section className="panel chloe-publication-detail" aria-label="作品成片与发布">
-    <UnderlineTabs label="成片与发布子页" items={publicationTabs} selected={tab} onChange={value => {
-      if (value === tab) return;
-      const next = new URLSearchParams(params);
-      if (value === 'release') next.set('publicationTab', value);
-      else next.delete('publicationTab');
-      setParams(next);
-    }} />
+    <UnderlineTabs label="成片与发布子页" items={publicationTabs} selected={tab} onChange={selectTab} />
     <PageCheckStatus queries={[query]} />
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
-    {query.data && (tab === 'files'
-      ? <FinalDirectory files={query.data.finals} uploadUrl={`${url}/files`} project={project} refresh={refreshFinals} />
-      : <PublicationRelease data={query.data} materialId={materialId} onMaterialChange={setMaterialId} />)}
+    {query.data && <>
+      {tab === 'files' && <FinalDirectory files={query.data.finals} uploadUrl={`${url}/files`} project={project} refresh={refreshFinals} />}
+      {tab === 'release' && <PublicationMaterials data={query.data} materialId={materialId} onMaterialChange={setMaterialId} />}
+      {tab === 'history' && <PublicationHistory records={query.data.history} onViewMaterial={id => {
+        setMaterialId(id);
+        selectTab('release');
+      }} />}
+    </>}
   </section>;
 }
 
-function PublicationRelease({ data, materialId, onMaterialChange }: {
+function PublicationMaterials({ data, materialId, onMaterialChange }: {
   data: Publication; materialId: string; onMaterialChange: (value: string) => void;
 }) {
   const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
@@ -184,15 +193,21 @@ function PublicationRelease({ data, materialId, onMaterialChange }: {
       </div>
       <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
     </> : <p className="muted">暂无发布准备资料。</p>}
-    <section aria-label="发布记录"><h2>发布记录</h2>
-      {!data.history.length ? <p className="muted">暂无发布安排或结果。</p> : data.history.map(record => <article key={record.fields['发布编号']} className="chloe-publication-history">
-        <h3>{record.fields['发布编号']} · {record.fields['发布进展']}</h3>
-        {record.materialId && <button onClick={() => onMaterialChange(record.materialId!)}>查看 {record.materialId} 发布资料</button>}
-        {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>{field}：{record.fields[field]}</p>)}
-        {record.url && <a href={record.url} target="_blank" rel="noopener noreferrer">打开已发布作品</a>}
-      </article>)}
-    </section>
   </>;
+}
+
+function PublicationHistory({ records, onViewMaterial }: {
+  records: Publication['history']; onViewMaterial: (id: string) => void;
+}) {
+  return <section aria-label="发布记录"><h2>发布记录</h2>
+    {!records.length ? <p className="muted">暂无发布安排或结果。</p> : records.map(({ fields, materialId, url }) =>
+      <article key={fields['发布编号']} className="chloe-publication-history">
+        <h3>{fields['发布编号']} · {fields['发布进展']}</h3>
+        {materialId && <button onClick={() => onViewMaterial(materialId)}>查看 {materialId} 发布资料</button>}
+        {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>{field}：{fields[field]}</p>)}
+        {url && <a href={url} target="_blank" rel="noopener noreferrer">打开已发布作品</a>}
+      </article>)}
+  </section>;
 }
 
 function FinalDirectory({ files, uploadUrl, project, refresh }: {
