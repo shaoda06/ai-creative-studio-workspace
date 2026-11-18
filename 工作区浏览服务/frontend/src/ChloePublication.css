@@ -1,13 +1,12 @@
 .chloe-publication-detail{display:grid;gap:24px;min-width:0}
 .chloe-publication-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-width:0}
-.chloe-publication-media{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:28px;align-items:start}
-.chloe-publication-film,.chloe-publication-cover{display:grid;gap:12px;min-width:0}
+.chloe-publication-preparation{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:start}
+.chloe-publication-column{display:grid;gap:16px;min-width:0}
+.chloe-publication-media-content{display:grid;gap:12px;min-width:0}
 .chloe-publication-copy{display:grid;gap:20px;min-width:0}
 .chloe-publication-text{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
 .chloe-publication-product{display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:start;gap:12px;margin:12px 0}
 .chloe-publication-history{margin-top:20px}
-
-.chloe-publication-covers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;min-width:0;align-items:start}
 
 .chloe-publication-detail .prose .table-scroll .chloe-publication-files{table-layout:fixed;min-width:940px}
 .prose .chloe-publication-files td{vertical-align:middle}

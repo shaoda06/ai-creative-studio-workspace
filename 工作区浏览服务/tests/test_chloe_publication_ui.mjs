@@ -136,13 +136,42 @@ try {
   assert.equal(await files.count(),0);
   assert.equal(await tabs.evaluate(el=>[...el.querySelectorAll('button')].every(button=>
    button.getBoundingClientRect().right<=el.getBoundingClientRect().right+1)),true);
-  for(const field of ['正文','话题','挂品链接']){
+  const infoTabs=detail.getByRole('navigation',{name:'发布信息分类'});
+  const mediaTabs=detail.getByRole('navigation',{name:'发布媒体分类'});
+  const basicTab=infoTabs.getByRole('button',{name:'基础信息',exact:true});
+  const productTab=infoTabs.getByRole('button',{name:'挂品信息',exact:true});
+  const landscapeTab=mediaTabs.getByRole('button',{name:'封面（横版）',exact:true});
+  const portraitTab=mediaTabs.getByRole('button',{name:'封面（竖版）',exact:true});
+  const videoTab=mediaTabs.getByRole('button',{name:'本次视频',exact:true});
+  assert.equal(await basicTab.getAttribute('aria-current'),'page');
+  assert.equal(await landscapeTab.getAttribute('aria-current'),'page');
+  assert.equal(await detail.getByRole('region',{name:'竖版封面',exact:true}).count(),0);
+  assert.equal(await detail.getByRole('region',{name:'挂品信息',exact:true}).count(),0);
+  const layout=await detail.evaluate(el=>{
+   const left=el.querySelector('[aria-label="发布文字资料"]').getBoundingClientRect();
+   const right=el.querySelector('[aria-label="发布媒体"]').getBoundingClientRect();
+   const history=el.querySelector('[aria-label="发布记录"]').getBoundingClientRect();
+   const host=el.querySelector('.chloe-publication-preparation').getBoundingClientRect();
+   return {ratio:left.width/(left.width+right.width), separated:left.right<right.left,
+    aligned:left.top===right.top, fits:right.right<=host.right+1, below:history.top>=Math.max(left.bottom,right.bottom)};
+  });
+  assert.ok(Math.abs(layout.ratio-.4)<.005 && layout.separated && layout.aligned && layout.fits && layout.below,JSON.stringify(layout));
+  for(const field of ['正文','话题']){
    await page.getByRole('button',{name:'复制'+field,exact:true}).click();
    assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields[field]);
   }
+  await productTab.focus();await page.keyboard.press('Enter');
+  assert.equal(await productTab.getAttribute('aria-current'),'page');
+  assert.equal(await landscapeTab.getAttribute('aria-current'),'page');
+  assert.equal(await detail.getByRole('region',{name:'正文',exact:true}).count(),0);
+  await page.getByRole('button',{name:'复制挂品链接',exact:true}).click();
+  assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields['挂品链接']);
   await page.getByRole('button',{name:'复制挂品信息',exact:true}).click();
   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
-  for(const [label,bytes,filename] of [['下载成片',video,'第二版成片.webm'],...fixture.detail.materials[1].covers.map(c=>['下载'+c.label,images.get(decodeURIComponent(c.media.url)),c.media.name])]){
+  for(const [tab,label,bytes,filename] of [[videoTab,'下载成片',video,'第二版成片.webm'],
+    ...fixture.detail.materials[1].covers.map((c,i)=>[[landscapeTab,portraitTab][i],'下载'+c.label,images.get(decodeURIComponent(c.media.url)),c.media.name])]){
+   await tab.click();
+   assert.equal(await productTab.getAttribute('aria-current'),'page');
    const event=page.waitForEvent('download');await page.getByRole('button',{name:label,exact:true}).click();
    const download=await event;if(filename)assert.equal(download.suggestedFilename(),filename);
    const destination=join(downloads,width+'-'+download.suggestedFilename());await download.saveAs(destination);
@@ -273,33 +302,44 @@ try {
   assert.equal(await page.getByRole('dialog').count(),0);
   await releaseTab.click();
   await history.waitFor();
-  for(const [label,width] of [['横版封面',200],['竖版封面',120]]){
+  for(const [tab,label,width] of [[landscapeTab,'横版封面',200],[portraitTab,'竖版封面',120]]){
+   await tab.click();
    await page.getByRole('region',{name:label,exact:true}).locator('button.cover').click();
    await page.getByRole('dialog').waitFor();
    await page.waitForFunction(width=>document.querySelector('dialog img')?.naturalWidth===width,width);
    await page.keyboard.press('Escape');
   }
+  await videoTab.click();
   const player=page.locator('video');await player.evaluate(el=>el.play());
   await page.waitForFunction(()=>document.querySelector('video')?.currentTime>0);
+  await landscapeTab.click();
+  assert.equal(await player.count(),0);
   await history.getByRole('button',{name:'查看 Q001 发布资料',exact:true}).click();
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
-  assert.equal(await page.locator('video').getAttribute('aria-label'),'最终成片.webm');
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
+  await videoTab.click();
+  assert.equal(await player.getAttribute('aria-label'),'最终成片.webm');
   await player.evaluate(el=>el.play());
   await directoryTab.click();
   await files.waitFor();
   assert.equal(await player.count(),0);
   await releaseTab.click();
   await history.waitFor();
+  assert.equal(await basicTab.getAttribute('aria-current'),'page');
+  assert.equal(await landscapeTab.getAttribute('aria-current'),'page');
+  assert.equal(await player.count(),0);
+  await videoTab.click();
   assert.equal(await player.getAttribute('aria-label'),'最终成片.webm');
   assert.equal(await player.evaluate(el=>el.paused),true);
+  await landscapeTab.click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   if(process.env.CHLOE_UI_SCREENSHOT && width===1366){await page.getByRole('button',{name:'关闭提示',exact:true}).evaluateAll(buttons=>buttons.forEach(button=>button.click()));await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:process.env.CHLOE_UI_SCREENSHOT,fullPage:true});}
   missingPortrait=true;await page.reload();
+  assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
+  await portraitTab.click();
   await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'下载竖版封面',exact:true}).isDisabled(),true);
-  assert.equal(await page.getByRole('button',{name:'下载横版封面',exact:true}).isEnabled(),true);
   missingPortrait=false;noMaterial=true;await page.reload();
   await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();
   assert.equal(await files.count(),0);
@@ -309,6 +349,7 @@ try {
   await releaseTab.click();
   failDetail=true;await page.reload();await page.getByRole('button',{name:'重新读取',exact:true}).waitFor();
   failDetail=false;noMaterial=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
+  await videoTab.click();
   await page.getByRole('button',{name:'下载成片',exact:true}).waitFor();
   await page.getByRole('button',{name:'成片与发布',exact:true}).click();
   await cards.first().waitFor();

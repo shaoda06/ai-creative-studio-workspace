@@ -36,6 +36,15 @@ const publicationTabs: { value: 'files' | 'release'; label: string }[] = [
   { value: 'files', label: '成片目录' },
   { value: 'release', label: '发布记录' },
 ];
+const informationTabs: { value: 'basic' | 'product'; label: string }[] = [
+  { value: 'basic', label: '基础信息' },
+  { value: 'product', label: '挂品信息' },
+];
+const mediaTabs: { value: 'landscape' | 'portrait' | 'video'; label: string }[] = [
+  { value: 'landscape', label: '封面（横版）' },
+  { value: 'portrait', label: '封面（竖版）' },
+  { value: 'video', label: '本次视频' },
+];
 const missing = new Set(['待确定', '待核实', '未取得', '不适用', '无']);
 const fileTimeFormat = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
@@ -107,7 +116,11 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
   data: Publication; project: string; materialId: string; onMaterialChange: (value: string) => void;
 }) {
   const [preview, setPreview] = useState<FileItem | null>(null);
+  const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
+  const [mediaTab, setMediaTab] = useState<'landscape' | 'portrait' | 'video'>('landscape');
   const material = data.materials.find(item => item.id === materialId) || data.materials.at(-1);
+  const coverLabel = mediaTab === 'landscape' ? '横版封面' : '竖版封面';
+  const cover = material?.covers.find(item => item.label === coverLabel)?.media;
   const used = data.history.some(item => item.materialId === material?.id);
   const product = material ? ['商品', '款式或SKU', '挂品链接'].filter(field => !missing.has(material.fields[field]))
     .map(field => `${field}：${material.fields[field]}`).join('\n') : '';
@@ -119,35 +132,39 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
         <span>{used ? '已有发布记录引用此资料' : '发布准备资料'}</span>
         <span>发布执行：{material.fields['发布执行']}</span>
       </div>
-      <div className="chloe-publication-media">
-        <section aria-label="本次成片" className="chloe-publication-film">
-          <h2>本次成片</h2>
-          {material.film ? <>
-            <p className="chloe-publication-text">{material.film.name}</p>
-            <ReleaseFilmPlayer key={material.film.url} item={material.film} />
-            <DownloadButton url={material.film.url!} filename={material.film.name} label="下载成片" title={material.film.name} />
-          </> : <p className="muted">尚未指定本次发布使用的成片。</p>}
+      <div className="chloe-publication-preparation">
+        <section aria-label="发布文字资料" className="chloe-publication-column">
+          <UnderlineTabs label="发布信息分类" items={informationTabs} selected={informationTab} onChange={setInformationTab} />
+          {informationTab === 'basic' ? <div className="chloe-publication-copy">
+            {['标题', '正文', '话题'].map(field => <section key={field} aria-label={field}>
+              <div className="chloe-publication-toolbar"><h2>{field}</h2>
+                {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label={`复制${field}`} successMessage={`${field}已复制`} />}
+              </div>
+              <p className="chloe-publication-text">{material.fields[field]}</p>
+            </section>)}
+          </div> : <section aria-label="挂品信息">
+            {product && <CopyButton text={product} label="复制挂品信息" />}
+            {['商品', '款式或SKU', '挂品链接'].map(field => <div className="chloe-publication-product" key={field}>
+              <strong>{field}：</strong><span className="chloe-publication-text">{field === '挂品链接' && /^https?:\/\//.test(material.fields[field])
+                ? <a href={material.fields[field]} target="_blank" rel="noopener noreferrer">{material.fields[field]}</a> : material.fields[field]}</span>
+              {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label={`复制${field}`} />}
+            </div>)}
+          </section>}
         </section>
-        <div className="chloe-publication-covers">{material.covers.map(cover => <section key={cover.label} aria-label={cover.label} className="chloe-publication-cover">
-          <h2>{cover.label}</h2>
-          <AssetMediaCard key={cover.media?.url || cover.label} title={cover.label} hideTitle item={{ media: cover.media, emptyLabel: `尚未准备${cover.label}。` }} revision={0} showVersion={false} showFileActions={false} />
-          <DownloadButton url={cover.media?.url || null} filename={cover.media?.name} label={`下载${cover.label}`} title={cover.media?.name || cover.label} />
-        </section>)}</div>
+        <section aria-label="发布媒体" className="chloe-publication-column">
+          <UnderlineTabs label="发布媒体分类" items={mediaTabs} selected={mediaTab} onChange={setMediaTab} />
+          {mediaTab === 'video' ? <section aria-label="本次视频" className="chloe-publication-media-content">
+            {material.film ? <>
+              <p className="chloe-publication-text">{material.film.name}</p>
+              <ReleaseFilmPlayer key={material.film.url} item={material.film} />
+              <DownloadButton url={material.film.url!} filename={material.film.name} label="下载成片" title={material.film.name} />
+            </> : <p className="muted">尚未指定本次发布使用的成片。</p>}
+          </section> : <section aria-label={coverLabel} className="chloe-publication-media-content">
+            <AssetMediaCard key={cover?.url || coverLabel} title={coverLabel} hideTitle item={{ media: cover, emptyLabel: `尚未准备${coverLabel}。` }} revision={0} showVersion={false} showFileActions={false} />
+            <DownloadButton url={cover?.url || null} filename={cover?.name} label={`下载${coverLabel}`} title={cover?.name || coverLabel} />
+          </section>}
+        </section>
       </div>
-      <div className="chloe-publication-copy">{['标题', '正文', '话题'].map(field => <section key={field} aria-label={field}>
-        <div className="chloe-publication-toolbar"><h2>{field}</h2>
-          {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label={`复制${field}`} successMessage={`${field}已复制`} />}
-        </div>
-        <p className="chloe-publication-text">{material.fields[field]}</p>
-      </section>)}</div>
-      <section aria-label="挂品信息">
-        <div className="chloe-publication-toolbar"><h2>挂品信息</h2>{product && <CopyButton text={product} label="复制挂品信息" />}</div>
-        {['商品', '款式或SKU', '挂品链接'].map(field => <div className="chloe-publication-product" key={field}>
-          <strong>{field}：</strong><span className="chloe-publication-text">{field === '挂品链接' && /^https?:\/\//.test(material.fields[field])
-            ? <a href={material.fields[field]} target="_blank" rel="noopener noreferrer">{material.fields[field]}</a> : material.fields[field]}</span>
-          {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label={`复制${field}`} />}
-        </div>)}
-      </section>
       <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
     </> : <p className="muted">暂无发布准备资料。</p>}
     <section aria-label="发布记录"><h2>发布记录</h2>
