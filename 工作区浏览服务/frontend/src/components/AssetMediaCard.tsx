@@ -8,7 +8,7 @@ import { FileActions } from './FileActions';
 import { FullscreenImage } from './FullscreenImage';
 import { FullscreenVideo, ReleaseFilmPlayer } from './ReleaseFilms';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, previewLayout, showFileActions = true, showVersion = true, aspectRatio, to, badge, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; previewLayout?: 'fixed' | 'fill'; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; badge?: { label: string; tone: 'blue' | 'green' }; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, previewLayout, fullscreenPreview = false, showPreviewCaption = true, showFileActions = true, showVersion = true, aspectRatio, to, badge, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; previewLayout?: 'fixed' | 'fill'; fullscreenPreview?: boolean; showPreviewCaption?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; badge?: { label: string; tone: 'blue' | 'green' }; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
   const preview = useContext(PreviewContext);
   const badgeId = useId();
   const [dimensions, setDimensions] = useState('');
@@ -26,6 +26,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const imageStyle = naturalRatio ? { height: 'auto', maxHeight: 'none' } : fixedRatioStyle && { maxHeight: 'none' };
   const media: FileItem | undefined = item.media;
   const isVideo = media?.kind === 'video';
+  const opensFullscreen = fullscreenPreview || !!selection;
   const thumbnail = media?.thumbnailUrl;
   const originalDimensions = media?.originalDimensions;
   const shownDimensions = originalDimensions?.join(' × ') ?? (thumbnail ? '未取得' : dimensions || '读取中');
@@ -43,8 +44,8 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     <div className="asset-media-item">
       {previewLayout && isVideo ? <div className="cover">
         <ReleaseFilmPlayer key={media.url} item={media} contained />
-      </div> : item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={selection ? isVideo ? `全屏播放${title}` : `查看${title}大图` : undefined}
-        onClick={linked ? undefined : selection ? () => setFullscreen(true) : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry || thumbnail || originalDimensions ? undefined : event => {
+      </div> : item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={opensFullscreen ? isVideo ? `全屏播放${title}` : `查看${title}大图` : undefined}
+        onClick={linked ? undefined : opensFullscreen ? () => setFullscreen(true) : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry || thumbnail || originalDimensions ? undefined : event => {
         const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
         setDimensions(`${width} × ${height}`);
       }} /></Cover> : <div style={fixedRatioStyle} className="cover asset-media-placeholder">
@@ -52,7 +53,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}
       {!entry && <>
-      {previewLayout ? <p className="asset-media-field asset-media-preview-caption" title={isVideo ? media.name : undefined} aria-hidden={!media}>
+      {previewLayout ? showPreviewCaption && <p className="asset-media-field asset-media-preview-caption" title={isVideo ? media.name : undefined} aria-hidden={!media}>
         {isVideo ? media.name : media && <><span className="field-label">尺寸：</span>{shownDimensions}</>}
       </p> : !compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{shownDimensions}</p>}
       {showFileActions && !compact && item.media && !onDetails && <div className="asset-media-field file-entry-main"><span className="field-label">文件：</span><FileActions url={item.media.url} /></div>}
@@ -68,9 +69,14 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
     {children && (linkedActions ? <div className="asset-media-card-linked-content">{children}</div> : children)}
   </>;
   if (linked && !linkedActions) return <Link className={`${className} asset-media-card-link`} to={to!} aria-label={title} aria-describedby={badge ? badgeId : undefined}>{content}</Link>;
-  return <article className={linked && children ? `${className} asset-media-card-link` : className} aria-label={hideTitle ? title : undefined}>
+  return <article className={linked && children ? `${className} asset-media-card-link` : className} aria-label={hideTitle ? title : undefined}
+    onContextMenu={fullscreenPreview && media?.url && !fullscreen ? event => {
+      event.preventDefault();
+      event.currentTarget.querySelector('video')?.pause();
+      setFullscreen(true);
+    } : undefined}>
     {content}
-    {fullscreen && media?.url && (isVideo ? <FullscreenVideo title={title} item={media} close={() => setFullscreen(false)} />
+    {fullscreen && media?.url && (isVideo ? <FullscreenVideo title={title} item={media} hideDownload={!!previewLayout} close={() => setFullscreen(false)} />
       : <FullscreenImage title={title} src={media.url} alt={title} close={() => setFullscreen(false)} />)}
   </article>;
 }

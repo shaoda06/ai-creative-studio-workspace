@@ -600,6 +600,12 @@ try {
     }
     const fillVideo=showcase.getByRole('article',{name:'填充预览视频',exact:true}).locator('video');
     await contained(fillVideo,`${width}px / 容器内视频`);
+    const fillImage=showcase.getByRole('article',{name:'填充预览图片',exact:true});
+    await fillImage.locator('.cover').click({button:'right'});
+    const fillImagePreview=page.getByRole('dialog',{name:'填充预览图片',exact:true});
+    await fillImagePreview.getByRole('button',{name:'退出全屏看图'}).waitFor();
+    await page.keyboard.press('Escape');
+    await fillImagePreview.waitFor({state:'hidden'});
     const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});
     assert.equal(await defaultCard.getByText('文件：',{exact:true}).count(),1);
     assert.equal(await defaultCard.getByText('采用版本：',{exact:true}).count(),1);

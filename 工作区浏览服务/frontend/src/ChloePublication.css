@@ -3,7 +3,9 @@
 .chloe-publication-preparation{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:stretch}
 .chloe-publication-column{display:grid;gap:16px;min-width:0}
 .chloe-publication-media-column{contain:size;grid-template-rows:auto minmax(0,1fr)}
-.chloe-publication-preview{display:grid;grid-template-rows:minmax(0,1fr)}
+.chloe-publication-preview{display:grid;grid-template-rows:auto minmax(0,1fr);gap:8px}
+.chloe-publication-dimensions{margin:0}
+.chloe-publication-dimensions>.field-label{margin-right:8px}
 .chloe-publication-copy{display:grid;gap:20px;min-width:0}
 .chloe-publication-text{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
 .chloe-publication-product{display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:start;gap:12px;margin:12px 0}

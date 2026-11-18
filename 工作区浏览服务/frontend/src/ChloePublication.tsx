@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { get } from './api';
 import type { FileItem } from './api';
-import { Dialog, Preview, PreviewContext, Result } from './components';
+import { Dialog, Preview, Result } from './components';
 import { PageHeader } from './components/PageHeader';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { PageCheckStatus } from './components/PageCheckStatus';
@@ -58,6 +58,10 @@ function commonAspect(width: number, height: number) {
   return width >= height ? `${w}:${h}` : `${h}:${w}`;
 }
 
+function MediaDimensions({ width, height }: { width: number; height: number }) {
+  return <>{width} × {height} <span className="muted">· {commonAspect(width, height)}</span></>;
+}
+
 export function ChloePublication({ title, baseUrl, selected, onSelect }: {
   title: string; baseUrl: string; selected: string | null; onSelect: (value: string | null) => void;
 }) {
@@ -107,24 +111,24 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && (tab === 'files'
       ? <FinalDirectory files={query.data.finals} uploadUrl={`${url}/files`} project={project} refresh={refreshFinals} />
-      : <PublicationRelease data={query.data} project={project} materialId={materialId} onMaterialChange={setMaterialId} />)}
+      : <PublicationRelease data={query.data} materialId={materialId} onMaterialChange={setMaterialId} />)}
   </section>;
 }
 
-function PublicationRelease({ data, project, materialId, onMaterialChange }: {
-  data: Publication; project: string; materialId: string; onMaterialChange: (value: string) => void;
+function PublicationRelease({ data, materialId, onMaterialChange }: {
+  data: Publication; materialId: string; onMaterialChange: (value: string) => void;
 }) {
-  const [preview, setPreview] = useState<FileItem | null>(null);
   const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
   const [mediaTab, setMediaTab] = useState<'landscape' | 'portrait' | 'video'>('landscape');
   const material = data.materials.find(item => item.id === materialId) || data.materials.at(-1);
   const videoTab = mediaTab === 'video';
   const mediaLabel = videoTab ? '本次视频' : mediaTab === 'landscape' ? '横版封面' : '竖版封面';
   const media = videoTab ? material?.film : material?.covers.find(item => item.label === mediaLabel)?.media;
+  const size = media?.originalDimensions;
   const used = data.history.some(item => item.materialId === material?.id);
   const product = material ? ['商品', '款式或SKU', '挂品链接'].filter(field => !missing.has(material.fields[field]))
     .map(field => `${field}：${material.fields[field]}`).join('\n') : '';
-  return <PreviewContext value={setPreview}>
+  return <>
     {material ? <>
       <div className="chloe-publication-toolbar">
         <TabSelect label="选择发布资料" items={data.materials.map(item => ({ value: item.id, label: `${item.id} · ${item.fields['平台']} · ${item.fields['账号']}` }))}
@@ -154,7 +158,11 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
         <section aria-label="发布媒体" className="chloe-publication-column chloe-publication-media-column">
           <UnderlineTabs label="发布媒体分类" items={mediaTabs} selected={mediaTab} onChange={setMediaTab} />
           <section aria-label={mediaLabel} className="chloe-publication-preview">
-            <AssetMediaCard key={media?.url || mediaLabel} title={mediaLabel} hideTitle previewLayout="fill" revision={0}
+            <p className="chloe-publication-dimensions"><span className="field-label">尺寸和比例</span>
+              {size ? <MediaDimensions width={size[0]} height={size[1]} /> : <span className="muted">—</span>}
+            </p>
+            <AssetMediaCard key={media?.url || mediaLabel} title={mediaLabel} hideTitle previewLayout="fill"
+              fullscreenPreview showPreviewCaption={false} revision={0}
               item={{ media: media || undefined, emptyLabel: videoTab ? '尚未指定本次发布使用的成片。' : `尚未准备${mediaLabel}。` }}
               showVersion={false} showFileActions={false} />
           </section>
@@ -170,8 +178,7 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
         {record.url && <a href={record.url} target="_blank" rel="noopener noreferrer">打开已发布作品</a>}
       </article>)}
     </section>
-    {preview && <Preview project={project} item={preview} revision={0} close={() => setPreview(null)} />}
-  </PreviewContext>;
+  </>;
 }
 
 function FinalDirectory({ files, uploadUrl, project, refresh }: {
@@ -213,7 +220,7 @@ function FinalDirectory({ files, uploadUrl, project, refresh }: {
             <td className="chloe-publication-file-name"><FinalName name={file.name.slice(0, extensionAt)} url={file.url!} refresh={refresh} /></td>
             <td>{file.name.slice(extensionAt)}</td>
             <td>{metadata && metadata.width > 0 && metadata.height > 0
-              ? <>{metadata.width} × {metadata.height} <span className="muted">· {commonAspect(metadata.width, metadata.height)}</span></>
+              ? <MediaDimensions width={metadata.width} height={metadata.height} />
               : <span title="无法读取视频分辨率">—</span>}</td>
             <td>{metadata?.duration != null ? `${durationFormat.format(metadata.duration)} 秒` : <span title="无法读取视频时长">—</span>}</td>
             <td><div className="chloe-publication-toolbar chloe-publication-file-actions">

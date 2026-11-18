@@ -218,11 +218,11 @@ export function ShowcaseExamples({ category }: { category: string }) {
           <AssetMediaCard title="固定预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle previewLayout="fixed" showFileActions={false} showVersion={false} />
         </div>
       </ComponentExample>
-      <ComponentExample fullWidth title="填满容器的媒体预览" rule="由外框确定卡片高度。图片、视频和空态填满同一空间，媒体按原比例显示。" usage="Chloe 发布记录右栏跟随左栏高度">
+      <ComponentExample fullWidth title="填满容器的媒体预览" rule="由外框确定卡片高度。图片、视频和空态填满同一空间，媒体按原比例显示。可右击图片或视频打开全屏。" usage="Chloe 发布记录右栏跟随左栏高度">
         <div className="component-demo-fill-media">
-          <AssetMediaCard title="填充预览图片" item={imageRecord} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
-          <AssetMediaCard title="填充预览视频" item={{media:video}} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
-          <AssetMediaCard title="填充预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="填充预览图片" item={imageRecord} revision={1} hideTitle previewLayout="fill" fullscreenPreview showPreviewCaption={false} showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="填充预览视频" item={{media:video}} revision={1} hideTitle previewLayout="fill" fullscreenPreview showPreviewCaption={false} showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="填充预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle previewLayout="fill" fullscreenPreview showPreviewCaption={false} showFileActions={false} showVersion={false} />
         </div>
       </ComponentExample>
       <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe共用资产入口封面、参考图、正式图及其他版本">

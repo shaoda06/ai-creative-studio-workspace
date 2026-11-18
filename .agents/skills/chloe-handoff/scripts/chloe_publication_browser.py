@@ -58,6 +58,15 @@ def final_video_metadata(path, _revision):
     return {field: info[field] for field in ('width', 'height', 'duration')}
 
 
+@lru_cache(maxsize=256)
+def cover_metadata(path, _revision):
+    try:
+        info = resources.facts(path)
+    except (OSError, ValueError):
+        return None
+    return {field: info[field] for field in ('width', 'height')}
+
+
 def final_file_info(path):
     info = path.stat()
     created = getattr(info, 'st_birthtime', None)
@@ -130,18 +139,29 @@ def detail(root, name, api):
     project, identity, title, doc = project_context(root, name)
     rows = preparations(root, project, identity, title)
     base = f'{api}/publication-videos/{quote(name)}/files/'
-    def media(path, kind):
+    def media(path, kind, *, include_dimensions=False):
         key = path.relative_to(root).as_posix()
-        return {'kind': kind, 'name': path.name, 'key': key, 'url': base+quote(key, safe='/')}
+        item = {'kind': kind, 'name': path.name, 'key': key, 'url': base+quote(key, safe='/')}
+        if include_dimensions:
+            state = path.stat()
+            revision = (state.st_ino, state.st_mtime_ns, state.st_size)
+            metadata = final_video_metadata if kind == 'video' else cover_metadata
+            info = metadata(path, revision)
+            if info and info['width'] > 0 and info['height'] > 0:
+                item['originalDimensions'] = [info['width'], info['height']]
+        return item
     materials = []
     for row in rows:
-        film = None if row['成片文件'] in MISSING else media((project/LINK.fullmatch(row['成片文件'])[2]).resolve(), 'video')
+        film = None
+        if row['成片文件'] not in MISSING:
+            path = (project / LINK.fullmatch(row['成片文件'])[2]).resolve()
+            film = media(path, 'video', include_dimensions=True)
         covers = []
         for label in ('横版封面', '竖版封面'):
             image = None
             if row[label+'引用'] not in MISSING:
                 ref = media_reference(root, project/'发布资料.md', row[label+'引用'])
-                image = media(resources.local(root, ref['file']), 'image')
+                image = media(resources.local(root, ref['file']), 'image', include_dimensions=True)
             covers.append({'label': label, 'media': image})
         materials.append({'id': row['资料编号'], 'fields': {k: plain(v) for k,v in row.items()}, 'film': film, 'covers': covers})
     history = []

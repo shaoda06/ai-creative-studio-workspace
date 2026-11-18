@@ -122,6 +122,8 @@ class ChloePublicationTests(HttpTestCase):
         data = response.json(); material = data['materials'][0]
         self.assertEqual(material['fields']['正文'],'领口和面料细节。\n第二行保留换行与竖线|。')
         self.assertEqual(data['history'],[])
+        self.assertEqual(material['film']['originalDimensions'], [320, 180])
+        self.assertEqual([cover['media']['originalDimensions'] for cover in material['covers']], [[160, 120], [120, 160]])
         self.assertEqual(publication.listing(self.root,self.api)[0]['finalCount'],1)
         for media, original in [(material['film'],film),(material['covers'][0]['media'],Path(cover['absolute_file'])), (material['covers'][1]['media'],Path(self.portrait['absolute_file']))]:
             downloaded = self.client.get(media['url']+'?download=true')

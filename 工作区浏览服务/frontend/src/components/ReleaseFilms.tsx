@@ -54,15 +54,17 @@ function ReleaseFilmList({ videos, category }: { videos: FileItem[]; category: s
   </>;
 }
 
-export function FullscreenVideo({ title, item, close }: { title: string; item: FileItem; close: () => void }) {
+export function FullscreenVideo({ title, item, close, hideDownload = false }: {
+  title: string; item: FileItem; close: () => void; hideDownload?: boolean;
+}) {
   return <Dialog size="fullscreen" showHeader={false} title={title} close={close}>
     <button type="button" className="release-films-fullscreen-backdrop" aria-label="点击背景关闭视频预览" tabIndex={-1} onClick={close} />
-    <div className="release-films-fullscreen"><ReleaseFilmPlayer item={item} fullscreen /></div>
+    <div className="release-films-fullscreen"><ReleaseFilmPlayer item={item} fullscreen hideDownload={hideDownload} /></div>
   </Dialog>;
 }
 
-export function ReleaseFilmPlayer({ item, fullscreen = false, contained = false }: {
-  item: FileItem; fullscreen?: boolean; contained?: boolean;
+export function ReleaseFilmPlayer({ item, fullscreen = false, contained = false, hideDownload = false }: {
+  item: FileItem; fullscreen?: boolean; contained?: boolean; hideDownload?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -75,7 +77,7 @@ export function ReleaseFilmPlayer({ item, fullscreen = false, contained = false 
   return <>
     <video key={attempt} ref={player}
       className={`release-films-player${fullscreen ? ' release-films-player-fullscreen' : contained ? ' release-films-player-contained' : ''}`}
-      aria-label={item.name} controls controlsList={contained ? 'nodownload' : undefined} preload="metadata" src={item.url} onError={() => setFailed(true)} />
+      aria-label={item.name} controls controlsList={contained || hideDownload ? 'nodownload' : undefined} preload="metadata" src={item.url} onError={() => setFailed(true)} />
     {failed && <FloatingMessage tone="error">{item.name} 无法播放。<button onClick={() => { setFailed(false); setAttempt(value => value + 1); }}>重新加载视频</button></FloatingMessage>}
   </>;
 }
