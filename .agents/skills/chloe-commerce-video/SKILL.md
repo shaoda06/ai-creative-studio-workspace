@@ -29,7 +29,8 @@ description: Chloe 自营穿搭与带货业务入口，按需接续参考分析�
 | 发布平台、目标人群、内容风格、工作区与具名项目初始化 | [账号定位与建档](../chloe-positioning/SKILL.md) |
 | 精选联盟选品、商品事实与原始素材 | [选品与商品资料](../chloe-selection/SKILL.md) |
 | 单独制作与管理模特、发型、服装、配饰、造型、场景、声音及镜头图片 | [资产与镜头图片](../chloe-assets/SKILL.md) |
-| 单条内容与带货表现、跨视频复盘及下一轮调整 | [带货复盘](../chloe-review/SKILL.md) |
+| 制作卡点、返修与经验沉淀 | [制作过程复盘](../chloe-review/SKILL.md#制作过程复盘) |
+| 单条内容与带货表现、跨视频复盘及下一轮调整 | [内容与运营复盘](../chloe-review/SKILL.md) |
 | 成片发布准备、发布协助、个人页或封面任务 | 先读[Chloe运营接入](../chloe-positioning/references/社媒运营接入规范.md)，再调用[公共运营](../studio-entry/references/能力目录.md#社媒运营与发布) |
 
 ## 流程与状态
