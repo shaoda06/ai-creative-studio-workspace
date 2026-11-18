@@ -1,4 +1,4 @@
 interface:
   display_name: "Studio 发布准备与记录"
-  short_description: "准备社媒发布包，交接手动发布或获授权代发，汇报提交回执。"
+  short_description: "准备社媒发布包、交接或代发，汇报回执并按需同步发布资料。"
   default_prompt: "使用$studio-publication处理当前任务，先确定输入、授权和实际范围。"
