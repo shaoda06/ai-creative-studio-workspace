@@ -151,6 +151,10 @@ try {
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书']);
   assert.equal(await xiaohongshu.getAttribute('aria-current'),'page');
   assert.equal(await materialSelect.getAttribute('data-value'),'Q002');
+  assert.equal(await materialSelect.innerText(),`Q002 · ${fixture.detail.materials[1].fields['标题']}`);
+  const pickerBounds=await materialSelect.boundingBox();
+  const textBounds=await textArea.boundingBox();
+  assert.ok(Math.abs(pickerBounds.x-textBounds.x)<1 && Math.abs(pickerBounds.width-textBounds.width)<1);
   await douyin.focus();await page.keyboard.press('Enter');
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   assert.equal(await releaseTitle.innerText(),fixture.detail.materials[0].fields['标题']);
@@ -468,12 +472,13 @@ try {
   materialsOverride=[firstMaterial];await page.reload();await platforms.waitFor();
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音']);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
-  assert.equal(await materialSelect.innerText(),'Q001 · 示例账号');
+  assert.equal(await materialSelect.innerText(),`Q001 · ${firstMaterial.fields['标题']}`);
   assert.ok((await materialSelect.boundingBox()).y >= (await platforms.boundingBox()).y + (await platforms.boundingBox()).height);
   await materialSelect.click();
   const choices=detail.getByRole('listbox',{name:'选择发布资料'});
   assert.equal(await choices.getByRole('option').count(),1);
   assert.equal(await choices.getByRole('option').getAttribute('aria-selected'),'true');
+  assert.ok((await choices.getByRole('option').innerText()).startsWith(`Q001 · ${firstMaterial.fields['标题']}`));
   await page.keyboard.press('Escape');
   materialsOverride=[firstMaterial,secondMaterial,
    {...secondMaterial,id:'Q003',fields:{...secondMaterial.fields,'平台':'快手','标题':'快手发布标题'}},
@@ -483,10 +488,10 @@ try {
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书','快手']);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   assert.equal(await releaseTitle.innerText(),'另一个抖音标题');
-  assert.match(await materialSelect.innerText(),/Q004 · 另一个抖音账号/);
+  assert.equal(await materialSelect.innerText(),'Q004 · 另一个抖音标题');
   await materialSelect.click();
   assert.equal(await choices.getByRole('option').count(),2);
-  await choices.getByRole('option',{name:'Q001 · 示例账号',exact:true}).click();
+  await choices.getByRole('option',{name:`Q001 · ${firstMaterial.fields['标题']}`,exact:true}).click();
   assert.equal(await releaseTitle.innerText(),firstMaterial.fields['标题']);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   await platforms.getByRole('button',{name:'快手',exact:true}).click();

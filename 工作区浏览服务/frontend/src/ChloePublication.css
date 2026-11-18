@@ -1,6 +1,6 @@
 .chloe-publication-detail{display:grid;gap:24px;min-width:0}
 .chloe-publication-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-width:0}
-.chloe-publication-preparation{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:stretch}
+.chloe-publication-material-picker,.chloe-publication-preparation{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:stretch}
 .chloe-publication-column{display:grid;gap:16px;min-width:0}
 .chloe-publication-media-column{contain:size;grid-template-rows:auto minmax(0,1fr)}
 .chloe-publication-preview{display:grid;grid-template-rows:auto minmax(0,1fr);gap:8px}

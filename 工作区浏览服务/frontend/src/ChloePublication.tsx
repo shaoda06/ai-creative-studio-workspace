@@ -155,10 +155,12 @@ function PublicationMaterials({ materials, materialId, onMaterialChange }: {
           const next = available.filter(entry => entry.platform === platform).at(-1);
           if (next) onMaterialChange(next.material.id);
         }} />
-      <div className="chloe-publication-toolbar">
-        <TabSelect label="选择发布资料"
-          items={platformMaterials.map(({ material: item }) => ({ value: item.id, label: `${item.id} · ${item.fields['账号']}` }))}
-          selected={material.id} onChange={onMaterialChange} />
+      <div className="chloe-publication-material-picker">
+        <div>
+          <TabSelect variant="field" label="选择发布资料"
+            items={platformMaterials.map(({ material: item }) => ({ value: item.id, label: `${item.id} · ${item.fields['标题']}` }))}
+            selected={material.id} onChange={onMaterialChange} />
+        </div>
       </div>
       <div className="chloe-publication-preparation">
         <section aria-label="发布文字资料" className="chloe-publication-column">
