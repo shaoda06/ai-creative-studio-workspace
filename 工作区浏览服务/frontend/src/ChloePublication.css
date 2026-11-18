@@ -10,6 +10,7 @@
 .chloe-publication-text{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
 .chloe-publication-product{display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:start;gap:12px;margin:12px 0}
 .chloe-publication-history{margin-top:20px}
+.chloe-publication-history-heading{justify-content:space-between}
 
 .chloe-publication-detail .prose .table-scroll .chloe-publication-files{table-layout:fixed;min-width:940px}
 .prose .chloe-publication-files td{vertical-align:middle}

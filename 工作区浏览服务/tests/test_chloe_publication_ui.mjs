@@ -27,7 +27,7 @@ try:
  second=x.base/'第二封面.png';Image.new('RGB',(200,150),'navy').save(second)
  ref=import_media(x.root,second,'second-cover',project=x.project.name)
  x.append(x.project/'README.md','发布记录',['P001',x.row[3],x.row[4],x.row[5],'[Q001](<发布资料.md>)',x.row[8],x.row[10],x.row[11],
-                                      '未取得','未取得','立即发布','待提交','未取得','未取得','示例安排','未取得'])
+                                      '2026-11-19T12:26+08:00','未取得','定时发布','待提交','未取得','未取得','示例安排','未取得'])
  x.row[3]='[成片](<成片/第二版成片.webm>)'
  x.row[4]=f'[本视频:{ref["resource_id"]}@{ref["version"]}](<{Path(ref["absolute_file"]).relative_to(x.project).as_posix()}>)'
  x.row[0]='Q002';x.row[1]='小红书';x.row[6]='另一平台的长标题'+('细节展示'*18)
@@ -56,7 +56,7 @@ await server.listen();
 const browser=await chromium.launch({channel:'chrome',headless:true});
 try {
  for(const [width,height] of [[1280,640],[1366,768],[1920,1080]]){
-  const context=await browser.newContext({viewport:{width,height},permissions:['clipboard-read','clipboard-write']});
+  const context=await browser.newContext({viewport:{width,height},timezoneId:'America/Los_Angeles',permissions:['clipboard-read','clipboard-write']});
   const page=await context.newPage();page.setDefaultTimeout(10000);
   const errors=[],unexpected=[],writes=[];let failList=true, failDetail=false, empty=false, noMaterial=false, missingPortrait=false, failDelete=true, removed=false, hasUpload=false;
   let uploadedFile=uploaded, pendingDownload, materialsOverride;
@@ -399,11 +399,26 @@ try {
   await page.reload();
   await history.getByRole('heading',{name:'P001 · 待提交',exact:true}).waitFor();
   await history.getByRole('heading',{name:'P002 · 已发布',exact:true}).waitFor();
+  const firstRecord=history.getByRole('article').first();
+  const viewMaterial=firstRecord.getByRole('button',{name:'查看 Q001 发布资料',exact:true});
+  assert.deepEqual(await firstRecord.locator('p > strong').allTextContents(),['发布方式：','计划发布时间：','实际发布时间：','平台作品ID：']);
+  assert.equal(await firstRecord.locator('p > strong').first().evaluate(el=>getComputedStyle(el).fontWeight),'700');
+  assert.deepEqual(await firstRecord.locator('time').allTextContents(),['2026年11月18日 20:26']);
+  assert.equal(await firstRecord.locator('time').getAttribute('datetime'),'2026-11-19T12:26+08:00');
+  await firstRecord.getByText('实际发布时间：未取得',{exact:true}).waitFor();
+  assert.equal(await history.getByRole('article').nth(1).locator('time').innerText(),'2026年11月18日 05:00');
+  assert.ok(await viewMaterial.evaluate(el=>{
+   const link=el.getBoundingClientRect(), header=el.parentElement.getBoundingClientRect();
+   const title=el.parentElement.querySelector('h3').getBoundingClientRect();
+   const style=getComputedStyle(el);
+   return Math.abs(link.right-header.right)<1 && link.left>title.right && link.top<title.bottom && link.bottom>title.top &&
+    style.textDecorationLine==='underline' && style.borderTopWidth==='0px';
+  }));
   assert.equal(await history.getByRole('link',{name:'打开已发布作品'}).getAttribute('href'),'https://example.com/post/002');
   assert.equal(await platforms.count(),0);
   assert.equal(await mediaArea.count(),0);
   assert.equal(await files.count(),0);
-  await history.getByRole('button',{name:'查看 Q001 发布资料',exact:true}).click();
+  await viewMaterial.click();
   await platforms.waitFor();
   assert.equal(await releaseTab.getAttribute('aria-current'),'page');
   assert.equal(await history.count(),0);

@@ -18,6 +18,7 @@ import { AssetMediaCard } from './components/AssetMediaCard';
 import { CopyButton } from './components/CopyButton';
 import { DownloadButton } from './components/DownloadButton';
 import { FilePicker } from './components/FilePicker';
+import { LinkButton } from './components/LinkButton';
 import { useNotify } from './components/Notifications';
 import './ChloePublication.css';
 import './components/EpisodeProduction.css';
@@ -52,6 +53,7 @@ const missing = new Set(['待确定', '待核实', '未取得', '不适用', '�
 const fileTimeFormat = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
 });
+const publicationTimeFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'long', timeStyle: 'short', hourCycle: 'h23' });
 const durationFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
 const commonAspects = [[1, 1], [5, 4], [4, 3], [3, 2], [16, 10], [16, 9], [2, 1], [21, 9]];
 
@@ -194,15 +196,24 @@ function PublicationMaterials({ materials, materialId, onMaterialChange }: {
   </>;
 }
 
+function PublicationTime({ value }: { value: string }) {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? value : <time dateTime={value}>{publicationTimeFormat.format(time)}</time>;
+}
+
 function PublicationHistory({ records, onViewMaterial }: {
   records: Publication['history']; onViewMaterial: (id: string) => void;
 }) {
   return <section aria-label="发布记录"><h2>发布记录</h2>
     {!records.length ? <p className="muted">暂无发布安排或结果。</p> : records.map(({ fields, materialId, url }) =>
       <article key={fields['发布编号']} className="chloe-publication-history">
-        <h3>{fields['发布编号']} · {fields['发布进展']}</h3>
-        {materialId && <button onClick={() => onViewMaterial(materialId)}>查看 {materialId} 发布资料</button>}
-        {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>{field}：{fields[field]}</p>)}
+        <header className="chloe-publication-toolbar chloe-publication-history-heading">
+          <h3>{fields['发布编号']} · {fields['发布进展']}</h3>
+          {materialId && <LinkButton onClick={() => onViewMaterial(materialId)}>查看 {materialId} 发布资料</LinkButton>}
+        </header>
+        {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>
+          <strong>{field}：</strong>{field.endsWith('时间') ? <PublicationTime value={fields[field]} /> : fields[field]}
+        </p>)}
         {url && <a href={url} target="_blank" rel="noopener noreferrer">打开已发布作品</a>}
       </article>)}
   </section>;
