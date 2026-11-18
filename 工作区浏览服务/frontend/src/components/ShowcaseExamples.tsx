@@ -213,9 +213,16 @@ export function ShowcaseExamples({ category }: { category: string }) {
       </ComponentExample>
       <ComponentExample fullWidth title="固定高度的媒体预览" rule="横竖图片、内嵌视频及空态沿用相同预览高度，底部保留一行尺寸或文件名。" usage="Chloe 发布记录中的封面和本次视频">
         <div className="asset-media-grid">
-          <AssetMediaCard title="固定预览图片" item={imageRecord} revision={1} hideTitle fixedPreview showFileActions={false} showVersion={false} />
-          <AssetMediaCard title="固定预览视频" item={{media:video}} revision={1} hideTitle fixedPreview showFileActions={false} showVersion={false} />
-          <AssetMediaCard title="固定预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle fixedPreview showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="固定预览图片" item={imageRecord} revision={1} hideTitle previewLayout="fixed" showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="固定预览视频" item={{media:video}} revision={1} hideTitle previewLayout="fixed" showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="固定预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle previewLayout="fixed" showFileActions={false} showVersion={false} />
+        </div>
+      </ComponentExample>
+      <ComponentExample fullWidth title="填满容器的媒体预览" rule="由外框确定卡片高度。图片、视频和空态填满同一空间，媒体按原比例显示。" usage="Chloe 发布记录右栏跟随左栏高度">
+        <div className="component-demo-fill-media">
+          <AssetMediaCard title="填充预览图片" item={imageRecord} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="填充预览视频" item={{media:video}} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
+          <AssetMediaCard title="填充预览空态" item={{emptyLabel:'尚未准备媒体'}} revision={1} hideTitle previewLayout="fill" showFileActions={false} showVersion={false} />
         </div>
       </ComponentExample>
       <ComponentExample title="按比例展示的图片卡片" rule="aspectRatio为数字时使用指定比例，有图与空态同高。natural按原图比例铺满宽度，无图时使用默认占位高度。" usage="Chloe共用资产入口封面、参考图、正式图及其他版本">

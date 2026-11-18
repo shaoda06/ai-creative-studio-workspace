@@ -18,3 +18,5 @@
 .component-example.is-full-width { grid-column: 1 / -1; }
 .component-demo-textarea { width: 100%; min-height: 100px; margin-top: 12px; }
 .component-demo-stack { display: grid; gap: 12px; min-width: 0; }
+
+.component-demo-fill-media{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));grid-auto-rows:240px;gap:18px}

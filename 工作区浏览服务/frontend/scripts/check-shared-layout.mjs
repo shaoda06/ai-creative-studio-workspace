@@ -590,6 +590,16 @@ try {
     const cardPlayer=showcase.getByRole('article',{name:'固定预览视频',exact:true}).locator('video');
     await contained(cardPlayer,`${width}px / 固定预览视频播放器`);
     assert.equal(await cardPlayer.getAttribute('controlslist'),'nodownload');
+    for (const name of ['填充预览图片','填充预览视频','填充预览空态']) {
+      const fill=showcase.getByRole('article',{name,exact:true});
+      const {height:cardHeight}=await fill.boundingBox();
+      const {height:frameHeight}=await fill.locator('.cover').boundingBox();
+      assert.equal(cardHeight,240);
+      assert.ok(frameHeight>0 && frameHeight<cardHeight);
+      await contained(fill,`${width}px / ${name}`);
+    }
+    const fillVideo=showcase.getByRole('article',{name:'填充预览视频',exact:true}).locator('video');
+    await contained(fillVideo,`${width}px / 容器内视频`);
     const defaultCard=showcase.getByRole('article',{name:'外层已命名的采用图',exact:true});
     assert.equal(await defaultCard.getByText('文件：',{exact:true}).count(),1);
     assert.equal(await defaultCard.getByText('采用版本：',{exact:true}).count(),1);

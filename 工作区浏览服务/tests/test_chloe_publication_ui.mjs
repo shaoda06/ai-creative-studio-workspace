@@ -154,6 +154,17 @@ try {
     aligned:left.top===right.top, fits:right.right<=host.right+1, below:history.top>=Math.max(left.bottom,right.bottom)};
   });
   assert.ok(Math.abs(layout.ratio-.4)<.005 && layout.separated && layout.aligned && layout.fits && layout.below,JSON.stringify(layout));
+  const matchColumnHeights=async()=>{
+   const boxes=await detail.evaluate(el=>{
+    const left=el.querySelector('[aria-label="发布文字资料"]').getBoundingClientRect();
+    const right=el.querySelector('[aria-label="发布媒体"]').getBoundingClientRect();
+    const card=el.querySelector('.chloe-publication-preview .asset-media-card').getBoundingClientRect();
+    return {left:left.height,right:right.height,bottomDelta:Math.abs(card.bottom-right.bottom)};
+   });
+   assert.ok(Math.abs(boxes.left-boxes.right)<1 && boxes.bottomDelta<1,JSON.stringify(boxes));
+   return boxes.left;
+  };
+  const basicHeight=await matchColumnHeights();
   for(const field of ['标题','正文','话题']){
    const copy=detail.getByRole('region',{name:field,exact:true}).getByRole('button',{name:'复制'+field,exact:true});
    assert.equal(await copy.innerText(),'复制');
@@ -171,6 +182,8 @@ try {
   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),'商品：示例上衣\n款式或SKU：蓝色 M码\n挂品链接：https://example.com/product?id=1&sku=blue');
   const mediaArea=detail.getByRole('region',{name:'发布媒体'});
   const previewCard=mediaArea.locator('.asset-media-card');
+  const productHeight=await matchColumnHeights();
+  assert.ok(Math.abs(productHeight-basicHeight)>1,'changing left tabs changes the reference height');
   const firstCard=await previewCard.boundingBox();
   for(const tab of [landscapeTab,portraitTab,videoTab]){
    await tab.click();
@@ -178,10 +191,19 @@ try {
    assert.equal(await mediaArea.getByRole('button',{name:/^下载/}).count(),0);
    const bounds=await previewCard.boundingBox();
    assert.deepEqual([bounds.width,bounds.height],[firstCard.width,firstCard.height]);
+   assert.equal(await matchColumnHeights(),productHeight);
   }
   const inCardVideo=previewCard.locator('video');
   assert.equal(await inCardVideo.getAttribute('controlslist'),'nodownload');
-  assert.equal(await inCardVideo.evaluate(el=>el.getBoundingClientRect().height),260);
+  const fittedVideo=await inCardVideo.evaluate(el=>({
+   height:el.getBoundingClientRect().height,frame:el.parentElement.getBoundingClientRect().height,
+   objectFit:getComputedStyle(el).objectFit,
+  }));
+  assert.ok(fittedVideo.height>0 && Math.abs(fittedVideo.height-fittedVideo.frame)<1);
+  assert.equal(fittedVideo.objectFit,'contain');
+  await basicTab.click();
+  assert.equal(await matchColumnHeights(),basicHeight);
+  assert.ok(Math.abs((await previewCard.boundingBox()).height-firstCard.height)>1);
   await directoryTab.click();
   await files.waitFor();
   assert.equal(page.url(),directoryUrl);
@@ -343,9 +365,11 @@ try {
   missingPortrait=true;await page.reload();
   await previewCard.waitFor();
   const loadedHeight=(await previewCard.boundingBox()).height;
+  const loadedColumnHeight=await matchColumnHeights();
   await portraitTab.click();
   await page.getByText('尚未准备竖版封面。',{exact:true}).waitFor();
   assert.equal((await previewCard.boundingBox()).height,loadedHeight);
+  assert.equal(await matchColumnHeights(),loadedColumnHeight);
   assert.equal(await mediaArea.getByRole('button',{name:/^下载/}).count(),0);
   missingPortrait=false;noMaterial=true;await page.reload();
   await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();

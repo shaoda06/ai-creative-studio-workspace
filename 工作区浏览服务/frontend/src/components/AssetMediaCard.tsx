@@ -8,7 +8,7 @@ import { FileActions } from './FileActions';
 import { FullscreenImage } from './FullscreenImage';
 import { FullscreenVideo, ReleaseFilmPlayer } from './ReleaseFilms';
 
-export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, fixedPreview = false, showFileActions = true, showVersion = true, aspectRatio, to, badge, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; fixedPreview?: boolean; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; badge?: { label: string; tone: 'blue' | 'green' }; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
+export function AssetMediaCard({ title, item, revision, formal = false, compact = false, entry = false, hideTitle = false, previewLayout, showFileActions = true, showVersion = true, aspectRatio, to, badge, titleActions, onDetails, selection, children }: { title: string; item: RecordData; revision: number; formal?: boolean; compact?: boolean; entry?: boolean; hideTitle?: boolean; previewLayout?: 'fixed' | 'fill'; showFileActions?: boolean; showVersion?: boolean; aspectRatio?: number | 'natural'; to?: string; badge?: { label: string; tone: 'blue' | 'green' }; titleActions?: ReactNode; onDetails?: () => void; selection?: { selected: boolean; onSelect: () => void; disabled?: boolean }; children?: ReactNode }) {
   const preview = useContext(PreviewContext);
   const badgeId = useId();
   const [dimensions, setDimensions] = useState('');
@@ -29,7 +29,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
   const thumbnail = media?.thumbnailUrl;
   const originalDimensions = media?.originalDimensions;
   const shownDimensions = originalDimensions?.join(' × ') ?? (thumbnail ? '未取得' : dimensions || '读取中');
-  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}${selection ? ' asset-media-card-selectable' : ''}`;
+  const className = `asset-media-card${compact ? ' asset-media-card-compact' : ''}${entry ? ' asset-media-card-entry' : ''}${linkedActions ? ' asset-media-card-linked-actions' : ''}${selection ? ' asset-media-card-selectable' : ''}${previewLayout === 'fill' ? ' asset-media-card-fill' : ''}`;
   const selectionButton = selection && <button type="button" className="asset-media-card-select"
     aria-label={`选择${title}`} aria-pressed={selection.selected} disabled={selection.disabled || !media?.url} onClick={selection.onSelect}>
     {selection.selected ? <span aria-hidden="true">✓</span> : '选择'}
@@ -41,7 +41,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
       {(titleActions || selection) && <div className="asset-media-card-title-actions">{titleActions}{selectionButton}</div>}
     </div> : <PointerTooltip text={title}><h3>{title}</h3></PointerTooltip>)}
     <div className="asset-media-item">
-      {fixedPreview && isVideo ? <div className="cover">
+      {previewLayout && isVideo ? <div className="cover">
         <ReleaseFilmPlayer key={media.url} item={media} contained />
       </div> : item.media ? <Cover style={naturalRatio ? { height: 'auto' } : fixedRatioStyle} className="cover" aria-label={selection ? isVideo ? `全屏播放${title}` : `查看${title}大图` : undefined}
         onClick={linked ? undefined : selection ? () => setFullscreen(true) : () => preview(item.media)}><img style={imageStyle} className="reference" loading="lazy" src={thumbnail || item.media.url + `?v=${revision}`} alt={item.media.name} onLoad={compact || entry || thumbnail || originalDimensions ? undefined : event => {
@@ -52,7 +52,7 @@ export function AssetMediaCard({ title, item, revision, formal = false, compact 
         <span>{item.emptyLabel || '已登记，图片文件缺失。'}</span>
       </div>}
       {!entry && <>
-      {fixedPreview ? <p className="asset-media-field asset-media-preview-caption" title={isVideo ? media.name : undefined} aria-hidden={!media}>
+      {previewLayout ? <p className="asset-media-field asset-media-preview-caption" title={isVideo ? media.name : undefined} aria-hidden={!media}>
         {isVideo ? media.name : media && <><span className="field-label">尺寸：</span>{shownDimensions}</>}
       </p> : !compact && item.media && <p className="asset-media-field"><span className="field-label">尺寸：</span>{shownDimensions}</p>}
       {showFileActions && !compact && item.media && !onDetails && <div className="asset-media-field file-entry-main"><span className="field-label">文件：</span><FileActions url={item.media.url} /></div>}

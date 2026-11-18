@@ -100,6 +100,9 @@ dialog header:has(.revision-export-close-actions){flex-wrap:wrap}.revision-expor
 .prose p.script-dialogue{font-weight:700;text-decoration-line:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 
 .asset-media-item>.cover{height:260px;flex-shrink:0}
+.asset-media-card-fill,.asset-media-card-fill .asset-media-item{min-height:0}
+.asset-media-card-fill .asset-media-item>.cover{height:auto;min-height:0;flex:1}
+.asset-media-card-fill .asset-media-item>.cover img{max-height:none}
 .asset-media-placeholder{flex-direction:column;gap:12px;padding:20px;border-radius:8px;color:var(--muted);font-size:13px;line-height:1.7;text-align:center}.asset-media-placeholder>svg{width:40px;height:40px;flex:none}.asset-media-placeholder>span{max-width:100%;overflow-wrap:anywhere}
 
 .asset-media-field{margin:4px 0}.asset-media-field>.field-label{margin-right:8px}.asset-media-preview-caption{min-height:1.5em;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.asset-media-item>.cover{margin-bottom:6px}

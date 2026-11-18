@@ -151,10 +151,10 @@ function PublicationRelease({ data, project, materialId, onMaterialChange }: {
             </div>)}
           </section>}
         </section>
-        <section aria-label="发布媒体" className="chloe-publication-column">
+        <section aria-label="发布媒体" className="chloe-publication-column chloe-publication-media-column">
           <UnderlineTabs label="发布媒体分类" items={mediaTabs} selected={mediaTab} onChange={setMediaTab} />
-          <section aria-label={mediaLabel}>
-            <AssetMediaCard key={media?.url || mediaLabel} title={mediaLabel} hideTitle fixedPreview revision={0}
+          <section aria-label={mediaLabel} className="chloe-publication-preview">
+            <AssetMediaCard key={media?.url || mediaLabel} title={mediaLabel} hideTitle previewLayout="fill" revision={0}
               item={{ media: media || undefined, emptyLabel: videoTab ? '尚未指定本次发布使用的成片。' : `尚未准备${mediaLabel}。` }}
               showVersion={false} showFileActions={false} />
           </section>
