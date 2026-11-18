@@ -31,6 +31,7 @@ try:
  x.row[3]='[成片](<成片/第二版成片.webm>)'
  x.row[4]=f'[本视频:{ref["resource_id"]}@{ref["version"]}](<{Path(ref["absolute_file"]).relative_to(x.project).as_posix()}>)'
  x.row[0]='Q002';x.row[1]='小红书';x.row[6]='另一平台的长标题'+('细节展示'*18)
+ x.row[12]='2026-11-18T20:30:00+08:00';x.row[13]='用户手动'
  x.append(path,'发布资料',x.row)
  readme=x.project/'README.md'
  readme.write_text(readme.read_text().replace('| 视频状态 | 制作中 |','| 视频状态 | 已发布 |'))
@@ -123,6 +124,9 @@ try {
   const xiaohongshu=platforms.getByRole('button',{name:'小红书',exact:true});
   const materialSelect=detail.getByRole('combobox',{name:'选择发布资料'});
   const releaseTitle=detail.getByRole('region',{name:'标题',exact:true}).getByRole('paragraph');
+  const textArea=detail.getByRole('region',{name:'发布文字资料'});
+  const suggestedAt=textArea.getByRole('region',{name:'建议发布时间',exact:true});
+  const executor=textArea.getByRole('region',{name:'发布执行',exact:true});
   await files.waitFor();
   assert.equal(await directoryTab.getAttribute('aria-current'),'page');
   assert.equal(await history.count(),0);
@@ -150,8 +154,15 @@ try {
   await douyin.focus();await page.keyboard.press('Enter');
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   assert.equal(await releaseTitle.innerText(),fixture.detail.materials[0].fields['标题']);
+  assert.ok((await suggestedAt.getByRole('paragraph').innerText()).startsWith(fixture.detail.materials[0].fields['建议发布时间']));
+  assert.equal(await executor.getByRole('paragraph').innerText(),fixture.detail.materials[0].fields['发布执行']);
   await xiaohongshu.click();
   assert.equal(await releaseTitle.innerText(),fixture.detail.materials[1].fields['标题']);
+  assert.deepEqual(await textArea.getByRole('heading',{level:2}).allTextContents(),['标题','正文','话题','建议发布时间','发布执行']);
+  assert.equal(await suggestedAt.getByRole('paragraph').innerText(),`${fixture.detail.materials[1].fields['建议发布时间']}（具体发布安排以确认结果为准）`);
+  assert.equal(await executor.getByRole('paragraph').innerText(),fixture.detail.materials[1].fields['发布执行']);
+  assert.equal(await detail.getByText('已有发布记录引用此资料',{exact:true}).count(),0);
+  assert.equal(await detail.getByText(/^建议发布时间：|^发布执行：/).count(),0);
   assert.equal(await tabs.evaluate(el=>[...el.querySelectorAll('button')].every(button=>
    button.getBoundingClientRect().right<=el.getBoundingClientRect().right+1)),true);
   const infoTabs=detail.getByRole('navigation',{name:'发布信息分类'});
@@ -195,6 +206,8 @@ try {
   assert.equal(await productTab.getAttribute('aria-current'),'page');
   assert.equal(await landscapeTab.getAttribute('aria-current'),'page');
   assert.equal(await detail.getByRole('region',{name:'正文',exact:true}).count(),0);
+  assert.equal(await suggestedAt.count(),0);
+  assert.equal(await executor.count(),0);
   await page.getByRole('button',{name:'复制挂品链接',exact:true}).click();
   assert.equal((await page.evaluate(()=>navigator.clipboard.readText())).replaceAll('\r\n','\n'),fixture.detail.materials[1].fields['挂品链接']);
   await page.getByRole('button',{name:'复制挂品信息',exact:true}).click();

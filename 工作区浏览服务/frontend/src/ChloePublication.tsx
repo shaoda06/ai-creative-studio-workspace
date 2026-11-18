@@ -41,6 +41,8 @@ const informationTabs: { value: 'basic' | 'product'; label: string }[] = [
   { value: 'basic', label: '基础信息' },
   { value: 'product', label: '挂品信息' },
 ];
+const copyableFields = ['标题', '正文', '话题'];
+const basicFields = [...copyableFields, '建议发布时间', '发布执行'];
 const mediaTabs: { value: 'landscape' | 'portrait' | 'video'; label: string }[] = [
   { value: 'landscape', label: '封面（横版）' },
   { value: 'portrait', label: '封面（竖版）' },
@@ -115,7 +117,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     <Result loading={query.isPending} error={query.error} retry={query.refetch} retrying={query.isFetching} />
     {query.data && <>
       {tab === 'files' && <FinalDirectory files={query.data.finals} uploadUrl={`${url}/files`} project={project} refresh={refreshFinals} />}
-      {tab === 'release' && <PublicationMaterials data={query.data} materialId={materialId} onMaterialChange={setMaterialId} />}
+      {tab === 'release' && <PublicationMaterials materials={query.data.materials} materialId={materialId} onMaterialChange={setMaterialId} />}
       {tab === 'history' && <PublicationHistory records={query.data.history} onViewMaterial={id => {
         setMaterialId(id);
         selectTab('release');
@@ -124,12 +126,12 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
   </section>;
 }
 
-function PublicationMaterials({ data, materialId, onMaterialChange }: {
-  data: Publication; materialId: string; onMaterialChange: (value: string) => void;
+function PublicationMaterials({ materials, materialId, onMaterialChange }: {
+  materials: Material[]; materialId: string; onMaterialChange: (value: string) => void;
 }) {
   const [informationTab, setInformationTab] = useState<'basic' | 'product'>('basic');
   const [mediaTab, setMediaTab] = useState<'landscape' | 'portrait' | 'video'>('landscape');
-  const available = data.materials.flatMap(material => {
+  const available = materials.flatMap(material => {
     const platform = material.fields['平台']?.trim();
     return platform && !missing.has(platform) ? [{ platform, material }] : [];
   });
@@ -141,7 +143,6 @@ function PublicationMaterials({ data, materialId, onMaterialChange }: {
   const mediaLabel = videoTab ? '本次视频' : mediaTab === 'landscape' ? '横版封面' : '竖版封面';
   const media = videoTab ? material?.film : material?.covers.find(item => item.label === mediaLabel)?.media;
   const size = media?.originalDimensions;
-  const used = data.history.some(item => item.materialId === material?.id);
   const product = material ? ['商品', '款式或SKU', '挂品链接'].filter(field => !missing.has(material.fields[field]))
     .map(field => `${field}：${material.fields[field]}`).join('\n') : '';
   return <>
@@ -152,22 +153,20 @@ function PublicationMaterials({ data, materialId, onMaterialChange }: {
           const next = available.filter(entry => entry.platform === platform).at(-1);
           if (next) onMaterialChange(next.material.id);
         }} />
-      <div className="chloe-publication-toolbar">
-        {platformMaterials.length > 1 && <TabSelect label="选择发布资料"
+      {platformMaterials.length > 1 && <div className="chloe-publication-toolbar">
+        <TabSelect label="选择发布资料"
           items={platformMaterials.map(({ material: item }) => ({ value: item.id, label: `${item.id} · ${item.fields['账号']}` }))}
-          selected={material.id} onChange={onMaterialChange} />}
-        <span>{used ? '已有发布记录引用此资料' : '发布准备资料'}</span>
-        <span>发布执行：{material.fields['发布执行']}</span>
-      </div>
+          selected={material.id} onChange={onMaterialChange} />
+      </div>}
       <div className="chloe-publication-preparation">
         <section aria-label="发布文字资料" className="chloe-publication-column">
           <UnderlineTabs label="发布信息分类" items={informationTabs} selected={informationTab} onChange={setInformationTab} />
           {informationTab === 'basic' ? <div className="chloe-publication-copy">
-            {['标题', '正文', '话题'].map(field => <section key={field} aria-label={field}>
+            {basicFields.map(field => <section key={field} aria-label={field}>
               <div className="chloe-publication-toolbar"><h2>{field}</h2>
-                {!missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label="复制" ariaLabel={`复制${field}`} appearance="link" successMessage={`${field}已复制`} />}
+                {copyableFields.includes(field) && !missing.has(material.fields[field]) && <CopyButton text={material.fields[field]} label="复制" ariaLabel={`复制${field}`} appearance="link" successMessage={`${field}已复制`} />}
               </div>
-              <p className="chloe-publication-text">{material.fields[field]}</p>
+              <p className="chloe-publication-text">{material.fields[field]}{field === '建议发布时间' && '（具体发布安排以确认结果为准）'}</p>
             </section>)}
           </div> : <section aria-label="挂品信息">
             {product && <CopyButton text={product} label="复制挂品信息" />}
@@ -191,7 +190,6 @@ function PublicationMaterials({ data, materialId, onMaterialChange }: {
           </section>
         </section>
       </div>
-      <p>建议发布时间：{material.fields['建议发布时间']}（具体发布安排以确认结果为准）</p>
     </> : <p className="muted">暂无发布准备资料。</p>}
   </>;
 }
