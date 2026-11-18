@@ -17,7 +17,7 @@ description: Chloe 剪辑方案、已采用素材的剪映交接，以及用户�
 
 给已有视频配 BGM 或背景音时，按[剪辑配乐与原视频音轨](../studio-video-production/SKILL.md#剪辑配乐与原视频音轨)确认声音方案。
 
-穿搭动作要卡点、重排或修顺跳接时，先按[在动作中切镜的剪辑与返修方法](../studio-creative-techniques/references/在动作中切镜指南.md#剪辑与返修怎么用)核对实际素材和接点，将选段及复看结果写进已有剪辑资料。
+穿搭动作要卡点、重排或修顺跳接时，先按[在动作中切镜的剪辑与返修方法](../studio-creative-techniques/references/在动作中切镜指南.md#剪辑与返修怎么用)核对实际素材和接点，将选段及复看结果写进已有剪辑资料。使用闪进、英雄时刻等速度效果时，按[曲线变速与段落卡点](../studio-creative-techniques/references/在动作中切镜指南.md#曲线变速与段落卡点)明确效果用途、动作选段、速度变化和音乐落点。
 
 已有视频需要选择或调整影调时，查[视频调色指南](../studio-creative-techniques/references/视频调色指南.md)。视频修改版交回前，按[整片后期轮次](../chloe-production/references/视频制作流程与记录.md#整片后期轮次)完成轮次、来源和主播放登记，并处理辅助审阅材料。
 
