@@ -21,6 +21,7 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
   const [selector, setSelector] = useState<HTMLSpanElement | null>(null);
   const [preview, setPreview] = useState<FileItem | null>(null);
   const list = useQuery({ queryKey: ['production-videos', baseUrl], queryFn: ({ signal }) => get<FileItem[]>(baseUrl + '/production-videos', signal), refetchInterval: selected ? false : 15000 });
+  const videos = list.data?.slice().sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
   const projectUrl = (unit: string) => `${baseUrl}/projects/${encodeURIComponent(unit)}`;
   const access = useChloeProductionAccess(baseUrl, selected);
   return <div><ProductionAccessContext value={access}><BreadcrumbActionsContext value={actions}><BreadcrumbSelectorContext value={selector}><PreviewContext value={setPreview}>
@@ -34,8 +35,8 @@ export function ChloeProduction({ title, baseUrl, selected, onSelect }: {
     <section className="panel">
     <Result page loading={list.isPending} error={list.error} retry={list.refetch} retrying={list.isFetching} />
     <TaskApiContext value={taskApi}>
-      {list.data && <ProductionWorkbench showHeadingDownloads={false} inlineListHeading workStatusLabels={chloeVideoStatuses} project={selected || baseUrl} items={list.data} selected={selected} onSelect={onSelect} revision={0}
-        statistics={{ total: list.data.length, completed: 0, notStarted: 0, running: 0 }} />}
+      {videos && <ProductionWorkbench showHeadingDownloads={false} inlineListHeading workStatusLabels={chloeVideoStatuses} project={selected || baseUrl} items={videos} selected={selected} onSelect={onSelect} revision={0}
+        statistics={{ total: videos.length, completed: 0, notStarted: 0, running: 0 }} />}
     </TaskApiContext>
     </section>
     {preview && selected && <Preview project={selected} baseUrl={projectUrl(selected)} item={preview} revision={0} close={() => setPreview(null)} />}

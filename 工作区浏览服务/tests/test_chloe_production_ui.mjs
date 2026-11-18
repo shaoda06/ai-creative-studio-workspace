@@ -66,7 +66,10 @@ try {
    }
    if(path.endsWith('/production-videos')){
     if(failList){return route.fulfill({status:409,body:'隔离读取失败'});}
-    return route.fulfill({json:fixture.statusItems[videoStatus].map(item=>useSummaries?{...item,durationSummary:{seconds:9,estimated:false}}:item)});
+    const items=fixture.statusItems[videoStatus];
+    if(!useSummaries)return route.fulfill({json:items});
+    const item={...items[0],durationSummary:{seconds:9,estimated:false}};
+    return route.fulfill({json:[item,...['V1000','V009','V010'].map(id=>({...item,name:`${id}-隔离演示`,key:id}))]});
    }
    if(path.endsWith('/production-detail')){if(useSummaries)summaryDetailRequests++;return route.fulfill({json:{...scopedDetail,statusHtml:fixture.statusItems[videoStatus][0].statusHtml}});}
    if(path.endsWith('/production-downloads'))return route.fulfill({json:fixture.downloads[url.searchParams.get('round') || '2']});
@@ -271,7 +274,8 @@ try {
   await page.goto(server.resolvedUrls.local[0]+'isolated-empty');
   useSummaries=true;taskMode=false;summaryDetailRequests=0;
   await page.goto(server.resolvedUrls.local[0]+'#/spaces/chloe?section=production');
-  await page.getByText('9秒',{exact:true}).waitFor();
+  await card.getByText('9秒',{exact:true}).waitFor();
+  assert.deepEqual(await page.locator('.episode-grid .episode-button strong').allTextContents(),['V1000','V010','V009','V001']);
   await page.waitForTimeout(200);
   assert.equal(summaryDetailRequests,0,'list summaries must not fetch per-card production details');
   assert.equal(await page.locator('video').count(),0,'list summaries must not open videos to measure duration');
