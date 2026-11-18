@@ -120,7 +120,7 @@ function PublicationDetail({ baseUrl, project }: { baseUrl: string; project: str
     {query.data && <>
       {tab === 'files' && <FinalDirectory files={query.data.finals} uploadUrl={`${url}/files`} project={project} refresh={refreshFinals} />}
       {tab === 'release' && <PublicationMaterials materials={query.data.materials} materialId={materialId} onMaterialChange={setMaterialId} />}
-      {tab === 'history' && <PublicationHistory records={query.data.history} onViewMaterial={id => {
+      {tab === 'history' && <PublicationHistory records={query.data.history} materials={query.data.materials} onViewMaterial={id => {
         setMaterialId(id);
         selectTab('release');
       }} />}
@@ -203,21 +203,24 @@ function PublicationTime({ value }: { value: string }) {
   return Number.isNaN(time) ? value : <time dateTime={value}>{publicationTimeFormat.format(time)}</time>;
 }
 
-function PublicationHistory({ records, onViewMaterial }: {
-  records: Publication['history']; onViewMaterial: (id: string) => void;
+function PublicationHistory({ records, materials, onViewMaterial }: {
+  records: Publication['history']; materials: Material[]; onViewMaterial: (id: string) => void;
 }) {
+  const titles = new Map(materials.map(material => [material.id, material.fields['标题']]));
   return <section aria-label="发布记录"><h2>发布记录</h2>
-    {!records.length ? <p className="muted">暂无发布安排或结果。</p> : records.map(({ fields, materialId, url }) =>
-      <article key={fields['发布编号']} className="chloe-publication-history">
+    {!records.length ? <p className="muted">暂无发布安排或结果。</p> : records.map(({ fields, materialId, url }) => {
+      const title = materialId ? titles.get(materialId) : undefined;
+      return <article key={fields['发布编号']} className="chloe-publication-history">
         <header className="chloe-publication-toolbar chloe-publication-history-heading">
-          <h3>{fields['发布编号']} · {fields['发布进展']}</h3>
+          <h3>{title && !missing.has(title) && `${title} · `}{fields['发布编号']} · {fields['发布进展']}</h3>
           {materialId && <LinkButton onClick={() => onViewMaterial(materialId)}>查看发布资料</LinkButton>}
         </header>
         {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>
           <strong>{field}：</strong>{field.endsWith('时间') ? <PublicationTime value={fields[field]} /> : fields[field]}
         </p>)}
         {url && <a href={url} target="_blank" rel="noopener noreferrer">打开已发布作品</a>}
-      </article>)}
+      </article>;
+    })}
   </section>;
 }
 

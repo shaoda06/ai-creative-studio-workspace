@@ -401,24 +401,27 @@ try {
   assert.equal(await historyTab.getAttribute('aria-current'),'page');
   assert.match(new URL(page.url()).hash,/&publicationTab=history$/);
   await page.reload();
-  await history.getByRole('heading',{name:'P001 · 待提交',exact:true}).waitFor();
-  await history.getByRole('heading',{name:'P002 · 已发布',exact:true}).waitFor();
+  await history.getByRole('heading',{name:`${fixture.detail.materials[0].fields['标题']} · P001 · 待提交`,exact:true}).waitFor();
+  await history.getByRole('heading',{name:`${fixture.detail.materials[1].fields['标题']} · P002 · 已发布`,exact:true}).waitFor();
   const firstRecord=history.getByRole('article').first();
   const viewMaterial=firstRecord.getByRole('button',{name:'查看发布资料',exact:true});
   assert.equal(await history.getByRole('button',{name:'查看发布资料',exact:true}).count(),2);
+  const viewOtherMaterial=history.getByRole('article').nth(1).getByRole('button',{name:'查看发布资料',exact:true});
   assert.deepEqual(await firstRecord.locator('p > strong').allTextContents(),['发布方式：','计划发布时间：','实际发布时间：','平台作品ID：']);
   assert.equal(await firstRecord.locator('p > strong').first().evaluate(el=>getComputedStyle(el).fontWeight),'700');
   assert.deepEqual(await firstRecord.locator('time').allTextContents(),['2026年11月18日 20:26']);
   assert.equal(await firstRecord.locator('time').getAttribute('datetime'),'2026-11-19T12:26+08:00');
   await firstRecord.getByText('实际发布时间：未取得',{exact:true}).waitFor();
   assert.equal(await history.getByRole('article').nth(1).locator('time').innerText(),'2026年11月18日 05:00');
-  assert.ok(await viewMaterial.evaluate(el=>{
-   const link=el.getBoundingClientRect(), header=el.parentElement.getBoundingClientRect();
-   const title=el.parentElement.querySelector('h3').getBoundingClientRect();
-   const style=getComputedStyle(el);
-   return Math.abs(link.right-header.right)<1 && link.left>title.right && link.top<title.bottom && link.bottom>title.top &&
-    style.textDecorationLine==='underline' && style.borderTopWidth==='0px';
-  }));
+  for(const action of [viewMaterial,viewOtherMaterial]){
+   assert.ok(await action.evaluate(el=>{
+    const link=el.getBoundingClientRect(), header=el.parentElement.getBoundingClientRect();
+    const title=el.parentElement.querySelector('h3').getBoundingClientRect();
+    const style=getComputedStyle(el);
+    return Math.abs(link.right-header.right)<1 && link.left>title.right && link.top<title.bottom && link.bottom>title.top &&
+     style.textDecorationLine==='underline' && style.borderTopWidth==='0px';
+   }));
+  }
   assert.equal(await history.getByRole('link',{name:'打开已发布作品'}).getAttribute('href'),'https://example.com/post/002');
   assert.equal(await platforms.count(),0);
   assert.equal(await materialSelect.count(),0);
@@ -433,7 +436,7 @@ try {
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
   await historyTab.click();
-  await history.getByRole('article').nth(1).getByRole('button',{name:'查看发布资料',exact:true}).click();
+  await viewOtherMaterial.click();
   assert.equal(await xiaohongshu.getAttribute('aria-current'),'page');
   assert.equal(await releaseTitle.innerText(),fixture.detail.materials[1].fields['标题']);
   await historyTab.click();
