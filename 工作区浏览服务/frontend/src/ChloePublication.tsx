@@ -155,11 +155,11 @@ function PublicationMaterials({ materials, materialId, onMaterialChange }: {
           const next = available.filter(entry => entry.platform === platform).at(-1);
           if (next) onMaterialChange(next.material.id);
         }} />
-      {platformMaterials.length > 1 && <div className="chloe-publication-toolbar">
+      <div className="chloe-publication-toolbar">
         <TabSelect label="选择发布资料"
           items={platformMaterials.map(({ material: item }) => ({ value: item.id, label: `${item.id} · ${item.fields['账号']}` }))}
           selected={material.id} onChange={onMaterialChange} />
-      </div>}
+      </div>
       <div className="chloe-publication-preparation">
         <section aria-label="发布文字资料" className="chloe-publication-column">
           <UnderlineTabs label="发布信息分类" items={informationTabs} selected={informationTab} onChange={setInformationTab} />
@@ -209,7 +209,7 @@ function PublicationHistory({ records, onViewMaterial }: {
       <article key={fields['发布编号']} className="chloe-publication-history">
         <header className="chloe-publication-toolbar chloe-publication-history-heading">
           <h3>{fields['发布编号']} · {fields['发布进展']}</h3>
-          {materialId && <LinkButton onClick={() => onViewMaterial(materialId)}>查看 {materialId} 发布资料</LinkButton>}
+          {materialId && <LinkButton onClick={() => onViewMaterial(materialId)}>查看发布资料</LinkButton>}
         </header>
         {['发布方式', '计划发布时间', '实际发布时间', '平台作品ID'].map(field => <p key={field}>
           <strong>{field}：</strong>{field.endsWith('时间') ? <PublicationTime value={fields[field]} /> : fields[field]}

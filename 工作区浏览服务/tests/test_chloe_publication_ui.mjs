@@ -150,7 +150,7 @@ try {
   assert.equal(await files.count(),0);
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音','小红书']);
   assert.equal(await xiaohongshu.getAttribute('aria-current'),'page');
-  assert.equal(await materialSelect.count(),0);
+  assert.equal(await materialSelect.getAttribute('data-value'),'Q002');
   await douyin.focus();await page.keyboard.press('Enter');
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   assert.equal(await releaseTitle.innerText(),fixture.detail.materials[0].fields['标题']);
@@ -400,7 +400,8 @@ try {
   await history.getByRole('heading',{name:'P001 · 待提交',exact:true}).waitFor();
   await history.getByRole('heading',{name:'P002 · 已发布',exact:true}).waitFor();
   const firstRecord=history.getByRole('article').first();
-  const viewMaterial=firstRecord.getByRole('button',{name:'查看 Q001 发布资料',exact:true});
+  const viewMaterial=firstRecord.getByRole('button',{name:'查看发布资料',exact:true});
+  assert.equal(await history.getByRole('button',{name:'查看发布资料',exact:true}).count(),2);
   assert.deepEqual(await firstRecord.locator('p > strong').allTextContents(),['发布方式：','计划发布时间：','实际发布时间：','平台作品ID：']);
   assert.equal(await firstRecord.locator('p > strong').first().evaluate(el=>getComputedStyle(el).fontWeight),'700');
   assert.deepEqual(await firstRecord.locator('time').allTextContents(),['2026年11月18日 20:26']);
@@ -416,6 +417,7 @@ try {
   }));
   assert.equal(await history.getByRole('link',{name:'打开已发布作品'}).getAttribute('href'),'https://example.com/post/002');
   assert.equal(await platforms.count(),0);
+  assert.equal(await materialSelect.count(),0);
   assert.equal(await mediaArea.count(),0);
   assert.equal(await files.count(),0);
   await viewMaterial.click();
@@ -426,6 +428,12 @@ try {
   await page.getByRole('button',{name:'复制标题',exact:true}).click();
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),fixture.detail.materials[0].fields['标题']);
   await page.waitForFunction(()=>document.querySelector('.asset-media-card img')?.naturalWidth===160);
+  await historyTab.click();
+  await history.getByRole('article').nth(1).getByRole('button',{name:'查看发布资料',exact:true}).click();
+  assert.equal(await xiaohongshu.getAttribute('aria-current'),'page');
+  assert.equal(await releaseTitle.innerText(),fixture.detail.materials[1].fields['标题']);
+  await historyTab.click();
+  await viewMaterial.click();
   await videoTab.click();
   assert.equal(await player.getAttribute('aria-label'),'最终成片.webm');
   await player.evaluate(el=>el.play());
@@ -460,7 +468,13 @@ try {
   materialsOverride=[firstMaterial];await page.reload();await platforms.waitFor();
   assert.deepEqual(await platforms.getByRole('button').allTextContents(),['抖音']);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
-  assert.equal(await materialSelect.count(),0);
+  assert.equal(await materialSelect.innerText(),'Q001 · 示例账号');
+  assert.ok((await materialSelect.boundingBox()).y >= (await platforms.boundingBox()).y + (await platforms.boundingBox()).height);
+  await materialSelect.click();
+  const choices=detail.getByRole('listbox',{name:'选择发布资料'});
+  assert.equal(await choices.getByRole('option').count(),1);
+  assert.equal(await choices.getByRole('option').getAttribute('aria-selected'),'true');
+  await page.keyboard.press('Escape');
   materialsOverride=[firstMaterial,secondMaterial,
    {...secondMaterial,id:'Q003',fields:{...secondMaterial.fields,'平台':'快手','标题':'快手发布标题'}},
    {...firstMaterial,id:'Q004',fields:{...firstMaterial.fields,'账号':'另一个抖音账号','标题':'另一个抖音标题'}},
@@ -471,17 +485,17 @@ try {
   assert.equal(await releaseTitle.innerText(),'另一个抖音标题');
   assert.match(await materialSelect.innerText(),/Q004 · 另一个抖音账号/);
   await materialSelect.click();
-  const choices=detail.getByRole('listbox',{name:'选择发布资料'});
   assert.equal(await choices.getByRole('option').count(),2);
   await choices.getByRole('option',{name:'Q001 · 示例账号',exact:true}).click();
   assert.equal(await releaseTitle.innerText(),firstMaterial.fields['标题']);
   assert.equal(await douyin.getAttribute('aria-current'),'page');
   await platforms.getByRole('button',{name:'快手',exact:true}).click();
   assert.equal(await releaseTitle.innerText(),'快手发布标题');
-  assert.equal(await materialSelect.count(),0);
+  assert.equal(await materialSelect.getAttribute('data-value'),'Q003');
   materialsOverride=undefined;noMaterial=true;await page.reload();
   await detail.getByText('暂无发布准备资料。',{exact:true}).waitFor();
   assert.equal(await platforms.count(),0);
+  assert.equal(await materialSelect.count(),0);
   assert.equal(await files.count(),0);
   assert.equal(await page.getByRole('button',{name:'下载成片',exact:true}).count(),0);
   await historyTab.click();
